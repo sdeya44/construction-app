@@ -132,7 +132,6 @@ async function shareLogWhatsApp(log, att, eq, dl) {
   if (isMobile) window.location.href = `https://wa.me/?text=${encoded}`;
   else window.open(`https://wa.me/?text=${encoded}`, '_blank');
 }
-}
 
 function confirmDelLog(id, log) {
   confirm2('מחיקת יומן', `האם למחוק את היומן של ${log.siteName} מתאריך ${fmtDate(log.date)}?`, async () => {
