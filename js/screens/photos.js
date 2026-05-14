@@ -38,10 +38,11 @@ function renderPhotosSheet(site) {
 }
 
 function photoCard(p) {
+  const fallback = `https://drive.google.com/thumbnail?id=${p.fileId}&sz=w400`;
   return `<div style="border-radius:12px;overflow:hidden;background:#f0f3fa;border:1px solid #e5e9f5">
     <img src="${p.url}" data-fileid="${p.fileId}"
       style="width:100%;aspect-ratio:1;object-fit:cover;display:block" loading="lazy"
-      onerror="if(this.dataset.fileid&&!this.dataset.retried){this.dataset.retried='1';this.src='https://lh3.googleusercontent.com/d/'+this.dataset.fileid;}else{this.parentElement.style.display='none';}">
+      onerror="if(this.dataset.fileid&&!this.dataset.retried){this.dataset.retried='1';this.src='https://drive.google.com/thumbnail?id='+this.dataset.fileid+'&sz=w400';}else{this.parentElement.style.display='none';}">
     <div style="padding:6px 8px">
       <div style="font-size:11px;font-weight:600;color:#6b7280">${new Date(p.date+'T12:00:00').toLocaleDateString('he-IL',{day:'numeric',month:'long'})}</div>
       ${p.desc ? `<div style="font-size:12px;color:#374151;margin-top:2px">${p.desc}</div>` : ''}
@@ -75,8 +76,11 @@ async function uploadSitePhoto(file) {
 }
 
 export async function uploadWizPhotos(siteId, siteName, date, logId='') {
-  for (const p of (D.wiz.photos||[])) {
+  const list = D.wiz.photos || [];
+  let fail = 0;
+  for (const p of list) {
     try {
+      toast('מעלה תמונה...', '');
       const compressed = await compressImage(p.file);
       const fname  = `${siteName}_${date}_${Date.now()}.jpg`;
       const fileId = await driveUpload(compressed, fname);
@@ -84,6 +88,10 @@ export async function uploadWizPhotos(siteId, siteName, date, logId='') {
       const photoId = uid(), now = new Date().toISOString();
       await sAppend('SitePhotos',[photoId, siteId, siteName, date, '', fileId, url, D.user?.email||'', now, logId]);
       D.photos.push({ id:photoId, siteId, siteName, date, desc:'', fileId, url, by:D.user?.email||'', at:now, logId });
-    } catch {}
+    } catch(err) {
+      console.error('Photo upload failed:', err);
+      fail++;
+    }
   }
+  if (fail) toast(`${fail} תמונות לא הועלו — בדוק חיבור`, 'err');
 }

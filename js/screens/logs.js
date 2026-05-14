@@ -84,7 +84,7 @@ export function showLog(id) {
         ${ph.map(p=>`<div style="border-radius:10px;overflow:hidden;background:#f0f3fa">
           <img src="${p.url}" data-fileid="${p.fileId}"
             style="width:100%;aspect-ratio:1;object-fit:cover;display:block" loading="lazy"
-            onerror="if(this.dataset.fileid&&!this.dataset.retried){this.dataset.retried='1';this.src='https://lh3.googleusercontent.com/d/'+this.dataset.fileid;}else{this.parentElement.style.display='none';}">
+            onerror="if(this.dataset.fileid&&!this.dataset.retried){this.dataset.retried='1';this.src='https://drive.google.com/thumbnail?id='+this.dataset.fileid+'&sz=w400';}else{this.parentElement.style.display='none';}">
         </div>`).join('')}
       </div>` : ''}
     ${log.notes ? `<div class="card-title">הערות</div>

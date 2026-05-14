@@ -116,6 +116,8 @@ function bindWizStep(step) {
   if (step === 5) {
     document.getElementById('w-gnote')?.addEventListener('input', e => { D.wiz.gNote = e.target.value; });
     document.getElementById('wiz-add-del')?.addEventListener('click', addDel);
+    document.getElementById('wiz-cam-btn')?.addEventListener('click', () => document.getElementById('wiz-cam-input').click());
+    document.getElementById('wiz-gal-btn')?.addEventListener('click', () => document.getElementById('wiz-gal-input').click());
     document.getElementById('wiz-cam-input').onchange = e => handleWizPhoto(e);
     document.getElementById('wiz-gal-input').onchange = e => handleWizPhoto(e);
     document.querySelectorAll('.del-remove').forEach(btn => {
@@ -222,8 +224,8 @@ function wiz5() {
       </div>`).join('')}
       ${!D.wiz.photos?.length ? '<div class="muted" style="font-size:13px;margin-bottom:10px">תמונות ישויכו לאתר ולתאריך הדיווח</div>' : ''}
       <div class="btn-row" style="margin-top:8px">
-        <button class="btn btn-outline btn-sm fg" onclick="document.getElementById('wiz-cam-input').click()">📷 מצלמה</button>
-        <button class="btn btn-ghost btn-sm fg" onclick="document.getElementById('wiz-gal-input').click()">🖼️ גלריה</button>
+        <button class="btn btn-outline btn-sm fg" id="wiz-cam-btn">📷 מצלמה</button>
+        <button class="btn btn-ghost btn-sm fg" id="wiz-gal-btn">🖼️ גלריה</button>
       </div>
     </div>
     <div class="card mt12" style="background:#f0f4ff">
