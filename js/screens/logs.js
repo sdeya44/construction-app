@@ -109,7 +109,7 @@ export function showLog(id) {
   openSheet('sh-log');
 }
 
-function shareLogWhatsApp(log, att, eq, dl) {
+async function shareLogWhatsApp(log, att, eq, dl) {
   const acts = getActs(log);
   const lines = [
     `*${BUSINESS_NAME} — דיווח יומי*`,
@@ -122,20 +122,15 @@ function shareLogWhatsApp(log, att, eq, dl) {
     log.notes   ? `הערות: ${log.notes}` : null,
   ].filter(Boolean);
   const text = lines.join('\n');
-  const encoded = encodeURIComponent(text);
 
-  // iOS: use native share sheet (most reliable — shows WhatsApp + all apps)
   if (navigator.share) {
-    navigator.share({ text }).catch(() => {});
-    return;
+    try { await navigator.share({ text }); return; } catch {}
   }
-  // Android: direct deep link
-  if (/Android/i.test(navigator.userAgent)) {
-    window.location.href = `whatsapp://send?text=${encoded}`;
-    return;
-  }
-  // Desktop: WhatsApp Web
-  window.open(`https://wa.me/?text=${encoded}`, '_blank');
+
+  const encoded = encodeURIComponent(text);
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if (isMobile) window.location.href = `https://wa.me/?text=${encoded}`;
+  else window.open(`https://wa.me/?text=${encoded}`, '_blank');
 }
 }
 
