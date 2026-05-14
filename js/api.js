@@ -113,7 +113,10 @@ export async function driveUpload(file, filename) {
     { method: 'POST', headers: { Authorization: 'Bearer '+D.token }, body: form }
   );
   const data = await r.json();
-  if (!data.id) throw new Error('Drive upload failed');
+  if (!data.id) {
+    const reason = data.error?.message || data.error?.status || `HTTP ${r.status}`;
+    throw new Error(reason);
+  }
   await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`, {
     method: 'POST',
     headers: { Authorization: 'Bearer '+D.token, 'Content-Type': 'application/json' },
