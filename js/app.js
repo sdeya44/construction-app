@@ -30,33 +30,39 @@ function navigate(s) {
 }
 
 // ── GM PANEL ──────────────────────────────────────────────────────────────────
+// Tabs that render content inside the panel (safe to open with)
+const GM_PANEL_TABS = new Set(['payroll','equip','calendar','search','admin']);
+
 export function openGMPanel() {
   const panel = document.getElementById('gm-panel');
   if (!panel) return;
-  panel._shouldClose = false;
+  if (panel.classList.contains('open')) return; // already open — do nothing
   panel.style.display = 'flex';
   requestAnimationFrame(() => panel.classList.add('open'));
-  renderGMTab(D.gmTab || 'payroll');
+  // Only open with a tab that renders inside the panel, never a nav tab
+  const tab = GM_PANEL_TABS.has(D.gmTab) ? D.gmTab : 'payroll';
+  renderGMTab(tab);
 }
 
 export function closeGMPanel() {
   const panel = document.getElementById('gm-panel');
   if (!panel) return;
-  panel._shouldClose = true;
   panel.classList.remove('open');
-  setTimeout(() => { if (panel._shouldClose) panel.style.display = 'none'; }, 380);
+  // Hide after transition — only if still closed when timer fires
+  setTimeout(() => {
+    if (!panel.classList.contains('open')) panel.style.display = 'none';
+  }, 380);
 }
 
 export function renderGMTab(tab) {
-  D.gmTab = tab;
+  // Only persist safe panel tabs so the next open doesn't trigger a nav-close
+  if (GM_PANEL_TABS.has(tab)) D.gmTab = tab;
   // Update tab highlight
   document.querySelectorAll('#gm-tabs .gm-tab').forEach(el => {
     el.classList.toggle('active', el.dataset.tab === tab);
   });
   // Render content
-  if (tab === 'reports') {
-    go('reports'); closeGMPanel();
-  } else if (tab === 'payroll') {
+  if (tab === 'payroll') {
     import('./screens/payroll.js').then(m => m.renderPayroll());
   } else if (tab === 'equip') {
     import('./screens/equip-report.js').then(m => m.renderEquipReport());
@@ -66,6 +72,8 @@ export function renderGMTab(tab) {
     import('./screens/search.js').then(m => m.renderSearch('gm'));
   } else if (tab === 'admin') {
     import('./screens/admin.js').then(m => m.renderAdmin());
+  } else if (tab === 'reports') {
+    closeGMPanel(); navigate('reports');
   } else if (tab === 'logs') {
     closeGMPanel(); populateLogFilters(); navigate('logs');
   } else if (tab === 'sites') {
@@ -86,11 +94,12 @@ export function applyRoleUI() {
   const gmBtn = document.getElementById('btn-open-gm');
   if (gmBtn) gmBtn.style.display = (D.role === 'GeneralManager') ? '' : 'none';
 
-  // GeneralManager: search in nav, no reports (reports via GM panel)
-  // SiteManager: reports in nav, no search
+  // SiteManager sees reports in nav; GeneralManager sees search in nav (reports via GM panel)
   const isGM = D.role === 'GeneralManager';
-  document.getElementById('nav-search')?.style && (document.getElementById('nav-search').style.display = isGM ? '' : 'none');
-  document.getElementById('nav-reports')?.style && (document.getElementById('nav-reports').style.display = isGM ? 'none' : '');
+  const navSearch  = document.getElementById('nav-search');
+  const navReports = document.getElementById('nav-reports');
+  if (navSearch)  navSearch.style.display  = isGM ? '' : 'none';
+  if (navReports) navReports.style.display = isGM ? 'none' : '';
 
   document.querySelectorAll('[data-role-require]').forEach(el => {
     const req = el.dataset.roleRequire;
