@@ -14,10 +14,20 @@ const WSTEPS = [
   { t:'אספקות והערות',   s:'5/5' },
 ];
 
+function getAvailableSites() {
+  const active = D.sites.filter(s => s.status === 'פעיל');
+  if (D.role === 'SiteManager') {
+    const assigned = new Set(D.siteAssignments.filter(a => a.email === D.user?.email).map(a => a.siteId));
+    return active.filter(s => assigned.has(s.id));
+  }
+  return active;
+}
+
 export function startLog() {
   if (!can('create_log')) { toast('אין הרשאה ליצור יומן','err'); return; }
-  if (!D.sites.filter(s => s.status === 'פעיל').length) {
-    toast('הוסף אתר פעיל תחילה','err'); go('sites'); return;
+  if (!D.isOnline) { toast('אין חיבור לאינטרנט — לא ניתן לשמור דיווח','err'); return; }
+  if (!getAvailableSites().length) {
+    toast('אין אתרים פעילים זמינים','err'); go('sites'); return;
   }
   D.wiz = { step:1, date:todayStr(), siteId:'', acts:[], note:'', gNote:'', emps:[], equip:[], dels:[], photos:[], editMode:false };
   drawWiz(); go('newlog');
@@ -94,11 +104,18 @@ function bindWizStep(step) {
     document.querySelectorAll('.wiz-emp-item').forEach(item => {
       item.addEventListener('click', () => {
         const id = item.dataset.id, busy = item.dataset.busy==='1', sel = D.wiz.emps.includes(id);
-        if (busy && !sel) { toast(item.dataset.name+' כבר מדווח היום','err'); return; }
-        const a = D.wiz.emps, idx = a.indexOf(id);
-        idx === -1 ? a.push(id) : a.splice(idx,1);
-        item.classList.toggle('on');
-        item.querySelector('.sel-check').textContent = D.wiz.emps.includes(id) ? '✓' : '';
+        const toggle = () => {
+          const a = D.wiz.emps, idx = a.indexOf(id);
+          idx === -1 ? a.push(id) : a.splice(idx,1);
+          item.classList.toggle('on');
+          item.querySelector('.sel-check').textContent = D.wiz.emps.includes(id) ? '✓' : '';
+        };
+        if (busy && !sel) {
+          const site = item.dataset.busysite || 'אתר אחר';
+          if (confirm(`${item.dataset.name} כבר מדווח ב${site} בתאריך זה.\nלהוסיף גם לדיווח זה?`)) toggle();
+          return;
+        }
+        toggle();
       });
     });
   }
@@ -130,7 +147,7 @@ function bindWizStep(step) {
 }
 
 function wiz1() {
-  const sites = D.sites.filter(s => s.status === 'פעיל');
+  const sites = getAvailableSites();
   if (D.wiz.editMode) {
     const site = D.sites.find(s => s.id === D.wiz.siteId);
     return `<div class="form-group"><label class="form-label">תאריך</label>
@@ -165,13 +182,19 @@ function wiz2() {
 function wiz3() {
   const emps = D.employees.filter(e => e.active === 'פעיל');
   if (!emps.length) return `<div class="empty"><div class="empty-icon">👷</div><div class="empty-title">אין עובדים פעילים</div></div>`;
-  const busyIds = D.attendance.filter(a => a.date === (D.wiz.date||todayStr())).map(a => a.empId);
+  // Attendance at OTHER sites on the same date (not this log's site)
+  const otherSiteAtt = D.attendance.filter(a =>
+    a.date === (D.wiz.date||todayStr()) && a.siteId !== D.wiz.siteId && a.logId !== D.wiz.editLogId
+  );
+  const busyIds   = otherSiteAtt.map(a => a.empId);
+  const busySite  = {}; // empId → site name
+  otherSiteAtt.forEach(a => { const s = D.sites.find(x=>x.id===a.siteId); busySite[a.empId] = s?.name || 'אתר אחר'; });
   return emps.map(e => {
     const busy = busyIds.includes(e.id) && !D.wiz.emps.includes(e.id);
     const sel  = D.wiz.emps.includes(e.id);
-    return `<div class="sel-item wiz-emp-item ${sel?'on':''} ${busy?'dim':''}" data-id="${e.id}" data-busy="${busy?'1':'0'}" data-name="${e.name}">
+    return `<div class="sel-item wiz-emp-item ${sel?'on':''} ${busy?'dim':''}" data-id="${e.id}" data-busy="${busy?'1':'0'}" data-name="${e.name}" data-busysite="${busySite[e.id]||''}">
       <div class="sel-check">${sel?'✓':''}</div>
-      <div><div class="li-name">${e.name}</div><div class="muted">${e.profession||''}${busy?' · כבר מדווח':''}</div></div>
+      <div><div class="li-name">${e.name}</div><div class="muted">${e.profession||''}${busy?` · מדווח ב${busySite[e.id]||'אתר אחר'}`:''}</div></div>
     </div>`;
   }).join('');
 }
@@ -293,6 +316,7 @@ function copyYesterday() {
 
 async function saveLog() {
   if (D.wiz.editMode) { await saveLogEdit(); return; }
+  if (!D.isOnline) { toast('אין חיבור לאינטרנט — לא ניתן לשמור','err'); return; }
   const w = D.wiz;
   const site = D.sites.find(s => s.id === w.siteId);
   if (!site) { toast('אתר לא נמצא','err'); return; }
@@ -327,6 +351,7 @@ async function saveLog() {
 }
 
 async function saveLogEdit() {
+  if (!D.isOnline) { toast('אין חיבור לאינטרנט — לא ניתן לשמור','err'); return; }
   const w = D.wiz;
   const log = D.logs.find(l => l.id===w.editLogId);
   if (!log) { toast('יומן לא נמצא','err'); return; }

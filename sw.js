@@ -1,4 +1,4 @@
-const CACHE = 'cnstr-v2';
+const CACHE = 'cnstr-v3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -10,6 +10,7 @@ const ASSETS = [
   '/js/api.js',
   '/js/state.js',
   '/js/auth.js',
+  '/js/offline.js',
   '/js/screens/dashboard.js',
   '/js/screens/employees.js',
   '/js/screens/sites.js',
@@ -18,6 +19,11 @@ const ASSETS = [
   '/js/screens/wizard.js',
   '/js/screens/photos.js',
   '/js/screens/reports.js',
+  '/js/screens/search.js',
+  '/js/screens/admin.js',
+  '/js/screens/payroll.js',
+  '/js/screens/equip-report.js',
+  '/js/screens/calendar.js',
 ];
 
 self.addEventListener('install', e => {
@@ -47,7 +53,7 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Network-first for navigation (HTML pages) so updates are picked up
+  // Network-first for navigation so updates are picked up
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request).then(res => {

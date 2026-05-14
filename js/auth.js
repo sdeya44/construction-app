@@ -5,6 +5,7 @@ import { showLoad, setLoad, hideLoad, toast, go } from './utils.js';
 import { renderDash, startAutoRefresh } from './screens/dashboard.js';
 import { initSelects } from './screens/reports.js';
 import { applyRoleUI } from './app.js';
+import { loadCache, updateStatusBar, startOfflineMonitor } from './offline.js';
 
 export function signIn() {
   const tc = google.accounts.oauth2.initTokenClient({
@@ -27,10 +28,23 @@ export function tryAutoLogin() {
     const s = localStorage.getItem(USER_KEY);
     if (!s) return;
     const saved = JSON.parse(s);
+
+    // If offline, boot from cache immediately without waiting for OAuth
+    if (!navigator.onLine) {
+      D.user = saved;
+      bootOffline();
+      return;
+    }
+
     const tc = google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID, scope: SCOPES, hint: saved.email||'',
       callback: async r => {
-        if (!r.access_token) return;
+        if (!r.access_token) {
+          // Token refresh failed — try offline cache
+          D.user = saved;
+          bootOffline();
+          return;
+        }
         D.token = r.access_token;
         D.user  = saved;
         await boot();
@@ -38,6 +52,34 @@ export function tryAutoLogin() {
     });
     tc.requestAccessToken({ prompt: 'none' });
   } catch {}
+}
+
+async function bootOffline() {
+  document.getElementById('login-screen').style.display = 'none';
+  showLoad('טוען נתונים שמורים...');
+  const snap = await loadCache();
+  hideLoad();
+  if (!snap) {
+    document.getElementById('login-screen').style.display = 'flex';
+    toast('אין חיבור לאינטרנט ואין נתונים שמורים','err');
+    return;
+  }
+  // Restore cached state fields into D
+  const skip = new Set(['token','wiz']);
+  for (const [k,v] of Object.entries(snap)) {
+    if (!skip.has(k)) D[k] = v;
+  }
+  D.isOnline = false;
+  document.getElementById('app-main').style.display = 'flex';
+  applyRoleUI();
+  initSelects();
+  renderDash();
+  updateStatusBar(false);
+  startOfflineMonitor(online => {
+    D.isOnline = online;
+    if (online) toast('חיבור לאינטרנט חזר — רענן את הדף לטעינת נתונים עדכניים','ok');
+  });
+  toast('מצב לא מקוון — מוצגים נתונים שמורים','warn');
 }
 
 async function boot() {
@@ -54,10 +96,33 @@ async function boot() {
     initSelects();
     renderDash();
     startAutoRefresh();
+    updateStatusBar(true);
+    startOfflineMonitor(online => {
+      D.isOnline = online;
+      if (!online) toast('אין חיבור — לא ניתן לשמור','warn');
+      else toast('חיבור חזר','ok');
+    });
     toast('מחובר ✓','ok');
   } catch(e) {
     hideLoad();
-    document.getElementById('app-main').style.display = 'flex';
-    toast('שגיאת טעינה: '+e.message,'err');
+    // Try loading cached data as fallback
+    const snap = await loadCache();
+    if (snap) {
+      const skip = new Set(['token','wiz']);
+      for (const [k,v] of Object.entries(snap)) {
+        if (!skip.has(k)) D[k] = v;
+      }
+      D.isOnline = false;
+      document.getElementById('app-main').style.display = 'flex';
+      applyRoleUI();
+      initSelects();
+      renderDash();
+      updateStatusBar(false);
+      startOfflineMonitor(online => { D.isOnline = online; });
+      toast('שגיאת טעינה — מוצגים נתונים שמורים','warn');
+    } else {
+      document.getElementById('app-main').style.display = 'flex';
+      toast('שגיאת טעינה: '+e.message,'err');
+    }
   }
 }

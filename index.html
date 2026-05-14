@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#1a2744">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="אתרי בנייה">
-  <title>ניהול אתרי בנייה</title>
+  <meta name="apple-mobile-web-app-title" content="כיאן הנדסה">
+  <title>כיאן הנדסה — ניהול אתרים</title>
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -24,8 +24,8 @@
 
 <div id="login-screen">
   <div class="l-logo">🏗️</div>
-  <div class="l-title">ניהול אתרי בנייה</div>
-  <div class="l-sub">מערכת דיווח יומי לצוות ניהול</div>
+  <div class="l-title">כיאן הנדסה</div>
+  <div class="l-sub">מערכת ניהול אתרי בנייה</div>
   <div class="l-card">
     <p>התחבר עם חשבון Google שלך כדי להיכנס למערכת</p>
     <button id="g-btn">
@@ -43,11 +43,17 @@
 
 <div id="app-main" style="display:none;flex-direction:column;height:100%;">
 
+  <!-- STATUS BAR -->
+  <div id="status-bar" class="status-bar online" style="display:none">
+    <div class="status-dot"></div><span>מחובר</span>
+  </div>
+
   <!-- DASHBOARD -->
   <div id="s-dash" class="screen active">
     <div class="topbar">
-      <div class="fg"><div class="topbar-title">דשבורד</div><div class="topbar-sub" id="d-date"></div></div>
+      <div class="fg"><div class="topbar-title">כיאן הנדסה</div><div class="topbar-sub" id="d-date"></div></div>
       <button class="topbar-btn" id="refresh-btn" style="margin-left:6px">🔄</button>
+      <button class="topbar-btn" id="btn-open-gm" title="מנהל ראשי" style="display:none;background:linear-gradient(135deg,#1d4ed8,#1e40af);color:#fff;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:700">מנהל ראשי ▲</button>
       <button class="topbar-btn" id="logout-btn">⚙️</button>
     </div>
     <div class="scroll">
@@ -183,6 +189,12 @@
     </div>
   </div>
 
+  <!-- SEARCH -->
+  <div id="s-search" class="screen">
+    <div class="topbar"><div class="topbar-title fg">חיפוש</div></div>
+    <div id="search-content" style="padding:12px 16px;height:100%;overflow-y:auto"></div>
+  </div>
+
   <div class="bottom-nav">
     <button class="nav-item active" id="nav-dash">
       <span class="nav-icon">🏠</span><span class="nav-label">בית</span><div class="nav-dot"></div>
@@ -194,14 +206,11 @@
       <span class="nav-icon" style="font-size:28px;background:linear-gradient(135deg,var(--blue),var(--blue2));border-radius:14px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;margin-top:-12px;box-shadow:0 4px 16px rgba(45,91,227,.4)">➕</span>
       <span class="nav-label" style="margin-top:2px">דיווח</span><div class="nav-dot"></div>
     </button>
-    <button class="nav-item" id="nav-emp">
-      <span class="nav-icon">👷</span><span class="nav-label">עובדים</span><div class="nav-dot"></div>
+    <button class="nav-item" id="nav-logs">
+      <span class="nav-icon">📋</span><span class="nav-label">יומנים</span><div class="nav-dot"></div>
     </button>
-    <button class="nav-item" id="nav-mgmt">
-      <span class="nav-icon">⚙️</span><span class="nav-label">ניהול</span><div class="nav-dot"></div>
-    </button>
-    <button class="nav-item" id="nav-reports">
-      <span class="nav-icon">📊</span><span class="nav-label">דוחות</span><div class="nav-dot"></div>
+    <button class="nav-item" id="nav-search">
+      <span class="nav-icon">🔍</span><span class="nav-label">חיפוש</span><div class="nav-dot"></div>
     </button>
   </div>
 </div>
@@ -224,6 +233,7 @@
       </select>
     </div>
     <div class="form-group"><label class="form-label">טלפון</label><input type="tel" class="form-input" id="e-phone" placeholder="050-0000000"></div>
+    <div class="form-group"><label class="form-label">תעריף יומי (₪)</label><input type="number" class="form-input" id="e-daily-rate" placeholder="0" min="0" step="10"></div>
     <div class="form-group"><label class="form-label">סטטוס</label>
       <div class="status-toggle">
         <div class="status-chip active-s" id="sc-active">✅ פעיל</div>
@@ -346,6 +356,37 @@
 <input type="file" id="site-cam-input" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="wiz-cam-input" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="wiz-gal-input" accept="image/*" style="display:none">
+
+<!-- GM PANEL -->
+<div id="gm-panel" style="display:none">
+  <div class="gm-inner">
+    <div class="gm-topbar">
+      <div>
+        <div class="gm-biz">כיאן הנדסה</div>
+        <div class="gm-subtitle">ממשק מנהל ראשי</div>
+      </div>
+      <button class="gm-close-btn" id="btn-close-gm">✕</button>
+    </div>
+    <div class="gm-tabs" id="gm-tabs">
+      <button class="gm-tab active" data-tab="reports">📊 דוחות</button>
+      <button class="gm-tab" data-tab="payroll">💰 שכר</button>
+      <button class="gm-tab" data-tab="equip">🚜 ציוד</button>
+      <button class="gm-tab" data-tab="calendar">📅 לוח</button>
+      <button class="gm-tab" data-tab="search">🔍 חיפוש</button>
+      <button class="gm-tab" data-tab="logs">📋 יומנים</button>
+      <button class="gm-tab" data-tab="emp">👷 עובדים</button>
+      <button class="gm-tab" data-tab="sites">📍 אתרים</button>
+      <button class="gm-tab" data-tab="mgmt">⚙️ ניהול</button>
+      <button class="gm-tab" data-tab="admin">👤 משתמשים</button>
+    </div>
+    <div class="gm-content" id="gm-content">
+      <div class="empty" style="margin-top:40px">
+        <div class="empty-icon">📊</div>
+        <div class="empty-title">בחר לשונית</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>

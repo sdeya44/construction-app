@@ -6,6 +6,11 @@ import { openSitePhotos } from './photos.js';
 
 export function renderSites() {
   let s = [...D.sites];
+  // SiteManagers only see their assigned sites
+  if (D.role === 'SiteManager') {
+    const assigned = new Set(D.siteAssignments.filter(a => a.email === D.user?.email).map(a => a.siteId));
+    s = s.filter(x => assigned.has(x.id));
+  }
   const tab = D.siteTab;
   if (tab === 'active') s = s.filter(x => x.status === 'פעיל');
   else if (tab === 'frozen') s = s.filter(x => x.status !== 'פעיל' && x.status !== 'הסתיים');

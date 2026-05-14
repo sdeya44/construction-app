@@ -1,4 +1,4 @@
-import { MN, DAYS_HE } from '../config.js';
+import { MN, DAYS_HE, BUSINESS_NAME } from '../config.js';
 import { D } from '../state.js';
 import { pad, monthPrefix, getDaysInMonth, toast, openSheet, isLocked, getActs, exportCSV } from '../utils.js';
 import { sAppend, rebuildTab, logAudit } from '../api.js';
@@ -146,12 +146,14 @@ export function exportAllEmployeesPDF() {
   const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;800&display=swap" rel="stylesheet">
     <style>*{font-family:'Heebo',sans-serif;box-sizing:border-box;margin:0;padding:0}body{direction:rtl;font-size:11px}
+    .biz-hdr{color:#1d4ed8;font-size:12px;font-weight:800;text-align:center;padding:6px 0 2px}
     .page{padding:6mm}.hdr{background:#1a2744;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
     .emp-name{font-size:16px;font-weight:800;color:#f0a500}.sub2{font-size:12px;color:rgba(255,255,255,.7)}
     table{width:100%;border-collapse:collapse;font-size:10px}th{background:#2d5be3;color:#fff;padding:3px 1px;text-align:center;font-size:9px}
     td{padding:4px 1px;border:1px solid #e5e9f5;text-align:center}.tot-h{background:#f0a500;color:#1a2744;font-weight:800}
     .tot-c{background:#f0a500;color:#1a2744;font-weight:800;font-size:13px}.footer{text-align:center;color:#888;font-size:10px;margin-top:6px}
-    @media print{.page{padding:4mm}}</style></head><body>${pages}</body></html>`;
+    @media print{.page{padding:4mm}}</style></head><body>
+    <div class="biz-hdr">${BUSINESS_NAME}</div>${pages}</body></html>`;
   openPrint(html); toast(`נפתח חלון הדפסה – ${emps.length} עובדים`,'ok');
 }
 
@@ -220,10 +222,12 @@ function buildPrintDoc(title, subtitle, body) {
   return `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;800&display=swap" rel="stylesheet">
     <style>*{font-family:'Heebo',sans-serif;box-sizing:border-box}body{margin:16px;direction:rtl;font-size:12px}
+    .biz-name{color:#1d4ed8;font-size:13px;font-weight:800;text-align:center;margin-bottom:2px}
     h2{color:#1a2744;text-align:center;font-size:18px;margin-bottom:4px}.sub{color:#666;text-align:center;font-size:12px;margin-bottom:16px}
     table{width:100%;border-collapse:collapse}th{background:#1a2744;color:#fff;padding:8px 6px;font-size:11px;text-align:center}
     td{padding:7px 6px;border-bottom:1px solid #e5e9f5;font-size:11px;text-align:center;vertical-align:top}
     tr:nth-child(even)td{background:#f0f3fa}@media print{body{margin:8px}}</style></head><body>
+    <div class="biz-name">${BUSINESS_NAME}</div>
     <h2>${title}</h2><div class="sub">${subtitle}</div>${body}</body></html>`;
 }
 

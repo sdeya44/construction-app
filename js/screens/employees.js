@@ -49,7 +49,7 @@ export function openAddEmp() {
   if (!can('manage_employees')) { toast('אין הרשאה','err'); return; }
   D.editEmpId = null; D.empStatus = 'פעיל';
   document.getElementById('emp-sh-title').textContent = '➕ הוספת עובד';
-  ['e-name','e-phone'].forEach(id => document.getElementById(id).value = '');
+  ['e-name','e-phone','e-daily-rate'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   selectStatus('active');
   document.getElementById('btn-save-emp').textContent = 'שמור עובד';
   openSheet('sh-emp');
@@ -62,6 +62,8 @@ export function openEditEmp(id) {
   document.getElementById('e-name').value  = e.name;
   document.getElementById('e-prof').value  = e.profession || 'פועל';
   document.getElementById('e-phone').value = e.phone || '';
+  const rateEl = document.getElementById('e-daily-rate');
+  if (rateEl) rateEl.value = e.dailyRate || '';
   selectStatus(e.active === 'פעיל' ? 'active' : 'frozen');
   document.getElementById('btn-save-emp').textContent = 'עדכן עובד';
   openSheet('sh-emp');
@@ -77,20 +79,21 @@ export async function saveEmp() {
   if (!can('manage_employees')) { toast('אין הרשאה','err'); return; }
   const name  = document.getElementById('e-name').value.trim();
   if (!name) { toast('יש להזין שם','err'); return; }
-  const prof  = document.getElementById('e-prof').value;
-  const phone = document.getElementById('e-phone').value.trim();
+  const prof      = document.getElementById('e-prof').value;
+  const phone     = document.getElementById('e-phone').value.trim();
+  const dailyRate = parseFloat(document.getElementById('e-daily-rate')?.value || '0') || 0;
   setBtn('btn-save-emp', true, 'שומר...');
   try {
     if (D.editEmpId) {
       const i = D.employees.findIndex(e => e.id === D.editEmpId);
-      D.employees[i] = { ...D.employees[i], name, profession: prof, phone, active: D.empStatus };
-      await sWrite('Employees','A1',[HDR.Employees,...D.employees.map(e=>[e.id,e.name,e.phone,e.profession,e.active,e.notes||''])]);
+      D.employees[i] = { ...D.employees[i], name, profession: prof, phone, active: D.empStatus, dailyRate };
+      await sWrite('Employees','A1',[HDR.Employees,...D.employees.map(e=>[e.id,e.name,e.phone,e.profession,e.active,e.notes||'',e.dailyRate||''])]);
       await logAudit('UPDATE','Employee',D.editEmpId,`עדכון עובד: ${name}`);
       toast('עובד עודכן ✓','ok');
     } else {
       const id = uid();
-      await sAppend('Employees',[id,name,phone,prof,D.empStatus,'']);
-      D.employees.push({ id, name, phone, profession: prof, active: D.empStatus, notes: '' });
+      await sAppend('Employees',[id,name,phone,prof,D.empStatus,'',dailyRate||'']);
+      D.employees.push({ id, name, phone, profession: prof, active: D.empStatus, notes: '', dailyRate });
       await logAudit('CREATE','Employee',id,`הוספת עובד: ${name}`);
       toast('עובד נוסף ✓','ok');
     }

@@ -25,8 +25,8 @@ export function renderDash() {
 function renderRoleBadge() {
   const el = document.getElementById('d-role-badge');
   if (!el) return;
-  const colors = { Admin:'b-red', Manager:'b-blue', Viewer:'b-gray' };
-  const labels = { Admin:'מנהל מערכת', Manager:'מנהל', Viewer:'צופה' };
+  const colors = { GeneralManager:'b-blue', SiteManager:'b-green', Admin:'b-blue', Manager:'b-green', Viewer:'b-gray' };
+  const labels = { GeneralManager:'מנהל ראשי', SiteManager:'מנהל אתר', Admin:'מנהל ראשי', Manager:'מנהל אתר', Viewer:'צופה' };
   el.className = 'badge ' + (colors[D.role]||'b-gray');
   el.textContent = labels[D.role] || D.role;
 }

@@ -1,4 +1,4 @@
-import { MN } from '../config.js';
+import { MN, BUSINESS_NAME } from '../config.js';
 import { D } from '../state.js';
 import { logToRow, attToRow, leToRow, delToRow } from '../state.js';
 import { todayStr, fmtDate, toast, can, confirm2, openSheet, closeSheet, isLocked, getActs, logCardHtml } from '../utils.js';
@@ -89,6 +89,11 @@ export function showLog(id) {
       </div>` : ''}
     ${log.notes ? `<div class="card-title">הערות</div>
       <div class="muted" style="margin-bottom:16px;line-height:1.6">${log.notes}</div>` : ''}
+    <div class="btn-row mt8">
+      <button class="btn btn-ghost fg" id="log-wa-btn" style="background:#25d366;color:#fff;border:none">
+        <span style="font-size:1.1em">💬</span> שתף בוואטסאפ
+      </button>
+    </div>
     ${canEdit||canDel ? `<div class="btn-row mt8">
       ${canEdit ? `<button class="btn btn-outline fg" id="log-edit-btn">✏️ ערוך</button>` : ''}
       ${canDel  ? `<button class="btn btn-danger fg" id="log-del-btn">🗑️ מחק</button>` : ''}
@@ -96,11 +101,28 @@ export function showLog(id) {
     <button class="btn btn-ghost mt8" id="log-close-btn">סגור</button>`;
 
   document.getElementById('log-close-btn')?.addEventListener('click', () => closeSheet('sh-log'));
+  document.getElementById('log-wa-btn')?.addEventListener('click', () => shareLogWhatsApp(log, att, eq, dl));
   document.getElementById('log-edit-btn')?.addEventListener('click', () => {
     closeSheet('sh-log'); editLog(id);
   });
   document.getElementById('log-del-btn')?.addEventListener('click', () => confirmDelLog(id, log));
   openSheet('sh-log');
+}
+
+function shareLogWhatsApp(log, att, eq, dl) {
+  const acts = getActs(log);
+  const lines = [
+    `*${BUSINESS_NAME} — דיווח יומי*`,
+    `אתר: ${log.siteName}`,
+    `תאריך: ${fmtDate(log.date)}`,
+    acts.length ? `פעילויות: ${acts.join(', ')}` : null,
+    att.length  ? `עובדים (${att.length}): ${att.map(a=>a.empName).join(', ')}` : null,
+    eq.length   ? `ציוד: ${eq.map(e=>e.eqName).join(', ')}` : null,
+    dl.length   ? `אספקות: ${dl.map(d=>`${d.material} (${d.suppName})`).join(', ')}` : null,
+    log.notes   ? `הערות: ${log.notes}` : null,
+  ].filter(Boolean);
+  const url = `https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`;
+  window.open(url, '_blank');
 }
 
 function confirmDelLog(id, log) {

@@ -1,39 +1,45 @@
 import { ROLES } from './config.js';
 import { sRead } from './api.js';
+import { saveCache } from './offline.js';
 
-// ── GLOBAL STATE ──────────────────────────────────────────────────────────────
 export const D = {
-  user: null, token: null, role: 'Viewer', activeScreen: 'dash',
+  user: null, token: null,
+  role: 'SiteManager',
+  isOnline: navigator.onLine,
+  lastSync: null,
+  activeScreen: 'dash',
   sites: [], employees: [], equipment: [], suppliers: [],
   logs: [], attendance: [], logEquip: [], deliveries: [],
-  monthLocks: [], photos: [], users: [],
+  monthLocks: [], photos: [], users: [], siteAssignments: [],
   logTab: 'all', empTab: 'active', siteTab: 'active', mgmtTab: 'suppliers',
+  gmTab: 'users',
   editSiteId: null, editEmpId: null, editSuppId: null, editEquipId: null,
   empStatus: 'פעיל', siteStatus: 'פעיל', suppStatus: 'פעיל', equipStatus: 'פעיל',
   wiz: {}, reportMonth: null, reportYear: null,
 };
 
-// ── LOAD ALL DATA ─────────────────────────────────────────────────────────────
 export async function loadAll() {
-  const [si,em,eq,su,lg,at,le,dl,ml,ph,us] = await Promise.all([
-    sRead('Sites',       'A2:E5000'),
-    sRead('Employees',   'A2:F5000'),
-    sRead('Equipment',   'A2:E5000'),
-    sRead('Suppliers',   'A2:E5000'),
-    sRead('DailyLogs',   'A2:P5000'),
-    sRead('Attendance',  'A2:F5000'),
-    sRead('LogEquipment','A2:F5000'),
-    sRead('Deliveries',  'A2:G5000'),
-    sRead('MonthLocks',  'A2:H5000'),
-    sRead('SitePhotos',  'A2:J5000'),
-    sRead('Users',       'A2:F5000'),
+  const [si,em,eq,su,lg,at,le,dl,ml,ph,us,sa] = await Promise.all([
+    sRead('Sites',           'A2:E5000'),
+    sRead('Employees',       'A2:G5000'),
+    sRead('Equipment',       'A2:E5000'),
+    sRead('Suppliers',       'A2:E5000'),
+    sRead('DailyLogs',       'A2:P5000'),
+    sRead('Attendance',      'A2:F5000'),
+    sRead('LogEquipment',    'A2:F5000'),
+    sRead('Deliveries',      'A2:G5000'),
+    sRead('MonthLocks',      'A2:H5000'),
+    sRead('SitePhotos',      'A2:J5000'),
+    sRead('Users',           'A2:F5000'),
+    sRead('SiteAssignments', 'A2:F5000'),
   ]);
 
   D.sites      = (si||[]).filter(r=>r[0]).map(r=>({
     id:r[0], name:r[1]||'', address:r[2]||'', status:r[3]||'פעיל', notes:r[4]||''
   }));
   D.employees  = (em||[]).filter(r=>r[0]).map(r=>({
-    id:r[0], name:r[1]||'', phone:r[2]||'', profession:r[3]||'', active:r[4]||'פעיל', notes:r[5]||''
+    id:r[0], name:r[1]||'', phone:r[2]||'', profession:r[3]||'',
+    active:r[4]||'פעיל', notes:r[5]||'', dailyRate: r[6] ? +r[6] : 0
   }));
   D.equipment  = (eq||[]).filter(r=>r[0]).map(r=>({
     id:r[0], name:r[1]||'', type:r[2]||'', active:r[3]||'פעיל', notes:r[4]||''
@@ -68,16 +74,29 @@ export async function loadAll() {
     by:r[7]||'', at:r[8]||'', logId:r[9]||''
   }));
   D.users      = (us||[]).filter(r=>r[0]).map(r=>({
-    id:r[0], email:r[1]||'', name:r[2]||'', role:r[3]||'Viewer',
+    id:r[0], email:r[1]||'', name:r[2]||'', role:r[3]||'SiteManager',
+    addedAt:r[4]||'', addedBy:r[5]||''
+  }));
+  D.siteAssignments = (sa||[]).filter(r=>r[0]).map(r=>({
+    id:r[0], email:r[1]||'', siteId:r[2]||'', siteName:r[3]||'',
     addedAt:r[4]||'', addedBy:r[5]||''
   }));
 
-  // Determine role from Users sheet
+  // Determine role — migrate legacy roles
   const userRecord = D.users.find(u => u.email === D.user?.email);
-  D.role = userRecord?.role || 'Admin'; // Default Admin if no Users sheet entry yet
+  const raw = userRecord?.role || 'GeneralManager';
+  if      (raw === 'Admin')              D.role = 'GeneralManager';
+  else if (raw === 'Manager' || raw === 'Viewer') D.role = 'SiteManager';
+  else                                   D.role = raw;
+
+  D.isOnline = true;
+  D.lastSync = new Date();
+  try {
+    const { token, wiz, ...snap } = D;
+    await saveCache(snap);
+  } catch {}
 }
 
-// ── SERIALIZE HELPERS ─────────────────────────────────────────────────────────
 export function logToRow(l) {
   return [
     l.id, l.date, l.siteId, l.siteName, l.manager,

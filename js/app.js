@@ -9,7 +9,7 @@ import { renderMgmt, setMgmtTab, mgmtAdd, openAddSupp, openAddEquip, selectSuppS
 import { startLog } from './screens/wizard.js';
 import { handlePhotoUpload } from './screens/photos.js';
 import { genReport, exportSummaryPDF, exportAllEmployeesPDF, exportMonthCSV, exportSiteMonthPDF, lockMonth, drawLocks, initSelects } from './screens/reports.js';
-import { drawLocks as _drawLocks } from './screens/reports.js';
+import { renderSearch } from './screens/search.js';
 
 // ── SCREEN RENDERER MAP ───────────────────────────────────────────────────────
 export function renderCurrentScreen() {
@@ -20,6 +20,7 @@ export function renderCurrentScreen() {
   else if (s==='sites')  renderSites();
   else if (s==='mgmt')   renderMgmt();
   else if (s==='reports'){ /* genReport on demand */ }
+  else if (s==='search') renderSearch('field');
 }
 
 // ── NAVIGATION WITH RENDER ────────────────────────────────────────────────────
@@ -28,10 +29,65 @@ function navigate(s) {
   renderCurrentScreen();
 }
 
+// ── GM PANEL ──────────────────────────────────────────────────────────────────
+export function openGMPanel() {
+  const panel = document.getElementById('gm-panel');
+  if (!panel) return;
+  panel.style.display = 'flex';
+  requestAnimationFrame(() => panel.classList.add('open'));
+  renderGMTab(D.gmTab || 'reports');
+}
+
+export function closeGMPanel() {
+  const panel = document.getElementById('gm-panel');
+  if (!panel) return;
+  panel.classList.remove('open');
+  panel.addEventListener('transitionend', () => { panel.style.display = 'none'; }, { once: true });
+}
+
+export function renderGMTab(tab) {
+  D.gmTab = tab;
+  // Update tab highlight
+  document.querySelectorAll('#gm-tabs .gm-tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === tab);
+  });
+  // Render content
+  if (tab === 'reports') {
+    go('reports'); closeGMPanel();
+  } else if (tab === 'payroll') {
+    import('./screens/payroll.js').then(m => m.renderPayroll());
+  } else if (tab === 'equip') {
+    import('./screens/equip-report.js').then(m => m.renderEquipReport());
+  } else if (tab === 'calendar') {
+    import('./screens/calendar.js').then(m => m.renderCalendar());
+  } else if (tab === 'search') {
+    import('./screens/search.js').then(m => m.renderSearch('gm'));
+  } else if (tab === 'admin') {
+    import('./screens/admin.js').then(m => m.renderAdmin());
+  } else if (tab === 'logs') {
+    closeGMPanel(); populateLogFilters(); navigate('logs');
+  } else if (tab === 'sites') {
+    closeGMPanel(); navigate('sites');
+  } else if (tab === 'emp') {
+    closeGMPanel(); navigate('emp');
+  } else if (tab === 'mgmt') {
+    closeGMPanel(); navigate('mgmt');
+  }
+}
+
 // ── ROLE-BASED UI ─────────────────────────────────────────────────────────────
 export function applyRoleUI() {
   const addLogBtn = document.getElementById('nav-newlog');
   if (addLogBtn) addLogBtn.style.display = can('create_log') ? '' : 'none';
+
+  // Show GM button only for GeneralManager
+  const gmBtn = document.getElementById('btn-open-gm');
+  if (gmBtn) gmBtn.style.display = (D.role === 'GeneralManager') ? '' : 'none';
+
+  // Show/hide search in field nav
+  const navSearch = document.getElementById('nav-search');
+  if (navSearch) navSearch.style.display = '';
+
   document.querySelectorAll('[data-role-require]').forEach(el => {
     const req = el.dataset.roleRequire;
     el.style.display = can(req) ? '' : 'none';
@@ -47,9 +103,20 @@ function bindEvents() {
   document.getElementById('nav-dash')?.addEventListener('click',    () => navigate('dash'));
   document.getElementById('nav-sites')?.addEventListener('click',   () => navigate('sites'));
   document.getElementById('nav-newlog')?.addEventListener('click',  startLog);
-  document.getElementById('nav-emp')?.addEventListener('click',     () => navigate('emp'));
-  document.getElementById('nav-mgmt')?.addEventListener('click',   () => navigate('mgmt'));
-  document.getElementById('nav-reports')?.addEventListener('click', () => navigate('reports'));
+  document.getElementById('nav-logs')?.addEventListener('click',    () => { populateLogFilters(); navigate('logs'); });
+  document.getElementById('nav-search')?.addEventListener('click',  () => navigate('search'));
+
+  // GM panel open/close
+  document.getElementById('btn-open-gm')?.addEventListener('click', openGMPanel);
+  document.getElementById('btn-close-gm')?.addEventListener('click', closeGMPanel);
+  document.getElementById('gm-panel')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('gm-panel')) closeGMPanel();
+  });
+
+  // GM tabs
+  document.querySelectorAll('#gm-tabs .gm-tab').forEach(tab => {
+    tab.addEventListener('click', () => renderGMTab(tab.dataset.tab));
+  });
 
   // Dashboard
   document.getElementById('refresh-btn')?.addEventListener('click', refreshData);
