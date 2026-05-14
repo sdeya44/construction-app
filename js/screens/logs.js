@@ -123,13 +123,20 @@ function shareLogWhatsApp(log, att, eq, dl) {
   ].filter(Boolean);
   const text = lines.join('\n');
   const encoded = encodeURIComponent(text);
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  if (isMobile) {
-    // Direct URL scheme — opens WhatsApp immediately with message pre-filled
-    window.location.href = `whatsapp://send?text=${encoded}`;
-  } else {
-    window.open(`https://wa.me/?text=${encoded}`, '_blank');
+
+  // iOS: use native share sheet (most reliable — shows WhatsApp + all apps)
+  if (navigator.share) {
+    navigator.share({ text }).catch(() => {});
+    return;
   }
+  // Android: direct deep link
+  if (/Android/i.test(navigator.userAgent)) {
+    window.location.href = `whatsapp://send?text=${encoded}`;
+    return;
+  }
+  // Desktop: WhatsApp Web
+  window.open(`https://wa.me/?text=${encoded}`, '_blank');
+}
 }
 
 function confirmDelLog(id, log) {
