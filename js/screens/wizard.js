@@ -167,7 +167,7 @@ function wiz3() {
   return emps.map(e => {
     const busy = busyIds.includes(e.id) && !D.wiz.emps.includes(e.id);
     const sel  = D.wiz.emps.includes(e.id);
-    return `<div class="sel-item ${sel?'on':''} ${busy?'dim':''}" data-id="${e.id}" data-busy="${busy?'1':'0'}" data-name="${e.name}">
+    return `<div class="sel-item wiz-emp-item ${sel?'on':''} ${busy?'dim':''}" data-id="${e.id}" data-busy="${busy?'1':'0'}" data-name="${e.name}">
       <div class="sel-check">${sel?'✓':''}</div>
       <div><div class="li-name">${e.name}</div><div class="muted">${e.profession||''}${busy?' · כבר מדווח':''}</div></div>
     </div>`;
