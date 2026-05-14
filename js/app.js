@@ -33,16 +33,18 @@ function navigate(s) {
 export function openGMPanel() {
   const panel = document.getElementById('gm-panel');
   if (!panel) return;
+  panel._shouldClose = false;
   panel.style.display = 'flex';
   requestAnimationFrame(() => panel.classList.add('open'));
-  renderGMTab(D.gmTab || 'reports');
+  renderGMTab(D.gmTab || 'payroll');
 }
 
 export function closeGMPanel() {
   const panel = document.getElementById('gm-panel');
   if (!panel) return;
+  panel._shouldClose = true;
   panel.classList.remove('open');
-  panel.addEventListener('transitionend', () => { panel.style.display = 'none'; }, { once: true });
+  setTimeout(() => { if (panel._shouldClose) panel.style.display = 'none'; }, 380);
 }
 
 export function renderGMTab(tab) {
@@ -84,9 +86,11 @@ export function applyRoleUI() {
   const gmBtn = document.getElementById('btn-open-gm');
   if (gmBtn) gmBtn.style.display = (D.role === 'GeneralManager') ? '' : 'none';
 
-  // Show/hide search in field nav
-  const navSearch = document.getElementById('nav-search');
-  if (navSearch) navSearch.style.display = '';
+  // GeneralManager: search in nav, no reports (reports via GM panel)
+  // SiteManager: reports in nav, no search
+  const isGM = D.role === 'GeneralManager';
+  document.getElementById('nav-search')?.style && (document.getElementById('nav-search').style.display = isGM ? '' : 'none');
+  document.getElementById('nav-reports')?.style && (document.getElementById('nav-reports').style.display = isGM ? 'none' : '');
 
   document.querySelectorAll('[data-role-require]').forEach(el => {
     const req = el.dataset.roleRequire;
@@ -104,6 +108,7 @@ function bindEvents() {
   document.getElementById('nav-sites')?.addEventListener('click',   () => navigate('sites'));
   document.getElementById('nav-newlog')?.addEventListener('click',  startLog);
   document.getElementById('nav-logs')?.addEventListener('click',    () => { populateLogFilters(); navigate('logs'); });
+  document.getElementById('nav-reports')?.addEventListener('click', () => navigate('reports'));
   document.getElementById('nav-search')?.addEventListener('click',  () => navigate('search'));
 
   // GM panel open/close
