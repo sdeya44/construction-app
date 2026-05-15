@@ -82,17 +82,19 @@ export async function loadAll() {
     addedAt:r[4]||'', addedBy:r[5]||''
   }));
 
-  // Determine role
+  // Determine role from sheet
   const userRecord = D.users.find(u => u.email === D.user?.email);
   let raw = userRecord ? userRecord.role : 'SiteManager';
-  if (raw === 'Admin')                       raw = 'GeneralManager';
+  if (raw === 'Admin')                            raw = 'GeneralManager';
   else if (raw === 'Manager' || raw === 'Viewer') raw = 'SiteManager';
 
-  // If no GM exists anywhere in the system, current user must be GM to bootstrap
-  const hasExistingGM = D.users.some(u => u.role === 'GeneralManager' || u.role === 'Admin');
-  if (!hasExistingGM) raw = 'GeneralManager';
-
   D.role = raw;
+
+  // LocalStorage override: if this email was bootstrapped as GM, honour it
+  try {
+    const gmEmail = localStorage.getItem('cnstr_gm_v1');
+    if (gmEmail && gmEmail === D.user?.email) D.role = 'GeneralManager';
+  } catch {}
 
   D.isOnline = true;
   D.lastSync = new Date();
