@@ -1,7 +1,7 @@
 import { MN, BUSINESS_NAME } from '../config.js';
 import { D } from '../state.js';
 import { logToRow, attToRow, leToRow, delToRow } from '../state.js';
-import { todayStr, fmtDate, toast, can, confirm2, openSheet, closeSheet, isLocked, getActs, logCardHtml } from '../utils.js';
+import { todayStr, fmtDate, toast, can, confirm2, openSheet, closeSheet, isLocked, getActs, isDayOff, logCardHtml } from '../utils.js';
 import { sRead, rebuildTab, logAudit } from '../api.js';
 import { editLog } from './wizard.js';
 import { renderDash } from './dashboard.js';
@@ -60,11 +60,13 @@ export function showLog(id) {
   const canEdit = can('edit_log') && !lk;
   const canDel  = can('delete_log') && !lk;
 
+  const off = isDayOff(log);
   document.getElementById('sh-log-body').innerHTML = `
     ${lk ? '<div class="locked-bar">🔒 חודש נעול – לא ניתן לערוך</div>' : ''}
+    ${off ? `<div class="locked-bar" style="background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.2);color:var(--red)">🚫 ${log.other}</div>` : ''}
     <div class="sh-title">${log.siteName}</div>
     <div class="muted" style="margin-bottom:16px">${fmtDate(log.date)} · ${log.manager?.split('@')[0]}</div>
-    ${acts.length ? `<div class="card-title">פעילויות</div>
+    ${!off && acts.length ? `<div class="card-title">פעילויות</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
         ${acts.map(a=>`<span class="badge b-blue">${a}</span>`).join('')}
       </div>` : ''}

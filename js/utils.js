@@ -97,7 +97,12 @@ export function isLocked(ds) {
 }
 
 // ── LOG ACTIVITIES ────────────────────────────────────────────────────────────
+export function isDayOff(l) {
+  return (l.other || '').startsWith('יום חופש:');
+}
+
 export function getActs(l) {
+  if (isDayOff(l)) return [];
   const a = [];
   if (l.dig)  a.push('חפירה');
   if (l.base) a.push('מצעים');
@@ -152,16 +157,19 @@ export function logCardHtml(log, attendance) {
   const acts = getActs(log);
   const att  = attendance.filter(a => a.logId === log.id);
   const lk   = isLocked(log.date);
+  const off  = isDayOff(log);
   const [,mo,dy] = (log.date||'').split('-');
-  return `<div class="log-card" data-logid="${log.id}">
-    <div class="log-date">
+  return `<div class="log-card${off?' log-card-dayoff':''}" data-logid="${log.id}">
+    <div class="log-date${off?' log-date-off':''}">
       <div class="log-day">${dy||'?'}</div>
       <div class="log-mon">${MN[+mo]||''}</div>
     </div>
     <div class="log-info">
       <div class="log-site">${log.siteName} ${lk?'🔒':''}</div>
       <div class="log-meta">👷 ${att.length} עובדים · ${log.manager?.split('@')[0]||''}</div>
-      <div class="log-acts">${acts.map(a=>`<span class="act-tag">${a}</span>`).join('')}</div>
+      <div class="log-acts">
+        ${off ? `<span class="act-tag tag-dayoff">🚫 ${log.other}</span>` : acts.map(a=>`<span class="act-tag">${a}</span>`).join('')}
+      </div>
     </div>
   </div>`;
 }

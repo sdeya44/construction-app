@@ -29,7 +29,7 @@ export function startLog() {
   if (!getAvailableSites().length) {
     toast('אין אתרים פעילים זמינים','err'); go('sites'); return;
   }
-  D.wiz = { step:1, date:todayStr(), siteId:'', acts:[], note:'', gNote:'', emps:[], equip:[], dels:[], photos:[], editMode:false };
+  D.wiz = { step:1, date:todayStr(), siteId:'', acts:[], note:'', gNote:'', emps:[], equip:[], dels:[], photos:[], editMode:false, dayOff:false, dayOffReason:'' };
   drawWiz(); go('newlog');
 }
 
@@ -44,8 +44,11 @@ export function editLog(id) {
   if (log.dig)  acts.push('dig'); if (log.base) acts.push('base');
   if (log.form) acts.push('form');if (log.cast) acts.push('cast');
   if (log.strip)acts.push('strip');
-  D.wiz = { step:1, date:log.date, siteId:log.siteId, acts, note:log.other||'', gNote:log.notes||'',
-            emps:att, equip:eq, dels, editLogId:id, editVersion:log.version||1, editMode:true, photos:[] };
+  const isDayOff = (log.other || '').startsWith('יום חופש:');
+  const dayOffReason = isDayOff ? log.other.replace('יום חופש: ', '') : '';
+  D.wiz = { step:1, date:log.date, siteId:log.siteId, acts, note:isDayOff ? '' : (log.other||''), gNote:log.notes||'',
+            emps:att, equip:eq, dels, editLogId:id, editVersion:log.version||1, editMode:true, photos:[],
+            dayOff:isDayOff, dayOffReason };
   drawWiz(); go('newlog');
 }
 
@@ -99,6 +102,17 @@ function bindWizStep(step) {
       });
     });
     document.getElementById('w-note')?.addEventListener('input', e => { D.wiz.note = e.target.value; });
+    document.getElementById('wiz-dayoff-toggle')?.addEventListener('click', () => {
+      D.wiz.dayOff = !D.wiz.dayOff;
+      if (D.wiz.dayOff) { D.wiz.acts = []; D.wiz.note = ''; }
+      drawWiz();
+    });
+    document.querySelectorAll('.wiz-dayoff-reason').forEach(chip => {
+      chip.addEventListener('click', () => {
+        D.wiz.dayOffReason = chip.dataset.reason;
+        drawWiz();
+      });
+    });
   }
   if (step === 3) {
     document.querySelectorAll('.wiz-emp-item').forEach(item => {
@@ -163,7 +177,7 @@ function wiz1() {
       <option value="">— בחר אתר —</option>
       ${sites.map(s=>`<option value="${s.id}" ${D.wiz.siteId===s.id?'selected':''}>${s.name}</option>`).join('')}
     </select></div>
-    ${D.wiz.siteId ? `<button class="btn btn-ghost btn-sm" id="wiz-copy-btn" style="margin-top:4px">📋 העתק מיומן קודם</button>` : ''}`;
+    <button class="btn btn-outline btn-sm" id="wiz-copy-btn" style="margin-top:4px">📋 העתק מיומן קודם לאתר זה</button>`;
 }
 
 function wiz2() {
@@ -172,11 +186,23 @@ function wiz2() {
     {k:'form',l:'טפסנות',i:'🪵'},{k:'cast',l:'יציקה',i:'🏗️'},
     {k:'strip',l:'פירוק טפסנות',i:'🔧'}
   ];
-  return `<div class="chips">
+  const dayOffReasons = [
+    {k:'חג',i:'🎉'},{k:'גשם',i:'🌧️'},{k:'תקלה',i:'🔧'},{k:'אחר',i:'📝'}
+  ];
+  const dim = D.wiz.dayOff ? 'style="opacity:.35;pointer-events:none"' : '';
+  return `<div class="chips" ${dim}>
     ${acts.map(a=>`<div class="chip wiz-act-chip ${D.wiz.acts.includes(a.k)?'on':''}" data-act="${a.k}">${a.i} ${a.l}</div>`).join('')}
   </div>
-  <div class="form-group mt12"><label class="form-label">פעילות נוספת</label>
-    <input type="text" class="form-input" id="w-note" placeholder="פעילות אחרת..." value="${D.wiz.note}"></div>`;
+  <div class="form-group mt12" ${dim}><label class="form-label">פעילות נוספת / הערת פעילות</label>
+    <input type="text" class="form-input" id="w-note" placeholder="פעילות אחרת..." value="${D.wiz.note}"></div>
+  <div class="divider"></div>
+  <div class="chip day-off-chip ${D.wiz.dayOff?'on':''}" id="wiz-dayoff-toggle">
+    🚫 אתר לא עבד היום
+  </div>
+  ${D.wiz.dayOff ? `<div class="chips mt8">
+    ${dayOffReasons.map(r=>`<div class="chip ${D.wiz.dayOffReason===r.k?'on dayoff-sel':''} wiz-dayoff-reason" data-reason="${r.k}">${r.i} ${r.k}</div>`).join('')}
+  </div>
+  <div class="muted tc mt8" style="font-size:12px">הסיבה תירשם ביומן. שלבים הבאים אופציונליים.</div>` : ''}`;
 }
 
 function wiz3() {
@@ -322,13 +348,14 @@ async function saveLog() {
   if (!site) { toast('אתר לא נמצא','err'); return; }
   setBtn('wiz-btn', true, 'שומר...');
   const logId = uid(), now = new Date().toISOString();
+  const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason || 'אחר'}` : (w.note || '');
   try {
     await sAppend('DailyLogs',[
       logId, w.date, w.siteId, site.name, D.user?.email||'',
       w.acts.includes('dig')?'TRUE':'FALSE', w.acts.includes('base')?'TRUE':'FALSE',
       w.acts.includes('form')?'TRUE':'FALSE', w.acts.includes('cast')?'TRUE':'FALSE',
       w.acts.includes('strip')?'TRUE':'FALSE',
-      w.note||'', w.gNote||'', now, 1, '', ''
+      noteVal, w.gNote||'', now, 1, '', ''
     ]);
     for (const eid of w.emps) {
       const e = D.employees.find(x => x.id===eid);
@@ -357,7 +384,7 @@ async function saveLogEdit() {
   if (!log) { toast('יומן לא נמצא','err'); return; }
   setBtn('wiz-btn', true, 'שומר...');
   try {
-    // Conflict detection
+    const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason || 'אחר'}` : (w.note || '');
     const { conflict, deleted } = await checkLogVersion(w.editLogId, w.editVersion);
     if (deleted) { toast('יומן זה נמחק ע"י משתמש אחר','err'); setBtn('wiz-btn',false,'💾 עדכן יומן'); return; }
     if (conflict) { toast('⚠️ היומן שונה ע"י משתמש אחר. סגור וטען מחדש.','err'); setBtn('wiz-btn',false,'💾 עדכן יומן'); return; }
@@ -376,7 +403,7 @@ async function saveLogEdit() {
       w.acts.includes('dig')?'TRUE':'FALSE', w.acts.includes('base')?'TRUE':'FALSE',
       w.acts.includes('form')?'TRUE':'FALSE', w.acts.includes('cast')?'TRUE':'FALSE',
       w.acts.includes('strip')?'TRUE':'FALSE',
-      w.note||'', w.gNote||'', r[12]||'', newVersion, now, D.user?.email||''
+      noteVal, w.gNote||'', r[12]||'', newVersion, now, D.user?.email||''
     ]);
 
     const newAtAdd = w.emps.map(eid => { const e=D.employees.find(x=>x.id===eid); return [uid(),w.editLogId,eid,e?.name||'',log.date,log.siteId]; });
@@ -392,7 +419,7 @@ async function saveLogEdit() {
 
     // Update in-memory
     const li = D.logs.findIndex(l => l.id===w.editLogId);
-    D.logs[li] = { ...D.logs[li], dig:w.acts.includes('dig'), base:w.acts.includes('base'), form:w.acts.includes('form'), cast:w.acts.includes('cast'), strip:w.acts.includes('strip'), other:w.note||'', notes:w.gNote||'', version:newVersion, updatedAt:now, updatedBy:D.user?.email||'' };
+    D.logs[li] = { ...D.logs[li], dig:w.acts.includes('dig'), base:w.acts.includes('base'), form:w.acts.includes('form'), cast:w.acts.includes('cast'), strip:w.acts.includes('strip'), other:noteVal, notes:w.gNote||'', version:newVersion, updatedAt:now, updatedBy:D.user?.email||'' };
     D.attendance = D.attendance.filter(a=>a.logId!==w.editLogId);
     newAtAdd.forEach(r => D.attendance.push({id:r[0],logId:r[1],empId:r[2],empName:r[3],date:r[4],siteId:r[5]}));
     D.logEquip = D.logEquip.filter(e=>e.logId!==w.editLogId);
