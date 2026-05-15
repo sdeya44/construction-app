@@ -12,7 +12,7 @@ export const D = {
   logs: [], attendance: [], logEquip: [], deliveries: [],
   monthLocks: [], photos: [], users: [], siteAssignments: [],
   logTab: 'all', empTab: 'active', siteTab: 'active', mgmtTab: 'suppliers',
-  gmTab: 'users',
+  gmTab: 'payroll',
   editSiteId: null, editEmpId: null, editSuppId: null, editEquipId: null,
   empStatus: 'פעיל', siteStatus: 'פעיל', suppStatus: 'פעיל', equipStatus: 'פעיל',
   wiz: {}, reportMonth: null, reportYear: null,
