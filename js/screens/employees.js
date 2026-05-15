@@ -67,9 +67,9 @@ export function openEmpHistory(id) {
     const x = padL+i*slotW+(slotW-barW)/2;
     const barH = m.days>0 ? Math.max(3,Math.floor((m.days/maxD)*chartH)) : 3;
     const y = padT+chartH-barH;
-    return `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="#d4a017" opacity=".9"/>
-      ${m.days>0?`<text x="${x+barW/2}" y="${y-3}" text-anchor="middle" font-size="8" fill="#f0c842" font-weight="600" font-family="Heebo">${m.days}</text>`:''}
-      <text x="${x+barW/2}" y="${svgH-4}" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.5)" font-family="Heebo">${m.label}</text>`;
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="#6366f1" opacity=".9"/>
+      ${m.days>0?`<text x="${x+barW/2}" y="${y-3}" text-anchor="middle" font-size="8" fill="#6366f1" font-weight="600" font-family="Heebo">${m.days}</text>`:''}
+      <text x="${x+barW/2}" y="${svgH-4}" text-anchor="middle" font-size="8" fill="rgba(99,102,241,0.5)" font-family="Heebo">${m.label}</text>`;
   }).join('');
 
   document.getElementById('sh-emp-hist-body').innerHTML = `
@@ -78,14 +78,14 @@ export function openEmpHistory(id) {
     <div class="emp-stat-grid">
       <div class="emp-stat-box"><div class="emp-stat-val">${uniqueDays}</div><div class="emp-stat-lab">סה"כ ימים</div></div>
       <div class="emp-stat-box"><div class="emp-stat-val">${rate?'₪'+rate.toLocaleString():'—'}</div><div class="emp-stat-lab">תעריף יומי</div></div>
-      <div class="emp-stat-box" style="background:rgba(212,160,23,.08)">
+      <div class="emp-stat-box" style="background:rgba(99,102,241,0.08)">
         <div class="emp-stat-val" style="color:var(--blue)">${totalCost?'₪'+totalCost.toLocaleString():'—'}</div>
         <div class="emp-stat-lab">סה"כ שכר</div>
       </div>
     </div>
     <div class="card-title" style="margin-bottom:8px">נוכחות — 6 חודשים</div>
     <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%;height:auto;direction:ltr;margin-bottom:16px">
-      <line x1="${padL}" y1="${padT+chartH}" x2="${svgW-padL}" y2="${padT+chartH}" stroke="rgba(212,160,23,.2)" stroke-width="1"/>
+      <line x1="${padL}" y1="${padT+chartH}" x2="${svgW-padL}" y2="${padT+chartH}" stroke="rgba(99,102,241,0.15)" stroke-width="1"/>
       ${svgBars}
     </svg>
     ${recentSites.length ? `

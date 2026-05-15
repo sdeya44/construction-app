@@ -83,7 +83,7 @@ export function showLog(id) {
       </div>`).join('')}</div>` : ''}
     ${ph.length ? `<div class="card-title">תמונות (${ph.length})</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px" id="log-photos-grid">
-        ${ph.map((p,i)=>`<div style="border-radius:10px;overflow:hidden;background:var(--navy2)">
+        ${ph.map((p,i)=>`<div style="border-radius:10px;overflow:hidden;background:rgba(255,255,255,0.5)">
           <img src="${p.url}" data-fileid="${p.fileId}" data-idx="${i}" class="photo-thumb"
             style="width:100%;aspect-ratio:1;object-fit:cover;display:block" loading="lazy"
             onerror="if(this.dataset.fileid&&!this.dataset.retried){this.dataset.retried='1';this.src='https://drive.google.com/thumbnail?id='+this.dataset.fileid+'&sz=w400';}else{this.parentElement.style.display='none';}">

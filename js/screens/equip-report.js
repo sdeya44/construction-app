@@ -68,12 +68,12 @@ function renderResults(month, year) {
     </tr>`).join('');
     openPrint(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
       <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;800&display=swap" rel="stylesheet">
-      <style>*{font-family:'Heebo',sans-serif;box-sizing:border-box}body{margin:20px;direction:rtl;font-size:12px}
-      .biz{color:#888;font-size:12px;text-align:center;margin-bottom:4px}h2{color:#d4a017;text-align:center;font-size:20px;margin-bottom:4px;font-weight:800}
+      <style>*{font-family:'Heebo',sans-serif;box-sizing:border-box}body{margin:20px;direction:rtl;font-size:12px;background:#fff}
+      .biz{color:#888;font-size:12px;text-align:center;margin-bottom:4px}h2{color:#4f46e5;text-align:center;font-size:20px;margin-bottom:4px;font-weight:800}
       .sub{color:#666;text-align:center;font-size:12px;margin-bottom:18px}table{width:100%;border-collapse:collapse}
-      th{background:#1a1400;color:#f0c842;padding:9px 7px;font-size:11px;text-align:center}
-      td{padding:7px;border-bottom:1px solid rgba(212,160,23,.15);font-size:11px;text-align:center;vertical-align:middle}
-      tr:nth-child(even) td{background:#0d1117}tfoot tr td{background:#1a1400;color:#f0c842;font-weight:800;font-size:12px}
+      th{background:#4f46e5;color:#fff;padding:9px 7px;font-size:11px;text-align:center}
+      td{padding:7px;border-bottom:1px solid rgba(99,102,241,.12);font-size:11px;text-align:center;vertical-align:middle}
+      tr:nth-child(even) td{background:#f5f3ff}tfoot tr td{background:#4f46e5;color:#fff;font-weight:800;font-size:12px}
       @media print{body{margin:8px}}</style></head><body>
       <div class="biz">${BUSINESS_NAME}</div>
       <h2>דוח שימוש ציוד — ${MN[month]} ${year}</h2>
