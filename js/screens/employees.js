@@ -1,6 +1,6 @@
 import { HDR, MN } from '../config.js';
 import { D } from '../state.js';
-import { uid, pad, monthPrefix, todayStr, toast, can, openSheet, closeSheet, setBtn } from '../utils.js';
+import { uid, monthPrefix, todayStr, toast, can, openSheet, closeSheet, setBtn } from '../utils.js';
 import { sAppend, sWrite, logAudit } from '../api.js';
 
 export function renderEmps() { filterEmps(); }
