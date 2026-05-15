@@ -7,14 +7,26 @@ import { initSelects } from './screens/reports.js';
 import { applyRoleUI } from './app.js';
 import { loadCache, updateStatusBar, startOfflineMonitor } from './offline.js';
 
+const loginEl  = () => document.getElementById('login-screen');
+const appEl    = () => document.getElementById('app-main');
+
+function restoreCache(snap, online) {
+  const skip = new Set(['token','wiz']);
+  for (const [k,v] of Object.entries(snap)) { if (!skip.has(k)) D[k] = v; }
+  D.isOnline = online;
+  appEl().style.display = 'flex';
+  applyRoleUI(); initSelects(); renderDash();
+  updateStatusBar(online);
+  startOfflineMonitor(on => { D.isOnline = on; });
+}
+
 export function signIn() {
   const tc = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID, scope: SCOPES,
     callback: async r => {
       if (r.error) { toast('שגיאת כניסה','err'); return; }
       D.token = r.access_token;
-      const u = await fetch('https://www.googleapis.com/oauth2/v3/userinfo',
-        { headers: { Authorization: 'Bearer '+D.token } });
+      const u = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer '+D.token } });
       D.user = await u.json();
       try { localStorage.setItem(USER_KEY, JSON.stringify(D.user)); } catch {}
       await boot();
@@ -25,37 +37,20 @@ export function signIn() {
 
 export function tryAutoLogin() {
   try {
-    const s = localStorage.getItem(USER_KEY);
-    if (!s) return;
+    const s = localStorage.getItem(USER_KEY); if (!s) return;
     const saved = JSON.parse(s);
-
-    // If offline, boot from cache immediately without waiting for OAuth
-    if (!navigator.onLine) {
-      D.user = saved;
-      bootOffline();
-      return;
-    }
-
+    if (!navigator.onLine) { D.user = saved; bootOffline(); return; }
     const tc = google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID, scope: SCOPES, hint: saved.email||'',
       callback: async r => {
-        if (!r.access_token) {
-          // Token refresh failed — try offline cache
-          D.user = saved;
-          bootOffline();
-          return;
-        }
+        if (!r.access_token) { D.user = saved; bootOffline(); return; }
         D.token = r.access_token;
         try {
-          const u = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: 'Bearer ' + D.token }
-          });
-          const freshUser = await u.json();
-          D.user = freshUser.email ? freshUser : saved;
+          const u = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer '+D.token } });
+          const fresh = await u.json();
+          D.user = fresh.email ? fresh : saved;
           localStorage.setItem(USER_KEY, JSON.stringify(D.user));
-        } catch {
-          D.user = saved;
-        }
+        } catch { D.user = saved; }
         await boot();
       }
     });
@@ -64,26 +59,16 @@ export function tryAutoLogin() {
 }
 
 async function bootOffline() {
-  document.getElementById('login-screen').style.display = 'none';
+  loginEl().style.display = 'none';
   showLoad('טוען נתונים שמורים...');
   const snap = await loadCache();
   hideLoad();
   if (!snap) {
-    document.getElementById('login-screen').style.display = 'flex';
+    loginEl().style.display = 'flex';
     toast('אין חיבור לאינטרנט ואין נתונים שמורים','err');
     return;
   }
-  // Restore cached state fields into D
-  const skip = new Set(['token','wiz']);
-  for (const [k,v] of Object.entries(snap)) {
-    if (!skip.has(k)) D[k] = v;
-  }
-  D.isOnline = false;
-  document.getElementById('app-main').style.display = 'flex';
-  applyRoleUI();
-  initSelects();
-  renderDash();
-  updateStatusBar(false);
+  restoreCache(snap, false);
   startOfflineMonitor(online => {
     D.isOnline = online;
     if (online) toast('חיבור לאינטרנט חזר — רענן את הדף לטעינת נתונים עדכניים','ok');
@@ -92,22 +77,17 @@ async function bootOffline() {
 }
 
 async function boot() {
-  document.getElementById('login-screen').style.display = 'none';
+  loginEl().style.display = 'none';
   showLoad('מתחבר...');
   try {
     setLoad('בודק מבנה גיליון...');
     await ensureStructure();
     setLoad('טוען נתונים...');
     await loadAll();
-    // URL bootstrap: ?gm forces GeneralManager permanently via localStorage
     if (new URLSearchParams(location.search).has('gm')) {
       D.role = 'GeneralManager';
-      try { localStorage.setItem('cnstr_gm_v1', D.user?.email || ''); } catch {}
-
-      // Also update the sheet so it persists for other devices
-      const email = D.user?.email || '';
-      const name  = D.user?.name  || email;
-      const now   = new Date().toISOString();
+      const email = D.user?.email || '', name = D.user?.name || email, now = new Date().toISOString();
+      try { localStorage.setItem('cnstr_gm_v1', email); } catch {}
       const already = D.users.find(u => u.email === email);
       try {
         if (!already) {
@@ -124,42 +104,26 @@ async function boot() {
           await rebuildTab('Users', D.users.map(u => [u.id, u.email, u.name, u.role, u.addedAt, u.addedBy]));
           toast('תפקיד עודכן ל-מנהל ראשי ✓', 'ok');
         }
-      } catch(e) {
-        toast('⚠️ שמירה לגיליון נכשלה: ' + e.message, 'warn');
-      }
+      } catch(e) { toast('⚠️ שמירה לגיליון נכשלה: '+e.message, 'warn'); }
     }
     hideLoad();
-    document.getElementById('app-main').style.display = 'flex';
-    applyRoleUI();
-    initSelects();
-    renderDash();
-    startAutoRefresh();
+    appEl().style.display = 'flex';
+    applyRoleUI(); initSelects(); renderDash(); startAutoRefresh();
     updateStatusBar(true);
     startOfflineMonitor(online => {
       D.isOnline = online;
-      if (!online) toast('אין חיבור — לא ניתן לשמור','warn');
-      else toast('חיבור חזר','ok');
+      toast(online ? 'חיבור חזר' : 'אין חיבור — לא ניתן לשמור', online ? 'ok' : 'warn');
     });
     toast('מחובר ✓','ok');
   } catch(e) {
     hideLoad();
-    // Try loading cached data as fallback
     const snap = await loadCache();
     if (snap) {
-      const skip = new Set(['token','wiz']);
-      for (const [k,v] of Object.entries(snap)) {
-        if (!skip.has(k)) D[k] = v;
-      }
-      D.isOnline = false;
-      document.getElementById('app-main').style.display = 'flex';
-      applyRoleUI();
-      initSelects();
-      renderDash();
-      updateStatusBar(false);
+      restoreCache(snap, false);
       startOfflineMonitor(online => { D.isOnline = online; });
       toast('שגיאת טעינה — מוצגים נתונים שמורים','warn');
     } else {
-      document.getElementById('app-main').style.display = 'flex';
+      appEl().style.display = 'flex';
       toast('שגיאת טעינה: '+e.message,'err');
     }
   }

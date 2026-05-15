@@ -6,7 +6,6 @@ import { openSitePhotos } from './photos.js';
 
 export function renderSites() {
   let s = [...D.sites];
-  // SiteManagers only see their assigned sites
   if (D.role === 'SiteManager') {
     const assigned = new Set(D.siteAssignments.filter(a => a.email === D.user?.email).map(a => a.siteId));
     s = s.filter(x => assigned.has(x.id));
@@ -38,9 +37,7 @@ export function renderSites() {
       </button>
     </div>`;
   }).join('');
-  document.querySelectorAll('.site-row').forEach(row => {
-    row.onclick = () => openEditSite(row.dataset.id);
-  });
+  document.querySelectorAll('.site-row').forEach(row => { row.onclick = () => openEditSite(row.dataset.id); });
   document.querySelectorAll('.site-photos-btn').forEach(btn => {
     btn.onclick = e => { e.stopPropagation(); openSitePhotos(btn.dataset.id); };
   });
@@ -53,12 +50,19 @@ export function setSiteTab(t, el) {
   renderSites();
 }
 
+function applySiteStatusUI(v) {
+  ['ss-active','ss-frozen','ss-ended'].forEach(id => document.getElementById(id)?.classList.remove('active-s','frozen-s','ended-s'));
+  if (v==='פעיל')   document.getElementById('ss-active')?.classList.add('active-s');
+  else if (v==='מוקפא') document.getElementById('ss-frozen')?.classList.add('frozen-s');
+  else              document.getElementById('ss-ended')?.classList.add('ended-s');
+}
+
 export function openAddSite() {
   if (!can('manage_sites')) { toast('אין הרשאה','err'); return; }
   D.editSiteId = null; D.siteStatus = 'פעיל';
   document.getElementById('site-sh-title').textContent = '➕ הוספת אתר';
-  ['s-name','s-addr','s-notes'].forEach(id => document.getElementById(id).value = '');
-  updateSiteStatusUI('פעיל');
+  ['s-name','s-addr','s-notes'].forEach(id => { document.getElementById(id).value = ''; });
+  applySiteStatusUI('פעיל');
   document.getElementById('btn-save-site').textContent = 'שמור אתר';
   openSheet('sh-site');
 }
@@ -70,21 +74,12 @@ export function openEditSite(id) {
   document.getElementById('s-name').value  = s.name;
   document.getElementById('s-addr').value  = s.address || '';
   document.getElementById('s-notes').value = s.notes   || '';
-  updateSiteStatusUI(s.status || 'פעיל');
+  applySiteStatusUI(s.status || 'פעיל');
   document.getElementById('btn-save-site').textContent = 'עדכן אתר';
   openSheet('sh-site');
 }
 
-export function selectSiteStatus(v) { D.siteStatus = v; updateSiteStatusUI(v); }
-
-export function updateSiteStatusUI(v) {
-  ['ss-active','ss-frozen','ss-ended'].forEach(id => {
-    document.getElementById(id)?.classList.remove('active-s','frozen-s','ended-s');
-  });
-  if (v==='פעיל')   document.getElementById('ss-active')?.classList.add('active-s');
-  else if (v==='מוקפא') document.getElementById('ss-frozen')?.classList.add('frozen-s');
-  else              document.getElementById('ss-ended')?.classList.add('ended-s');
-}
+export function selectSiteStatus(v) { D.siteStatus = v; applySiteStatusUI(v); }
 
 export async function saveSite() {
   if (!can('manage_sites')) { toast('אין הרשאה','err'); return; }
@@ -96,14 +91,14 @@ export async function saveSite() {
   try {
     if (D.editSiteId) {
       const i = D.sites.findIndex(s => s.id === D.editSiteId);
-      D.sites[i] = { ...D.sites[i], name, address: addr, status: D.siteStatus, notes };
+      D.sites[i] = { ...D.sites[i], name, address:addr, status:D.siteStatus, notes };
       await sWrite('Sites','A1',[HDR.Sites,...D.sites.map(s=>[s.id,s.name,s.address,s.status,s.notes])]);
       await logAudit('UPDATE','Site',D.editSiteId,`עדכון אתר: ${name}`);
       toast('אתר עודכן ✓','ok');
     } else {
       const id = uid();
       await sAppend('Sites',[id,name,addr,D.siteStatus,notes]);
-      D.sites.push({ id, name, address: addr, status: D.siteStatus, notes });
+      D.sites.push({ id, name, address:addr, status:D.siteStatus, notes });
       await logAudit('CREATE','Site',id,`הוספת אתר: ${name}`);
       toast('אתר נוסף ✓','ok');
     }

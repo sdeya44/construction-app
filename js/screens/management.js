@@ -5,8 +5,7 @@ import { sAppend, sWrite, logAudit } from '../api.js';
 
 export function renderMgmt() {
   const el = document.getElementById('mgmt-content');
-  if (D.mgmtTab === 'suppliers') renderSuppliers(el);
-  else renderEquipment(el);
+  if (D.mgmtTab === 'suppliers') renderSuppliers(el); else renderEquipment(el);
 }
 
 export function setMgmtTab(t, el) {
@@ -38,10 +37,16 @@ function suppRow(s) {
   </div>`;
 }
 
+function fillSuppForm(name, phone, notes) {
+  document.getElementById('sp-name').value  = name;
+  document.getElementById('sp-phone').value = phone;
+  document.getElementById('sp-notes').value = notes;
+}
+
 export function openAddSupp() {
   D.editSuppId = null; D.suppStatus = 'פעיל';
   document.getElementById('supp-sh-title').textContent = '➕ הוספת ספק';
-  ['sp-name','sp-phone','sp-notes'].forEach(id => { document.getElementById(id).value = ''; });
+  fillSuppForm('', '', '');
   selectSuppStatus('פעיל'); openSheet('sh-supp');
 }
 
@@ -49,9 +54,7 @@ export function openEditSupp(id) {
   const s = D.suppliers.find(x => x.id === id); if (!s) return;
   D.editSuppId = id; D.suppStatus = s.status || 'פעיל';
   document.getElementById('supp-sh-title').textContent = '✏️ עריכת ספק';
-  document.getElementById('sp-name').value  = s.name;
-  document.getElementById('sp-phone').value = s.phone || '';
-  document.getElementById('sp-notes').value = s.notes || '';
+  fillSuppForm(s.name, s.phone||'', s.notes||'');
   selectSuppStatus(s.status || 'פעיל'); openSheet('sh-supp');
 }
 
