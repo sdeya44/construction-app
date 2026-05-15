@@ -82,15 +82,15 @@ export async function loadAll() {
     addedAt:r[4]||'', addedBy:r[5]||''
   }));
 
-  // Determine role — never auto-elevate unknown users
+  // Determine role
   const userRecord = D.users.find(u => u.email === D.user?.email);
   let raw;
   if (userRecord) {
     raw = userRecord.role;
-  } else if (D.users.length === 0) {
-    raw = 'GeneralManager'; // empty sheet → first-ever login → GM
   } else {
-    raw = 'SiteManager';    // sheet has users but this person isn't listed → restrict
+    // No record for this user — GM only if no other GM exists in the system
+    const hasGM = D.users.some(u => u.role === 'GeneralManager' || u.role === 'Admin');
+    raw = hasGM ? 'SiteManager' : 'GeneralManager';
   }
   if      (raw === 'Admin')                       D.role = 'GeneralManager';
   else if (raw === 'Manager' || raw === 'Viewer') D.role = 'SiteManager';
