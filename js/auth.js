@@ -90,8 +90,30 @@ async function boot() {
     await ensureStructure();
     setLoad('טוען נתונים...');
     await loadAll();
-    // URL bootstrap: ?gm forces GeneralManager for first-time setup
-    if (new URLSearchParams(location.search).has('gm')) D.role = 'GeneralManager';
+    // URL bootstrap: ?gm forces GeneralManager and auto-registers user in sheet
+    if (new URLSearchParams(location.search).has('gm')) {
+      D.role = 'GeneralManager';
+      const already = D.users.find(u => u.email === D.user?.email);
+      if (!already) {
+        const { uid } = await import('./utils.js');
+        const id = uid();
+        const now = new Date().toISOString();
+        const name = D.user?.name || D.user?.email || '';
+        const email = D.user?.email || '';
+        try {
+          const { sAppend } = await import('./api.js');
+          await sAppend('Users', [id, email, name, 'GeneralManager', now, 'bootstrap']);
+          D.users.push({ id, email, name, role: 'GeneralManager', addedAt: now, addedBy: 'bootstrap' });
+        } catch {}
+      } else if (already.role !== 'GeneralManager') {
+        const { rebuildTab } = await import('./api.js');
+        const idx = D.users.findIndex(u => u.email === D.user?.email);
+        D.users[idx] = { ...already, role: 'GeneralManager' };
+        try {
+          await rebuildTab('Users', D.users.map(u => [u.id, u.email, u.name, u.role, u.addedAt, u.addedBy]));
+        } catch {}
+      }
+    }
     hideLoad();
     document.getElementById('app-main').style.display = 'flex';
     applyRoleUI();
