@@ -42,7 +42,7 @@ function renderPhotosSheet(site) {
 }
 
 function photoCard(p, idx = 0) {
-  return `<div style="border-radius:12px;overflow:hidden;background:#f0f3fa;border:1px solid #e5e9f5">
+  return `<div style="border-radius:12px;overflow:hidden;background:#fff7ed;border:1px solid #fed7aa">
     <img src="${p.url}" data-fileid="${p.fileId}" data-idx="${idx}" class="photo-thumb"
       style="width:100%;aspect-ratio:1;object-fit:cover;display:block" loading="lazy"
       onerror="if(this.dataset.fileid&&!this.dataset.retried){this.dataset.retried='1';this.src='https://drive.google.com/thumbnail?id='+this.dataset.fileid+'&sz=w400';}else{this.parentElement.style.display='none';}">

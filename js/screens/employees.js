@@ -80,7 +80,7 @@ export function openEmpHistory(id) {
     const barH = m.days > 0 ? Math.max(3, Math.floor((m.days / maxD) * chartH)) : 3;
     const y    = padT + chartH - barH;
     return `
-      <rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="#2d5be3" opacity=".82"/>
+      <rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="#f97316" opacity=".82"/>
       ${m.days > 0 ? `<text x="${x+barW/2}" y="${y-3}" text-anchor="middle" font-size="8" fill="#374151" font-weight="600" font-family="Heebo">${m.days}</text>` : ''}
       <text x="${x+barW/2}" y="${svgH-4}" text-anchor="middle" font-size="8" fill="#6b7280" font-family="Heebo">${m.label}</text>`;
   }).join('');
@@ -97,14 +97,14 @@ export function openEmpHistory(id) {
         <div class="emp-stat-val">${rate ? '₪'+rate.toLocaleString() : '—'}</div>
         <div class="emp-stat-lab">תעריף יומי</div>
       </div>
-      <div class="emp-stat-box" style="background:rgba(45,91,227,.08)">
+      <div class="emp-stat-box" style="background:rgba(249,115,22,.08)">
         <div class="emp-stat-val" style="color:var(--blue)">${totalCost ? '₪'+totalCost.toLocaleString() : '—'}</div>
         <div class="emp-stat-lab">סה"כ שכר</div>
       </div>
     </div>
     <div class="card-title" style="margin-bottom:8px">נוכחות — 6 חודשים</div>
     <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%;height:auto;direction:ltr;margin-bottom:16px">
-      <line x1="${padL}" y1="${padT+chartH}" x2="${svgW-padL}" y2="${padT+chartH}" stroke="#e5e9f5" stroke-width="1"/>
+      <line x1="${padL}" y1="${padT+chartH}" x2="${svgW-padL}" y2="${padT+chartH}" stroke="#fed7aa" stroke-width="1"/>
       ${svgBars}
     </svg>
     ${recentSites.length ? `
