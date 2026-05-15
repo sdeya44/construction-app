@@ -65,7 +65,7 @@ function renderQuickSites(today) {
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">אתרים פעילים</div>
-      ${can('create_log') ? `<button class="btn btn-sm" id="d-quick-log-btn" style="width:auto;padding:5px 12px;font-size:12px;background:rgba(212,160,23,.1);border:1.5px solid var(--blue);color:var(--blue)">⚡ דיווח מהיר</button>` : ''}
+      ${can('create_log') ? `<button class="btn btn-sm" id="d-quick-log-btn" style="width:auto;padding:5px 12px;font-size:12px;background:rgba(99,102,241,.12);border:1.5px solid var(--blue);color:var(--blue)">⚡ דיווח מהיר</button>` : ''}
     </div>
     <div class="quick-sites">
       ${sorted.map(s => `

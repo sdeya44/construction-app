@@ -213,13 +213,13 @@ function wiz1() {
   if (D.wiz.editMode) {
     const site = D.sites.find(s => s.id === D.wiz.siteId);
     return `<div class="form-group"><label class="form-label">תאריך</label>
-      <div class="form-input" style="background:var(--navy2);color:var(--muted)">${fmtDate(D.wiz.date)}</div></div>
+      <div class="form-input" style="background:rgba(255,255,255,0.5);color:var(--muted)">${fmtDate(D.wiz.date)}</div></div>
       <div class="form-group"><label class="form-label">אתר</label>
-      <div class="form-input" style="background:var(--navy2);color:var(--muted)">${site?.name||D.wiz.siteId}</div></div>
+      <div class="form-input" style="background:rgba(255,255,255,0.5);color:var(--muted)">${site?.name||D.wiz.siteId}</div></div>
       <div class="muted tc" style="font-size:12px;padding:4px 0">ניתן לערוך פעילויות, עובדים, ציוד, הערות ואספקות</div>`;
   }
   const quickBtn = `<button class="btn btn-sm mt8" id="wiz-quick-toggle"
-    style="width:auto;${D.wiz.quickMode?'background:rgba(212,160,23,.1);border:2px solid var(--blue);color:var(--blue)':'background:var(--navy2);border:2px solid var(--border);color:var(--muted)'}">
+    style="width:auto;${D.wiz.quickMode?'background:rgba(99,102,241,.1);border:2px solid var(--blue);color:var(--blue)':'background:rgba(255,255,255,0.6);border:2px solid rgba(99,102,241,0.2);color:var(--muted)'}">
     ⚡ ${D.wiz.quickMode ? 'מצב מהיר — פעיל' : 'מצב מהיר (2 שלבים)'}
   </button>`;
   return `<div class="form-group"><label class="form-label">תאריך</label>
@@ -338,7 +338,7 @@ function wiz5() {
         <button class="btn btn-ghost btn-sm fg" id="wiz-gal-btn">🖼️ גלריה</button>
       </div>
     </div>
-    <div class="card mt12" style="background:var(--navy2)">
+    <div class="card mt12" style="background:rgba(255,255,255,0.6)">
       <div class="card-title">סיכום</div>
       <div class="list-item" style="border:none;padding:4px 0"><span>📅</span><span style="margin-right:auto;font-weight:600">${fmtDate(D.wiz.date)}</span></div>
       <div class="list-item" style="border:none;padding:4px 0"><span>📍</span><span style="margin-right:auto;font-weight:600">${site?.name||'-'}</span></div>

@@ -41,13 +41,13 @@ function renderPhotosSheet(site) {
 }
 
 function photoCard(p, idx = 0) {
-  return `<div style="border-radius:12px;overflow:hidden;background:#131929;border:1px solid rgba(212,160,23,.2)">
+  return `<div style="border-radius:12px;overflow:hidden;background:rgba(255,255,255,0.65);border:1px solid rgba(99,102,241,0.2)">
     <img src="${p.url}" data-fileid="${p.fileId}" data-idx="${idx}" class="photo-thumb"
       style="width:100%;aspect-ratio:1;object-fit:cover;display:block" loading="lazy"
       onerror="if(this.dataset.fileid&&!this.dataset.retried){this.dataset.retried='1';this.src='https://drive.google.com/thumbnail?id='+this.dataset.fileid+'&sz=w400';}else{this.parentElement.style.display='none';}">
     <div style="padding:6px 8px">
-      <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,.5)">${new Date(p.date+'T12:00:00').toLocaleDateString('he-IL',{day:'numeric',month:'long'})}</div>
-      ${p.desc ? `<div style="font-size:12px;color:#f0f4ff;margin-top:2px">${p.desc}</div>` : ''}
+      <div style="font-size:11px;font-weight:600;color:var(--muted)">${new Date(p.date+'T12:00:00').toLocaleDateString('he-IL',{day:'numeric',month:'long'})}</div>
+      ${p.desc ? `<div style="font-size:12px;color:var(--text);margin-top:2px">${p.desc}</div>` : ''}
     </div>
   </div>`;
 }
