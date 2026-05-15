@@ -90,28 +90,33 @@ async function boot() {
     await ensureStructure();
     setLoad('טוען נתונים...');
     await loadAll();
-    // URL bootstrap: ?gm forces GeneralManager and auto-registers user in sheet
+    // URL bootstrap: ?gm forces GeneralManager permanently via localStorage
     if (new URLSearchParams(location.search).has('gm')) {
       D.role = 'GeneralManager';
-      const already = D.users.find(u => u.email === D.user?.email);
-      if (!already) {
-        const { uid } = await import('./utils.js');
-        const id = uid();
-        const now = new Date().toISOString();
-        const name = D.user?.name || D.user?.email || '';
-        const email = D.user?.email || '';
-        try {
+      try { localStorage.setItem('cnstr_gm_v1', D.user?.email || ''); } catch {}
+
+      // Also update the sheet so it persists for other devices
+      const email = D.user?.email || '';
+      const name  = D.user?.name  || email;
+      const now   = new Date().toISOString();
+      const already = D.users.find(u => u.email === email);
+      try {
+        if (!already) {
+          const { uid } = await import('./utils.js');
           const { sAppend } = await import('./api.js');
+          const id = uid();
           await sAppend('Users', [id, email, name, 'GeneralManager', now, 'bootstrap']);
           D.users.push({ id, email, name, role: 'GeneralManager', addedAt: now, addedBy: 'bootstrap' });
-        } catch {}
-      } else if (already.role !== 'GeneralManager') {
-        const { rebuildTab } = await import('./api.js');
-        const idx = D.users.findIndex(u => u.email === D.user?.email);
-        D.users[idx] = { ...already, role: 'GeneralManager' };
-        try {
+          toast('נרשמת כמנהל ראשי ✓', 'ok');
+        } else if (already.role !== 'GeneralManager') {
+          const { rebuildTab } = await import('./api.js');
+          const idx = D.users.findIndex(u => u.email === email);
+          D.users[idx] = { ...already, role: 'GeneralManager' };
           await rebuildTab('Users', D.users.map(u => [u.id, u.email, u.name, u.role, u.addedAt, u.addedBy]));
-        } catch {}
+          toast('תפקיד עודכן ל-מנהל ראשי ✓', 'ok');
+        }
+      } catch(e) {
+        toast('⚠️ שמירה לגיליון נכשלה: ' + e.message, 'warn');
       }
     }
     hideLoad();
