@@ -212,7 +212,7 @@ function bindEvents() {
 // ── INIT ──────────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
   bindEvents();
   setTimeout(tryAutoLogin, 800);

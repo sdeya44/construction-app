@@ -1,29 +1,29 @@
 const CACHE = 'cnstr-v3';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/css/app.css',
-  '/js/app.js',
-  '/js/config.js',
-  '/js/utils.js',
-  '/js/api.js',
-  '/js/state.js',
-  '/js/auth.js',
-  '/js/offline.js',
-  '/js/screens/dashboard.js',
-  '/js/screens/employees.js',
-  '/js/screens/sites.js',
-  '/js/screens/logs.js',
-  '/js/screens/management.js',
-  '/js/screens/wizard.js',
-  '/js/screens/photos.js',
-  '/js/screens/reports.js',
-  '/js/screens/search.js',
-  '/js/screens/admin.js',
-  '/js/screens/payroll.js',
-  '/js/screens/equip-report.js',
-  '/js/screens/calendar.js',
+  './',
+  './index.html',
+  './manifest.json',
+  './css/app.css',
+  './js/app.js',
+  './js/config.js',
+  './js/utils.js',
+  './js/api.js',
+  './js/state.js',
+  './js/auth.js',
+  './js/offline.js',
+  './js/screens/dashboard.js',
+  './js/screens/employees.js',
+  './js/screens/sites.js',
+  './js/screens/logs.js',
+  './js/screens/management.js',
+  './js/screens/wizard.js',
+  './js/screens/photos.js',
+  './js/screens/reports.js',
+  './js/screens/search.js',
+  './js/screens/admin.js',
+  './js/screens/payroll.js',
+  './js/screens/equip-report.js',
+  './js/screens/calendar.js',
 ];
 
 self.addEventListener('install', e => {
@@ -43,7 +43,6 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Always fetch from network for Google APIs and CDN resources
   if (url.hostname.includes('googleapis.com') ||
       url.hostname.includes('googleusercontent.com') ||
       url.hostname.includes('accounts.google.com') ||
@@ -53,19 +52,17 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Network-first for navigation so updates are picked up
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request).then(res => {
         const clone = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, clone));
         return res;
-      }).catch(() => caches.match('/index.html'))
+      }).catch(() => caches.match('./index.html'))
     );
     return;
   }
 
-  // Cache-first for app assets
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
