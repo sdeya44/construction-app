@@ -46,7 +46,16 @@ export function tryAutoLogin() {
           return;
         }
         D.token = r.access_token;
-        D.user  = saved;
+        try {
+          const u = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: 'Bearer ' + D.token }
+          });
+          const freshUser = await u.json();
+          D.user = freshUser.email ? freshUser : saved;
+          localStorage.setItem(USER_KEY, JSON.stringify(D.user));
+        } catch {
+          D.user = saved;
+        }
         await boot();
       }
     });
