@@ -84,17 +84,15 @@ export async function loadAll() {
 
   // Determine role
   const userRecord = D.users.find(u => u.email === D.user?.email);
-  let raw;
-  if (userRecord) {
-    raw = userRecord.role;
-  } else {
-    // No record for this user — GM only if no other GM exists in the system
-    const hasGM = D.users.some(u => u.role === 'GeneralManager' || u.role === 'Admin');
-    raw = hasGM ? 'SiteManager' : 'GeneralManager';
-  }
-  if      (raw === 'Admin')                       D.role = 'GeneralManager';
-  else if (raw === 'Manager' || raw === 'Viewer') D.role = 'SiteManager';
-  else                                            D.role = raw;
+  let raw = userRecord ? userRecord.role : 'SiteManager';
+  if (raw === 'Admin')                       raw = 'GeneralManager';
+  else if (raw === 'Manager' || raw === 'Viewer') raw = 'SiteManager';
+
+  // If no GM exists anywhere in the system, current user must be GM to bootstrap
+  const hasExistingGM = D.users.some(u => u.role === 'GeneralManager' || u.role === 'Admin');
+  if (!hasExistingGM) raw = 'GeneralManager';
+
+  D.role = raw;
 
   D.isOnline = true;
   D.lastSync = new Date();
