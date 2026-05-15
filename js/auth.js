@@ -90,6 +90,8 @@ async function boot() {
     await ensureStructure();
     setLoad('טוען נתונים...');
     await loadAll();
+    // URL bootstrap: ?gm forces GeneralManager for first-time setup
+    if (new URLSearchParams(location.search).has('gm')) D.role = 'GeneralManager';
     hideLoad();
     document.getElementById('app-main').style.display = 'flex';
     applyRoleUI();
