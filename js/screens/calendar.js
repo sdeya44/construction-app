@@ -5,9 +5,32 @@ import { pad, monthPrefix, getDaysInMonth } from '../utils.js';
 let _calSite  = '';
 let _calMonth = new Date().getMonth() + 1;
 let _calYear  = new Date().getFullYear();
-let _calTab   = 'site'; // 'site' | 'overview'
+let _calTab   = 'site';
 
 const DAY_SHORT = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+
+function todayStr() {
+  const t = new Date();
+  return `${t.getFullYear()}-${pad(t.getMonth()+1)}-${pad(t.getDate())}`;
+}
+
+function makeCell(style) {
+  const c = document.createElement('div');
+  c.style.cssText = style;
+  return c;
+}
+
+function appendDayHeaders(gridEl) {
+  DAY_SHORT.forEach(label => {
+    const h = makeCell('text-align:center;font-weight:700;font-size:12px;color:var(--muted);padding:4px 0');
+    h.textContent = label;
+    gridEl.appendChild(h);
+  });
+}
+
+function appendBlanks(gridEl, count) {
+  for (let i = 0; i < count; i++) gridEl.appendChild(document.createElement('div'));
+}
 
 function buildGrid() {
   const gridEl = document.getElementById('cal-grid');
@@ -21,107 +44,60 @@ function buildGrid() {
     return;
   }
 
-  const today     = new Date();
-  const todayStr  = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
-  const pfx       = monthPrefix(_calMonth, _calYear);
-  const daysInMon = getDaysInMonth(_calYear, _calMonth);
-  const firstDow  = new Date(_calYear, _calMonth - 1, 1).getDay();
+  const today      = todayStr();
+  const pfx        = monthPrefix(_calMonth, _calYear);
+  const daysInMon  = getDaysInMonth(_calYear, _calMonth);
+  const firstDow   = new Date(_calYear, _calMonth - 1, 1).getDay();
+  const logByDate  = {};
+  D.logs.filter(l => l.siteId===_calSite && l.date?.startsWith(pfx)).forEach(l => { logByDate[l.date] = l; });
 
-  const siteLogs  = D.logs.filter(l => l.siteId === _calSite && l.date && l.date.startsWith(pfx));
-  const logByDate = {};
-  siteLogs.forEach(l => { logByDate[l.date] = l; });
+  appendDayHeaders(gridEl);
+  appendBlanks(gridEl, firstDow);
 
-  DAY_SHORT.forEach(label => {
-    const hdr = document.createElement('div');
-    hdr.textContent = label;
-    hdr.style.cssText = 'text-align:center;font-weight:700;font-size:12px;color:var(--muted);padding:4px 0';
-    gridEl.appendChild(hdr);
-  });
-
-  for (let blank = 0; blank < firstDow; blank++) {
-    const empty = document.createElement('div');
-    gridEl.appendChild(empty);
-  }
-
-  let workDays   = 0;
-  let absentDays = 0;
-  let futureDays = 0;
-
+  let workDays=0, absentDays=0, futureDays=0;
   for (let d = 1; d <= daysInMon; d++) {
-    const dateStr = `${_calYear}-${pad(_calMonth)}-${pad(d)}`;
-    const dow     = new Date(_calYear, _calMonth - 1, d).getDay();
-    const isWeekend = dow === 5 || dow === 6;
-    const isFuture  = dateStr > todayStr;
+    const dateStr  = `${_calYear}-${pad(_calMonth)}-${pad(d)}`;
+    const dow      = new Date(_calYear, _calMonth-1, d).getDay();
+    const isWeekend = dow===5||dow===6;
+    const isFuture  = dateStr > today;
     const log       = logByDate[dateStr];
 
-    const cell = document.createElement('div');
-    cell.style.cssText = 'border-radius:8px;padding:6px 2px;text-align:center;font-weight:700;font-size:13px;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;';
-
+    const cell = makeCell('border-radius:8px;padding:6px 2px;text-align:center;font-weight:700;font-size:13px;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;');
     const dayNum = document.createElement('span');
     dayNum.textContent = d;
     cell.appendChild(dayNum);
 
     if (isFuture) {
-      cell.style.background = '#f1f5f9';
-      cell.style.color = '#94a3b8';
-      futureDays++;
+      cell.style.background='#f1f5f9'; cell.style.color='#94a3b8'; futureDays++;
     } else if (isWeekend) {
-      cell.style.background = '#f8fafc';
-      cell.style.color = '#cbd5e1';
+      cell.style.background='#f8fafc'; cell.style.color='#cbd5e1';
     } else if (log) {
-      cell.style.background = '#dcfce7';
-      cell.style.color = '#15803d';
-      cell.style.cursor = 'pointer';
+      cell.style.cssText += 'background:#dcfce7;color:#15803d;cursor:pointer';
       const check = document.createElement('span');
-      check.textContent = '✓';
-      check.style.fontSize = '11px';
+      check.textContent='✓'; check.style.fontSize='11px';
       cell.appendChild(check);
       const logId = log.id;
-      cell.addEventListener('click', () => {
-        import('./logs.js').then(m => m.showLog(logId));
-      });
+      cell.addEventListener('click', () => import('./logs.js').then(m => m.showLog(logId)));
       workDays++;
     } else {
-      cell.style.background = '#fee2e2';
-      cell.style.color = '#b91c1c';
-      cell.style.cursor = 'pointer';
+      cell.style.cssText += 'background:#fee2e2;color:#b91c1c;cursor:pointer';
       const x = document.createElement('span');
-      x.textContent = '✗';
-      x.style.fontSize = '11px';
+      x.textContent='✗'; x.style.fontSize='11px';
       cell.appendChild(x);
-      const capturedDate  = dateStr;
-      const capturedSite  = _calSite;
+      const capturedDate=dateStr, capturedSite=_calSite;
       cell.addEventListener('click', () => {
-        const panel = document.getElementById('gm-panel');
-        if (panel) panel.classList.remove('open');
-        D.wiz = {
-          step: 1,
-          date: capturedDate,
-          siteId: capturedSite,
-          acts: [],
-          note: '',
-          gNote: '',
-          emps: [],
-          equip: [],
-          dels: [],
-          photos: [],
-          editMode: false,
-          dayOff: false,
-          dayOffReason: '',
-        };
+        document.getElementById('gm-panel')?.classList.remove('open');
+        D.wiz = { step:1, date:capturedDate, siteId:capturedSite, acts:[], note:'', gNote:'', emps:[], equip:[], dels:[], photos:[], editMode:false, dayOff:false, dayOffReason:'' };
         import('../utils.js').then(u => u.go('newlog'));
         import('./wizard.js').then(w => w.drawWiz());
       });
       absentDays++;
     }
-
     gridEl.appendChild(cell);
   }
 
   const summEl = document.getElementById('cal-summary');
-  if (summEl) {
-    summEl.textContent = `${workDays} ימי עבודה | ${absentDays} ימי היעדרות | ${futureDays} ימי עתיד`;
-  }
+  if (summEl) summEl.textContent = `${workDays} ימי עבודה | ${absentDays} ימי היעדרות | ${futureDays} ימי עתיד`;
 }
 
 function buildOverviewGrid() {
@@ -129,105 +105,76 @@ function buildOverviewGrid() {
   if (!gridEl) return;
   gridEl.innerHTML = '';
 
-  const today     = new Date();
-  const todayStr  = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
-  const pfx       = monthPrefix(_calMonth, _calYear);
-  const daysInMon = getDaysInMonth(_calYear, _calMonth);
-  const firstDow  = new Date(_calYear, _calMonth - 1, 1).getDay();
   const activeSites = D.sites.filter(s => s.status === 'פעיל');
-  const total = activeSites.length;
-
-  if (!total) {
+  if (!activeSites.length) {
     gridEl.innerHTML = '<div class="empty" style="grid-column:span 7"><div class="empty-icon">📍</div><div class="empty-title">אין אתרים פעילים</div></div>';
     const summEl = document.getElementById('cal-summary');
     if (summEl) summEl.innerHTML = '';
     return;
   }
 
-  // index all logs for the month by date
+  const today     = todayStr();
+  const pfx       = monthPrefix(_calMonth, _calYear);
+  const daysInMon = getDaysInMonth(_calYear, _calMonth);
+  const firstDow  = new Date(_calYear, _calMonth-1, 1).getDay();
+  const total     = activeSites.length;
+
   const logsByDate = {};
-  D.logs.filter(l => l.date && l.date.startsWith(pfx)).forEach(l => {
+  D.logs.filter(l => l.date?.startsWith(pfx)).forEach(l => {
     (logsByDate[l.date] = logsByDate[l.date] || new Set()).add(l.siteId);
   });
 
-  DAY_SHORT.forEach(label => {
-    const hdr = document.createElement('div');
-    hdr.textContent = label;
-    hdr.style.cssText = 'text-align:center;font-weight:700;font-size:12px;color:var(--muted);padding:4px 0';
-    gridEl.appendChild(hdr);
-  });
+  appendDayHeaders(gridEl);
+  appendBlanks(gridEl, firstDow);
 
-  for (let blank = 0; blank < firstDow; blank++) {
-    gridEl.appendChild(document.createElement('div'));
-  }
-
-  let fullDays = 0, partialDays = 0, missDays = 0;
-
+  let fullDays=0, partialDays=0, missDays=0;
   for (let d = 1; d <= daysInMon; d++) {
     const dateStr   = `${_calYear}-${pad(_calMonth)}-${pad(d)}`;
-    const dow       = new Date(_calYear, _calMonth - 1, d).getDay();
-    const isWeekend = dow === 5 || dow === 6;
-    const isFuture  = dateStr > todayStr;
+    const dow       = new Date(_calYear, _calMonth-1, d).getDay();
+    const isWeekend = dow===5||dow===6;
+    const isFuture  = dateStr > today;
 
-    const cell = document.createElement('div');
-    cell.style.cssText = 'border-radius:8px;padding:4px 2px;text-align:center;font-size:12px;font-weight:700;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;';
-
+    const cell = makeCell('border-radius:8px;padding:4px 2px;text-align:center;font-size:12px;font-weight:700;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;');
     const dayNum = document.createElement('span');
     dayNum.textContent = d;
     cell.appendChild(dayNum);
 
     if (isFuture) {
-      cell.style.background = '#f1f5f9';
-      cell.style.color = '#94a3b8';
+      cell.style.background='#f1f5f9'; cell.style.color='#94a3b8';
     } else if (isWeekend) {
-      cell.style.background = '#f8fafc';
-      cell.style.color = '#cbd5e1';
+      cell.style.background='#f8fafc'; cell.style.color='#cbd5e1';
     } else {
       const reported = logsByDate[dateStr] ? logsByDate[dateStr].size : 0;
       const ratio    = reported / total;
-      const label    = document.createElement('span');
+      const label = document.createElement('span');
       label.textContent = `${reported}/${total}`;
-      label.style.fontSize = '10px';
-      label.style.fontWeight = '600';
+      label.style.cssText = 'font-size:10px;font-weight:600';
       cell.appendChild(label);
-
-      if (ratio >= 1) {
-        cell.style.background = '#dcfce7';
-        cell.style.color = '#15803d';
-        fullDays++;
-      } else if (ratio >= 0.5) {
-        cell.style.background = '#fef9c3';
-        cell.style.color = '#92400e';
-        partialDays++;
-      } else if (ratio > 0) {
-        cell.style.background = '#ffedd5';
-        cell.style.color = '#c2410c';
-        partialDays++;
-      } else {
-        cell.style.background = '#fee2e2';
-        cell.style.color = '#b91c1c';
-        missDays++;
-      }
+      if (ratio >= 1)       { cell.style.background='#dcfce7'; cell.style.color='#15803d'; fullDays++; }
+      else if (ratio >= 0.5){ cell.style.background='#fef9c3'; cell.style.color='#92400e'; partialDays++; }
+      else if (ratio > 0)   { cell.style.background='#ffedd5'; cell.style.color='#c2410c'; partialDays++; }
+      else                  { cell.style.background='#fee2e2'; cell.style.color='#b91c1c'; missDays++; }
     }
-
     gridEl.appendChild(cell);
   }
 
   const summEl = document.getElementById('cal-summary');
-  if (summEl) {
-    summEl.innerHTML = `
-      <div class="cal-legend">
-        <div class="cal-legend-item"><span class="cal-legend-dot" style="background:#dcfce7;border:1.5px solid #86efac"></span>כולם דיווחו</div>
-        <div class="cal-legend-item"><span class="cal-legend-dot" style="background:#fef9c3;border:1.5px solid #fde047"></span>חלקי</div>
-        <div class="cal-legend-item"><span class="cal-legend-dot" style="background:#fee2e2;border:1.5px solid #fca5a5"></span>אין דיווח</div>
-      </div>
-      <div style="margin-top:6px">${fullDays} ימים מלאים · ${partialDays} חלקיים · ${missDays} ללא דיווח</div>`;
-  }
+  if (summEl) summEl.innerHTML = `
+    <div class="cal-legend">
+      <div class="cal-legend-item"><span class="cal-legend-dot" style="background:#dcfce7;border:1.5px solid #86efac"></span>כולם דיווחו</div>
+      <div class="cal-legend-item"><span class="cal-legend-dot" style="background:#fef9c3;border:1.5px solid #fde047"></span>חלקי</div>
+      <div class="cal-legend-item"><span class="cal-legend-dot" style="background:#fee2e2;border:1.5px solid #fca5a5"></span>אין דיווח</div>
+    </div>
+    <div style="margin-top:6px">${fullDays} ימים מלאים · ${partialDays} חלקיים · ${missDays} ללא דיווח</div>`;
 }
 
 function updateLabel() {
   const lbl = document.getElementById('cal-month-label');
   if (lbl) lbl.textContent = `${MN[_calMonth]} ${_calYear}`;
+}
+
+function rebuildGrid() {
+  if (_calTab === 'overview') buildOverviewGrid(); else buildGrid();
 }
 
 function switchTab(tab) {
@@ -236,18 +183,12 @@ function switchTab(tab) {
   document.getElementById(`cal-tab-${tab}`)?.classList.add('active');
   const siteSel = document.getElementById('cal-site-row');
   if (siteSel) siteSel.style.display = tab === 'site' ? '' : 'none';
-  if (tab === 'overview') buildOverviewGrid();
-  else buildGrid();
+  rebuildGrid();
 }
 
 export function renderCalendar() {
   const el = document.getElementById('gm-content');
   if (!el) return;
-
-  const siteOptions = D.sites
-    .map(s => `<option value="${s.id}">${s.name}</option>`)
-    .join('');
-
   el.innerHTML = `
     <div class="card">
       <div class="card-title">📅 לוח שנה</div>
@@ -259,7 +200,7 @@ export function renderCalendar() {
         <label class="form-label">אתר</label>
         <select class="form-input" id="cal-site-sel">
           <option value="">— בחר אתר —</option>
-          ${siteOptions}
+          ${D.sites.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}
         </select>
       </div>
       <div class="row" style="align-items:center;justify-content:space-between;margin-top:8px">
@@ -275,30 +216,18 @@ export function renderCalendar() {
     const siteSel = document.getElementById('cal-site-sel');
     if (siteSel) siteSel.value = _calSite;
   }
-
   updateLabel();
-  if (_calTab === 'overview') buildOverviewGrid();
-  else buildGrid();
+  rebuildGrid();
 
   document.getElementById('cal-tab-site').addEventListener('click', () => switchTab('site'));
   document.getElementById('cal-tab-overview').addEventListener('click', () => switchTab('overview'));
-
-  document.getElementById('cal-site-sel').addEventListener('change', e => {
-    _calSite = e.target.value;
-    buildGrid();
-  });
-
+  document.getElementById('cal-site-sel').addEventListener('change', e => { _calSite = e.target.value; buildGrid(); });
   document.getElementById('cal-prev').addEventListener('click', () => {
-    _calMonth--;
-    if (_calMonth < 1) { _calMonth = 12; _calYear--; }
-    updateLabel();
-    if (_calTab === 'overview') buildOverviewGrid(); else buildGrid();
+    _calMonth--; if (_calMonth < 1) { _calMonth=12; _calYear--; }
+    updateLabel(); rebuildGrid();
   });
-
   document.getElementById('cal-next').addEventListener('click', () => {
-    _calMonth++;
-    if (_calMonth > 12) { _calMonth = 1; _calYear++; }
-    updateLabel();
-    if (_calTab === 'overview') buildOverviewGrid(); else buildGrid();
+    _calMonth++; if (_calMonth > 12) { _calMonth=1; _calYear++; }
+    updateLabel(); rebuildGrid();
   });
 }

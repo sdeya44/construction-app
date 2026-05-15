@@ -14,6 +14,8 @@ const WSTEPS = [
   { t:'אספקות והערות',   s:'5/5' },
 ];
 
+const ACT_KEYS = ['dig','base','form','cast','strip'];
+
 function getAvailableSites() {
   const active = D.sites.filter(s => s.status === 'פעיל');
   if (D.role === 'SiteManager') {
@@ -23,20 +25,22 @@ function getAvailableSites() {
   return active;
 }
 
+function initWiz(overrides = {}) {
+  D.wiz = { step:1, date:todayStr(), siteId:'', acts:[], note:'', gNote:'', emps:[], equip:[], dels:[], photos:[], editMode:false, dayOff:false, dayOffReason:'', ...overrides };
+}
+
 export function startLog() {
   if (!can('create_log')) { toast('אין הרשאה ליצור יומן','err'); return; }
   if (!D.isOnline) { toast('אין חיבור לאינטרנט — לא ניתן לשמור דיווח','err'); return; }
-  if (!getAvailableSites().length) {
-    toast('אין אתרים פעילים זמינים','err'); go('sites'); return;
-  }
-  D.wiz = { step:1, date:todayStr(), siteId:'', acts:[], note:'', gNote:'', emps:[], equip:[], dels:[], photos:[], editMode:false, dayOff:false, dayOffReason:'' };
+  if (!getAvailableSites().length) { toast('אין אתרים פעילים זמינים','err'); go('sites'); return; }
+  initWiz();
   drawWiz(); go('newlog');
 }
 
 export function startLogForSite(siteId) {
   if (!can('create_log')) { toast('אין הרשאה ליצור יומן','err'); return; }
   if (!D.isOnline) { toast('אין חיבור לאינטרנט — לא ניתן לשמור דיווח','err'); return; }
-  D.wiz = { step:1, date:todayStr(), siteId, acts:[], note:'', gNote:'', emps:[], equip:[], dels:[], photos:[], editMode:false, dayOff:false, dayOffReason:'' };
+  initWiz({ siteId });
   drawWiz(); go('newlog');
 }
 
@@ -44,7 +48,7 @@ export function startQuickLog(siteId = '') {
   if (!can('create_log')) { toast('אין הרשאה ליצור יומן','err'); return; }
   if (!D.isOnline) { toast('אין חיבור לאינטרנט — לא ניתן לשמור דיווח','err'); return; }
   if (!getAvailableSites().length) { toast('אין אתרים פעילים זמינים','err'); go('sites'); return; }
-  D.wiz = { step:1, date:todayStr(), siteId, acts:[], note:'', gNote:'', emps:[], equip:[], dels:[], photos:[], editMode:false, dayOff:false, dayOffReason:'', quickMode:true };
+  initWiz({ siteId, quickMode:true });
   drawWiz(); go('newlog');
 }
 
@@ -52,18 +56,14 @@ export function editLog(id) {
   const log = D.logs.find(l => l.id === id); if (!log) return;
   if (isLocked(log.date)) { toast('חודש נעול – אי אפשר לערוך','err'); return; }
   if (!can('edit_log'))   { toast('אין הרשאה לעריכה','err'); return; }
-  const att  = D.attendance.filter(a => a.logId === id).map(a => a.empId);
-  const eq   = D.logEquip.filter(e => e.logId === id).map(e => e.eqId);
-  const dels = D.deliveries.filter(d => d.logId === id).map(d => ({ suppId:d.suppId, suppName:d.suppName, material:d.material, qty:d.qty }));
-  const acts = [];
-  if (log.dig)  acts.push('dig'); if (log.base) acts.push('base');
-  if (log.form) acts.push('form');if (log.cast) acts.push('cast');
-  if (log.strip)acts.push('strip');
-  const isDayOff = (log.other || '').startsWith('יום חופש:');
-  const dayOffReason = isDayOff ? log.other.replace('יום חופש: ', '') : '';
+  const att  = D.attendance.filter(a => a.logId===id).map(a => a.empId);
+  const eq   = D.logEquip.filter(e => e.logId===id).map(e => e.eqId);
+  const dels = D.deliveries.filter(d => d.logId===id).map(d => ({ suppId:d.suppId, suppName:d.suppName, material:d.material, qty:d.qty }));
+  const acts = ACT_KEYS.filter(k => log[k]);
+  const isDayOff = (log.other||'').startsWith('יום חופש:');
   D.wiz = { step:1, date:log.date, siteId:log.siteId, acts, note:isDayOff ? '' : (log.other||''), gNote:log.notes||'',
             emps:att, equip:eq, dels, editLogId:id, editVersion:log.version||1, editMode:true, photos:[],
-            dayOff:isDayOff, dayOffReason };
+            dayOff:isDayOff, dayOffReason:isDayOff ? log.other.replace('יום חופש: ','') : '' };
   drawWiz(); go('newlog');
 }
 
@@ -81,8 +81,7 @@ export function drawWiz() {
   } else {
     const i = w.step - 1, st = WSTEPS[i];
     dots = WSTEPS.map((_,j) => `<div class="step-dot ${j<i?'done':j===i?'active':''}"></div>`).join('');
-    stepTitle = st.t;
-    stepSub   = `שלב ${st.s}`;
+    stepTitle = st.t; stepSub = `שלב ${st.s}`;
     isLastStep = w.step === 5;
   }
 
@@ -116,9 +115,7 @@ export function drawWiz() {
     else if (isQuick && w.step === 3) { w.step = 1; drawWiz(); }
     else { w.step--; drawWiz(); }
   };
-  document.getElementById('wiz-btn').onclick = () => {
-    if (isLastStep) saveLog(); else wizNext();
-  };
+  document.getElementById('wiz-btn').onclick = () => { if (isLastStep) saveLog(); else wizNext(); };
   bindWizStep(w.step);
 }
 
@@ -127,17 +124,13 @@ function bindWizStep(step) {
     document.getElementById('w-date')?.addEventListener('change', e => { D.wiz.date = e.target.value; });
     document.getElementById('w-site')?.addEventListener('change', e => { D.wiz.siteId = e.target.value; });
     document.getElementById('wiz-copy-btn')?.addEventListener('click', copyYesterday);
-    document.getElementById('wiz-quick-toggle')?.addEventListener('click', () => {
-      D.wiz.quickMode = !D.wiz.quickMode;
-      drawWiz();
-    });
+    document.getElementById('wiz-quick-toggle')?.addEventListener('click', () => { D.wiz.quickMode = !D.wiz.quickMode; drawWiz(); });
   }
   if (step === 2) {
     document.getElementById('btn-copy-yesterday')?.addEventListener('click', copyFromYesterday);
     document.querySelectorAll('.wiz-act-chip').forEach(chip => {
       chip.addEventListener('click', () => {
-        const k = chip.dataset.act;
-        const a = D.wiz.acts, idx = a.indexOf(k);
+        const k = chip.dataset.act, a = D.wiz.acts, idx = a.indexOf(k);
         idx === -1 ? a.push(k) : a.splice(idx,1);
         chip.classList.toggle('on');
       });
@@ -149,10 +142,7 @@ function bindWizStep(step) {
       drawWiz();
     });
     document.querySelectorAll('.wiz-dayoff-reason').forEach(chip => {
-      chip.addEventListener('click', () => {
-        D.wiz.dayOffReason = chip.dataset.reason;
-        drawWiz();
-      });
+      chip.addEventListener('click', () => { D.wiz.dayOffReason = chip.dataset.reason; drawWiz(); });
     });
   }
   if (step === 3) {
@@ -166,8 +156,7 @@ function bindWizStep(step) {
           item.querySelector('.sel-check').textContent = D.wiz.emps.includes(id) ? '✓' : '';
         };
         if (busy && !sel) {
-          const site = item.dataset.busysite || 'אתר אחר';
-          if (confirm(`${item.dataset.name} כבר מדווח ב${site} בתאריך זה.\nלהוסיף גם לדיווח זה?`)) toggle();
+          if (confirm(`${item.dataset.name} כבר מדווח ב${item.dataset.busysite||'אתר אחר'} בתאריך זה.\nלהוסיף גם לדיווח זה?`)) toggle();
           return;
         }
         toggle();
@@ -190,18 +179,13 @@ function bindWizStep(step) {
     });
     document.getElementById('save-grp-btn')?.addEventListener('click', () => {
       const name = prompt('שם הצוות:');
-      if (name?.trim()) {
-        saveGroup(D.wiz.siteId, name.trim(), [...D.wiz.emps]);
-        toast('צוות נשמר ✓','ok');
-        drawWiz();
-      }
+      if (name?.trim()) { saveGroup(D.wiz.siteId, name.trim(), [...D.wiz.emps]); toast('צוות נשמר ✓','ok'); drawWiz(); }
     });
   }
   if (step === 4) {
     document.querySelectorAll('.wiz-eq-item').forEach(item => {
       item.addEventListener('click', () => {
-        const id = item.dataset.id;
-        const a = D.wiz.equip, idx = a.indexOf(id);
+        const id = item.dataset.id, a = D.wiz.equip, idx = a.indexOf(id);
         idx === -1 ? a.push(id) : a.splice(idx,1);
         item.classList.toggle('on');
         item.querySelector('.sel-check').textContent = D.wiz.equip.includes(id) ? '✓' : '';
@@ -257,9 +241,7 @@ function wiz2() {
     {k:'form',l:'טפסנות',i:'🪵'},{k:'cast',l:'יציקה',i:'🏗️'},
     {k:'strip',l:'פירוק טפסנות',i:'🔧'}
   ];
-  const dayOffReasons = [
-    {k:'חג',i:'🎉'},{k:'גשם',i:'🌧️'},{k:'תקלה',i:'🔧'},{k:'אחר',i:'📝'}
-  ];
+  const dayOffReasons = [{k:'חג',i:'🎉'},{k:'גשם',i:'🌧️'},{k:'תקלה',i:'🔧'},{k:'אחר',i:'📝'}];
   const dim = D.wiz.dayOff ? 'style="opacity:.35;pointer-events:none"' : '';
   return `<div style="margin-bottom:10px">
     <button class="btn btn-ghost btn-sm" id="btn-copy-yesterday" style="width:auto">📋 העתק מאתמול</button>
@@ -270,9 +252,7 @@ function wiz2() {
   <div class="form-group mt12" ${dim}><label class="form-label">פעילות נוספת / הערת פעילות</label>
     <input type="text" class="form-input" id="w-note" placeholder="פעילות אחרת..." value="${D.wiz.note}"></div>
   <div class="divider"></div>
-  <div class="chip day-off-chip ${D.wiz.dayOff?'on':''}" id="wiz-dayoff-toggle">
-    🚫 אתר לא עבד היום
-  </div>
+  <div class="chip day-off-chip ${D.wiz.dayOff?'on':''}" id="wiz-dayoff-toggle">🚫 אתר לא עבד היום</div>
   ${D.wiz.dayOff ? `<div class="chips mt8">
     ${dayOffReasons.map(r=>`<div class="chip ${D.wiz.dayOffReason===r.k?'on dayoff-sel':''} wiz-dayoff-reason" data-reason="${r.k}">${r.i} ${r.k}</div>`).join('')}
   </div>
@@ -282,13 +262,10 @@ function wiz2() {
 function wiz3() {
   const emps = D.employees.filter(e => e.active === 'פעיל');
   if (!emps.length) return `<div class="empty"><div class="empty-icon">👷</div><div class="empty-title">אין עובדים פעילים</div></div>`;
-  const otherSiteAtt = D.attendance.filter(a =>
-    a.date === (D.wiz.date||todayStr()) && a.siteId !== D.wiz.siteId && a.logId !== D.wiz.editLogId
-  );
-  const busyIds  = otherSiteAtt.map(a => a.empId);
+  const otherSiteAtt = D.attendance.filter(a => a.date===(D.wiz.date||todayStr()) && a.siteId!==D.wiz.siteId && a.logId!==D.wiz.editLogId);
+  const busyIds = otherSiteAtt.map(a => a.empId);
   const busySite = {};
   otherSiteAtt.forEach(a => { const s = D.sites.find(x=>x.id===a.siteId); busySite[a.empId] = s?.name || 'אתר אחר'; });
-
   const groups = D.wiz.siteId ? getGroupsForSite(D.wiz.siteId) : [];
   const groupBar = groups.length || D.wiz.emps.length ? `
     <div class="group-bar">
@@ -299,7 +276,6 @@ function wiz3() {
       }).join('')}
       ${D.wiz.emps.length ? `<button class="group-chip save-grp" id="save-grp-btn">💾 שמור כצוות</button>` : ''}
     </div>` : '';
-
   return groupBar + emps.map(e => {
     const busy = busyIds.includes(e.id) && !D.wiz.emps.includes(e.id);
     const sel  = D.wiz.emps.includes(e.id);
@@ -323,7 +299,7 @@ function wiz4() {
 }
 
 function wiz5() {
-  const site       = D.sites.find(s => s.id === D.wiz.siteId);
+  const site = D.sites.find(s => s.id === D.wiz.siteId);
   const activeSupps = D.suppliers.filter(s => s.status === 'פעיל');
   return `
     <div class="form-group"><label class="form-label">הערות כלליות</label>
@@ -398,31 +374,28 @@ function addDel() {
 }
 
 function handleWizPhoto(e) {
-  const f = e.target.files[0]; if (!f) return; e.target.value = '';
-  const url = URL.createObjectURL(f);
+  const f = e.target.files[0]; if (!f) return;
+  e.target.value = '';
   if (!D.wiz.photos) D.wiz.photos = [];
-  D.wiz.photos.push({ file:f, url, name:f.name });
+  D.wiz.photos.push({ file:f, url:URL.createObjectURL(f), name:f.name });
   drawWiz();
 }
 
+function applyLogToDwiz(prev) {
+  D.wiz.acts  = ACT_KEYS.filter(k => prev[k]);
+  D.wiz.note  = (prev.other||'').startsWith('יום חופש:') ? '' : (prev.other||'');
+  D.wiz.emps  = D.attendance.filter(a => a.logId===prev.id).map(a => a.empId);
+  D.wiz.equip = D.logEquip.filter(e => e.logId===prev.id).map(e => e.eqId);
+  D.wiz.dels  = D.deliveries.filter(d => d.logId===prev.id).map(d => ({ suppId:d.suppId, suppName:d.suppName, material:d.material, qty:d.qty }));
+}
+
 function copyFromYesterday() {
-  const siteId = D.wiz.siteId;
-  if (!siteId) { toast('אתר לא נבחר','err'); return; }
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
+  const siteId = D.wiz.siteId; if (!siteId) { toast('אתר לא נבחר','err'); return; }
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
   const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
-  const prev = D.logs.find(l => l.siteId === siteId && l.date === yStr);
+  const prev = D.logs.find(l => l.siteId===siteId && l.date===yStr);
   if (!prev) { toast('אין דיווח מאתמול','err'); return; }
-  D.wiz.acts  = [];
-  if (prev.dig)  D.wiz.acts.push('dig');
-  if (prev.base) D.wiz.acts.push('base');
-  if (prev.form) D.wiz.acts.push('form');
-  if (prev.cast) D.wiz.acts.push('cast');
-  if (prev.strip)D.wiz.acts.push('strip');
-  D.wiz.note  = (prev.other || '').startsWith('יום חופש:') ? '' : (prev.other || '');
-  D.wiz.emps  = D.attendance.filter(a => a.logId === prev.id).map(a => a.empId);
-  D.wiz.equip = D.logEquip.filter(e => e.logId === prev.id).map(e => e.eqId);
-  D.wiz.dels  = D.deliveries.filter(d => d.logId === prev.id).map(d => ({ suppId:d.suppId, suppName:d.suppName, material:d.material, qty:d.qty }));
+  applyLogToDwiz(prev);
   toast('הועתק מאתמול ✓','ok');
   drawWiz();
 }
@@ -431,21 +404,10 @@ function copyYesterday() {
   const siteId = document.getElementById('w-site')?.value || D.wiz.siteId;
   if (!siteId) { toast('בחר אתר תחילה','err'); return; }
   D.wiz.siteId = siteId;
-  const prev = [...D.logs]
-    .filter(l => l.siteId === siteId && l.date < D.wiz.date)
-    .sort((a,b) => b.date.localeCompare(a.date))[0];
+  const prev = [...D.logs].filter(l => l.siteId===siteId && l.date<D.wiz.date).sort((a,b)=>b.date.localeCompare(a.date))[0];
   if (!prev) { toast('אין יומן קודם לאתר זה','err'); return; }
-  D.wiz.acts  = [];
-  if (prev.dig)  D.wiz.acts.push('dig');
-  if (prev.base) D.wiz.acts.push('base');
-  if (prev.form) D.wiz.acts.push('form');
-  if (prev.cast) D.wiz.acts.push('cast');
-  if (prev.strip)D.wiz.acts.push('strip');
-  D.wiz.note  = (prev.other || '').startsWith('יום חופש:') ? '' : (prev.other || '');
-  D.wiz.emps  = D.attendance.filter(a => a.logId===prev.id).map(a => a.empId);
-  D.wiz.equip = D.logEquip.filter(e => e.logId===prev.id).map(e => e.eqId);
-  D.wiz.dels  = D.deliveries.filter(d => d.logId===prev.id).map(d => ({ suppId:d.suppId, suppName:d.suppName, material:d.material, qty:d.qty }));
-  toast('נתונים הועתקו מיומן '+ prev.date +' ✓','ok');
+  applyLogToDwiz(prev);
+  toast('נתונים הועתקו מיומן '+prev.date+' ✓','ok');
   drawWiz();
 }
 
@@ -457,21 +419,18 @@ async function saveLog() {
   if (!site) { toast('אתר לא נמצא','err'); return; }
   setBtn('wiz-btn', true, 'שומר...');
   const logId = uid(), now = new Date().toISOString();
-  const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason || 'אחר'}` : (w.note || '');
+  const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason||'אחר'}` : (w.note||'');
+  const tf = k => w.acts.includes(k)?'TRUE':'FALSE';
   try {
-    await sAppend('DailyLogs',[
-      logId, w.date, w.siteId, site.name, D.user?.email||'',
-      w.acts.includes('dig')?'TRUE':'FALSE', w.acts.includes('base')?'TRUE':'FALSE',
-      w.acts.includes('form')?'TRUE':'FALSE', w.acts.includes('cast')?'TRUE':'FALSE',
-      w.acts.includes('strip')?'TRUE':'FALSE',
-      noteVal, w.gNote||'', now, 1, '', ''
-    ]);
+    await sAppend('DailyLogs',[logId, w.date, w.siteId, site.name, D.user?.email||'',
+      tf('dig'),tf('base'),tf('form'),tf('cast'),tf('strip'),
+      noteVal, w.gNote||'', now, 1, '', '']);
     for (const eid of w.emps) {
-      const e = D.employees.find(x => x.id===eid);
+      const e = D.employees.find(x=>x.id===eid);
       await sAppend('Attendance',[uid(),logId,eid,e?.name||'',w.date,w.siteId]);
     }
     for (const eqid of w.equip) {
-      const e = D.equipment.find(x => x.id===eqid);
+      const e = D.equipment.find(x=>x.id===eqid);
       await sAppend('LogEquipment',[uid(),logId,eqid,e?.name||'',w.date,w.siteId]);
     }
     for (const d of w.dels) {
@@ -481,52 +440,43 @@ async function saveLog() {
     await logAudit('CREATE','DailyLog',logId,`יומן חדש: ${site.name} ${w.date}`);
     await loadAll();
     toast('דיווח נשמר ✓','ok');
-    D.wiz = {};
-    go('dash'); renderDash();
+    D.wiz = {}; go('dash'); renderDash();
   } catch(e) { toast('שגיאה: '+e.message,'err'); setBtn('wiz-btn',false,'💾 שמור דיווח'); }
 }
 
 async function saveLogEdit() {
   if (!D.isOnline) { toast('אין חיבור לאינטרנט — לא ניתן לשמור','err'); return; }
   const w = D.wiz;
-  const log = D.logs.find(l => l.id===w.editLogId);
-  if (!log) { toast('יומן לא נמצא','err'); return; }
+  const log = D.logs.find(l => l.id===w.editLogId); if (!log) { toast('יומן לא נמצא','err'); return; }
   setBtn('wiz-btn', true, 'שומר...');
   try {
-    const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason || 'אחר'}` : (w.note || '');
+    const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason||'אחר'}` : (w.note||'');
     const { conflict, deleted } = await checkLogVersion(w.editLogId, w.editVersion);
-    if (deleted) { toast('יומן זה נמחק ע"י משתמש אחר','err'); setBtn('wiz-btn',false,'💾 עדכן יומן'); return; }
+    if (deleted)  { toast('יומן זה נמחק ע"י משתמש אחר','err'); setBtn('wiz-btn',false,'💾 עדכן יומן'); return; }
     if (conflict) { toast('⚠️ היומן שונה ע"י משתמש אחר. סגור וטען מחדש.','err'); setBtn('wiz-btn',false,'💾 עדכן יומן'); return; }
 
-    // Read fresh data from all affected tabs
     const [lg,at,le,dl] = await Promise.all([
       sRead('DailyLogs','A2:P5000'), sRead('Attendance','A2:F5000'),
       sRead('LogEquipment','A2:F5000'), sRead('Deliveries','A2:G5000')
     ]);
 
-    const newVersion = (w.editVersion||1) + 1;
-    const now = new Date().toISOString();
-
+    const newVersion = (w.editVersion||1) + 1, now = new Date().toISOString();
+    const tf = k => w.acts.includes(k)?'TRUE':'FALSE';
     const newLg = lg.filter(r=>r[0]).map(r => r[0]!==w.editLogId ? r : [
-      r[0],r[1],r[2],r[3],r[4],
-      w.acts.includes('dig')?'TRUE':'FALSE', w.acts.includes('base')?'TRUE':'FALSE',
-      w.acts.includes('form')?'TRUE':'FALSE', w.acts.includes('cast')?'TRUE':'FALSE',
-      w.acts.includes('strip')?'TRUE':'FALSE',
+      r[0],r[1],r[2],r[3],r[4], tf('dig'),tf('base'),tf('form'),tf('cast'),tf('strip'),
       noteVal, w.gNote||'', r[12]||'', newVersion, now, D.user?.email||''
     ]);
-
-    const newAtAdd = w.emps.map(eid => { const e=D.employees.find(x=>x.id===eid); return [uid(),w.editLogId,eid,e?.name||'',log.date,log.siteId]; });
-    const newLeAdd = w.equip.map(eqid=>{ const e=D.equipment.find(x=>x.id===eqid);return [uid(),w.editLogId,eqid,e?.name||'',log.date,log.siteId]; });
-    const newDlAdd = w.dels.map(d   =>  [uid(),w.editLogId,d.suppId||'',d.suppName||'',d.material,d.qty||'','']);
+    const newAtAdd = w.emps.map(eid  => { const e=D.employees.find(x=>x.id===eid);  return [uid(),w.editLogId,eid,e?.name||'',log.date,log.siteId]; });
+    const newLeAdd = w.equip.map(eqid=>{ const e=D.equipment.find(x=>x.id===eqid); return [uid(),w.editLogId,eqid,e?.name||'',log.date,log.siteId]; });
+    const newDlAdd = w.dels.map(d    =>  [uid(),w.editLogId,d.suppId||'',d.suppName||'',d.material,d.qty||'','']);
 
     await Promise.all([
-      rebuildTab('DailyLogs', newLg),
+      rebuildTab('DailyLogs',  newLg),
       rebuildTab('Attendance', [...at.filter(r=>r[0]&&r[1]!==w.editLogId), ...newAtAdd]),
       rebuildTab('LogEquipment',[...le.filter(r=>r[0]&&r[1]!==w.editLogId),...newLeAdd]),
       rebuildTab('Deliveries', [...dl.filter(r=>r[0]&&r[1]!==w.editLogId), ...newDlAdd]),
     ]);
 
-    // Update in-memory
     const li = D.logs.findIndex(l => l.id===w.editLogId);
     D.logs[li] = { ...D.logs[li], dig:w.acts.includes('dig'), base:w.acts.includes('base'), form:w.acts.includes('form'), cast:w.acts.includes('cast'), strip:w.acts.includes('strip'), other:noteVal, notes:w.gNote||'', version:newVersion, updatedAt:now, updatedBy:D.user?.email||'' };
     D.attendance = D.attendance.filter(a=>a.logId!==w.editLogId);
@@ -538,7 +488,6 @@ async function saveLogEdit() {
 
     await logAudit('UPDATE','DailyLog',w.editLogId,`עדכון יומן: ${log.siteName} ${log.date}`);
     toast('יומן עודכן ✓','ok');
-    D.wiz = {};
-    filterLogs(); renderDash(); go('logs');
+    D.wiz = {}; filterLogs(); renderDash(); go('logs');
   } catch(e) { toast('שגיאה: '+e.message,'err'); setBtn('wiz-btn',false,'💾 עדכן יומן'); }
 }
