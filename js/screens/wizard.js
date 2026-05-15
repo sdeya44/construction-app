@@ -41,6 +41,14 @@ export function startLogForSite(siteId) {
   drawWiz(); go('newlog');
 }
 
+export function startQuickLog(siteId = '') {
+  if (!can('create_log')) { toast('אין הרשאה ליצור יומן','err'); return; }
+  if (!D.isOnline) { toast('אין חיבור לאינטרנט — לא ניתן לשמור דיווח','err'); return; }
+  if (!getAvailableSites().length) { toast('אין אתרים פעילים זמינים','err'); go('sites'); return; }
+  D.wiz = { step:1, date:todayStr(), siteId, acts:[], note:'', gNote:'', emps:[], equip:[], dels:[], photos:[], editMode:false, dayOff:false, dayOffReason:'', quickMode:true };
+  drawWiz(); go('newlog');
+}
+
 export function editLog(id) {
   const log = D.logs.find(l => l.id === id); if (!log) return;
   if (isLocked(log.date)) { toast('חודש נעול – אי אפשר לערוך','err'); return; }
@@ -61,35 +69,56 @@ export function editLog(id) {
 }
 
 export function drawWiz() {
-  const w = D.wiz, i = w.step-1, st = WSTEPS[i];
-  const dots = WSTEPS.map((_,j) => `<div class="step-dot ${j<i?'done':j===i?'active':''}"></div>`).join('');
+  const w = D.wiz;
+  const isQuick = !!w.quickMode;
+
+  let dots, stepTitle, stepSub, isLastStep;
+  if (isQuick) {
+    const qIdx = w.step === 1 ? 0 : 1;
+    dots = [0,1].map(j => `<div class="step-dot ${j<qIdx?'done':j===qIdx?'active':''}"></div>`).join('');
+    stepTitle = w.step === 1 ? 'אתר ותאריך' : 'עובדים נוכחים';
+    stepSub   = `שלב ${qIdx+1}/2 · ⚡ מהיר`;
+    isLastStep = w.step === 3;
+  } else {
+    const i = w.step - 1, st = WSTEPS[i];
+    dots = WSTEPS.map((_,j) => `<div class="step-dot ${j<i?'done':j===i?'active':''}"></div>`).join('');
+    stepTitle = st.t;
+    stepSub   = `שלב ${st.s}`;
+    isLastStep = w.step === 5;
+  }
+
   let body = '';
   if (w.step===1) body = wiz1();
-  if (w.step===2) body = wiz2();
+  if (w.step===2 && !isQuick) body = wiz2();
   if (w.step===3) body = wiz3();
-  if (w.step===4) body = wiz4();
-  if (w.step===5) body = wiz5();
+  if (w.step===4 && !isQuick) body = wiz4();
+  if (w.step===5 && !isQuick) body = wiz5();
+
+  const btnText = isLastStep
+    ? (w.editMode ? '💾 עדכן יומן' : isQuick ? '⚡ שמור מהיר' : '💾 שמור דיווח')
+    : 'המשך →';
+
   document.getElementById('s-newlog').innerHTML = `
     <div class="step-hdr">
       <div class="step-prog">${dots}</div>
-      <div class="step-title">${st.t}</div>
-      <div class="step-sub">שלב ${st.s}</div>
+      <div class="step-title">${stepTitle}</div>
+      <div class="step-sub">${stepSub}</div>
     </div>
     <div class="scroll">${body}</div>
     <div class="step-ftr">
       <button class="btn btn-ghost" style="width:auto;padding:14px 20px" id="wiz-back">
         ${w.step===1 ? '✕ ביטול' : '← חזור'}
       </button>
-      <button class="btn btn-primary fg" id="wiz-btn">
-        ${w.step===5 ? (w.editMode?'💾 עדכן יומן':'💾 שמור דיווח') : 'המשך →'}
-      </button>
+      <button class="btn btn-primary fg" id="wiz-btn">${btnText}</button>
     </div>`;
+
   document.getElementById('wiz-back').onclick = () => {
     if (w.step === 1) { D.wiz = {}; go(w.editMode ? 'logs' : 'dash'); }
+    else if (isQuick && w.step === 3) { w.step = 1; drawWiz(); }
     else { w.step--; drawWiz(); }
   };
   document.getElementById('wiz-btn').onclick = () => {
-    if (w.step === 5) saveLog(); else wizNext();
+    if (isLastStep) saveLog(); else wizNext();
   };
   bindWizStep(w.step);
 }
@@ -99,6 +128,10 @@ function bindWizStep(step) {
     document.getElementById('w-date')?.addEventListener('change', e => { D.wiz.date = e.target.value; });
     document.getElementById('w-site')?.addEventListener('change', e => { D.wiz.siteId = e.target.value; });
     document.getElementById('wiz-copy-btn')?.addEventListener('click', copyYesterday);
+    document.getElementById('wiz-quick-toggle')?.addEventListener('click', () => {
+      D.wiz.quickMode = !D.wiz.quickMode;
+      drawWiz();
+    });
   }
   if (step === 2) {
     document.querySelectorAll('.wiz-act-chip').forEach(chip => {
@@ -201,6 +234,10 @@ function wiz1() {
       <div class="form-input" style="background:#f5f7ff;color:var(--muted)">${site?.name||D.wiz.siteId}</div></div>
       <div class="muted tc" style="font-size:12px;padding:4px 0">ניתן לערוך פעילויות, עובדים, ציוד, הערות ואספקות</div>`;
   }
+  const quickBtn = `<button class="btn btn-sm mt8" id="wiz-quick-toggle"
+    style="width:auto;${D.wiz.quickMode?'background:rgba(45,91,227,.1);border:2px solid var(--blue);color:var(--blue)':'background:var(--bg);border:2px solid var(--border);color:var(--muted)'}">
+    ⚡ ${D.wiz.quickMode ? 'מצב מהיר — פעיל' : 'מצב מהיר (2 שלבים)'}
+  </button>`;
   return `<div class="form-group"><label class="form-label">תאריך</label>
     <input type="date" class="form-input" id="w-date" value="${D.wiz.date}" max="${todayStr()}"></div>
     <div class="form-group"><label class="form-label">אתר *</label>
@@ -208,7 +245,10 @@ function wiz1() {
       <option value="">— בחר אתר —</option>
       ${sites.map(s=>`<option value="${s.id}" ${D.wiz.siteId===s.id?'selected':''}>${s.name}</option>`).join('')}
     </select></div>
-    <button class="btn btn-outline btn-sm" id="wiz-copy-btn" style="margin-top:4px">📋 העתק מיומן קודם לאתר זה</button>`;
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+      <button class="btn btn-outline btn-sm" id="wiz-copy-btn" style="width:auto">📋 העתק מיומן קודם</button>
+      ${quickBtn}
+    </div>`;
 }
 
 function wiz2() {
@@ -336,6 +376,7 @@ function wizNext() {
     if (!w.siteId) { toast('יש לבחור אתר','err'); return; }
     if (D.logs.find(l => l.siteId===w.siteId && l.date===w.date)) { toast('יומן לאתר זה כבר קיים היום','err'); return; }
     if (isLocked(w.date)) { toast('חודש זה נעול','err'); return; }
+    if (w.quickMode) { w.step = 3; drawWiz(); return; }
   }
   if (w.step === 2) {
     w.note = document.getElementById('w-note')?.value || w.note;

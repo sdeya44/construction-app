@@ -332,3 +332,28 @@ textarea.form-input{resize:none;min-height:80px}
 [data-fontsize="large"] .card-title{font-size:13px}
 [data-fontsize="large"] .nav-label{font-size:12px}
 [data-fontsize="large"] .badge{font-size:13px;padding:4px 10px}
+
+/* ── COST CHART ──────────────────────────────────────────────────────────── */
+.chart-bar-label{font-size:9px;fill:#374151;font-weight:600;font-family:'Heebo',sans-serif}
+.chart-axis-label{font-size:9px;fill:#6b7280;font-family:'Heebo',sans-serif}
+[data-theme="dark"] .chart-bar-label{fill:#e2e8f0}
+[data-theme="dark"] .chart-axis-label{fill:#64748b}
+
+/* ── EMPLOYEE HISTORY ────────────────────────────────────────────────────── */
+.emp-stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+.emp-stat-box{background:var(--bg);border-radius:12px;padding:12px;text-align:center}
+.emp-stat-val{font-size:20px;font-weight:800;color:var(--text);line-height:1}
+.emp-stat-lab{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* ── QUICK LOG ENTRY ─────────────────────────────────────────────────────── */
+.quick-log-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.quick-log-label{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+
+/* ── CALENDAR OVERVIEW ───────────────────────────────────────────────────── */
+.cal-ov-cell{border-radius:8px;padding:5px 2px;text-align:center;font-weight:700;font-size:12px;min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.cal-ov-cell.clickable{cursor:pointer}
+.cal-ov-day{font-size:13px;font-weight:800;line-height:1}
+.cal-ov-ratio{font-size:10px;font-weight:700;line-height:1;opacity:.85}
+.cal-legend{display:flex;gap:10px;justify-content:center;margin-top:8px;flex-wrap:wrap}
+.cal-legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);font-weight:600}
+.cal-legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}

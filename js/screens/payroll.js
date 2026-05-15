@@ -2,6 +2,59 @@ import { D } from '../state.js';
 import { MN, BUSINESS_NAME } from '../config.js';
 import { pad, monthPrefix, toast, can, exportCSV } from '../utils.js';
 
+function renderCostChart() {
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const m = d.getMonth() + 1;
+    const y = d.getFullYear();
+    const pfx = `${y}-${pad(m)}`;
+    const total = D.employees.reduce((sum, emp) => {
+      if (!emp.dailyRate) return sum;
+      const days = new Set(
+        D.attendance.filter(a => a.empId === emp.id && a.date?.startsWith(pfx)).map(a => a.date)
+      ).size;
+      return sum + days * (+emp.dailyRate);
+    }, 0);
+    months.push({ label: MN[m], total });
+  }
+
+  const max = Math.max(...months.map(m => m.total), 1);
+  const svgW = 300, svgH = 130;
+  const padL = 8, padR = 8, padT = 22, padB = 28;
+  const chartW = svgW - padL - padR;
+  const chartH = svgH - padT - padB;
+  const slotW = chartW / months.length;
+  const barW  = Math.floor(slotW * 0.6);
+
+  const bars = months.map((m, i) => {
+    const x    = padL + i * slotW + (slotW - barW) / 2;
+    const barH = m.total > 0 ? Math.max(4, Math.floor((m.total / max) * chartH)) : 3;
+    const y    = padT + chartH - barH;
+    const fmt  = m.total >= 10000 ? '₪'+(m.total/1000).toFixed(0)+'K' : m.total > 0 ? '₪'+m.total.toLocaleString() : '';
+    return `
+      <rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="4" fill="url(#cg)"/>
+      ${m.total > 0 ? `<text x="${x+barW/2}" y="${y-4}" text-anchor="middle" class="chart-bar-label">${fmt}</text>` : ''}
+      <text x="${x+barW/2}" y="${svgH-6}" text-anchor="middle" class="chart-axis-label">${m.label}</text>`;
+  }).join('');
+
+  return `
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">📈 עלויות שכר — 6 חודשים אחרונים</div>
+      <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%;height:auto;direction:ltr">
+        <defs>
+          <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#2d5be3"/>
+            <stop offset="100%" stop-color="#4a7af5" stop-opacity=".7"/>
+          </linearGradient>
+        </defs>
+        <line x1="${padL}" y1="${padT+chartH}" x2="${svgW-padR}" y2="${padT+chartH}" stroke="#e5e9f5" stroke-width="1"/>
+        ${bars}
+      </svg>
+    </div>`;
+}
+
 function openPrint(html) {
   const w = window.open('', '_blank');
   if (!w) { toast('אפשר חלונות קופצים בדפדפן', 'err'); return; }
@@ -159,7 +212,7 @@ export function renderPayroll() {
   const currentMonth = now.getMonth() + 1;
   const currentYear  = now.getFullYear();
 
-  el.innerHTML = `
+  el.innerHTML = renderCostChart() + `
     <div class="card">
       <div class="card-title">💰 דוח שכר</div>
       <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap">

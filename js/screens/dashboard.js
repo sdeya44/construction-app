@@ -65,7 +65,10 @@ function renderQuickSites(today) {
   const reportedIds = new Set(D.logs.filter(l => l.date === today).map(l => l.siteId));
   const sorted = [...sites].sort((a,b) => (reportedIds.has(a.id)?1:0) - (reportedIds.has(b.id)?1:0));
   el.innerHTML = `
-    <div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">אתרים פעילים</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">אתרים פעילים</div>
+      ${can('create_log') ? `<button class="btn btn-sm" id="d-quick-log-btn" style="width:auto;padding:5px 12px;font-size:12px;background:rgba(45,91,227,.1);border:1.5px solid var(--blue);color:var(--blue)">⚡ דיווח מהיר</button>` : ''}
+    </div>
     <div class="quick-sites">
       ${sorted.map(s => `
         <button class="quick-site-chip ${reportedIds.has(s.id)?'has-report':''}"
@@ -73,6 +76,9 @@ function renderQuickSites(today) {
           ${reportedIds.has(s.id) ? '✓' : '+'} ${s.name}
         </button>`).join('')}
     </div>`;
+  document.getElementById('d-quick-log-btn')?.addEventListener('click', () => {
+    import('./wizard.js').then(m => m.startQuickLog());
+  });
   el.querySelectorAll('.quick-site-chip').forEach(chip => {
     chip.addEventListener('click', () => {
       const sid = chip.dataset.siteId;

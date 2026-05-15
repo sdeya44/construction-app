@@ -1,6 +1,6 @@
-import { HDR } from '../config.js';
+import { HDR, MN } from '../config.js';
 import { D } from '../state.js';
-import { uid, todayStr, toast, can, openSheet, closeSheet, setBtn } from '../utils.js';
+import { uid, pad, monthPrefix, todayStr, toast, can, openSheet, closeSheet, setBtn } from '../utils.js';
 import { sAppend, sWrite, logAudit } from '../api.js';
 
 export function renderEmps() { filterEmps(); }
@@ -41,8 +41,89 @@ export function filterEmps() {
       }).join('')}
     </div>`).join('');
   document.querySelectorAll('.emp-row').forEach(row => {
-    row.onclick = () => openEditEmp(row.dataset.id);
+    row.onclick = () => openEmpHistory(row.dataset.id);
   });
+}
+
+export function openEmpHistory(id) {
+  const emp = D.employees.find(e => e.id === id);
+  if (!emp) return;
+
+  const now = new Date();
+  const monthStats = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const m = d.getMonth() + 1;
+    const y = d.getFullYear();
+    const days = new Set(
+      D.attendance.filter(a => a.empId === id && a.date?.startsWith(monthPrefix(m, y))).map(a => a.date)
+    ).size;
+    monthStats.push({ label: MN[m], month: m, year: y, days });
+  }
+
+  const uniqueDays = new Set(D.attendance.filter(a => a.empId === id).map(a => a.date)).size;
+  const rate = +(emp.dailyRate || 0);
+  const totalCost = uniqueDays * rate;
+
+  const recentSiteMap = new Map();
+  [...D.attendance].filter(a => a.empId === id).sort((a,b) => b.date.localeCompare(a.date))
+    .forEach(a => { if (!recentSiteMap.has(a.siteId)) recentSiteMap.set(a.siteId, D.sites.find(s=>s.id===a.siteId)?.name||'אתר'); });
+  const recentSites = [...recentSiteMap.entries()].slice(0, 5);
+
+  const maxD = Math.max(...monthStats.map(m => m.days), 1);
+  const svgW = 280, svgH = 100;
+  const padL = 8, padT = 20, chartH = 60, chartW = svgW - padL * 2;
+  const slotW = chartW / monthStats.length;
+  const barW  = Math.floor(slotW * 0.55);
+  const svgBars = monthStats.map((m, i) => {
+    const x    = padL + i * slotW + (slotW - barW) / 2;
+    const barH = m.days > 0 ? Math.max(3, Math.floor((m.days / maxD) * chartH)) : 3;
+    const y    = padT + chartH - barH;
+    return `
+      <rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="#2d5be3" opacity=".82"/>
+      ${m.days > 0 ? `<text x="${x+barW/2}" y="${y-3}" text-anchor="middle" font-size="8" fill="#374151" font-weight="600" font-family="Heebo">${m.days}</text>` : ''}
+      <text x="${x+barW/2}" y="${svgH-4}" text-anchor="middle" font-size="8" fill="#6b7280" font-family="Heebo">${m.label}</text>`;
+  }).join('');
+
+  document.getElementById('sh-emp-hist-body').innerHTML = `
+    <div class="sh-title">👷 ${emp.name}</div>
+    <div class="muted" style="margin-bottom:16px">${emp.profession||''} · <span class="badge ${emp.active==='פעיל'?'b-green':'b-orange'}">${emp.active}</span></div>
+    <div class="emp-stat-grid">
+      <div class="emp-stat-box">
+        <div class="emp-stat-val">${uniqueDays}</div>
+        <div class="emp-stat-lab">סה"כ ימים</div>
+      </div>
+      <div class="emp-stat-box">
+        <div class="emp-stat-val">${rate ? '₪'+rate.toLocaleString() : '—'}</div>
+        <div class="emp-stat-lab">תעריף יומי</div>
+      </div>
+      <div class="emp-stat-box" style="background:rgba(45,91,227,.08)">
+        <div class="emp-stat-val" style="color:var(--blue)">${totalCost ? '₪'+totalCost.toLocaleString() : '—'}</div>
+        <div class="emp-stat-lab">סה"כ שכר</div>
+      </div>
+    </div>
+    <div class="card-title" style="margin-bottom:8px">נוכחות — 6 חודשים</div>
+    <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%;height:auto;direction:ltr;margin-bottom:16px">
+      <line x1="${padL}" y1="${padT+chartH}" x2="${svgW-padL}" y2="${padT+chartH}" stroke="#e5e9f5" stroke-width="1"/>
+      ${svgBars}
+    </svg>
+    ${recentSites.length ? `
+      <div class="card-title" style="margin-bottom:8px">אתרים אחרונים</div>
+      ${recentSites.map(([,name]) => `
+        <div class="list-item" style="padding:8px 0">
+          <div class="avatar av-blue" style="width:32px;height:32px;font-size:14px">📍</div>
+          <div class="li-name">${name}</div>
+        </div>`).join('')}` : ''}
+    ${can('manage_employees') ? `
+      <button class="btn btn-outline mt8" id="emp-hist-edit">✏️ ערוך פרטי עובד</button>` : ''}
+    <button class="btn btn-ghost mt8" id="emp-hist-close">סגור</button>
+  `;
+
+  document.getElementById('emp-hist-close')?.addEventListener('click', () => closeSheet('sh-emp-hist'));
+  document.getElementById('emp-hist-edit')?.addEventListener('click', () => {
+    closeSheet('sh-emp-hist'); openEditEmp(id);
+  });
+  openSheet('sh-emp-hist');
 }
 
 export function openAddEmp() {
