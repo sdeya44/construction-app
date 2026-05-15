@@ -1,6 +1,5 @@
-import { MN, BUSINESS_NAME } from '../config.js';
+import { BUSINESS_NAME } from '../config.js';
 import { D } from '../state.js';
-import { logToRow, attToRow, leToRow, delToRow } from '../state.js';
 import { todayStr, fmtDate, toast, can, confirm2, openSheet, closeSheet, isLocked, getActs, isDayOff, logCardHtml } from '../utils.js';
 import { sRead, rebuildTab, logAudit } from '../api.js';
 import { editLog } from './wizard.js';

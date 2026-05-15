@@ -1,6 +1,5 @@
-import { MN } from '../config.js';
-import { D, loadAll, logToRow, attToRow, leToRow, delToRow } from '../state.js';
-import { uid, todayStr, fmtDate, toast, can, go, openSheet, setBtn, isLocked } from '../utils.js';
+import { D, loadAll } from '../state.js';
+import { uid, todayStr, fmtDate, toast, can, go, setBtn, isLocked } from '../utils.js';
 import { sRead, sAppend, rebuildTab, checkLogVersion, logAudit } from '../api.js';
 import { uploadWizPhotos } from './photos.js';
 import { renderDash } from './dashboard.js';
@@ -442,9 +441,10 @@ function copyYesterday() {
   if (prev.form) D.wiz.acts.push('form');
   if (prev.cast) D.wiz.acts.push('cast');
   if (prev.strip)D.wiz.acts.push('strip');
-  D.wiz.note  = prev.other || '';
+  D.wiz.note  = (prev.other || '').startsWith('יום חופש:') ? '' : (prev.other || '');
   D.wiz.emps  = D.attendance.filter(a => a.logId===prev.id).map(a => a.empId);
   D.wiz.equip = D.logEquip.filter(e => e.logId===prev.id).map(e => e.eqId);
+  D.wiz.dels  = D.deliveries.filter(d => d.logId===prev.id).map(d => ({ suppId:d.suppId, suppName:d.suppName, material:d.material, qty:d.qty }));
   toast('נתונים הועתקו מיומן '+ prev.date +' ✓','ok');
   drawWiz();
 }

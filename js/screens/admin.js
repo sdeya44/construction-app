@@ -1,5 +1,5 @@
 import { D } from '../state.js';
-import { uid, toast, can, fmtDate } from '../utils.js';
+import { uid, toast, can } from '../utils.js';
 import { sAppend, rebuildTab, logAudit } from '../api.js';
 
 let _adminTab = 'users';

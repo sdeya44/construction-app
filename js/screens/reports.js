@@ -1,8 +1,7 @@
 import { MN, DAYS_HE, BUSINESS_NAME } from '../config.js';
 import { D } from '../state.js';
-import { pad, monthPrefix, getDaysInMonth, toast, openSheet, isLocked, getActs, exportCSV } from '../utils.js';
+import { uid, pad, monthPrefix, getDaysInMonth, toast, openSheet, isLocked, getActs, exportCSV } from '../utils.js';
 import { sAppend, rebuildTab, logAudit } from '../api.js';
-import { uid } from '../utils.js';
 
 export function initSelects() {
   const now = new Date();
