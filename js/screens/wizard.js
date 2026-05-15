@@ -134,6 +134,7 @@ function bindWizStep(step) {
     });
   }
   if (step === 2) {
+    document.getElementById('btn-copy-yesterday')?.addEventListener('click', copyFromYesterday);
     document.querySelectorAll('.wiz-act-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const k = chip.dataset.act;
@@ -261,7 +262,10 @@ function wiz2() {
     {k:'חג',i:'🎉'},{k:'גשם',i:'🌧️'},{k:'תקלה',i:'🔧'},{k:'אחר',i:'📝'}
   ];
   const dim = D.wiz.dayOff ? 'style="opacity:.35;pointer-events:none"' : '';
-  return `<div class="chips" ${dim}>
+  return `<div style="margin-bottom:10px">
+    <button class="btn btn-ghost btn-sm" id="btn-copy-yesterday" style="width:auto">📋 העתק מאתמול</button>
+  </div>
+  <div class="chips" ${dim}>
     ${acts.map(a=>`<div class="chip wiz-act-chip ${D.wiz.acts.includes(a.k)?'on':''}" data-act="${a.k}">${a.i} ${a.l}</div>`).join('')}
   </div>
   <div class="form-group mt12" ${dim}><label class="form-label">פעילות נוספת / הערת פעילות</label>
@@ -399,6 +403,28 @@ function handleWizPhoto(e) {
   const url = URL.createObjectURL(f);
   if (!D.wiz.photos) D.wiz.photos = [];
   D.wiz.photos.push({ file:f, url, name:f.name });
+  drawWiz();
+}
+
+function copyFromYesterday() {
+  const siteId = D.wiz.siteId;
+  if (!siteId) { toast('אתר לא נבחר','err'); return; }
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
+  const prev = D.logs.find(l => l.siteId === siteId && l.date === yStr);
+  if (!prev) { toast('אין דיווח מאתמול','err'); return; }
+  D.wiz.acts  = [];
+  if (prev.dig)  D.wiz.acts.push('dig');
+  if (prev.base) D.wiz.acts.push('base');
+  if (prev.form) D.wiz.acts.push('form');
+  if (prev.cast) D.wiz.acts.push('cast');
+  if (prev.strip)D.wiz.acts.push('strip');
+  D.wiz.note  = (prev.other || '').startsWith('יום חופש:') ? '' : (prev.other || '');
+  D.wiz.emps  = D.attendance.filter(a => a.logId === prev.id).map(a => a.empId);
+  D.wiz.equip = D.logEquip.filter(e => e.logId === prev.id).map(e => e.eqId);
+  D.wiz.dels  = D.deliveries.filter(d => d.logId === prev.id).map(d => ({ suppId:d.suppId, suppName:d.suppName, material:d.material, qty:d.qty }));
+  toast('הועתק מאתמול ✓','ok');
   drawWiz();
 }
 
