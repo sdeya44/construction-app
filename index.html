@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a2744">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="כיאן הנדסה">
+  <title>כיאן הנדסה — ניהול אתרים</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+<div id="app">
+
+<div id="login-screen">
+  <div class="l-logo">🏗️</div>
+  <div class="l-title">כיאן הנדסה</div>
+  <div class="l-sub">מערכת ניהול אתרי בנייה</div>
+  <div class="l-card">
+    <p>התחבר עם חשבון Google שלך כדי להיכנס למערכת</p>
+    <button id="g-btn">
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      כניסה עם Google
+    </button>
+  </div>
+</div>
+
+<div id="loading" class="hidden">
+  <div class="ld-logo">🏗️</div>
+  <div class="ld-txt" id="ld-txt">מתחבר...</div>
+  <div class="ld-bar"><div class="ld-prog"></div></div>
+</div>
+
+<div id="app-main" style="display:none;flex-direction:column;height:100%;">
+
+  <!-- STATUS BAR -->
+  <div id="status-bar" class="status-bar online" style="display:none">
+    <div class="status-dot"></div><span>מחובר</span>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="s-dash" class="screen active">
+    <div class="topbar">
+      <div class="fg"><div class="topbar-title">כיאן הנדסה</div><div class="topbar-sub" id="d-date"></div></div>
+      <button class="topbar-btn" id="refresh-btn" style="margin-left:6px">🔄</button>
+      <button class="topbar-btn" id="btn-open-gm" title="מנהל ראשי" style="display:none;background:linear-gradient(135deg,#1d4ed8,#1e40af);color:#fff;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:700">מנהל ראשי ▲</button>
+      <button class="topbar-btn" id="logout-btn">⚙️</button>
+    </div>
+    <div class="scroll" id="dash-scroll">
+      <div class="hero">
+        <div class="hero-greet">שלום, <span id="d-name">מנהל</span> 👋</div>
+        <div id="d-role-badge"></div>
+        <div class="stats-grid" style="margin:0">
+          <div style="background:rgba(255,255,255,.08);border-radius:12px;padding:14px">
+            <div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:4px">אתרים היום</div>
+            <div style="font-size:28px;font-weight:800;color:var(--gold)" id="d-sites">0</div>
+          </div>
+          <div style="background:rgba(255,255,255,.08);border-radius:12px;padding:14px">
+            <div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:4px">עובדים בשטח</div>
+            <div style="font-size:28px;font-weight:800;color:white" id="d-workers">0</div>
+          </div>
+        </div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon">📋</div><div class="stat-num" id="d-mlogs">0</div><div class="stat-label">יומנים החודש</div></div>
+        <div class="stat-card dark"><div class="stat-icon">👷</div><div class="stat-num" id="d-empt">0</div><div class="stat-label">עובדים פעילים</div></div>
+      </div>
+      <div id="d-alerts"></div>
+      <div id="d-quick-sites"></div>
+      <div class="sec-hdr"><div class="sec-title">יומנים אחרונים</div></div>
+      <div id="d-recent"><div class="spin"></div></div>
+    </div>
+  </div>
+
+  <!-- WIZARD -->
+  <div id="s-newlog" class="screen"></div>
+
+  <!-- LOGS -->
+  <div id="s-logs" class="screen">
+    <div class="topbar"><div class="topbar-title fg">יומנים</div></div>
+    <div style="padding:12px 16px 0;flex-shrink:0">
+      <div class="search-bar"><span>🔍</span><input type="text" placeholder="חיפוש חופשי..." id="log-q"></div>
+      <div class="filter-row">
+        <select class="form-input" id="log-filter-site">
+          <option value="">כל האתרים</option>
+        </select>
+        <select class="form-input" id="log-filter-act">
+          <option value="">כל הפעילויות</option>
+          <option value="dig">חפירה</option>
+          <option value="base">מצעים</option>
+          <option value="form">טפסנות</option>
+          <option value="cast">יציקה</option>
+          <option value="strip">פירוק טפסנות</option>
+          <option value="other">אחר</option>
+        </select>
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-tab="all">הכל</button>
+        <button class="tab" data-tab="today">היום</button>
+        <button class="tab" data-tab="month">החודש</button>
+      </div>
+    </div>
+    <div class="scroll" style="padding-top:0"><div id="logs-list"></div></div>
+  </div>
+
+  <!-- EMPLOYEES -->
+  <div id="s-emp" class="screen">
+    <div class="topbar">
+      <div class="topbar-title fg">עובדים</div>
+      <button class="topbar-btn" id="btn-add-emp" data-role-require="manage_employees">➕</button>
+    </div>
+    <div style="padding:12px 16px 0;flex-shrink:0">
+      <div class="search-bar"><span>🔍</span><input type="text" placeholder="חיפוש עובד..." id="emp-q"></div>
+      <div class="tabs">
+        <button class="tab active" data-tab="active">פעילים</button>
+        <button class="tab" data-tab="frozen">מוקפאים</button>
+        <button class="tab" data-tab="all">כולם</button>
+      </div>
+    </div>
+    <div class="scroll" style="padding-top:0"><div id="emp-list"></div></div>
+  </div>
+
+  <!-- SITES -->
+  <div id="s-sites" class="screen">
+    <div class="topbar">
+      <div class="topbar-title fg">אתרים</div>
+      <button class="topbar-btn" id="btn-add-site" data-role-require="manage_sites">➕</button>
+    </div>
+    <div style="padding:12px 16px 0;flex-shrink:0">
+      <div class="tabs">
+        <button class="tab active" data-tab="active">פעילים</button>
+        <button class="tab" data-tab="frozen">מוקפאים</button>
+        <button class="tab" data-tab="all">כולם</button>
+      </div>
+    </div>
+    <div class="scroll" style="padding-top:0"><div id="sites-list"></div></div>
+  </div>
+
+  <!-- MANAGEMENT (suppliers + equipment) -->
+  <div id="s-mgmt" class="screen">
+    <div class="topbar">
+      <div class="topbar-title fg">ניהול</div>
+      <button class="topbar-btn" id="mgmt-add-btn" data-role-require="manage_suppliers">➕</button>
+    </div>
+    <div class="scroll">
+      <div class="tabs">
+        <button class="tab active" data-tab="suppliers">ספקים</button>
+        <button class="tab" data-tab="equipment">ציוד</button>
+      </div>
+      <div id="mgmt-content"></div>
+    </div>
+  </div>
+
+  <!-- REPORTS -->
+  <div id="s-reports" class="screen">
+    <div class="topbar">
+      <div class="topbar-title fg">דוחות</div>
+      <button class="topbar-btn" data-role-require="lock_month">🔒</button>
+    </div>
+    <div class="scroll">
+      <div class="card">
+        <div class="card-title">בחר חודש לדוח</div>
+        <div class="row">
+          <select class="form-input fg" id="r-month"></select>
+          <select class="form-input fg" id="r-year"></select>
+        </div>
+        <button class="btn btn-primary mt8" id="btn-gen-report">📊 הפק דוח</button>
+      </div>
+      <div id="r-out" style="display:none">
+        <div class="card">
+          <div class="card-title">ייצוא</div>
+          <div class="pdf-action-row">
+            <button class="btn btn-purple btn-sm" id="btn-summary-pdf">📄 ריכוז PDF</button>
+            <button class="btn btn-gold btn-sm" id="btn-full-pdf">📋 דוח מלא PDF</button>
+          </div>
+          <button class="btn btn-outline btn-sm mt8" id="btn-csv">📥 ייצוא CSV</button>
+          <div class="muted mt8" style="font-size:12px;line-height:1.5">ריכוז = רשימה + ימים. דוח מלא = כל עובד בדף נפרד עם טבלת נוכחות. CSV = ייצוא לאקסל.</div>
+        </div>
+        <div id="r-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEARCH -->
+  <div id="s-search" class="screen">
+    <div class="topbar"><div class="topbar-title fg">חיפוש</div></div>
+    <div id="search-content" style="padding:12px 16px;height:100%;overflow-y:auto"></div>
+  </div>
+
+  <div class="bottom-nav">
+    <button class="nav-item active" id="nav-dash">
+      <span class="nav-icon">🏠</span><span class="nav-label">בית</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-sites">
+      <span class="nav-icon">📍</span><span class="nav-label">אתרים</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-newlog">
+      <span class="nav-icon" style="font-size:28px;background:linear-gradient(135deg,var(--blue),var(--blue2));border-radius:14px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;margin-top:-12px;box-shadow:0 4px 16px rgba(45,91,227,.4)">➕</span>
+      <span class="nav-label" style="margin-top:2px">דיווח</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-logs">
+      <span class="nav-icon">📋</span><span class="nav-label">יומנים</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-reports">
+      <span class="nav-icon">📊</span><span class="nav-label">דוחות</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-search" style="display:none">
+      <span class="nav-icon">🔍</span><span class="nav-label">חיפוש</span><div class="nav-dot"></div>
+    </button>
+  </div>
+</div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- ADD EMPLOYEE -->
+<div class="overlay" id="sh-emp">
+  <div class="sheet">
+    <div class="sh-handle"></div>
+    <div class="sh-title" id="emp-sh-title">➕ הוספת עובד</div>
+    <div class="form-group"><label class="form-label">שם מלא *</label><input type="text" class="form-input" id="e-name" placeholder="שם העובד"></div>
+    <div class="form-group"><label class="form-label">מקצוע</label>
+      <select class="form-input" id="e-prof">
+        <option value="טפסן">טפסן</option>
+        <option value="פועל">פועל</option>
+        <option value="נהג">נהג</option>
+        <option value="אחר">אחר</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">טלפון</label><input type="tel" class="form-input" id="e-phone" placeholder="050-0000000"></div>
+    <div class="form-group"><label class="form-label">תעריף יומי (₪)</label><input type="number" class="form-input" id="e-daily-rate" placeholder="0" min="0" step="10"></div>
+    <div class="form-group"><label class="form-label">סטטוס</label>
+      <div class="status-toggle">
+        <div class="status-chip active-s" id="sc-active">✅ פעיל</div>
+        <div class="status-chip" id="sc-frozen">❄️ מוקפא</div>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btn-save-emp">שמור עובד</button>
+    <button class="btn btn-ghost mt8" id="btn-cancel-emp">ביטול</button>
+  </div>
+</div>
+
+<!-- ADD SITE -->
+<div class="overlay" id="sh-site">
+  <div class="sheet">
+    <div class="sh-handle"></div>
+    <div class="sh-title" id="site-sh-title">➕ הוספת אתר</div>
+    <div class="form-group"><label class="form-label">שם האתר *</label><input type="text" class="form-input" id="s-name" placeholder="שם הפרויקט"></div>
+    <div class="form-group"><label class="form-label">כתובת</label><input type="text" class="form-input" id="s-addr" placeholder="רחוב, עיר"></div>
+    <div class="form-group"><label class="form-label">סטטוס</label>
+      <div class="status-toggle">
+        <div class="status-chip active-s" id="ss-active">✅ פעיל</div>
+        <div class="status-chip" id="ss-frozen">❄️ מוקפא</div>
+        <div class="status-chip" id="ss-ended">✓ הסתיים</div>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">הערות</label><textarea class="form-input" id="s-notes" placeholder="הערות..."></textarea></div>
+    <button class="btn btn-primary" id="btn-save-site">שמור אתר</button>
+    <button class="btn btn-ghost mt8" id="btn-cancel-site">ביטול</button>
+  </div>
+</div>
+
+<!-- ADD SUPPLIER -->
+<div class="overlay" id="sh-supp">
+  <div class="sheet">
+    <div class="sh-handle"></div>
+    <div class="sh-title" id="supp-sh-title">➕ הוספת ספק</div>
+    <div class="form-group"><label class="form-label">שם הספק *</label><input type="text" class="form-input" id="sp-name" placeholder="שם הספק"></div>
+    <div class="form-group"><label class="form-label">טלפון</label><input type="tel" class="form-input" id="sp-phone" placeholder="03-0000000"></div>
+    <div class="form-group"><label class="form-label">סוג סחורה / חומרים</label><textarea class="form-input" id="sp-notes" placeholder="בטון, ברזל, חול, אינסטלציה..."></textarea></div>
+    <div class="form-group"><label class="form-label">סטטוס</label>
+      <div class="status-toggle">
+        <div class="status-chip active-s" id="ssp-active">✅ פעיל</div>
+        <div class="status-chip" id="ssp-frozen">❄️ מוקפא</div>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btn-save-supp">שמור ספק</button>
+    <button class="btn btn-ghost mt8" id="btn-cancel-supp">ביטול</button>
+  </div>
+</div>
+
+<!-- ADD EQUIPMENT -->
+<div class="overlay" id="sh-equip">
+  <div class="sheet">
+    <div class="sh-handle"></div>
+    <div class="sh-title" id="equip-sh-title">➕ הוספת ציוד</div>
+    <div class="form-group"><label class="form-label">שם הציוד *</label><input type="text" class="form-input" id="eq-name" placeholder="שם הציוד"></div>
+    <div class="form-group"><label class="form-label">סוג</label>
+      <select class="form-input" id="eq-type">
+        <option value="כבד">כבד</option>
+        <option value="קל">קל</option>
+        <option value="כלי עבודה">כלי עבודה</option>
+        <option value="רכב">רכב</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">סטטוס</label>
+      <div class="status-toggle">
+        <div class="status-chip active-s" id="seq-active">✅ פעיל</div>
+        <div class="status-chip" id="seq-frozen">❄️ מוקפא</div>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btn-save-equip">שמור ציוד</button>
+    <button class="btn btn-ghost mt8" id="btn-cancel-equip">ביטול</button>
+  </div>
+</div>
+
+<!-- LOG DETAIL -->
+<div class="overlay" id="sh-log">
+  <div class="sheet">
+    <div class="sh-handle"></div><div id="sh-log-body"></div>
+  </div>
+</div>
+
+<!-- MONTH LOCK -->
+<div class="overlay" id="sh-lock">
+  <div class="sheet">
+    <div class="sh-handle"></div>
+    <div class="sh-title">🔒 נעילת חודשים</div>
+    <div id="lock-list"></div>
+    <div class="divider"></div>
+    <div class="card-title">נעל חודש חדש</div>
+    <div class="row mt8">
+      <select class="form-input fg" id="lk-month">
+        <option value="1">ינואר</option><option value="2">פברואר</option><option value="3">מרץ</option>
+        <option value="4">אפריל</option><option value="5">מאי</option><option value="6">יוני</option>
+        <option value="7">יולי</option><option value="8">אוגוסט</option><option value="9">ספטמבר</option>
+        <option value="10">אוקטובר</option><option value="11">נובמבר</option><option value="12">דצמבר</option>
+      </select>
+      <select class="form-input fg" id="lk-year"></select>
+    </div>
+    <button class="btn btn-danger mt12" id="btn-lock-month" data-role-require="lock_month">🔒 נעל חודש</button>
+  </div>
+</div>
+
+<!-- CONFIRM -->
+<div class="overlay" id="sh-confirm">
+  <div class="sheet">
+    <div class="sh-handle"></div><div id="confirm-body"></div>
+  </div>
+</div>
+
+<!-- SITE PHOTOS -->
+<div class="overlay" id="sh-photos">
+  <div class="sheet">
+    <div class="sh-handle"></div>
+    <div id="sh-photos-body"></div>
+  </div>
+</div>
+
+<!-- EMP HISTORY -->
+<div class="overlay" id="sh-emp-hist">
+  <div class="sheet">
+    <div class="sh-handle"></div>
+    <div id="sh-emp-hist-body"></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="overlay" id="sh-settings">
+  <div class="sheet">
+    <div class="sh-handle"></div>
+    <div class="sh-title">⚙️ הגדרות</div>
+    <div id="settings-body"></div>
+  </div>
+</div>
+
+<input type="file" id="photo-input" accept="image/*" style="display:none">
+<input type="file" id="site-cam-input" accept="image/*" capture="environment" style="display:none">
+<input type="file" id="wiz-cam-input" accept="image/*" capture="environment" style="display:none">
+<input type="file" id="wiz-gal-input" accept="image/*" style="display:none">
+
+<!-- GM PANEL -->
+<div id="gm-panel" style="display:none">
+  <div class="gm-inner">
+    <div class="gm-topbar">
+      <div>
+        <div class="gm-biz">כיאן הנדסה</div>
+        <div class="gm-subtitle">ממשק מנהל ראשי</div>
+      </div>
+      <button class="gm-close-btn" id="btn-close-gm">✕</button>
+    </div>
+    <div class="gm-tabs" id="gm-tabs">
+      <button class="gm-tab active" data-tab="reports">📊 דוחות</button>
+      <button class="gm-tab" data-tab="payroll">💰 שכר</button>
+      <button class="gm-tab" data-tab="equip">🚜 ציוד</button>
+      <button class="gm-tab" data-tab="calendar">📅 לוח</button>
+      <button class="gm-tab" data-tab="search">🔍 חיפוש</button>
+      <button class="gm-tab" data-tab="logs">📋 יומנים</button>
+      <button class="gm-tab" data-tab="emp">👷 עובדים</button>
+      <button class="gm-tab" data-tab="sites">📍 אתרים</button>
+      <button class="gm-tab" data-tab="mgmt">⚙️ ניהול</button>
+      <button class="gm-tab" data-tab="admin">👤 משתמשים</button>
+    </div>
+    <div class="gm-content" id="gm-content">
+      <div class="empty" style="margin-top:40px">
+        <div class="empty-icon">📊</div>
+        <div class="empty-title">בחר לשונית</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="sh-lightbox"></div>
+
+</body>
+</html>
