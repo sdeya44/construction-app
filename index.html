@@ -56,7 +56,7 @@
       <button class="topbar-btn" id="btn-open-gm" title="מנהל ראשי" style="display:none;background:linear-gradient(135deg,#1d4ed8,#1e40af);color:#fff;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:700">מנהל ראשי ▲</button>
       <button class="topbar-btn" id="logout-btn">⚙️</button>
     </div>
-    <div class="scroll">
+    <div class="scroll" id="dash-scroll">
       <div class="hero">
         <div class="hero-greet">שלום, <span id="d-name">מנהל</span> 👋</div>
         <div id="d-role-badge"></div>
@@ -75,6 +75,8 @@
         <div class="stat-card"><div class="stat-icon">📋</div><div class="stat-num" id="d-mlogs">0</div><div class="stat-label">יומנים החודש</div></div>
         <div class="stat-card dark"><div class="stat-icon">👷</div><div class="stat-num" id="d-empt">0</div><div class="stat-label">עובדים פעילים</div></div>
       </div>
+      <div id="d-alerts"></div>
+      <div id="d-quick-sites"></div>
       <div class="sec-hdr"><div class="sec-title">יומנים אחרונים</div></div>
       <div id="d-recent"><div class="spin"></div></div>
     </div>
@@ -355,6 +357,15 @@
   </div>
 </div>
 
+<!-- SETTINGS -->
+<div class="overlay" id="sh-settings">
+  <div class="sheet">
+    <div class="sh-handle"></div>
+    <div class="sh-title">⚙️ הגדרות</div>
+    <div id="settings-body"></div>
+  </div>
+</div>
+
 <input type="file" id="photo-input" accept="image/*" style="display:none">
 <input type="file" id="site-cam-input" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="wiz-cam-input" accept="image/*" capture="environment" style="display:none">
@@ -390,6 +401,9 @@
     </div>
   </div>
 </div>
+
+<!-- LIGHTBOX -->
+<div id="sh-lightbox"></div>
 
 </body>
 </html>

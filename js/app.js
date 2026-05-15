@@ -1,5 +1,5 @@
 import { D } from './state.js';
-import { go, can, openSheet, closeSheet } from './utils.js';
+import { go, can, openSheet, closeSheet, initSheetSwipe, setupPullToRefresh } from './utils.js';
 import { signIn, tryAutoLogin } from './auth.js';
 import { renderDash, refreshData } from './screens/dashboard.js';
 import { renderLogs, setLogTab, filterLogs, populateLogFilters } from './screens/logs.js';
@@ -10,6 +10,84 @@ import { startLog } from './screens/wizard.js';
 import { handlePhotoUpload } from './screens/photos.js';
 import { genReport, exportSummaryPDF, exportAllEmployeesPDF, exportMonthCSV, exportSiteMonthPDF, lockMonth, drawLocks, initSelects } from './screens/reports.js';
 import { renderSearch } from './screens/search.js';
+
+const DARK_KEY = 'cnstr_dark';
+const FONT_KEY = 'cnstr_font';
+
+// ── PREFERENCES ───────────────────────────────────────────────────────────────
+function initPrefs() {
+  if (localStorage.getItem(DARK_KEY) === '1') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
+  if (localStorage.getItem(FONT_KEY) === '1') {
+    document.documentElement.setAttribute('data-fontsize', 'large');
+  }
+}
+
+// ── SETTINGS SHEET ────────────────────────────────────────────────────────────
+function renderSettings() {
+  const isDark  = document.documentElement.getAttribute('data-theme') === 'dark';
+  const isLarge = document.documentElement.getAttribute('data-fontsize') === 'large';
+  document.getElementById('settings-body').innerHTML = `
+    <div class="settings-row">
+      <div>
+        <div class="settings-label">🌙 מצב כהה</div>
+        <div class="settings-sub">רקע כהה לשימוש בלילה</div>
+      </div>
+      <label class="toggle-sw">
+        <input type="checkbox" id="dark-toggle" ${isDark ? 'checked' : ''}>
+        <span class="toggle-track"></span>
+      </label>
+    </div>
+    <div class="settings-row">
+      <div>
+        <div class="settings-label">🔤 גופן גדול</div>
+        <div class="settings-sub">טקסט גדול לשימוש בשטח</div>
+      </div>
+      <label class="toggle-sw">
+        <input type="checkbox" id="fontsize-toggle" ${isLarge ? 'checked' : ''}>
+        <span class="toggle-track"></span>
+      </label>
+    </div>
+    <div class="divider" style="margin:8px 0 16px"></div>
+    <button class="btn btn-danger" id="logout-confirm-btn">🚪 התנתקות</button>
+    <button class="btn btn-ghost mt8" id="settings-close">סגור</button>
+  `;
+  document.getElementById('dark-toggle')?.addEventListener('change', e => {
+    if (e.target.checked) document.documentElement.setAttribute('data-theme','dark');
+    else document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem(DARK_KEY, e.target.checked ? '1' : '0');
+  });
+  document.getElementById('fontsize-toggle')?.addEventListener('change', e => {
+    if (e.target.checked) document.documentElement.setAttribute('data-fontsize','large');
+    else document.documentElement.removeAttribute('data-fontsize');
+    localStorage.setItem(FONT_KEY, e.target.checked ? '1' : '0');
+  });
+  document.getElementById('logout-confirm-btn')?.addEventListener('click', () => {
+    if (confirm('להתנתק?')) location.reload();
+  });
+  document.getElementById('settings-close')?.addEventListener('click', () => closeSheet('sh-settings'));
+}
+
+function openSettings() {
+  renderSettings();
+  openSheet('sh-settings');
+}
+
+// ── RIPPLE EFFECT ─────────────────────────────────────────────────────────────
+function initRipple() {
+  document.addEventListener('pointerdown', e => {
+    const el = e.target.closest('.btn, .chip, .nav-item, .sel-item, .quick-site-chip, .group-chip, .list-item.clickable');
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    const r = document.createElement('span');
+    r.className = 'ripple-el';
+    r.style.cssText = `width:${size}px;height:${size}px;top:${e.clientY-rect.top-size/2}px;left:${e.clientX-rect.left-size/2}px`;
+    el.appendChild(r);
+    setTimeout(() => r.remove(), 600);
+  }, { passive: true });
+}
 
 // ── SCREEN RENDERER MAP ───────────────────────────────────────────────────────
 export function renderCurrentScreen() {
@@ -30,16 +108,14 @@ function navigate(s) {
 }
 
 // ── GM PANEL ──────────────────────────────────────────────────────────────────
-// Tabs that render content inside the panel (safe to open with)
 const GM_PANEL_TABS = new Set(['payroll','equip','calendar','search','admin']);
 
 export function openGMPanel() {
   const panel = document.getElementById('gm-panel');
   if (!panel) return;
-  if (panel.classList.contains('open')) return; // already open — do nothing
+  if (panel.classList.contains('open')) return;
   panel.style.display = 'flex';
   requestAnimationFrame(() => panel.classList.add('open'));
-  // Only open with a tab that renders inside the panel, never a nav tab
   const tab = GM_PANEL_TABS.has(D.gmTab) ? D.gmTab : 'payroll';
   renderGMTab(tab);
 }
@@ -48,20 +124,16 @@ export function closeGMPanel() {
   const panel = document.getElementById('gm-panel');
   if (!panel) return;
   panel.classList.remove('open');
-  // Hide after transition — only if still closed when timer fires
   setTimeout(() => {
     if (!panel.classList.contains('open')) panel.style.display = 'none';
   }, 380);
 }
 
 export function renderGMTab(tab) {
-  // Only persist safe panel tabs so the next open doesn't trigger a nav-close
   if (GM_PANEL_TABS.has(tab)) D.gmTab = tab;
-  // Update tab highlight
   document.querySelectorAll('#gm-tabs .gm-tab').forEach(el => {
     el.classList.toggle('active', el.dataset.tab === tab);
   });
-  // Render content
   if (tab === 'payroll') {
     import('./screens/payroll.js').then(m => m.renderPayroll());
   } else if (tab === 'equip') {
@@ -90,11 +162,9 @@ export function applyRoleUI() {
   const addLogBtn = document.getElementById('nav-newlog');
   if (addLogBtn) addLogBtn.style.display = can('create_log') ? '' : 'none';
 
-  // Show GM button only for GeneralManager
   const gmBtn = document.getElementById('btn-open-gm');
   if (gmBtn) gmBtn.style.display = (D.role === 'GeneralManager') ? '' : 'none';
 
-  // SiteManager sees reports in nav; GeneralManager sees search in nav (reports via GM panel)
   const isGM = D.role === 'GeneralManager';
   const navSearch  = document.getElementById('nav-search');
   const navReports = document.getElementById('nav-reports');
@@ -134,9 +204,7 @@ function bindEvents() {
 
   // Dashboard
   document.getElementById('refresh-btn')?.addEventListener('click', refreshData);
-  document.getElementById('logout-btn')?.addEventListener('click', () => {
-    if (confirm('להתנתק?')) location.reload();
-  });
+  document.getElementById('logout-btn')?.addEventListener('click', openSettings);
 
   // Logs
   document.getElementById('log-q')?.addEventListener('input', filterLogs);
@@ -211,10 +279,14 @@ function bindEvents() {
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
+  initPrefs();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
   bindEvents();
+  initSheetSwipe();
+  setupPullToRefresh('dash-scroll', refreshData);
+  initRipple();
   setTimeout(tryAutoLogin, 800);
 });
 

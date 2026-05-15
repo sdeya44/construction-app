@@ -138,6 +138,44 @@ export function compressImage(file, maxDim=1200, quality=0.82) {
   });
 }
 
+// ── SWIPE TO CLOSE SHEETS ─────────────────────────────────────────────────────
+export function initSheetSwipe() {
+  document.querySelectorAll('.overlay').forEach(overlay => {
+    const sheet = overlay.querySelector('.sheet');
+    if (!sheet) return;
+    const handle = sheet.querySelector('.sh-handle');
+    if (!handle) return;
+    let ty = 0;
+    handle.addEventListener('touchstart', e => { ty = e.touches[0].clientY; }, { passive: true });
+    handle.addEventListener('touchend', e => {
+      if (e.changedTouches[0].clientY - ty > 70) overlay.classList.remove('open');
+    }, { passive: true });
+  });
+}
+
+// ── PULL TO REFRESH ───────────────────────────────────────────────────────────
+export function setupPullToRefresh(scrollId, onRefresh) {
+  const el = document.getElementById(scrollId);
+  if (!el) return;
+  let ty = 0, active = false;
+  el.addEventListener('touchstart', e => {
+    if (el.scrollTop > 0) return;
+    ty = e.touches[0].clientY;
+    active = true;
+  }, { passive: true });
+  el.addEventListener('touchmove', () => {
+    if (!active || el.scrollTop > 0) { active = false; return; }
+  }, { passive: true });
+  el.addEventListener('touchend', e => {
+    if (!active) return;
+    active = false;
+    const dy = e.changedTouches[0].clientY - ty;
+    const ind = el.querySelector('.ptr-indicator');
+    if (ind) ind.remove();
+    if (dy > 70) onRefresh();
+  }, { passive: true });
+}
+
 // ── CSV EXPORT ────────────────────────────────────────────────────────────────
 export function exportCSV(headers, rows, filename) {
   const BOM = '﻿';

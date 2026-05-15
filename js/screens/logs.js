@@ -5,6 +5,7 @@ import { todayStr, fmtDate, toast, can, confirm2, openSheet, closeSheet, isLocke
 import { sRead, rebuildTab, logAudit } from '../api.js';
 import { editLog } from './wizard.js';
 import { renderDash } from './dashboard.js';
+import { openLightbox } from '../lightbox.js';
 
 export function renderLogs() { filterLogs(); }
 
@@ -82,9 +83,9 @@ export function showLog(id) {
         <div class="li-info"><div class="li-name">${d.material}</div><div class="li-sub">${d.suppName} · ${d.qty}</div></div>
       </div>`).join('')}</div>` : ''}
     ${ph.length ? `<div class="card-title">תמונות (${ph.length})</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px">
-        ${ph.map(p=>`<div style="border-radius:10px;overflow:hidden;background:#f0f3fa">
-          <img src="${p.url}" data-fileid="${p.fileId}"
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px" id="log-photos-grid">
+        ${ph.map((p,i)=>`<div style="border-radius:10px;overflow:hidden;background:#f0f3fa">
+          <img src="${p.url}" data-fileid="${p.fileId}" data-idx="${i}" class="photo-thumb"
             style="width:100%;aspect-ratio:1;object-fit:cover;display:block" loading="lazy"
             onerror="if(this.dataset.fileid&&!this.dataset.retried){this.dataset.retried='1';this.src='https://drive.google.com/thumbnail?id='+this.dataset.fileid+'&sz=w400';}else{this.parentElement.style.display='none';}">
         </div>`).join('')}
@@ -104,6 +105,11 @@ export function showLog(id) {
 
   document.getElementById('log-close-btn')?.addEventListener('click', () => closeSheet('sh-log'));
   document.getElementById('log-wa-btn')?.addEventListener('click', () => shareLogWhatsApp(log, att, eq, dl));
+  if (ph.length) {
+    document.querySelectorAll('#log-photos-grid .photo-thumb').forEach((img, i) => {
+      img.addEventListener('click', () => openLightbox(ph, i));
+    });
+  }
   document.getElementById('log-edit-btn')?.addEventListener('click', () => {
     closeSheet('sh-log'); editLog(id);
   });

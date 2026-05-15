@@ -5,6 +5,7 @@ import { sRead, sAppend, rebuildTab, checkLogVersion, logAudit } from '../api.js
 import { uploadWizPhotos } from './photos.js';
 import { renderDash } from './dashboard.js';
 import { filterLogs } from './logs.js';
+import { getGroupsForSite, saveGroup, deleteGroup } from '../groups.js';
 
 const WSTEPS = [
   { t:'אתר ותאריך',     s:'1/5' },
@@ -30,6 +31,13 @@ export function startLog() {
     toast('אין אתרים פעילים זמינים','err'); go('sites'); return;
   }
   D.wiz = { step:1, date:todayStr(), siteId:'', acts:[], note:'', gNote:'', emps:[], equip:[], dels:[], photos:[], editMode:false, dayOff:false, dayOffReason:'' };
+  drawWiz(); go('newlog');
+}
+
+export function startLogForSite(siteId) {
+  if (!can('create_log')) { toast('אין הרשאה ליצור יומן','err'); return; }
+  if (!D.isOnline) { toast('אין חיבור לאינטרנט — לא ניתן לשמור דיווח','err'); return; }
+  D.wiz = { step:1, date:todayStr(), siteId, acts:[], note:'', gNote:'', emps:[], equip:[], dels:[], photos:[], editMode:false, dayOff:false, dayOffReason:'' };
   drawWiz(); go('newlog');
 }
 
@@ -132,6 +140,29 @@ function bindWizStep(step) {
         toggle();
       });
     });
+    document.querySelectorAll('.group-chip[data-gid]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const empIds = btn.dataset.empids.split(',').filter(Boolean);
+        const allSel = empIds.every(id => D.wiz.emps.includes(id));
+        if (allSel) D.wiz.emps = D.wiz.emps.filter(id => !empIds.includes(id));
+        else empIds.forEach(id => { if (!D.wiz.emps.includes(id)) D.wiz.emps.push(id); });
+        drawWiz();
+      });
+    });
+    document.querySelectorAll('.group-chip[data-delgid]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (confirm('למחוק קבוצה זו?')) { deleteGroup(btn.dataset.delgid); drawWiz(); }
+      });
+    });
+    document.getElementById('save-grp-btn')?.addEventListener('click', () => {
+      const name = prompt('שם הצוות:');
+      if (name?.trim()) {
+        saveGroup(D.wiz.siteId, name.trim(), [...D.wiz.emps]);
+        toast('צוות נשמר ✓','ok');
+        drawWiz();
+      }
+    });
   }
   if (step === 4) {
     document.querySelectorAll('.wiz-eq-item').forEach(item => {
@@ -208,14 +239,25 @@ function wiz2() {
 function wiz3() {
   const emps = D.employees.filter(e => e.active === 'פעיל');
   if (!emps.length) return `<div class="empty"><div class="empty-icon">👷</div><div class="empty-title">אין עובדים פעילים</div></div>`;
-  // Attendance at OTHER sites on the same date (not this log's site)
   const otherSiteAtt = D.attendance.filter(a =>
     a.date === (D.wiz.date||todayStr()) && a.siteId !== D.wiz.siteId && a.logId !== D.wiz.editLogId
   );
-  const busyIds   = otherSiteAtt.map(a => a.empId);
-  const busySite  = {}; // empId → site name
+  const busyIds  = otherSiteAtt.map(a => a.empId);
+  const busySite = {};
   otherSiteAtt.forEach(a => { const s = D.sites.find(x=>x.id===a.siteId); busySite[a.empId] = s?.name || 'אתר אחר'; });
-  return emps.map(e => {
+
+  const groups = D.wiz.siteId ? getGroupsForSite(D.wiz.siteId) : [];
+  const groupBar = groups.length || D.wiz.emps.length ? `
+    <div class="group-bar">
+      ${groups.map(g => {
+        const allSel = g.empIds.every(id => D.wiz.emps.includes(id));
+        return `<button class="group-chip${allSel?' active-grp':''}" data-gid="${g.id}" data-empids="${g.empIds.join(',')}">👥 ${g.name}</button>
+                <button class="group-chip del-grp" data-delgid="${g.id}" title="מחק קבוצה">✕</button>`;
+      }).join('')}
+      ${D.wiz.emps.length ? `<button class="group-chip save-grp" id="save-grp-btn">💾 שמור כצוות</button>` : ''}
+    </div>` : '';
+
+  return groupBar + emps.map(e => {
     const busy = busyIds.includes(e.id) && !D.wiz.emps.includes(e.id);
     const sel  = D.wiz.emps.includes(e.id);
     return `<div class="sel-item wiz-emp-item ${sel?'on':''} ${busy?'dim':''}" data-id="${e.id}" data-busy="${busy?'1':'0'}" data-name="${e.name}" data-busysite="${busySite[e.id]||''}">

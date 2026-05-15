@@ -1,4 +1,4 @@
-const CACHE = 'cnstr-v3';
+const CACHE = 'cnstr-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,8 @@ const ASSETS = [
   './js/state.js',
   './js/auth.js',
   './js/offline.js',
+  './js/lightbox.js',
+  './js/groups.js',
   './js/screens/dashboard.js',
   './js/screens/employees.js',
   './js/screens/sites.js',

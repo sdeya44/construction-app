@@ -2,6 +2,7 @@ import { D } from '../state.js';
 import { uid, toast, can, openSheet, closeSheet, compressImage } from '../utils.js';
 import { sAppend, driveUpload, driveThumbUrl, logAudit } from '../api.js';
 import { todayStr } from '../utils.js';
+import { openLightbox } from '../lightbox.js';
 
 let _photoSiteId = null;
 
@@ -22,8 +23,8 @@ function renderPhotosSheet(site) {
       <button class="btn btn-outline fg" id="site-gal-trigger">🖼️ גלריה</button>
     </div>` : ''}
     ${photos.length
-      ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          ${photos.map(p => photoCard(p)).join('')}
+      ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="site-photos-grid">
+          ${photos.map((p, i) => photoCard(p, i)).join('')}
          </div>`
       : `<div class="empty"><div class="empty-icon">📸</div><div class="empty-title">אין תמונות עדיין</div></div>`}
     <button class="btn btn-ghost mt8" id="site-photos-close">סגור</button>`;
@@ -35,12 +36,14 @@ function renderPhotosSheet(site) {
   document.getElementById('site-gal-trigger')?.addEventListener('click', () => {
     document.getElementById('photo-input').click();
   });
+  document.querySelectorAll('#site-photos-grid .photo-thumb').forEach((img, i) => {
+    img.addEventListener('click', () => openLightbox(photos, i));
+  });
 }
 
-function photoCard(p) {
-  const fallback = `https://drive.google.com/thumbnail?id=${p.fileId}&sz=w400`;
+function photoCard(p, idx = 0) {
   return `<div style="border-radius:12px;overflow:hidden;background:#f0f3fa;border:1px solid #e5e9f5">
-    <img src="${p.url}" data-fileid="${p.fileId}"
+    <img src="${p.url}" data-fileid="${p.fileId}" data-idx="${idx}" class="photo-thumb"
       style="width:100%;aspect-ratio:1;object-fit:cover;display:block" loading="lazy"
       onerror="if(this.dataset.fileid&&!this.dataset.retried){this.dataset.retried='1';this.src='https://drive.google.com/thumbnail?id='+this.dataset.fileid+'&sz=w400';}else{this.parentElement.style.display='none';}">
     <div style="padding:6px 8px">
