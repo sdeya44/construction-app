@@ -118,13 +118,13 @@ function renderResults(month, year) {
         *{font-family:'Heebo',sans-serif;box-sizing:border-box}
         body{margin:20px;direction:rtl;font-size:12px}
         .biz{color:#888;font-size:12px;text-align:center;margin-bottom:4px}
-        h2{color:#1a2744;text-align:center;font-size:20px;margin-bottom:4px;font-weight:800}
+        h2{color:#7c2d12;text-align:center;font-size:20px;margin-bottom:4px;font-weight:800}
         .sub{color:#666;text-align:center;font-size:12px;margin-bottom:18px}
         table{width:100%;border-collapse:collapse}
-        th{background:#1a2744;color:#fff;padding:9px 7px;font-size:11px;text-align:center}
-        td{padding:7px 7px;border-bottom:1px solid #e5e9f5;font-size:11px;text-align:center;vertical-align:middle}
-        tr:nth-child(even) td{background:#f0f3fa}
-        tfoot tr td{background:#f0a500;color:#1a2744;font-weight:800;font-size:12px}
+        th{background:#7c2d12;color:#fff;padding:9px 7px;font-size:11px;text-align:center}
+        td{padding:7px 7px;border-bottom:1px solid #fed7aa;font-size:11px;text-align:center;vertical-align:middle}
+        tr:nth-child(even) td{background:#fff7ed}
+        tfoot tr td{background:#fbbf24;color:#7c2d12;font-weight:800;font-size:12px}
         @media print{body{margin:8px}}
       </style></head><body>
       <div class="biz">${BUSINESS_NAME}</div>

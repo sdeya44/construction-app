@@ -103,7 +103,7 @@ export function exportSiteMonthPDF(siteId, month, year) {
   const html = buildPrintDoc(`יומן ביצוע חודשי — ${site.name}`, `${MN[month]} ${year} | הופק: ${new Date().toLocaleDateString('he-IL')}`,
     `<table><thead><tr><th>תאריך</th><th>פעילויות</th><th>עובדים</th><th>ציוד</th><th>אספקות</th><th>הערות</th></tr></thead>
      <tbody>${rows}</tbody>
-     <tfoot><tr style="background:#f0a500"><td colspan="6" style="font-weight:800;color:#1a2744">סה"כ ${siteLogs.length} ימי עבודה | ${MN[month]} ${year}</td></tr></tfoot></table>`);
+     <tfoot><tr style="background:#fbbf24"><td colspan="6" style="font-weight:800;color:#7c2d12">סה"כ ${siteLogs.length} ימי עבודה | ${MN[month]} ${year}</td></tr></tfoot></table>`);
   openPrint(html); toast('נפתח חלון הדפסה','ok');
 }
 
@@ -132,26 +132,26 @@ export function exportAllEmployeesPDF() {
       const dateStr = `${year}-${pad(month)}-${pad(d)}`;
       const dow = new Date(dateStr+'T12:00:00').getDay();
       const wknd = dow===5||dow===6;
-      dayHeaders += `<th style="min-width:16px;${wknd?'background:#1e3a8a':''}">${d}<br><span style="font-size:8px">${DAYS_HE[dow]}</span></th>`;
+      dayHeaders += `<th style="min-width:16px;${wknd?'background:#9a3412':''}">${d}<br><span style="font-size:8px">${DAYS_HE[dow]}</span></th>`;
       const worked = emp.dates.has(dateStr); if (worked) total++;
-      dayCells += `<td style="${wknd?'background:#fffbea':''}${worked?'color:#10b981;font-weight:800;font-size:14px':''}">${worked?'✓':''}</td>`;
+      dayCells += `<td style="${wknd?'background:#fff7ed':''}${worked?'color:#10b981;font-weight:800;font-size:14px':''}">${worked?'✓':''}</td>`;
     }
     pages += `<div class="page"${idx>0?' style="page-break-before:always"':''}>
       <div class="hdr"><div class="emp-name">${emp.name}</div><div class="sub2">ימי עבודה: ${MN[month]} ${year}</div></div>
       <table><thead><tr><th style="min-width:60px;text-align:right">שם עובד</th>${dayHeaders}<th class="tot-h">סה"כ</th></tr></thead>
-      <tbody><tr><td style="font-weight:700;background:#f0f3fa;text-align:right">${emp.name}</td>${dayCells}<td class="tot-c">${total}</td></tr></tbody></table>
+      <tbody><tr><td style="font-weight:700;background:#fff7ed;text-align:right">${emp.name}</td>${dayCells}<td class="tot-c">${total}</td></tr></tbody></table>
       <div class="footer">סה"כ ימי עבודה: ${total} | חודש: ${MN[month]} ${year}</div>
     </div>`;
   });
   const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;800&display=swap" rel="stylesheet">
     <style>*{font-family:'Heebo',sans-serif;box-sizing:border-box;margin:0;padding:0}body{direction:rtl;font-size:11px}
-    .biz-hdr{color:#1d4ed8;font-size:12px;font-weight:800;text-align:center;padding:6px 0 2px}
-    .page{padding:6mm}.hdr{background:#1a2744;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
-    .emp-name{font-size:16px;font-weight:800;color:#f0a500}.sub2{font-size:12px;color:rgba(255,255,255,.7)}
-    table{width:100%;border-collapse:collapse;font-size:10px}th{background:#2d5be3;color:#fff;padding:3px 1px;text-align:center;font-size:9px}
-    td{padding:4px 1px;border:1px solid #e5e9f5;text-align:center}.tot-h{background:#f0a500;color:#1a2744;font-weight:800}
-    .tot-c{background:#f0a500;color:#1a2744;font-weight:800;font-size:13px}.footer{text-align:center;color:#888;font-size:10px;margin-top:6px}
+    .biz-hdr{color:#f97316;font-size:12px;font-weight:800;text-align:center;padding:6px 0 2px}
+    .page{padding:6mm}.hdr{background:#7c2d12;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+    .emp-name{font-size:16px;font-weight:800;color:#fbbf24}.sub2{font-size:12px;color:rgba(255,255,255,.7)}
+    table{width:100%;border-collapse:collapse;font-size:10px}th{background:#f97316;color:#fff;padding:3px 1px;text-align:center;font-size:9px}
+    td{padding:4px 1px;border:1px solid #fed7aa;text-align:center}.tot-h{background:#fbbf24;color:#7c2d12;font-weight:800}
+    .tot-c{background:#fbbf24;color:#7c2d12;font-weight:800;font-size:13px}.footer{text-align:center;color:#888;font-size:10px;margin-top:6px}
     @media print{.page{padding:4mm}}</style></head><body>
     <div class="biz-hdr">${BUSINESS_NAME}</div>${pages}</body></html>`;
   openPrint(html); toast(`נפתח חלון הדפסה – ${emps.length} עובדים`,'ok');
@@ -222,11 +222,11 @@ function buildPrintDoc(title, subtitle, body) {
   return `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;800&display=swap" rel="stylesheet">
     <style>*{font-family:'Heebo',sans-serif;box-sizing:border-box}body{margin:16px;direction:rtl;font-size:12px}
-    .biz-name{color:#1d4ed8;font-size:13px;font-weight:800;text-align:center;margin-bottom:2px}
-    h2{color:#1a2744;text-align:center;font-size:18px;margin-bottom:4px}.sub{color:#666;text-align:center;font-size:12px;margin-bottom:16px}
-    table{width:100%;border-collapse:collapse}th{background:#1a2744;color:#fff;padding:8px 6px;font-size:11px;text-align:center}
-    td{padding:7px 6px;border-bottom:1px solid #e5e9f5;font-size:11px;text-align:center;vertical-align:top}
-    tr:nth-child(even)td{background:#f0f3fa}@media print{body{margin:8px}}</style></head><body>
+    .biz-name{color:#f97316;font-size:13px;font-weight:800;text-align:center;margin-bottom:2px}
+    h2{color:#7c2d12;text-align:center;font-size:18px;margin-bottom:4px}.sub{color:#666;text-align:center;font-size:12px;margin-bottom:16px}
+    table{width:100%;border-collapse:collapse}th{background:#7c2d12;color:#fff;padding:8px 6px;font-size:11px;text-align:center}
+    td{padding:7px 6px;border-bottom:1px solid #fed7aa;font-size:11px;text-align:center;vertical-align:top}
+    tr:nth-child(even)td{background:#fff7ed}@media print{body{margin:8px}}</style></head><body>
     <div class="biz-name">${BUSINESS_NAME}</div>
     <h2>${title}</h2><div class="sub">${subtitle}</div>${body}</body></html>`;
 }
