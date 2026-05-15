@@ -106,6 +106,8 @@ function buildGrid() {
           dels: [],
           photos: [],
           editMode: false,
+          dayOff: false,
+          dayOffReason: '',
         };
         import('../utils.js').then(u => u.go('newlog'));
         import('./wizard.js').then(w => w.drawWiz());
