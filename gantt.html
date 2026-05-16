@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<title>גאנט — לוח זמנים לפרויקטים</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #0f172a;
+    color: #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", "Arial Hebrew", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
+    -webkit-text-size-adjust: 100%;
+    direction: rtl;
+  }
+  body { min-height: 100vh; padding: 12px; }
+
+  .app { max-width: 1400px; margin: 0 auto; }
+
+  .header {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 1px solid #334155;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  }
+  .header h1 {
+    margin: 0 0 12px;
+    font-size: 22px;
+    font-weight: 800;
+    color: #f1f5f9;
+    letter-spacing: -0.5px;
+  }
+  .header h1 .acc { color: #38bdf8; }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .meta-field { flex: 1 1 200px; display: flex; flex-direction: column; gap: 4px; }
+  .meta-field label { font-size: 12px; color: #94a3b8; font-weight: 600; }
+  .meta-field input {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #f1f5f9;
+    padding: 9px 11px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    direction: rtl;
+  }
+  .meta-field input:focus { outline: none; border-color: #38bdf8; }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .btn {
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:hover { background: #334155; border-color: #475569; }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: #0284c7; border-color: #0ea5e9; color: #fff; }
+  .btn.primary:hover { background: #0369a1; }
+  .btn.success { background: #16a34a; border-color: #22c55e; color: #fff; }
+  .btn.success:hover { background: #15803d; }
+  .btn.warn   { background: #b45309; border-color: #d97706; color: #fff; }
+  .btn.warn:hover   { background: #92400e; }
+  .btn.danger { background: #b91c1c; border-color: #dc2626; color: #fff; }
+  .btn.danger:hover { background: #991b1b; }
+  .btn.ghost { background: transparent; }
+
+  .panel {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 14px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #0f172a;
+    border-bottom: 1px solid #334155;
+  }
+  .panel-head h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #f1f5f9;
+  }
+  .panel-head .hint { font-size: 12px; color: #94a3b8; }
+
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.acts {
+    width: 100%;
+    min-width: 920px;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  table.acts th, table.acts td {
+    padding: 8px 6px;
+    text-align: right;
+    border-bottom: 1px solid #334155;
+    vertical-align: middle;
+  }
+  table.acts th {
+    background: #0f172a;
+    color: #cbd5e1;
+    font-weight: 700;
+    font-size: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    white-space: nowrap;
+  }
+  table.acts tr:hover td { background: rgba(56,189,248,0.04); }
+  table.acts input, table.acts select {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #f1f5f9;
+    padding: 6px 7px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    width: 100%;
+    direction: rtl;
+  }
+  table.acts input[type="date"] { min-width: 130px; direction: ltr; text-align: right; }
+  table.acts input[type="number"] { min-width: 55px; text-align: center; direction: ltr; }
+  table.acts input.id-input { text-align: center; direction: ltr; min-width: 40px; }
+  table.acts input.pred-input { text-align: center; direction: ltr; min-width: 50px; }
+  table.acts input:focus, table.acts select:focus { outline: none; border-color: #38bdf8; }
+  table.acts td.del { width: 40px; text-align: center; }
+  .row-err input { border-color: #dc2626 !important; }
+  .row-warn input { border-color: #d97706 !important; }
+  .calc-cell { background: #0c2331 !important; color: #7dd3fc !important; }
+
+  .del-btn {
+    background: #7f1d1d;
+    color: #fecaca;
+    border: 1px solid #b91c1c;
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+  }
+  .del-btn:hover { background: #991b1b; color: #fff; }
+
+  .messages {
+    padding: 10px 16px;
+    background: #0f172a;
+    border-top: 1px solid #334155;
+    font-size: 13px;
+  }
+  .messages:empty { display: none; }
+  .msg {
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+  }
+  .msg:last-child { margin-bottom: 0; }
+  .msg.err  { background: rgba(220,38,38,0.15); color: #fca5a5; border-right: 3px solid #dc2626; }
+  .msg.warn { background: rgba(217,119,6,0.15); color: #fcd34d; border-right: 3px solid #d97706; }
+  .msg.ok   { background: rgba(22,163,74,0.15);  color: #86efac; border-right: 3px solid #16a34a; }
+
+  /* Gantt */
+  .gantt-scroll {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: 70vh;
+    position: relative;
+  }
+  .gantt {
+    position: relative;
+    min-width: 100%;
+    background: #0b1220;
+  }
+  .gantt-header {
+    display: flex;
+    position: sticky;
+    top: 0;
+    background: #0f172a;
+    border-bottom: 2px solid #334155;
+    z-index: 3;
+  }
+  .gantt-label-col {
+    flex: 0 0 auto;
+    width: 180px;
+    border-left: 1px solid #334155;
+    padding: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #cbd5e1;
+    background: #0f172a;
+    position: sticky;
+    right: 0;
+    z-index: 4;
+  }
+  .gantt-time-header {
+    display: flex;
+    flex-direction: column;
+  }
+  .gantt-weeks {
+    display: flex;
+    border-bottom: 1px solid #334155;
+  }
+  .gantt-week {
+    border-left: 1px solid #334155;
+    padding: 4px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #7dd3fc;
+    text-align: center;
+    white-space: nowrap;
+    background: #0c1c2e;
+  }
+  .gantt-days {
+    display: flex;
+  }
+  .gantt-day {
+    border-left: 1px solid #1f2937;
+    text-align: center;
+    font-size: 10px;
+    color: #64748b;
+    padding: 2px 0;
+    line-height: 1.2;
+    flex: 0 0 auto;
+  }
+  .gantt-day.weekend { background: #1a1330; color: #a78bfa; }
+  .gantt-day.today { background: rgba(56,189,248,0.18); color: #38bdf8; font-weight: 700; }
+
+  .gantt-body { position: relative; }
+  .gantt-row {
+    display: flex;
+    height: 36px;
+    border-bottom: 1px solid #1f2937;
+    position: relative;
+  }
+  .gantt-row:hover { background: rgba(56,189,248,0.04); }
+  .gantt-row-label {
+    flex: 0 0 auto;
+    width: 180px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    color: #e2e8f0;
+    border-left: 1px solid #334155;
+    background: #0f172a;
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .gantt-row-label .rid {
+    background: #334155;
+    color: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-left: 6px;
+    flex: 0 0 auto;
+  }
+  .gantt-row-label .rname {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .gantt-track {
+    position: relative;
+    flex: 1 1 auto;
+    height: 100%;
+  }
+  .gantt-grid-cell {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid #1f2937;
+  }
+  .gantt-grid-cell.weekend { background: rgba(124,58,237,0.06); }
+  .gantt-grid-cell.today { background: rgba(56,189,248,0.10); }
+
+  .gantt-bar {
+    position: absolute;
+    top: 6px;
+    height: 24px;
+    background: linear-gradient(180deg, #0ea5e9 0%, #0369a1 100%);
+    border: 1px solid #38bdf8;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    box-shadow: 0 2px 6px rgba(2,132,199,0.4);
+    cursor: pointer;
+    z-index: 2;
+  }
+  .gantt-bar:hover { filter: brightness(1.15); }
+  .gantt-bar .bar-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+  }
+
+  .gantt-arrows {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed;
+    background: #0f172a;
+    border: 1px solid #38bdf8;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #e2e8f0;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    pointer-events: none;
+    z-index: 1000;
+    max-width: 280px;
+    line-height: 1.5;
+  }
+  .tooltip strong { color: #7dd3fc; }
+  .tooltip.hidden { display: none; }
+
+  .empty-state {
+    padding: 40px 20px;
+    text-align: center;
+    color: #64748b;
+    font-size: 14px;
+  }
+
+  /* File input hidden */
+  .hidden-file { display: none; }
+
+  /* Mobile */
+  @media (max-width: 720px) {
+    body { padding: 8px; }
+    .header { padding: 12px; }
+    .header h1 { font-size: 18px; }
+    .meta-field { flex: 1 1 100%; }
+    .btn { padding: 8px 12px; font-size: 12px; }
+    .panel-head h2 { font-size: 14px; }
+    .gantt-label-col, .gantt-row-label { width: 120px; }
+    .gantt-row { height: 38px; }
+  }
+
+  /* Print */
+  @media print {
+    body {
+      background: #fff !important;
+      color: #000 !important;
+      padding: 0 !important;
+    }
+    .app { max-width: 100% !important; }
+    .no-print { display: none !important; }
+    .toolbar, .del-btn, .meta-row input { display: none !important; }
+    .header, .panel {
+      background: #fff !important;
+      border: 1px solid #999 !important;
+      box-shadow: none !important;
+      page-break-inside: avoid;
+    }
+    .header h1 { color: #000 !important; font-size: 22px !important; }
+    .header h1 .acc { color: #0369a1 !important; }
+    .panel-head { background: #f1f5f9 !important; border-bottom: 1px solid #999 !important; }
+    .panel-head h2 { color: #000 !important; }
+    .meta-field label { color: #333 !important; }
+    .meta-row input {
+      display: block !important;
+      background: transparent !important;
+      border: none !important;
+      color: #000 !important;
+      padding: 0 !important;
+    }
+    table.acts th { background: #e2e8f0 !important; color: #000 !important; }
+    table.acts td { color: #000 !important; }
+    table.acts input, table.acts select {
+      background: transparent !important;
+      border: none !important;
+      color: #000 !important;
+      padding: 0 !important;
+    }
+    table.acts td.del { display: none !important; }
+    table.acts th:last-child { display: none !important; }
+    .gantt {
+      background: #fff !important;
+      overflow: visible !important;
+    }
+    .gantt-scroll {
+      overflow: visible !important;
+      max-height: none !important;
+    }
+    .gantt-header, .gantt-row-label, .gantt-label-col {
+      background: #f1f5f9 !important;
+      color: #000 !important;
+      position: static !important;
+    }
+    .gantt-week { background: #e2e8f0 !important; color: #0369a1 !important; }
+    .gantt-day { color: #555 !important; }
+    .gantt-day.weekend { background: #f3e8ff !important; color: #6b21a8 !important; }
+    .gantt-grid-cell.weekend { background: rgba(168,85,247,0.08) !important; }
+    .gantt-bar {
+      background: #0ea5e9 !important;
+      color: #fff !important;
+      box-shadow: none !important;
+    }
+    .gantt-row-label { color: #000 !important; }
+    .gantt-row-label .rid { background: #cbd5e1 !important; color: #000 !important; }
+    .messages { background: #fff !important; }
+    @page { size: A4 landscape; margin: 10mm; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header no-print-toolbar">
+    <h1>גאנט<span class="acc"> · </span>לוח זמנים לפרויקטים</h1>
+
+    <div class="meta-row">
+      <div class="meta-field">
+        <label for="proj-name">שם הפרויקט</label>
+        <input type="text" id="proj-name" placeholder="לדוגמה: בניין מגורים רח׳ הרצל">
+      </div>
+      <div class="meta-field">
+        <label for="proj-start">תאריך התחלה כללי (אופציונלי)</label>
+        <input type="date" id="proj-start">
+      </div>
+    </div>
+
+    <div class="toolbar no-print">
+      <button class="btn primary" id="btn-add">+ הוסף פעילות</button>
+      <button class="btn success" id="btn-calc">חשב לוח זמנים</button>
+      <button class="btn warn"    id="btn-sample">טען דוגמה</button>
+      <button class="btn"         id="btn-export-json">ייצוא JSON</button>
+      <button class="btn"         id="btn-import-json">ייבוא JSON</button>
+      <button class="btn"         id="btn-export-csv">ייצוא CSV</button>
+      <button class="btn"         id="btn-print">הדפסה</button>
+      <button class="btn danger"  id="btn-clear">נקה הכל</button>
+    </div>
+    <input type="file" id="file-input" class="hidden-file" accept=".json,application/json">
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>טבלת פעילויות</h2>
+      <span class="hint no-print">ניתן להזין תאריכים, ימי עבודה וקדם. לחץ "חשב לוח זמנים" להשלמת השדות.</span>
+    </div>
+    <div class="table-wrap">
+      <table class="acts" id="acts-table">
+        <thead>
+          <tr>
+            <th style="width:60px">ID</th>
+            <th>תיאור פעילות</th>
+            <th style="width:140px">תאריך התחלה</th>
+            <th style="width:80px">ימי עבודה</th>
+            <th style="width:140px">תאריך סיום</th>
+            <th style="width:70px">קדם</th>
+            <th style="width:80px">השהייה</th>
+            <th style="width:180px">סטטוס / הערות</th>
+            <th style="width:40px" class="no-print"></th>
+          </tr>
+        </thead>
+        <tbody id="acts-body"></tbody>
+      </table>
+    </div>
+    <div class="messages" id="messages"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>תרשים גאנט</h2>
+      <span class="hint no-print">פסים כחולים · חיצים כתומים בין תלויות · ש״ק בגוון סגול</span>
+    </div>
+    <div class="gantt-scroll" id="gantt-scroll">
+      <div class="gantt" id="gantt"></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="tooltip" class="tooltip hidden"></div>
+
+<script>
+"use strict";
+
+// ============================================================
+// STATE
+// ============================================================
+var STORAGE_KEY = "gantt_app_state_v1";
+var DAY_WIDTH = 26; // px per day in gantt
+
+var state = {
+  projectName: "",
+  projectStart: "",
+  activities: []
+};
+
+var lastCompute = { ok: true, errors: [], warnings: [], byId: {} };
+
+// ============================================================
+// DATE UTILITIES
+// ============================================================
+function parseDate(str) {
+  if (!str) return null;
+  var parts = String(str).split("-");
+  if (parts.length !== 3) return null;
+  var y = parseInt(parts[0], 10);
+  var m = parseInt(parts[1], 10);
+  var d = parseInt(parts[2], 10);
+  if (!y || !m || !d) return null;
+  var dt = new Date(y, m - 1, d);
+  if (isNaN(dt.getTime())) return null;
+  return dt;
+}
+
+function formatDate(date) {
+  if (!date || isNaN(date.getTime())) return "";
+  var y = date.getFullYear();
+  var m = String(date.getMonth() + 1);
+  var d = String(date.getDate());
+  if (m.length === 1) m = "0" + m;
+  if (d.length === 1) d = "0" + d;
+  return y + "-" + m + "-" + d;
+}
+
+function formatDateShort(date) {
+  if (!date) return "";
+  var d = String(date.getDate());
+  var m = String(date.getMonth() + 1);
+  if (d.length === 1) d = "0" + d;
+  if (m.length === 1) m = "0" + m;
+  return d + "/" + m;
+}
+
+function cloneDate(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+// Work days: Sunday(0) - Thursday(4). Friday(5), Saturday(6) are weekend.
+function isWorkDay(date) {
+  var day = date.getDay();
+  return day !== 5 && day !== 6;
+}
+
+function nextWorkDay(date) {
+  var d = cloneDate(date);
+  while (!isWorkDay(d)) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+// Add N working days starting from a date (counting the start if it is a work day)
+// Example: addWorkDays(Sunday, 3) returns Tuesday (Sun, Mon, Tue).
+function addWorkDays(startDate, duration) {
+  if (!startDate || !duration || duration < 1) return null;
+  var d = cloneDate(startDate);
+  while (!isWorkDay(d)) d.setDate(d.getDate() + 1);
+  var count = 1;
+  while (count < duration) {
+    d.setDate(d.getDate() + 1);
+    if (isWorkDay(d)) count++;
+  }
+  return d;
+}
+
+// Move forward N work days from a date (excluding the start date itself).
+// Example: advanceWorkDays(Wednesday, 1) returns Thursday.
+// advanceWorkDays(Thursday, 1) returns Sunday.
+function advanceWorkDays(fromDate, n) {
+  var d = cloneDate(fromDate);
+  var moved = 0;
+  while (moved < n) {
+    d.setDate(d.getDate() + 1);
+    if (isWorkDay(d)) moved++;
+  }
+  return d;
+}
+
+// Number of work days between start and end inclusive.
+function workDaysBetween(start, end) {
+  if (!start || !end || end < start) return 0;
+  var d = cloneDate(start);
+  var e = cloneDate(end);
+  var c = 0;
+  while (d <= e) {
+    if (isWorkDay(d)) c++;
+    d.setDate(d.getDate() + 1);
+  }
+  return c;
+}
+
+// ============================================================
+// PERSISTENCE
+// ============================================================
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    // localStorage may be unavailable (private mode); ignore silently
+  }
+}
+
+function loadState() {
+  try {
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    var parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.activities)) {
+      state = {
+        projectName: parsed.projectName || "",
+        projectStart: parsed.projectStart || "",
+        activities: parsed.activities.map(normalizeActivity)
+      };
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+function normalizeActivity(a) {
+  return {
+    id: a.id ? String(a.id) : "",
+    description: a.description || "",
+    startDate: a.startDate || "",
+    duration: (a.duration === 0 || a.duration) ? Number(a.duration) : "",
+    endDate: a.endDate || "",
+    predecessorId: a.predecessorId ? String(a.predecessorId) : "",
+    lag: (a.lag === 0 || a.lag) ? Number(a.lag) : 0,
+    status: a.status || ""
+  };
+}
+
+// ============================================================
+// ACTIVITIES MANAGEMENT
+// ============================================================
+function nextId() {
+  var max = 0;
+  for (var i = 0; i < state.activities.length; i++) {
+    var n = parseInt(state.activities[i].id, 10);
+    if (!isNaN(n) && n > max) max = n;
+  }
+  return String(max + 1);
+}
+
+function addActivity() {
+  state.activities.push({
+    id: nextId(),
+    description: "",
+    startDate: "",
+    duration: "",
+    endDate: "",
+    predecessorId: "",
+    lag: 0,
+    status: ""
+  });
+  saveState();
+  renderAll();
+}
+
+function deleteActivity(index) {
+  if (index < 0 || index >= state.activities.length) return;
+  var a = state.activities[index];
+  var label = a.description || ("פעילות " + a.id);
+  if (!confirm("למחוק את: \"" + label + "\" ?")) return;
+  state.activities.splice(index, 1);
+  saveState();
+  renderAll();
+}
+
+function clearAll() {
+  if (!confirm("פעולה זו תמחק את כל הנתונים. להמשיך?")) return;
+  state = { projectName: "", projectStart: "", activities: [] };
+  saveState();
+  renderAll();
+}
+
+// ============================================================
+// CALCULATION ENGINE
+// ============================================================
+function buildIdMap() {
+  var map = {};
+  for (var i = 0; i < state.activities.length; i++) {
+    var a = state.activities[i];
+    if (a.id) map[String(a.id)] = a;
+  }
+  return map;
+}
+
+function detectCycles(activities, idMap) {
+  var WHITE = 0, GRAY = 1, BLACK = 2;
+  var color = {};
+  var inCycle = {};
+  for (var i = 0; i < activities.length; i++) color[activities[i].id] = WHITE;
+
+  function dfs(id) {
+    color[id] = GRAY;
+    var a = idMap[id];
+    if (a && a.predecessorId && idMap[a.predecessorId]) {
+      var pid = a.predecessorId;
+      if (color[pid] === GRAY) {
+        inCycle[id] = true;
+        inCycle[pid] = true;
+        return true;
+      }
+      if (color[pid] === WHITE && dfs(pid)) {
+        inCycle[id] = true;
+        return true;
+      }
+    }
+    color[id] = BLACK;
+    return false;
+  }
+
+  for (var j = 0; j < activities.length; j++) {
+    var a = activities[j];
+    if (color[a.id] === WHITE) dfs(a.id);
+  }
+  return inCycle;
+}
+
+function topoOrder(activities, idMap) {
+  var visited = {};
+  var order = [];
+  function visit(a, stack) {
+    if (visited[a.id]) return;
+    if (stack[a.id]) return;
+    stack[a.id] = true;
+    if (a.predecessorId && idMap[a.predecessorId]) {
+      visit(idMap[a.predecessorId], stack);
+    }
+    stack[a.id] = false;
+    visited[a.id] = true;
+    order.push(a);
+  }
+  for (var i = 0; i < activities.length; i++) {
+    visit(activities[i], {});
+  }
+  return order;
+}
+
+function computeSchedule() {
+  var errors = [];
+  var warnings = [];
+  var byId = {};
+
+  // Validate IDs first
+  var idSet = {};
+  for (var i = 0; i < state.activities.length; i++) {
+    var a = state.activities[i];
+    if (!a.id) {
+      errors.push("פעילות בשורה " + (i + 1) + " חסרה ID");
+      continue;
+    }
+    if (idSet[a.id]) {
+      errors.push("ID כפול: " + a.id);
+    }
+    idSet[a.id] = true;
+  }
+
+  var idMap = buildIdMap();
+  var cycles = detectCycles(state.activities, idMap);
+
+  for (var k in cycles) {
+    if (cycles[k]) errors.push("תלות מעגלית מעורבת בפעילות " + k);
+  }
+
+  // Warn on missing predecessors
+  for (var m = 0; m < state.activities.length; m++) {
+    var act = state.activities[m];
+    if (act.predecessorId && !idMap[act.predecessorId]) {
+      warnings.push("פעילות " + act.id + ": ID קדם \"" + act.predecessorId + "\" לא נמצא");
+    }
+    if (act.predecessorId && act.predecessorId === act.id) {
+      errors.push("פעילות " + act.id + ": לא יכולה להיות קדם של עצמה");
+    }
+  }
+
+  if (errors.length > 0) {
+    // Still compute what we can, but flag
+  }
+
+  var order;
+  try {
+    order = topoOrder(
+      state.activities.filter(function (a) { return !cycles[a.id]; }),
+      idMap
+    );
+  } catch (e) {
+    order = state.activities.slice();
+  }
+
+  // Add activities involved in cycles at end (they will not be computed properly)
+  for (var c = 0; c < state.activities.length; c++) {
+    if (cycles[state.activities[c].id] && order.indexOf(state.activities[c]) === -1) {
+      order.push(state.activities[c]);
+    }
+  }
+
+  // Process each in order
+  for (var ix = 0; ix < order.length; ix++) {
+    var act2 = order[ix];
+    var result = computeOne(act2, idMap, byId, cycles, warnings, errors);
+    byId[act2.id] = result;
+
+    // Write back computed values (without losing user intent for blank fields)
+    if (result.start) {
+      act2.startDate = formatDate(result.start);
+    }
+    if (result.end) {
+      act2.endDate = formatDate(result.end);
+    }
+    if (result.duration && (!act2.duration || act2.duration < 1)) {
+      act2.duration = result.duration;
+    } else if (result.duration && act2.duration && result.duration !== act2.duration && result.fromPredecessor) {
+      // If duration was computed from predecessor + end, override
+      act2.duration = result.duration;
+    }
+  }
+
+  lastCompute = { ok: errors.length === 0, errors: errors, warnings: warnings, byId: byId };
+  saveState();
+  return lastCompute;
+}
+
+function computeOne(act, idMap, byId, cycles, warnings, errors) {
+  var result = { start: null, end: null, duration: null, fromPredecessor: false, valid: true };
+
+  if (cycles[act.id]) {
+    result.valid = false;
+    return result;
+  }
+
+  var predEnd = null;
+  if (act.predecessorId && idMap[act.predecessorId] && byId[act.predecessorId] && byId[act.predecessorId].end) {
+    predEnd = byId[act.predecessorId].end;
+  }
+
+  var start = parseDate(act.startDate);
+  var end = parseDate(act.endDate);
+  var dur = (act.duration && Number(act.duration) > 0) ? Number(act.duration) : null;
+  var lag = (act.lag && Number(act.lag) >= 0) ? Number(act.lag) : 0;
+
+  // 1) If predecessor exists & has end → derive start
+  if (predEnd) {
+    start = advanceWorkDays(predEnd, lag + 1);
+    result.fromPredecessor = true;
+  } else if (start) {
+    // Snap entered start to a work day (if it falls on weekend)
+    if (!isWorkDay(start)) {
+      var snapped = nextWorkDay(start);
+      warnings.push("פעילות " + act.id + ": תאריך התחלה היה ש״ק, הוזז ל-" + formatDate(snapped));
+      start = snapped;
+    }
+  }
+
+  // 2) Determine end / duration
+  if (start && dur) {
+    end = addWorkDays(start, dur);
+    result.duration = dur;
+  } else if (start && end) {
+    if (end < start) {
+      errors.push("פעילות " + act.id + ": תאריך הסיום קודם לתאריך ההתחלה");
+      result.valid = false;
+    } else {
+      if (!isWorkDay(end)) {
+        // Snap end backward to last work day
+        var de = cloneDate(end);
+        while (!isWorkDay(de)) de.setDate(de.getDate() - 1);
+        end = de;
+      }
+      result.duration = workDaysBetween(start, end);
+    }
+  } else if (start && !end && !dur) {
+    warnings.push("פעילות " + act.id + ": חסר ימי עבודה או תאריך סיום");
+    result.valid = false;
+  } else if (!start) {
+    if (act.predecessorId && !idMap[act.predecessorId]) {
+      // already warned
+    } else if (!act.predecessorId) {
+      warnings.push("פעילות " + act.id + ": חסר תאריך התחלה");
+    }
+    result.valid = false;
+  }
+
+  result.start = start || null;
+  result.end = end || null;
+  if (result.duration === null && start && end) {
+    result.duration = workDaysBetween(start, end);
+  }
+  return result;
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function renderAll() {
+  renderHeader();
+  renderTable();
+  renderMessages();
+  renderGantt();
+}
+
+function renderHeader() {
+  document.getElementById("proj-name").value = state.projectName || "";
+  document.getElementById("proj-start").value = state.projectStart || "";
+}
+
+function renderTable() {
+  var tbody = document.getElementById("acts-body");
+  tbody.innerHTML = "";
+
+  if (state.activities.length === 0) {
+    var tr = document.createElement("tr");
+    tr.innerHTML = '<td colspan="9" class="empty-state">אין פעילויות. לחץ "הוסף פעילות" או "טען דוגמה".</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+
+  for (var i = 0; i < state.activities.length; i++) {
+    var a = state.activities[i];
+    var tr2 = document.createElement("tr");
+    tr2.setAttribute("data-index", String(i));
+    var compRes = lastCompute.byId[a.id];
+    if (compRes && compRes.valid === false) tr2.className = "row-warn";
+
+    tr2.innerHTML =
+      '<td><input class="id-input" type="text" data-field="id" value="' + escapeHtml(a.id) + '"></td>' +
+      '<td><input type="text" data-field="description" placeholder="תיאור" value="' + escapeHtml(a.description) + '"></td>' +
+      '<td><input type="date" data-field="startDate" value="' + escapeHtml(a.startDate) + '"></td>' +
+      '<td><input type="number" data-field="duration" min="0" step="1" value="' + escapeHtml(a.duration === "" || a.duration === null || a.duration === undefined ? "" : a.duration) + '"></td>' +
+      '<td><input type="date" data-field="endDate" value="' + escapeHtml(a.endDate) + '"></td>' +
+      '<td><input class="pred-input" type="text" data-field="predecessorId" placeholder="—" value="' + escapeHtml(a.predecessorId) + '"></td>' +
+      '<td><input type="number" data-field="lag" min="0" step="1" value="' + (a.lag === "" || a.lag === null || a.lag === undefined ? 0 : a.lag) + '"></td>' +
+      '<td><input type="text" data-field="status" placeholder="הערות" value="' + escapeHtml(a.status) + '"></td>' +
+      '<td class="del no-print"><button class="del-btn" type="button" title="מחק">✕</button></td>';
+
+    tbody.appendChild(tr2);
+  }
+
+  // Wire up inputs
+  var inputs = tbody.querySelectorAll("input");
+  for (var j = 0; j < inputs.length; j++) {
+    inputs[j].addEventListener("change", onCellChange);
+    inputs[j].addEventListener("input", onCellInput);
+  }
+  var delBtns = tbody.querySelectorAll(".del-btn");
+  for (var k = 0; k < delBtns.length; k++) {
+    delBtns[k].addEventListener("click", function (e) {
+      var tr = e.target.closest("tr");
+      var idx = parseInt(tr.getAttribute("data-index"), 10);
+      deleteActivity(idx);
+    });
+  }
+}
+
+function onCellInput(e) {
+  // Live-update state so we don't lose typing on re-render
+  var tr = e.target.closest("tr");
+  var idx = parseInt(tr.getAttribute("data-index"), 10);
+  var field = e.target.getAttribute("data-field");
+  var val = e.target.value;
+  if (field === "duration" || field === "lag") {
+    state.activities[idx][field] = val === "" ? (field === "lag" ? 0 : "") : Number(val);
+  } else {
+    state.activities[idx][field] = val;
+  }
+}
+
+function onCellChange(e) {
+  onCellInput(e);
+  saveState();
+  // Don't re-render full table, only gantt + messages
+  renderMessages();
+  renderGantt();
+}
+
+function renderMessages() {
+  var box = document.getElementById("messages");
+  box.innerHTML = "";
+  if (!lastCompute) return;
+  var errs = lastCompute.errors || [];
+  var wars = lastCompute.warnings || [];
+  for (var i = 0; i < errs.length; i++) {
+    var d = document.createElement("div");
+    d.className = "msg err";
+    d.textContent = "שגיאה: " + errs[i];
+    box.appendChild(d);
+  }
+  for (var j = 0; j < wars.length; j++) {
+    var d2 = document.createElement("div");
+    d2.className = "msg warn";
+    d2.textContent = "אזהרה: " + wars[j];
+    box.appendChild(d2);
+  }
+  if (errs.length === 0 && wars.length === 0 && state.activities.length > 0) {
+    var d3 = document.createElement("div");
+    d3.className = "msg ok";
+    d3.textContent = "לוח הזמנים תקין · " + state.activities.length + " פעילויות";
+    box.appendChild(d3);
+  }
+}
+
+// ============================================================
+// GANTT RENDERING
+// ============================================================
+function renderGantt() {
+  var container = document.getElementById("gantt");
+  container.innerHTML = "";
+
+  var validActs = [];
+  for (var i = 0; i < state.activities.length; i++) {
+    var a = state.activities[i];
+    var s = parseDate(a.startDate);
+    var e = parseDate(a.endDate);
+    if (s && e && e >= s) {
+      validActs.push({ act: a, start: s, end: e });
+    }
+  }
+
+  if (validActs.length === 0) {
+    container.innerHTML = '<div class="empty-state">אין פעילויות לתצוגה. הזן תאריכים ולחץ "חשב לוח זמנים".</div>';
+    return;
+  }
+
+  var minDate = validActs[0].start;
+  var maxDate = validActs[0].end;
+  for (var v = 1; v < validActs.length; v++) {
+    if (validActs[v].start < minDate) minDate = validActs[v].start;
+    if (validActs[v].end > maxDate) maxDate = validActs[v].end;
+  }
+  // Pad: start from Sunday before minDate, end at Saturday after maxDate
+  var start = cloneDate(minDate);
+  while (start.getDay() !== 0) start.setDate(start.getDate() - 1);
+  start.setDate(start.getDate() - 2); // padding
+  var end = cloneDate(maxDate);
+  while (end.getDay() !== 6) end.setDate(end.getDate() + 1);
+  end.setDate(end.getDate() + 2); // padding
+
+  var totalDays = Math.round((end - start) / 86400000) + 1;
+  var totalWidth = totalDays * DAY_WIDTH;
+
+  // Build header (weeks + days)
+  var headerEl = document.createElement("div");
+  headerEl.className = "gantt-header";
+
+  var labelCol = document.createElement("div");
+  labelCol.className = "gantt-label-col";
+  labelCol.textContent = "פעילות";
+  headerEl.appendChild(labelCol);
+
+  var timeWrap = document.createElement("div");
+  timeWrap.className = "gantt-time-header";
+  timeWrap.style.width = totalWidth + "px";
+
+  var weeksRow = document.createElement("div");
+  weeksRow.className = "gantt-weeks";
+
+  var daysRow = document.createElement("div");
+  daysRow.className = "gantt-days";
+
+  // Walk by week
+  var d = cloneDate(start);
+  var today = new Date();
+  today.setHours(0,0,0,0);
+
+  // Build week blocks
+  var weekStart = cloneDate(d);
+  var weekDays = 0;
+  while (d <= end) {
+    // Day cell
+    var dayEl = document.createElement("div");
+    dayEl.className = "gantt-day";
+    if (!isWorkDay(d)) dayEl.className += " weekend";
+    if (d.getTime() === today.getTime()) dayEl.className += " today";
+    dayEl.style.width = DAY_WIDTH + "px";
+    dayEl.innerHTML = '<div>' + d.getDate() + '</div>';
+    daysRow.appendChild(dayEl);
+
+    weekDays++;
+    // End of week: Saturday or last day
+    if (d.getDay() === 6 || d.getTime() === end.getTime()) {
+      var wEl = document.createElement("div");
+      wEl.className = "gantt-week";
+      wEl.style.width = (weekDays * DAY_WIDTH) + "px";
+      wEl.textContent = formatDateShort(weekStart) + " — " + formatDateShort(d);
+      weeksRow.appendChild(wEl);
+      weekDays = 0;
+      var next = cloneDate(d);
+      next.setDate(next.getDate() + 1);
+      weekStart = next;
+    }
+
+    d.setDate(d.getDate() + 1);
+  }
+
+  timeWrap.appendChild(weeksRow);
+  timeWrap.appendChild(daysRow);
+  headerEl.appendChild(timeWrap);
+  container.appendChild(headerEl);
+
+  // Body
+  var bodyEl = document.createElement("div");
+  bodyEl.className = "gantt-body";
+
+  var rowHeight = 36;
+  var barTopOffset = 6;
+  var barHeight = 24;
+
+  // Map activity id -> { row index, bar position }
+  var posById = {};
+
+  for (var r = 0; r < validActs.length; r++) {
+    var item = validActs[r];
+    var rowEl = document.createElement("div");
+    rowEl.className = "gantt-row";
+
+    var labelEl = document.createElement("div");
+    labelEl.className = "gantt-row-label";
+    var labelText = (item.act.description || "פעילות " + item.act.id);
+    labelEl.innerHTML = '<span class="rid">' + escapeHtml(item.act.id) + '</span><span class="rname" title="' + escapeHtml(labelText) + '">' + escapeHtml(labelText) + '</span>';
+    rowEl.appendChild(labelEl);
+
+    var trackEl = document.createElement("div");
+    trackEl.className = "gantt-track";
+    trackEl.style.width = totalWidth + "px";
+    trackEl.style.position = "relative";
+
+    // Add weekend backdrop cells (only weekends, for visual hint)
+    var dwalk = cloneDate(start);
+    var x = 0;
+    while (dwalk <= end) {
+      if (!isWorkDay(dwalk)) {
+        var cell = document.createElement("div");
+        cell.className = "gantt-grid-cell weekend";
+        cell.style.left = x + "px";
+        cell.style.width = DAY_WIDTH + "px";
+        trackEl.appendChild(cell);
+      }
+      if (dwalk.getTime() === today.getTime()) {
+        var cellT = document.createElement("div");
+        cellT.className = "gantt-grid-cell today";
+        cellT.style.left = x + "px";
+        cellT.style.width = DAY_WIDTH + "px";
+        trackEl.appendChild(cellT);
+      }
+      x += DAY_WIDTH;
+      dwalk.setDate(dwalk.getDate() + 1);
+    }
+
+    // Bar
+    var barLeft = Math.round((item.start - start) / 86400000) * DAY_WIDTH;
+    var barDays = Math.round((item.end - item.start) / 86400000) + 1;
+    var barWidth = barDays * DAY_WIDTH - 2;
+    if (barWidth < DAY_WIDTH - 2) barWidth = DAY_WIDTH - 2;
+
+    var barEl = document.createElement("div");
+    barEl.className = "gantt-bar";
+    barEl.style.left = (barLeft + 1) + "px";
+    barEl.style.width = barWidth + "px";
+    var dur = workDaysBetween(item.start, item.end);
+    barEl.innerHTML = '<span class="bar-label">' + escapeHtml(item.act.id) + ' · ' + escapeHtml(labelText) + '</span>';
+    barEl.setAttribute("data-tooltip", buildTooltip(item.act, item.start, item.end, dur));
+    barEl.addEventListener("mouseenter", onBarHover);
+    barEl.addEventListener("mouseleave", hideTooltip);
+    barEl.addEventListener("mousemove", moveTooltip);
+    barEl.addEventListener("touchstart", onBarTouch, { passive: true });
+
+    trackEl.appendChild(barEl);
+    rowEl.appendChild(trackEl);
+    bodyEl.appendChild(rowEl);
+
+    posById[item.act.id] = {
+      row: r,
+      barLeft: barLeft + 1,
+      barWidth: barWidth,
+      barTop: r * rowHeight + barTopOffset,
+      barHeight: barHeight
+    };
+  }
+
+  container.appendChild(bodyEl);
+
+  // Arrows overlay (SVG)
+  var svgNS = "http://www.w3.org/2000/svg";
+  var svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("class", "gantt-arrows");
+  // Determine label col width based on viewport
+  var labelColWidth = window.innerWidth <= 720 ? 120 : 180;
+  // Header height = weeks(~24) + days(~22) ≈ 50
+  var headerHeight = headerEl.offsetHeight || 50;
+  svg.setAttribute("width", String(totalWidth + labelColWidth));
+  svg.setAttribute("height", String(bodyEl.offsetHeight));
+  svg.style.position = "absolute";
+  svg.style.top = headerHeight + "px";
+  // In RTL, the track is left of the sticky label; SVG should align with track.
+  // Use right offset to align with track area.
+  svg.style.right = labelColWidth + "px";
+  svg.style.left = "auto";
+  svg.style.pointerEvents = "none";
+
+  // Arrow marker
+  var defs = document.createElementNS(svgNS, "defs");
+  var marker = document.createElementNS(svgNS, "marker");
+  marker.setAttribute("id", "arr-head");
+  marker.setAttribute("markerWidth", "8");
+  marker.setAttribute("markerHeight", "8");
+  marker.setAttribute("refX", "7");
+  marker.setAttribute("refY", "4");
+  marker.setAttribute("orient", "auto");
+  marker.setAttribute("markerUnits", "userSpaceOnUse");
+  var poly = document.createElementNS(svgNS, "polygon");
+  poly.setAttribute("points", "0,0 8,4 0,8");
+  poly.setAttribute("fill", "#f59e0b");
+  marker.appendChild(poly);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
+  // Draw arrows
+  for (var ai = 0; ai < validActs.length; ai++) {
+    var aItem = validActs[ai];
+    var predId = aItem.act.predecessorId;
+    if (!predId || !posById[predId]) continue;
+    var from = posById[predId];
+    var to = posById[aItem.act.id];
+
+    // Connect from end of predecessor bar (right edge in LTR coords) to start of dependent bar (left edge)
+    // In our coord system, "left" is LTR-left (0 at LTR-leftmost). The track is in normal LTR coords.
+    var fromX = from.barLeft + from.barWidth;
+    var fromY = from.barTop + from.barHeight / 2;
+    var toX = to.barLeft;
+    var toY = to.barTop + to.barHeight / 2;
+
+    drawArrow(svg, svgNS, fromX, fromY, toX, toY);
+  }
+
+  container.appendChild(svg);
+}
+
+function drawArrow(svg, svgNS, x1, y1, x2, y2) {
+  // Path: from (x1,y1) → step out → step vertically → step into target
+  var stepOut = 10;
+  var midY = y2;
+  var d;
+  if (x2 > x1) {
+    // Goes forward in time (typical case)
+    d = "M " + x1 + " " + y1 +
+        " L " + (x1 + stepOut) + " " + y1 +
+        " L " + (x1 + stepOut) + " " + midY +
+        " L " + (x2 - 2) + " " + midY;
+  } else {
+    // Goes backward (unusual) — route around
+    d = "M " + x1 + " " + y1 +
+        " L " + (x1 + stepOut) + " " + y1 +
+        " L " + (x1 + stepOut) + " " + (y1 + 12) +
+        " L " + (x2 - stepOut) + " " + (y1 + 12) +
+        " L " + (x2 - stepOut) + " " + midY +
+        " L " + (x2 - 2) + " " + midY;
+  }
+  var path = document.createElementNS(svgNS, "path");
+  path.setAttribute("d", d);
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "#f59e0b");
+  path.setAttribute("stroke-width", "1.6");
+  path.setAttribute("marker-end", "url(#arr-head)");
+  svg.appendChild(path);
+}
+
+function buildTooltip(act, start, end, dur) {
+  var lines = [];
+  lines.push("<strong>" + escapeHtml(act.description || "פעילות " + act.id) + "</strong>");
+  lines.push("ID: " + escapeHtml(act.id));
+  lines.push("התחלה: " + formatDate(start));
+  lines.push("סיום: " + formatDate(end));
+  lines.push("ימי עבודה: " + dur);
+  if (act.predecessorId) lines.push("קדם: " + escapeHtml(act.predecessorId) + " · השהייה: " + (act.lag || 0));
+  if (act.status) lines.push("הערות: " + escapeHtml(act.status));
+  return lines.join("<br>");
+}
+
+// ============================================================
+// TOOLTIP
+// ============================================================
+var tipEl = null;
+function getTipEl() {
+  if (!tipEl) tipEl = document.getElementById("tooltip");
+  return tipEl;
+}
+function onBarHover(e) {
+  var html = e.currentTarget.getAttribute("data-tooltip");
+  var t = getTipEl();
+  t.innerHTML = html;
+  t.classList.remove("hidden");
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  var t = getTipEl();
+  var px = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+  var py = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY) || 0;
+  var w = t.offsetWidth, h = t.offsetHeight;
+  var vw = window.innerWidth, vh = window.innerHeight;
+  var left = px + 14;
+  var top = py + 14;
+  if (left + w + 8 > vw) left = px - w - 14;
+  if (top + h + 8 > vh)  top = py - h - 14;
+  if (left < 4) left = 4;
+  if (top < 4) top = 4;
+  t.style.left = left + "px";
+  t.style.top = top + "px";
+}
+function hideTooltip() {
+  var t = getTipEl();
+  t.classList.add("hidden");
+}
+function onBarTouch(e) {
+  var html = e.currentTarget.getAttribute("data-tooltip");
+  var t = getTipEl();
+  t.innerHTML = html;
+  t.classList.remove("hidden");
+  var touch = e.touches[0];
+  moveTooltip({ clientX: touch.clientX, clientY: touch.clientY });
+  setTimeout(hideTooltip, 3500);
+}
+
+// ============================================================
+// EXPORT / IMPORT
+// ============================================================
+function exportJSON() {
+  var data = JSON.stringify(state, null, 2);
+  var blob = new Blob([data], { type: "application/json;charset=utf-8" });
+  triggerDownload(blob, (state.projectName || "gantt") + ".json");
+}
+
+function exportCSV() {
+  var rows = [
+    ["ID","תיאור","תאריך התחלה","ימי עבודה","תאריך סיום","קדם","השהייה","סטטוס"]
+  ];
+  for (var i = 0; i < state.activities.length; i++) {
+    var a = state.activities[i];
+    rows.push([
+      a.id, a.description, a.startDate,
+      String(a.duration || ""), a.endDate,
+      a.predecessorId, String(a.lag || 0), a.status
+    ]);
+  }
+  var csv = rows.map(function (r) {
+    return r.map(csvEscape).join(",");
+  }).join("\r\n");
+  // Add BOM for Excel Hebrew
+  var blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  triggerDownload(blob, (state.projectName || "gantt") + ".csv");
+}
+
+function csvEscape(v) {
+  var s = v == null ? "" : String(v);
+  if (s.indexOf(",") !== -1 || s.indexOf("\"") !== -1 || s.indexOf("\n") !== -1) {
+    return "\"" + s.replace(/"/g, "\"\"") + "\"";
+  }
+  return s;
+}
+
+function triggerDownload(blob, filename) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+}
+
+function importJSON(file) {
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      var parsed = JSON.parse(e.target.result);
+      if (!parsed || !Array.isArray(parsed.activities)) {
+        alert("הקובץ אינו בפורמט תקין");
+        return;
+      }
+      if (state.activities.length > 0 && !confirm("ייבוא יחליף את הנתונים הקיימים. להמשיך?")) return;
+      state = {
+        projectName: parsed.projectName || "",
+        projectStart: parsed.projectStart || "",
+        activities: parsed.activities.map(normalizeActivity)
+      };
+      saveState();
+      renderAll();
+    } catch (err) {
+      alert("שגיאה בקריאת הקובץ: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ============================================================
+// SAMPLE DATA
+// ============================================================
+function loadSample() {
+  if (state.activities.length > 0 && !confirm("לטעון דוגמה? הנתונים הקיימים יוחלפו.")) return;
+  state = {
+    projectName: "דוגמת שלד בניין",
+    projectStart: "2026-06-01",
+    activities: [
+      { id: "1", description: "התארגנות באתר",       startDate: "2026-06-01", duration: 3, endDate: "", predecessorId: "",  lag: 0, status: "" },
+      { id: "2", description: "עבודות עפר וחפירה",   startDate: "",            duration: 5, endDate: "", predecessorId: "1", lag: 0, status: "" },
+      { id: "3", description: "יציקת יסודות",        startDate: "",            duration: 4, endDate: "", predecessorId: "2", lag: 1, status: "" },
+      { id: "4", description: "קירות קומת קרקע",     startDate: "",            duration: 7, endDate: "", predecessorId: "3", lag: 2, status: "" },
+      { id: "5", description: "תקרה מעל קומת קרקע",  startDate: "",            duration: 6, endDate: "", predecessorId: "4", lag: 0, status: "" }
+    ]
+  };
+  computeSchedule();
+  renderAll();
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// ============================================================
+// EVENT WIRING
+// ============================================================
+function wire() {
+  document.getElementById("proj-name").addEventListener("input", function (e) {
+    state.projectName = e.target.value;
+    saveState();
+  });
+  document.getElementById("proj-start").addEventListener("change", function (e) {
+    state.projectStart = e.target.value;
+    saveState();
+  });
+
+  document.getElementById("btn-add").addEventListener("click", addActivity);
+  document.getElementById("btn-calc").addEventListener("click", function () {
+    computeSchedule();
+    renderAll();
+  });
+  document.getElementById("btn-sample").addEventListener("click", loadSample);
+  document.getElementById("btn-clear").addEventListener("click", clearAll);
+  document.getElementById("btn-export-json").addEventListener("click", exportJSON);
+  document.getElementById("btn-export-csv").addEventListener("click", exportCSV);
+  document.getElementById("btn-print").addEventListener("click", function () {
+    // Recompute so dates fill in for any unsaved changes, then print
+    computeSchedule();
+    renderAll();
+    setTimeout(function () { window.print(); }, 100);
+  });
+
+  document.getElementById("btn-import-json").addEventListener("click", function () {
+    document.getElementById("file-input").click();
+  });
+  document.getElementById("file-input").addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (f) importJSON(f);
+    e.target.value = ""; // allow re-selecting same file
+  });
+
+  window.addEventListener("resize", function () {
+    // Only re-render gantt arrows on resize
+    renderGantt();
+  });
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+function boot() {
+  try {
+    var loaded = loadState();
+    if (!loaded) {
+      // Start with one empty activity for convenience
+      state.activities = [];
+    }
+    wire();
+    renderAll();
+  } catch (err) {
+    // Fallback: show error in body to ensure page is not blank on Safari
+    document.body.innerHTML = '<div style="padding:20px;color:#fff;background:#0f172a;direction:rtl;font-family:Arial">' +
+      '<h2 style="color:#fca5a5">שגיאה בטעינה</h2><pre style="white-space:pre-wrap">' +
+      escapeHtml(err.message || String(err)) + '</pre></div>';
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
+</script>
+</body>
+</html>
