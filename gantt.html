@@ -190,12 +190,13 @@
   .msg.warn { background: rgba(217,119,6,0.15); color: #fcd34d; border-right: 3px solid #d97706; }
   .msg.ok   { background: rgba(22,163,74,0.15);  color: #86efac; border-right: 3px solid #16a34a; }
 
-  /* Gantt */
+  /* Gantt — forced LTR so the timeline flows left→right while UI stays RTL */
   .gantt-scroll {
     overflow: auto;
     -webkit-overflow-scrolling: touch;
     max-height: 70vh;
     position: relative;
+    direction: ltr;
   }
   .gantt {
     position: relative;
@@ -213,15 +214,17 @@
   .gantt-label-col {
     flex: 0 0 auto;
     width: 180px;
-    border-left: 1px solid #334155;
+    border-right: 1px solid #334155;
     padding: 8px;
     font-size: 12px;
     font-weight: 700;
     color: #cbd5e1;
     background: #0f172a;
     position: sticky;
-    right: 0;
+    left: 0;
     z-index: 4;
+    direction: rtl;
+    text-align: right;
   }
   .gantt-time-header {
     display: flex;
@@ -232,7 +235,7 @@
     border-bottom: 1px solid #334155;
   }
   .gantt-week {
-    border-left: 1px solid #334155;
+    border-right: 1px solid #334155;
     padding: 4px 6px;
     font-size: 11px;
     font-weight: 700;
@@ -240,12 +243,13 @@
     text-align: center;
     white-space: nowrap;
     background: #0c1c2e;
+    direction: ltr;
   }
   .gantt-days {
     display: flex;
   }
   .gantt-day {
-    border-left: 1px solid #1f2937;
+    border-right: 1px solid #1f2937;
     text-align: center;
     font-size: 10px;
     color: #64748b;
@@ -272,14 +276,15 @@
     align-items: center;
     font-size: 12px;
     color: #e2e8f0;
-    border-left: 1px solid #334155;
+    border-right: 1px solid #334155;
     background: #0f172a;
     position: sticky;
-    right: 0;
+    left: 0;
     z-index: 2;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+    direction: rtl;
   }
   .gantt-row-label .rid {
     background: #334155;
@@ -300,12 +305,13 @@
     position: relative;
     flex: 1 1 auto;
     height: 100%;
+    direction: ltr;
   }
   .gantt-grid-cell {
     position: absolute;
     top: 0;
     bottom: 0;
-    border-left: 1px solid #1f2937;
+    border-right: 1px solid #1f2937;
   }
   .gantt-grid-cell.weekend { background: rgba(124,58,237,0.06); }
   .gantt-grid-cell.today { background: rgba(56,189,248,0.10); }
@@ -329,6 +335,7 @@
     box-shadow: 0 2px 6px rgba(2,132,199,0.4);
     cursor: pointer;
     z-index: 2;
+    direction: rtl;
   }
   .gantt-bar:hover { filter: brightness(1.15); }
   .gantt-bar .bar-label {
@@ -336,6 +343,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     width: 100%;
+    text-align: right;
   }
 
   .gantt-arrows {
@@ -388,47 +396,170 @@
     .gantt-row { height: 38px; }
   }
 
+  /* Print-only elements hidden on screen */
+  .print-only { display: none; }
+
   /* Print */
   @media print {
-    body {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+    @page { size: A4 landscape; margin: 12mm 10mm; }
+    @page :first { margin-top: 14mm; }
+
+    html, body {
       background: #fff !important;
-      color: #000 !important;
+      color: #111 !important;
       padding: 0 !important;
+      font-family: "Times New Roman", "David", "Frank Ruehl", Georgia, serif !important;
+      font-size: 10.5pt !important;
     }
-    .app { max-width: 100% !important; }
+    .app { max-width: 100% !important; margin: 0 !important; }
     .no-print { display: none !important; }
-    .toolbar, .del-btn, .meta-row input { display: none !important; }
-    .header, .panel {
-      background: #fff !important;
-      border: 1px solid #999 !important;
-      box-shadow: none !important;
+    .print-only { display: block !important; }
+
+    /* Hide screen header in print, replaced by print-only banner */
+    .header { display: none !important; }
+    .messages { display: none !important; }
+
+    /* Print banner */
+    .print-banner {
+      display: block !important;
+      border-bottom: 2px solid #0c4a6e;
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+      page-break-after: avoid;
+    }
+    .print-banner .pb-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+    }
+    .print-banner .pb-name {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 22pt;
+      font-weight: 800;
+      color: #0c4a6e;
+      letter-spacing: -0.3px;
+      line-height: 1.1;
+      margin: 0;
+    }
+    .print-banner .pb-sub {
+      font-size: 9.5pt;
+      color: #475569;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+    .print-banner .pb-meta {
+      font-size: 9pt;
+      color: #1f2937;
+      text-align: left;
+      direction: rtl;
+      white-space: nowrap;
+    }
+    .print-banner .pb-meta div { margin-bottom: 2px; }
+    .print-banner .pb-meta .lbl { color: #64748b; font-size: 8.5pt; font-weight: 700; }
+
+    .print-summary {
+      display: flex !important;
+      margin: 8px 0 12px;
+      gap: 0;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      overflow: hidden;
       page-break-inside: avoid;
     }
-    .header h1 { color: #000 !important; font-size: 22px !important; }
-    .header h1 .acc { color: #0369a1 !important; }
-    .panel-head { background: #f1f5f9 !important; border-bottom: 1px solid #999 !important; }
-    .panel-head h2 { color: #000 !important; }
-    .meta-field label { color: #333 !important; }
-    .meta-row input {
-      display: block !important;
-      background: transparent !important;
-      border: none !important;
-      color: #000 !important;
-      padding: 0 !important;
+    .print-summary .ps-cell {
+      flex: 1;
+      padding: 6px 10px;
+      border-right: 1px solid #e2e8f0;
+      background: #f8fafc;
     }
-    table.acts th { background: #e2e8f0 !important; color: #000 !important; }
-    table.acts td { color: #000 !important; }
+    .print-summary .ps-cell:first-child { border-right: none; }
+    .print-summary .ps-lbl {
+      font-size: 8pt;
+      color: #64748b;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      margin-bottom: 2px;
+    }
+    .print-summary .ps-val {
+      font-size: 11.5pt;
+      font-weight: 700;
+      color: #0c4a6e;
+      font-family: Georgia, "Times New Roman", serif;
+    }
+
+    .print-section-title {
+      display: block !important;
+      font-family: Georgia, serif;
+      font-size: 12pt;
+      font-weight: 700;
+      color: #0c4a6e;
+      border-bottom: 1px solid #cbd5e1;
+      padding-bottom: 3px;
+      margin: 14px 0 6px;
+      page-break-after: avoid;
+    }
+
+    .panel {
+      background: #fff !important;
+      border: none !important;
+      box-shadow: none !important;
+      margin: 0 0 6px !important;
+      border-radius: 0 !important;
+      overflow: visible !important;
+    }
+    .panel-head { display: none !important; }
+    .table-wrap { overflow: visible !important; }
+
+    table.acts {
+      min-width: 0 !important;
+      width: 100% !important;
+      border-collapse: collapse !important;
+      font-size: 9.5pt !important;
+      page-break-inside: auto;
+    }
+    table.acts thead { display: table-header-group; }
+    table.acts tr { page-break-inside: avoid; page-break-after: auto; }
+    table.acts th {
+      background: #0c4a6e !important;
+      color: #fff !important;
+      font-weight: 700 !important;
+      font-size: 9pt !important;
+      padding: 6px 5px !important;
+      border: 1px solid #0c4a6e !important;
+      text-align: right !important;
+      position: static !important;
+    }
+    table.acts td {
+      color: #111 !important;
+      padding: 4px 5px !important;
+      border: 1px solid #cbd5e1 !important;
+      background: #fff !important;
+    }
+    table.acts tr:nth-child(even) td { background: #f8fafc !important; }
     table.acts input, table.acts select {
       background: transparent !important;
       border: none !important;
-      color: #000 !important;
+      color: #111 !important;
       padding: 0 !important;
+      font-family: inherit !important;
+      font-size: 9.5pt !important;
+      font-weight: inherit !important;
     }
-    table.acts td.del { display: none !important; }
-    table.acts th:last-child { display: none !important; }
+    table.acts input[type="number"]::-webkit-inner-spin-button,
+    table.acts input[type="number"]::-webkit-outer-spin-button { display: none !important; }
+    table.acts input.id-input { font-weight: 700 !important; color: #0c4a6e !important; }
+    table.acts td.del, table.acts th:last-child { display: none !important; }
+    table.acts .row-warn input { color: #b45309 !important; }
+
+    /* Gantt for print */
     .gantt {
       background: #fff !important;
       overflow: visible !important;
+      page-break-inside: avoid;
     }
     .gantt-scroll {
       overflow: visible !important;
@@ -436,27 +567,100 @@
     }
     .gantt-header, .gantt-row-label, .gantt-label-col {
       background: #f1f5f9 !important;
-      color: #000 !important;
-      position: static !important;
+      color: #111 !important;
     }
-    .gantt-week { background: #e2e8f0 !important; color: #0369a1 !important; }
-    .gantt-day { color: #555 !important; }
-    .gantt-day.weekend { background: #f3e8ff !important; color: #6b21a8 !important; }
-    .gantt-grid-cell.weekend { background: rgba(168,85,247,0.08) !important; }
+    .gantt-label-col, .gantt-row-label {
+      border-right: 1px solid #94a3b8 !important;
+    }
+    .gantt-row { border-bottom: 1px solid #cbd5e1 !important; }
+    .gantt-week {
+      background: #e0f2fe !important;
+      color: #0c4a6e !important;
+      border-right: 1px solid #94a3b8 !important;
+      font-size: 8.5pt !important;
+    }
+    .gantt-day {
+      color: #475569 !important;
+      border-right: 1px solid #e2e8f0 !important;
+      font-size: 8pt !important;
+    }
+    .gantt-day.weekend { background: #f1f5f9 !important; color: #64748b !important; }
+    .gantt-grid-cell.weekend { background: rgba(100,116,139,0.10) !important; }
+    .gantt-grid-cell.today { background: transparent !important; }
+    .gantt-day.today { background: #fff !important; color: #475569 !important; font-weight: normal !important; }
     .gantt-bar {
       background: #0ea5e9 !important;
       color: #fff !important;
       box-shadow: none !important;
+      border: 1px solid #0369a1 !important;
+      font-size: 8.5pt !important;
     }
-    .gantt-row-label { color: #000 !important; }
-    .gantt-row-label .rid { background: #cbd5e1 !important; color: #000 !important; }
-    .messages { background: #fff !important; }
-    @page { size: A4 landscape; margin: 10mm; }
+    .gantt-row-label {
+      color: #111 !important;
+      font-size: 9pt !important;
+    }
+    .gantt-row-label .rid {
+      background: #0c4a6e !important;
+      color: #fff !important;
+      font-size: 8pt !important;
+    }
+
+    /* Print footer */
+    .print-footer {
+      display: flex !important;
+      justify-content: space-between;
+      margin-top: 12px;
+      padding-top: 6px;
+      border-top: 1px solid #cbd5e1;
+      font-size: 8.5pt;
+      color: #64748b;
+      page-break-inside: avoid;
+    }
+    .print-footer .pf-legend {
+      display: flex;
+      gap: 10px;
+    }
+    .print-footer .pf-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .print-footer .pf-swatch {
+      display: inline-block;
+      width: 12px;
+      height: 8px;
+      border: 1px solid #475569;
+      vertical-align: middle;
+    }
+    .print-footer .pf-swatch.bar { background: #0ea5e9; border-color: #0369a1; }
+    .print-footer .pf-swatch.weekend { background: rgba(100,116,139,0.25); }
+    .print-footer .pf-swatch.arrow { background: #f59e0b; height: 2px; border: none; margin: 3px 0; }
+
+    /* Force schedule + chart on same / consecutive pages */
+    .panel.acts-panel { page-break-after: auto; }
+    .panel.gantt-panel { page-break-before: avoid; }
   }
 </style>
 </head>
 <body>
 <div class="app">
+
+  <!-- Print-only banner -->
+  <div class="print-only print-banner">
+    <div class="pb-top">
+      <div>
+        <h1 class="pb-name" id="print-proj-name">פרויקט</h1>
+        <div class="pb-sub">לוח זמנים מקצועי · תרשים גאנט</div>
+      </div>
+      <div class="pb-meta">
+        <div><span class="lbl">תאריך הדפסה: </span><span id="print-date"></span></div>
+        <div><span class="lbl">התחלת פרויקט: </span><span id="print-proj-start"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Print-only summary -->
+  <div class="print-only print-summary" id="print-summary"></div>
 
   <div class="header no-print-toolbar">
     <h1>גאנט<span class="acc"> · </span>לוח זמנים לפרויקטים</h1>
@@ -485,7 +689,8 @@
     <input type="file" id="file-input" class="hidden-file" accept=".json,application/json">
   </div>
 
-  <div class="panel">
+  <div class="print-only print-section-title">טבלת פעילויות</div>
+  <div class="panel acts-panel">
     <div class="panel-head">
       <h2>טבלת פעילויות</h2>
       <span class="hint no-print">ניתן להזין תאריכים, ימי עבודה וקדם. לחץ "חשב לוח זמנים" להשלמת השדות.</span>
@@ -511,7 +716,8 @@
     <div class="messages" id="messages"></div>
   </div>
 
-  <div class="panel">
+  <div class="print-only print-section-title">תרשים גאנט</div>
+  <div class="panel gantt-panel">
     <div class="panel-head">
       <h2>תרשים גאנט</h2>
       <span class="hint no-print">פסים כחולים · חיצים כתומים בין תלויות · ש״ק בגוון סגול</span>
@@ -519,6 +725,16 @@
     <div class="gantt-scroll" id="gantt-scroll">
       <div class="gantt" id="gantt"></div>
     </div>
+  </div>
+
+  <!-- Print-only footer with legend -->
+  <div class="print-only print-footer">
+    <div class="pf-legend">
+      <span><span class="pf-swatch bar"></span> פעילות</span>
+      <span><span class="pf-swatch weekend"></span> שישי / שבת</span>
+      <span><span class="pf-swatch arrow"></span> תלות</span>
+    </div>
+    <div>נוצר באמצעות מערכת גאנט · ימי עבודה א׳-ה׳</div>
   </div>
 
 </div>
@@ -942,6 +1158,58 @@ function renderAll() {
   renderTable();
   renderMessages();
   renderGantt();
+  updatePrintMeta();
+}
+
+function updatePrintMeta() {
+  var nameEl = document.getElementById("print-proj-name");
+  var dateEl = document.getElementById("print-date");
+  var psEl   = document.getElementById("print-proj-start");
+  var sumEl  = document.getElementById("print-summary");
+  if (!nameEl) return;
+
+  nameEl.textContent = state.projectName || "פרויקט ללא שם";
+
+  var now = new Date();
+  dateEl.textContent = formatDateHe(now);
+
+  if (state.projectStart) {
+    var ps = parseDate(state.projectStart);
+    psEl.textContent = ps ? formatDateHe(ps) : state.projectStart;
+  } else {
+    psEl.textContent = "—";
+  }
+
+  // Compute summary
+  var minS = null, maxE = null, totalDur = 0, count = 0;
+  for (var i = 0; i < state.activities.length; i++) {
+    var a = state.activities[i];
+    var s = parseDate(a.startDate);
+    var e = parseDate(a.endDate);
+    if (s && e && e >= s) {
+      if (!minS || s < minS) minS = s;
+      if (!maxE || e > maxE) maxE = e;
+      totalDur += workDaysBetween(s, e);
+      count++;
+    }
+  }
+  var spanDays = (minS && maxE) ? workDaysBetween(minS, maxE) : 0;
+
+  sumEl.innerHTML =
+    '<div class="ps-cell"><div class="ps-lbl">פעילויות</div><div class="ps-val">' + count + '</div></div>' +
+    '<div class="ps-cell"><div class="ps-lbl">תחילת ביצוע</div><div class="ps-val">' + (minS ? formatDateHe(minS) : "—") + '</div></div>' +
+    '<div class="ps-cell"><div class="ps-lbl">סיום ביצוע</div><div class="ps-val">' + (maxE ? formatDateHe(maxE) : "—") + '</div></div>' +
+    '<div class="ps-cell"><div class="ps-lbl">משך כולל</div><div class="ps-val">' + spanDays + ' ימי עבודה</div></div>' +
+    '<div class="ps-cell"><div class="ps-lbl">סה״כ עבודה</div><div class="ps-val">' + totalDur + ' ימי עבודה</div></div>';
+}
+
+function formatDateHe(d) {
+  if (!d) return "";
+  var day = String(d.getDate());
+  var mon = String(d.getMonth() + 1);
+  if (day.length === 1) day = "0" + day;
+  if (mon.length === 1) mon = "0" + mon;
+  return day + "/" + mon + "/" + d.getFullYear();
 }
 
 function renderHeader() {
@@ -1236,10 +1504,9 @@ function renderGantt() {
   svg.setAttribute("height", String(bodyEl.offsetHeight));
   svg.style.position = "absolute";
   svg.style.top = headerHeight + "px";
-  // In RTL, the track is left of the sticky label; SVG should align with track.
-  // Use right offset to align with track area.
-  svg.style.right = labelColWidth + "px";
-  svg.style.left = "auto";
+  // Gantt area is LTR — sticky label is on the left, tracks extend to the right.
+  svg.style.left = labelColWidth + "px";
+  svg.style.right = "auto";
   svg.style.pointerEvents = "none";
 
   // Arrow marker
