@@ -384,6 +384,55 @@
   /* File input hidden */
   .hidden-file { display: none; }
 
+  /* Custom modal — replaces native confirm/alert which iOS Safari blocks in file:// context */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    padding: 20px;
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal-box {
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    max-width: 420px;
+    width: 100%;
+    padding: 20px;
+    direction: rtl;
+  }
+  .modal-icon {
+    font-size: 28px;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  .modal-msg {
+    color: #f1f5f9;
+    font-size: 15px;
+    line-height: 1.5;
+    text-align: center;
+    margin-bottom: 18px;
+    font-weight: 500;
+  }
+  .modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  .modal-buttons .btn {
+    flex: 1;
+    max-width: 160px;
+    padding: 11px 16px;
+    font-size: 14px;
+  }
+
   /* Mobile */
   @media (max-width: 720px) {
     body { padding: 8px; }
@@ -741,8 +790,70 @@
 
 <div id="tooltip" class="tooltip hidden"></div>
 
+<div id="modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <div class="modal-icon" id="modal-icon">⚠️</div>
+    <div class="modal-msg" id="modal-msg"></div>
+    <div class="modal-buttons">
+      <button class="btn primary" id="modal-ok" type="button">אישור</button>
+      <button class="btn" id="modal-cancel" type="button">ביטול</button>
+    </div>
+  </div>
+</div>
+
 <script>
 "use strict";
+
+// ============================================================
+// CUSTOM MODAL (replaces native confirm/alert that iOS Safari blocks)
+// ============================================================
+var modalResolve = null;
+function customConfirm(msg, opts) {
+  opts = opts || {};
+  return new Promise(function (resolve) {
+    var overlay = document.getElementById("modal");
+    var msgEl   = document.getElementById("modal-msg");
+    var iconEl  = document.getElementById("modal-icon");
+    var okBtn   = document.getElementById("modal-ok");
+    var cancelBtn = document.getElementById("modal-cancel");
+
+    msgEl.textContent = msg;
+    iconEl.textContent = opts.icon || "⚠️";
+    okBtn.textContent = opts.okText || "אישור";
+    cancelBtn.textContent = opts.cancelText || "ביטול";
+    cancelBtn.style.display = opts.alertMode ? "none" : "";
+
+    okBtn.className = "btn " + (opts.danger ? "danger" : "primary");
+
+    overlay.classList.remove("hidden");
+
+    function cleanup(result) {
+      overlay.classList.add("hidden");
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+      overlay.removeEventListener("click", onBackdrop);
+      document.removeEventListener("keydown", onKey);
+      resolve(result);
+    }
+    function onOk()     { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    function onBackdrop(e) { if (e.target === overlay) cleanup(false); }
+    function onKey(e) {
+      if (e.key === "Escape") cleanup(false);
+      else if (e.key === "Enter") cleanup(true);
+    }
+
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+    overlay.addEventListener("click", onBackdrop);
+    document.addEventListener("keydown", onKey);
+    setTimeout(function () { okBtn.focus(); }, 50);
+  });
+}
+
+function customAlert(msg, icon) {
+  return customConfirm(msg, { alertMode: true, icon: icon || "ℹ️", okText: "סגור" });
+}
 
 // ============================================================
 // STATE
@@ -921,17 +1032,23 @@ function deleteActivity(index) {
   if (index < 0 || index >= state.activities.length) return;
   var a = state.activities[index];
   var label = a.description || ("פעילות " + a.id);
-  if (!confirm("למחוק את: \"" + label + "\" ?")) return;
-  state.activities.splice(index, 1);
-  saveState();
-  renderAll();
+  customConfirm("למחוק את: \"" + label + "\" ?", { icon: "🗑️", danger: true, okText: "מחק" })
+    .then(function (ok) {
+      if (!ok) return;
+      state.activities.splice(index, 1);
+      saveState();
+      renderAll();
+    });
 }
 
 function clearAll() {
-  if (!confirm("פעולה זו תמחק את כל הנתונים. להמשיך?")) return;
-  state = { projectName: "", projectStart: "", activities: [] };
-  saveState();
-  renderAll();
+  customConfirm("פעולה זו תמחק את כל הנתונים. להמשיך?", { icon: "🗑️", danger: true, okText: "מחק הכל" })
+    .then(function (ok) {
+      if (!ok) return;
+      state = { projectName: "", projectStart: "", activities: [] };
+      saveState();
+      renderAll();
+    });
 }
 
 // ============================================================
@@ -1685,13 +1802,18 @@ function triggerDownload(blob, filename) {
 function importJSON(file) {
   var reader = new FileReader();
   reader.onload = function (e) {
+    var parsed;
     try {
-      var parsed = JSON.parse(e.target.result);
-      if (!parsed || !Array.isArray(parsed.activities)) {
-        alert("הקובץ אינו בפורמט תקין");
-        return;
-      }
-      if (state.activities.length > 0 && !confirm("ייבוא יחליף את הנתונים הקיימים. להמשיך?")) return;
+      parsed = JSON.parse(e.target.result);
+    } catch (err) {
+      customAlert("שגיאה בקריאת הקובץ: " + err.message, "❌");
+      return;
+    }
+    if (!parsed || !Array.isArray(parsed.activities)) {
+      customAlert("הקובץ אינו בפורמט תקין", "❌");
+      return;
+    }
+    var doImport = function () {
       state = {
         projectName: parsed.projectName || "",
         projectStart: parsed.projectStart || "",
@@ -1699,8 +1821,12 @@ function importJSON(file) {
       };
       saveState();
       renderAll();
-    } catch (err) {
-      alert("שגיאה בקריאת הקובץ: " + err.message);
+    };
+    if (state.activities.length > 0) {
+      customConfirm("ייבוא יחליף את הנתונים הקיימים. להמשיך?", { icon: "📥", okText: "ייבא" })
+        .then(function (ok) { if (ok) doImport(); });
+    } else {
+      doImport();
     }
   };
   reader.readAsText(file);
@@ -1710,20 +1836,27 @@ function importJSON(file) {
 // SAMPLE DATA
 // ============================================================
 function loadSample() {
-  if (state.activities.length > 0 && !confirm("לטעון דוגמה? הנתונים הקיימים יוחלפו.")) return;
-  state = {
-    projectName: "דוגמת שלד בניין",
-    projectStart: "2026-06-01",
-    activities: [
-      { id: "1", description: "התארגנות באתר",       startDate: "2026-06-01", duration: 3, endDate: "", predecessorId: "",  lag: 0, status: "" },
-      { id: "2", description: "עבודות עפר וחפירה",   startDate: "",            duration: 5, endDate: "", predecessorId: "1", lag: 0, status: "" },
-      { id: "3", description: "יציקת יסודות",        startDate: "",            duration: 4, endDate: "", predecessorId: "2", lag: 1, status: "" },
-      { id: "4", description: "קירות קומת קרקע",     startDate: "",            duration: 7, endDate: "", predecessorId: "3", lag: 2, status: "" },
-      { id: "5", description: "תקרה מעל קומת קרקע",  startDate: "",            duration: 6, endDate: "", predecessorId: "4", lag: 0, status: "" }
-    ]
+  var applySample = function () {
+    state = {
+      projectName: "דוגמת שלד בניין",
+      projectStart: "2026-06-01",
+      activities: [
+        { id: "1", description: "התארגנות באתר",       startDate: "2026-06-01", duration: 3, endDate: "", predecessorId: "",  lag: 0, status: "" },
+        { id: "2", description: "עבודות עפר וחפירה",   startDate: "",            duration: 5, endDate: "", predecessorId: "1", lag: 0, status: "" },
+        { id: "3", description: "יציקת יסודות",        startDate: "",            duration: 4, endDate: "", predecessorId: "2", lag: 1, status: "" },
+        { id: "4", description: "קירות קומת קרקע",     startDate: "",            duration: 7, endDate: "", predecessorId: "3", lag: 2, status: "" },
+        { id: "5", description: "תקרה מעל קומת קרקע",  startDate: "",            duration: 6, endDate: "", predecessorId: "4", lag: 0, status: "" }
+      ]
+    };
+    computeSchedule();
+    renderAll();
   };
-  computeSchedule();
-  renderAll();
+  if (state.activities.length > 0) {
+    customConfirm("לטעון דוגמה? הנתונים הקיימים יוחלפו.", { icon: "📋", okText: "טען" })
+      .then(function (ok) { if (ok) applySample(); });
+  } else {
+    applySample();
+  }
 }
 
 // ============================================================
