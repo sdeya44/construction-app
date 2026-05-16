@@ -86,7 +86,7 @@ async function boot() {
     await loadAll();
     if (new URLSearchParams(location.search).has('gm')) {
       D.role = 'GeneralManager';
-      const email = D.user?.email || '', name = D.user?.name || email, now = new Date().toISOString();
+      const email = (D.user?.email || '').toLowerCase().trim(), name = D.user?.name || email, now = new Date().toISOString();
       try { localStorage.setItem('cnstr_gm_v1', email); } catch {}
       const already = D.users.find(u => u.email === email);
       try {

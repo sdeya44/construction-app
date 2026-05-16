@@ -82,8 +82,9 @@ export async function loadAll() {
     addedAt:r[4]||'', addedBy:r[5]||''
   }));
 
-  // Determine role from sheet
-  const userRecord = D.users.find(u => u.email === D.user?.email);
+  // Determine role from sheet — case-insensitive email match
+  const _myEmail = (D.user?.email || '').toLowerCase().trim();
+  const userRecord = D.users.find(u => (u.email || '').toLowerCase().trim() === _myEmail);
   let raw = userRecord ? userRecord.role : 'SiteManager';
   if (raw === 'Admin')                            raw = 'GeneralManager';
   else if (raw === 'Manager' || raw === 'Viewer') raw = 'SiteManager';
@@ -92,8 +93,8 @@ export async function loadAll() {
 
   // LocalStorage override: if this email was bootstrapped as GM, honour it
   try {
-    const gmEmail = localStorage.getItem('cnstr_gm_v1');
-    if (gmEmail && gmEmail === D.user?.email) D.role = 'GeneralManager';
+    const gmEmail = (localStorage.getItem('cnstr_gm_v1') || '').toLowerCase().trim();
+    if (gmEmail && gmEmail === _myEmail) D.role = 'GeneralManager';
   } catch {}
 
   D.isOnline = true;
