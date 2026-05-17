@@ -509,18 +509,21 @@
 
   /* Print-only elements hidden on screen */
   .print-only { display: none; }
+  #gantt-print-pages { display: none; }
 
-  /* Print orientation — overridden at runtime via <style id="print-page-rule"> */
-  /* Multi-page sliced gantt for print */
-  .gantt-scroll.printing-slices { overflow: visible !important; max-height: none !important; }
+  /* Multi-page sliced gantt for print — lives in a separate container so the
+     on-screen chart is never touched (avoids browsers re-rendering the live
+     chart while the print preview is still open) */
   .gantt-print-page {
     page-break-after: always;
+    break-after: page;
     page-break-inside: avoid;
+    break-inside: avoid;
     background: #fff;
     padding: 0;
-    margin-bottom: 14px;
+    margin: 0 0 14px;
   }
-  .gantt-print-page:last-child { page-break-after: auto; }
+  .gantt-print-page:last-child { page-break-after: auto; break-after: auto; }
   .gantt-print-page .gpp-title {
     font-family: Georgia, serif;
     font-size: 11pt;
@@ -537,13 +540,15 @@
     text-align: left;
     margin-bottom: 4px;
   }
-  .gantt-print-page .gpp-frame { display: none; } /* shown only in print */
 
   /* Print */
   @media print {
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     @page :first { margin-top: 14mm; }
-    .gantt-print-page .gpp-frame { display: block !important; }
+
+    /* Swap: hide the live gantt panel, show the pre-built sliced pages */
+    .panel.gantt-panel { display: none !important; }
+    #gantt-print-pages { display: block !important; }
 
     html, body {
       background: #fff !important;
@@ -868,6 +873,10 @@
     </div>
   </div>
 
+  <!-- Print-only container holding the sliced gantt pages.
+       Populated on print, hidden on screen, replaces the live gantt panel during print. -->
+  <div id="gantt-print-pages"></div>
+
   <!-- Print-only footer with legend -->
   <div class="print-only print-footer">
     <div class="pf-legend">
@@ -1034,9 +1043,12 @@ function showPrintDialog() {
   });
 }
 
-// Approximate page count for the current chart at a given orientation
+// Approximate page count for the current chart at a given orientation.
+// Numbers chosen to leave safety margin against page printable area:
+//   Portrait  A4 usable = 190mm ≈ 718px; 24 days × 20px + 130px label = 610px
+//   Landscape A4 usable = 277mm ≈ 1047px; 42 days × 20px + 130px label = 970px
 function PRINT_DAYS_PER_PAGE(orientation) {
-  return orientation === "portrait" ? 28 : 46;
+  return orientation === "portrait" ? 24 : 42;
 }
 
 function estimateGanttPages(orientation) {
@@ -1078,8 +1090,8 @@ var PRINT_LABEL_WIDTH = 130;
 var PRINT_ROW_HEIGHT = 28;
 
 function buildPrintGanttPages(orientation) {
+  var container = document.getElementById("gantt-print-pages");
   var range = computeChartRange();
-  var container = document.getElementById("gantt-scroll");
   if (!range) {
     container.innerHTML = '<div style="padding:20px;text-align:center;color:#475569">אין פעילויות להצגה</div>';
     return;
@@ -1088,7 +1100,6 @@ function buildPrintGanttPages(orientation) {
   var daysPerPage = PRINT_DAYS_PER_PAGE(orientation);
   var totalPages = Math.ceil(range.totalDays / daysPerPage);
 
-  // Build page index map for each activity (which page their start/end fall on)
   var actPageMap = {};
   for (var ai = 0; ai < range.validActs.length; ai++) {
     var item = range.validActs[ai];
@@ -1104,7 +1115,11 @@ function buildPrintGanttPages(orientation) {
     allHTML += buildGanttSlicePage(range, sliceStartDay, sliceEndDay, p + 1, totalPages, actPageMap);
   }
   container.innerHTML = allHTML;
-  container.classList.add("printing-slices");
+}
+
+function clearPrintGanttPages() {
+  var container = document.getElementById("gantt-print-pages");
+  if (container) container.innerHTML = "";
 }
 
 function daysBetweenIdx(start, target) {
@@ -2336,29 +2351,15 @@ function wire() {
   document.getElementById("btn-export-json").addEventListener("click", exportJSON);
   document.getElementById("btn-export-csv").addEventListener("click", exportCSV);
   document.getElementById("btn-print").addEventListener("click", function () {
-    // Recompute so dates fill in for any unsaved changes
     computeSchedule();
     renderAll();
     showPrintDialog().then(function (orientation) {
       if (!orientation) return;
       applyPrintOrientation(orientation);
       buildPrintGanttPages(orientation);
-      // Wait a tick for layout, then print
-      setTimeout(function () {
-        var done = false;
-        var restore = function () {
-          if (done) return;
-          done = true;
-          var container = document.getElementById("gantt-scroll");
-          container.classList.remove("printing-slices");
-          container.innerHTML = '<div class="gantt" id="gantt"></div>';
-          renderGantt();
-        };
-        window.addEventListener("afterprint", restore, { once: true });
-        // Safari fallback: afterprint not always fired
-        setTimeout(restore, 4000);
-        window.print();
-      }, 150);
+      // Give layout one tick to settle (the slices live in their own container
+      // so the on-screen chart is never modified — no restoration needed)
+      setTimeout(function () { window.print(); }, 150);
     });
   });
 
