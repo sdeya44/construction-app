@@ -164,7 +164,24 @@
     padding-right: 4px;
     padding-left: 4px;
   }
+  table.acts select.lm-select {
+    text-align: center;
+    direction: rtl;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 6px 4px;
+    background: #0f172a;
+  }
   table.acts input:focus, table.acts select:focus { outline: none; border-color: #38bdf8; }
+
+  /* Visual tint for fields the engine computed (so the user knows what is auto). */
+  table.acts input.computed-cell {
+    background: #0c2331;
+    color: #7dd3fc;
+    border-color: #1e3a5f;
+    font-style: italic;
+  }
+  table.acts input.computed-cell:focus { background: #0f172a; color: #f1f5f9; font-style: normal; }
   table.acts td.del { width: 40px; text-align: center; }
   .row-err input { border-color: #dc2626 !important; }
   .row-warn input { border-color: #d97706 !important; }
@@ -458,6 +475,10 @@
     line-height: 1;
   }
 
+  /* Dependency arrows — must be visible above grid backdrop, but the arrowhead
+     should sit just OUTSIDE the target bar (path stops a few px before it), so
+     z-index here can sit between grid (1) and bar (2). Keeping pointer-events
+     on so hover tooltips on the line work. */
   .gantt-arrows {
     position: absolute;
     top: 0;
@@ -465,8 +486,14 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 1;
+    z-index: 3;
+    overflow: visible;
   }
+  .gantt-arrows path {
+    pointer-events: stroke;
+    cursor: help;
+  }
+  .gantt-arrows path:hover { stroke-width: 2.4; }
 
   /* Tooltip */
   .tooltip {
@@ -1005,13 +1032,14 @@
           <tr>
             <th style="width:50px">ID</th>
             <th>תיאור פעילות</th>
-            <th style="width:130px">תאריך התחלה</th>
-            <th style="width:70px">ימי עבודה</th>
-            <th style="width:130px">תאריך סיום</th>
-            <th style="width:60px">קדם</th>
-            <th style="width:65px" title="סוג תלות בין משימת הקדם למשימה זו">סוג</th>
-            <th style="width:70px">השהייה</th>
-            <th style="width:160px">סטטוס / הערות</th>
+            <th style="width:120px">תאריך התחלה</th>
+            <th style="width:65px">ימי עבודה</th>
+            <th style="width:120px">תאריך סיום</th>
+            <th style="width:55px">קדם</th>
+            <th style="width:60px" title="סוג תלות בין משימת הקדם למשימה זו">סוג</th>
+            <th style="width:65px">השהייה</th>
+            <th style="width:80px" title="מצב נעילה: AUTO = הקדם שולט, FIXED = המשתמש שולט, FROZEN = קפוא">מצב</th>
+            <th style="width:140px">סטטוס / הערות</th>
             <th style="width:36px" class="no-print"></th>
           </tr>
         </thead>
@@ -1723,6 +1751,30 @@ function normalizeDepType(t) {
   return DEP_TYPES.indexOf(t) >= 0 ? t : "FS";
 }
 
+// Lock modes — describes who controls the task's dates
+//   AUTO    : start derives from predecessor; user-typed dates are honored if no pred
+//   FIXED   : user controls 2 of {start, end, duration}; the 3rd is computed
+//   FROZEN  : task is fully locked; predecessor is ignored, no auto changes
+var LOCK_MODES = ["AUTO", "FIXED", "FROZEN"];
+function normalizeLockMode(m, hasPredecessor) {
+  m = String(m || "").toUpperCase();
+  if (LOCK_MODES.indexOf(m) >= 0) return m;
+  return hasPredecessor ? "AUTO" : "FIXED";
+}
+
+// Edit intent — which 2 fields the user has explicitly set; the 3rd is computed.
+// Defaults to ["start","duration"]: type a start + duration and the end is computed.
+function normalizeLockedFields(arr) {
+  var valid = ["start", "end", "duration"];
+  if (!Array.isArray(arr)) return ["start", "duration"];
+  var clean = [];
+  for (var i = 0; i < arr.length; i++) {
+    if (valid.indexOf(arr[i]) >= 0 && clean.indexOf(arr[i]) < 0) clean.push(arr[i]);
+  }
+  if (clean.length !== 2) return ["start", "duration"];
+  return clean;
+}
+
 // A milestone is an activity with explicit duration of 0 — a point in time,
 // no actual work, rendered as a diamond instead of a bar.
 function isMilestone(act) {
@@ -1730,16 +1782,25 @@ function isMilestone(act) {
 }
 
 function normalizeActivity(a) {
+  var predId = a.predecessorId ? String(a.predecessorId) : "";
   return {
     id: a.id ? String(a.id) : "",
     description: a.description || "",
     startDate: a.startDate || "",
     duration: (a.duration === 0 || a.duration) ? Number(a.duration) : "",
     endDate: a.endDate || "",
-    predecessorId: a.predecessorId ? String(a.predecessorId) : "",
+    predecessorId: predId,
     predecessorType: normalizeDepType(a.predecessorType),
     lag: (a.lag === 0 || a.lag) ? Number(a.lag) : 0,
-    status: a.status || ""
+    status: a.status || "",
+    lockMode: normalizeLockMode(a.lockMode, !!predId),
+    lockedFields: normalizeLockedFields(a.lockedFields),
+    // Track which fields were computed (true) vs user-entered (false), for UI tinting
+    computedFields: {
+      start:    a.computedFields ? !!a.computedFields.start    : false,
+      end:      a.computedFields ? !!a.computedFields.end      : false,
+      duration: a.computedFields ? !!a.computedFields.duration : false
+    }
   };
 }
 
@@ -1756,7 +1817,7 @@ function nextId() {
 }
 
 function addActivity() {
-  state.activities.push({
+  state.activities.push(normalizeActivity({
     id: nextId(),
     description: "",
     startDate: "",
@@ -1765,10 +1826,12 @@ function addActivity() {
     predecessorId: "",
     predecessorType: "FS",
     lag: 0,
-    status: ""
-  });
+    status: "",
+    lockMode: "FIXED",           // no predecessor → user controls
+    lockedFields: ["start", "duration"]
+  }));
   saveState();
-  renderAll();
+  recomputeAndRenderAll();
 }
 
 function deleteActivity(index) {
@@ -1780,7 +1843,7 @@ function deleteActivity(index) {
       if (!ok) return;
       state.activities.splice(index, 1);
       saveState();
-      renderAll();
+      recomputeAndRenderAll();
     });
 }
 
@@ -1790,7 +1853,7 @@ function clearAll() {
       if (!ok) return;
       state = { projectName: "", projectStart: "", activities: [] };
       saveState();
-      renderAll();
+      recomputeAndRenderAll();
     });
 }
 
@@ -1916,24 +1979,31 @@ function computeSchedule() {
     }
   }
 
-  // Process each in order
+  // Process each in order — write back only COMPUTED fields, never override
+  // a field the user explicitly locked.
   for (var ix = 0; ix < order.length; ix++) {
     var act2 = order[ix];
     var result = computeOne(act2, idMap, byId, cycles, warnings, errors);
     byId[act2.id] = result;
+    if (!act2.computedFields) act2.computedFields = { start: false, end: false, duration: false };
 
-    // Write back computed values (without losing user intent for blank fields)
-    if (result.start) {
+    if (result.computed.start && result.start) {
       act2.startDate = formatDate(result.start);
+      act2.computedFields.start = true;
+    } else if (result.start) {
+      act2.computedFields.start = false;
     }
-    if (result.end) {
+    if (result.computed.end && result.end) {
       act2.endDate = formatDate(result.end);
+      act2.computedFields.end = true;
+    } else if (result.end) {
+      act2.computedFields.end = false;
     }
-    if (result.duration && (!act2.duration || act2.duration < 1)) {
+    if (result.computed.duration && (result.duration === 0 || result.duration > 0)) {
       act2.duration = result.duration;
-    } else if (result.duration && act2.duration && result.duration !== act2.duration && result.fromPredecessor) {
-      // If duration was computed from predecessor + end, override
-      act2.duration = result.duration;
+      act2.computedFields.duration = true;
+    } else if (result.duration !== null) {
+      act2.computedFields.duration = false;
     }
   }
 
@@ -2060,40 +2130,88 @@ function computeCriticalPath(idMap) {
 }
 
 function computeOne(act, idMap, byId, cycles, warnings, errors) {
-  var result = { start: null, end: null, duration: null, fromPredecessor: false, valid: true, milestone: false };
+  var result = {
+    start: null, end: null, duration: null,
+    fromPredecessor: false, valid: true, milestone: false,
+    computed: { start: false, end: false, duration: false }
+  };
 
-  if (cycles[act.id]) {
-    result.valid = false;
+  if (cycles[act.id]) { result.valid = false; return result; }
+
+  var lock = normalizeLockMode(act.lockMode, !!act.predecessorId);
+  var depType = normalizeDepType(act.predecessorType);
+  var lag = (act.lag === 0 || act.lag) ? Number(act.lag) : 0;
+
+  var userStart = parseDate(act.startDate);
+  var userEnd   = parseDate(act.endDate);
+  var userDur   = (act.duration === 0) ? 0 : (act.duration && Number(act.duration) > 0 ? Number(act.duration) : null);
+
+  var pred = (act.predecessorId && idMap[act.predecessorId] && byId[act.predecessorId] && byId[act.predecessorId].end) ? byId[act.predecessorId] : null;
+
+  // ---- FROZEN: trust user values, no auto changes whatsoever ----
+  if (lock === "FROZEN") {
+    result.start = userStart;
+    result.end = userEnd;
+    if (userDur !== null) result.duration = userDur;
+    else if (userStart && userEnd) result.duration = workDaysBetween(userStart, userEnd);
     return result;
   }
 
-  var predResult = null;
-  if (act.predecessorId && idMap[act.predecessorId] && byId[act.predecessorId] && byId[act.predecessorId].end) {
-    predResult = byId[act.predecessorId];
+  // ---- AUTO + predecessor: predecessor controls primary anchor ----
+  if (lock === "AUTO" && pred) {
+    var anchor;
+    var anchorIsStart = (depType === "FS" || depType === "SS");
+    if (depType === "FS")      anchor = advanceWorkDays(pred.end,   lag + 1);
+    else if (depType === "SS") anchor = (lag === 0) ? cloneDate(pred.start) : advanceWorkDays(pred.start, lag);
+    else if (depType === "FF") anchor = (lag === 0) ? cloneDate(pred.end)   : advanceWorkDays(pred.end,   lag);
+    else if (depType === "SF") anchor = (lag === 0) ? cloneDate(pred.start) : advanceWorkDays(pred.start, lag);
+    if (!isWorkDay(anchor)) anchor = (anchorIsStart ? nextWorkDay(anchor) : snapBackToWorkDay(anchor));
+
+    result.fromPredecessor = true;
+
+    if (isMilestone(act)) {
+      result.milestone = true;
+      result.start = anchor;
+      result.end = cloneDate(anchor);
+      result.duration = 0;
+      result.computed.start = anchorIsStart;
+      result.computed.end   = !anchorIsStart;
+      return result;
+    }
+
+    var d = (userDur !== null && userDur > 0) ? userDur : 1;
+    result.duration = d;
+    result.computed.duration = (userDur === null);
+    if (anchorIsStart) {
+      result.start = anchor;
+      result.end = addWorkDays(anchor, d);
+      result.computed.start = true;
+      result.computed.end = true;
+    } else {
+      result.end = anchor;
+      result.start = subtractWorkDays(anchor, d);
+      result.computed.start = true;
+      result.computed.end = true;
+    }
+    return result;
   }
 
-  var start = parseDate(act.startDate);
-  var end = parseDate(act.endDate);
-  var dur = (act.duration && Number(act.duration) > 0) ? Number(act.duration) : null;
-  var lag = (act.lag === 0 || act.lag) ? Number(act.lag) : 0;
-  var depType = normalizeDepType(act.predecessorType);
+  // ---- AUTO without a working predecessor → behave like FIXED ----
+  if (lock === "AUTO" && !pred) {
+    if (act.predecessorId && !idMap[act.predecessorId]) {
+      warnings.push("פעילות " + act.id + ": ID קדם \"" + act.predecessorId + "\" לא נמצא");
+    }
+  }
 
-  // ---- Milestone branch: duration = 0, end = start, single point in time ----
+  // ---- FIXED: user controls the 2 locked fields, compute the 3rd ----
+  var locked = normalizeLockedFields(act.lockedFields);
+
   if (isMilestone(act)) {
     result.milestone = true;
-    if (predResult) {
-      if (depType === "FS")      start = advanceWorkDays(predResult.end,   lag + 1);
-      else if (depType === "SS") start = (lag === 0) ? cloneDate(predResult.start) : advanceWorkDays(predResult.start, lag);
-      else if (depType === "FF") start = (lag === 0) ? cloneDate(predResult.end)   : advanceWorkDays(predResult.end,   lag);
-      else if (depType === "SF") start = (lag === 0) ? cloneDate(predResult.start) : advanceWorkDays(predResult.start, lag);
-      result.fromPredecessor = true;
-    } else if (start && !isWorkDay(start)) {
-      start = nextWorkDay(start);
-    }
-    if (start) {
-      if (!isWorkDay(start)) start = nextWorkDay(start);
-      result.start = start;
-      result.end = cloneDate(start);
+    if (userStart) {
+      var ms = isWorkDay(userStart) ? userStart : nextWorkDay(userStart);
+      result.start = ms;
+      result.end = cloneDate(ms);
       result.duration = 0;
     } else {
       warnings.push("Milestone " + act.id + ": חסר תאריך");
@@ -2102,78 +2220,59 @@ function computeOne(act, idMap, byId, cycles, warnings, errors) {
     return result;
   }
 
-  // 1) Derive constrained edge from predecessor based on dep type.
-  //    FS: successor.start = pred.end + lag + 1 work day
-  //    SS: successor.start = pred.start + lag work days (lag=0 → same day)
-  //    FF: successor.end   = pred.end   + lag work days
-  //    SF: successor.end   = pred.start + lag work days
-  if (predResult) {
-    if (depType === "FS") {
-      start = advanceWorkDays(predResult.end, lag + 1);
-    } else if (depType === "SS") {
-      start = (lag === 0) ? cloneDate(predResult.start) : advanceWorkDays(predResult.start, lag);
-      if (!isWorkDay(start)) start = nextWorkDay(start);
-    } else if (depType === "FF") {
-      end = (lag === 0) ? cloneDate(predResult.end) : advanceWorkDays(predResult.end, lag);
-      if (!isWorkDay(end)) {
-        var fe = cloneDate(end);
-        while (!isWorkDay(fe)) fe.setDate(fe.getDate() - 1);
-        end = fe;
-      }
-      if (dur) start = subtractWorkDays(end, dur);
-    } else if (depType === "SF") {
-      end = (lag === 0) ? cloneDate(predResult.start) : advanceWorkDays(predResult.start, lag);
-      if (!isWorkDay(end)) {
-        var se = cloneDate(end);
-        while (!isWorkDay(se)) se.setDate(se.getDate() - 1);
-        end = se;
-      }
-      if (dur) start = subtractWorkDays(end, dur);
-    }
-    result.fromPredecessor = true;
-  } else if (start && !isWorkDay(start)) {
-    var snapped = nextWorkDay(start);
-    warnings.push("פעילות " + act.id + ": תאריך התחלה היה ש״ק, הוזז ל-" + formatDate(snapped));
-    start = snapped;
-  }
+  var hasStart = locked.indexOf("start") >= 0;
+  var hasEnd   = locked.indexOf("end") >= 0;
+  var hasDur   = locked.indexOf("duration") >= 0;
 
-  // 2) Complete missing edge from duration / both dates
-  if (start && dur && !end) {
-    end = addWorkDays(start, dur);
-    result.duration = dur;
-  } else if (end && dur && !start) {
-    start = subtractWorkDays(end, dur);
-    result.duration = dur;
-  } else if (start && end) {
-    if (end < start) {
-      errors.push("פעילות " + act.id + ": תאריך הסיום קודם לתאריך ההתחלה");
+  if (hasStart && hasDur) {
+    if (userStart && userDur !== null && userDur > 0) {
+      var sA = isWorkDay(userStart) ? userStart : nextWorkDay(userStart);
+      result.start = sA;
+      result.duration = userDur;
+      result.end = addWorkDays(sA, userDur);
+      result.computed.end = true;
+    } else if (userStart) {
+      warnings.push("פעילות " + act.id + ": חסרים ימי עבודה");
       result.valid = false;
     } else {
-      if (!isWorkDay(end)) {
-        var de = cloneDate(end);
-        while (!isWorkDay(de)) de.setDate(de.getDate() - 1);
-        end = de;
+      result.valid = false;
+    }
+  } else if (hasStart && hasEnd) {
+    if (userStart && userEnd) {
+      var sB = isWorkDay(userStart) ? userStart : nextWorkDay(userStart);
+      var eB = userEnd;
+      if (!isWorkDay(eB)) eB = snapBackToWorkDay(eB);
+      if (eB < sB) {
+        errors.push("פעילות " + act.id + ": תאריך הסיום קודם לתאריך ההתחלה");
+        result.valid = false;
+      } else {
+        result.start = sB;
+        result.end = eB;
+        result.duration = workDaysBetween(sB, eB);
+        result.computed.duration = true;
       }
-      result.duration = workDaysBetween(start, end);
+    } else {
+      result.valid = false;
     }
-  } else if (start && !end && !dur) {
-    warnings.push("פעילות " + act.id + ": חסר ימי עבודה או תאריך סיום");
-    result.valid = false;
-  } else if (!start && !end) {
-    if (act.predecessorId && !idMap[act.predecessorId]) {
-      // already warned
-    } else if (!act.predecessorId) {
-      warnings.push("פעילות " + act.id + ": חסר תאריך התחלה");
+  } else if (hasEnd && hasDur) {
+    if (userEnd && userDur !== null && userDur > 0) {
+      var eC = userEnd;
+      if (!isWorkDay(eC)) eC = snapBackToWorkDay(eC);
+      result.end = eC;
+      result.duration = userDur;
+      result.start = subtractWorkDays(eC, userDur);
+      result.computed.start = true;
+    } else {
+      result.valid = false;
     }
-    result.valid = false;
-  }
-
-  result.start = start || null;
-  result.end = end || null;
-  if (result.duration === null && start && end) {
-    result.duration = workDaysBetween(start, end);
   }
   return result;
+}
+
+function snapBackToWorkDay(d) {
+  var x = cloneDate(d);
+  while (!isWorkDay(x)) x.setDate(x.getDate() - 1);
+  return x;
 }
 
 // ============================================================
@@ -2249,7 +2348,7 @@ function renderTable() {
 
   if (state.activities.length === 0) {
     var tr = document.createElement("tr");
-    tr.innerHTML = '<td colspan="9" class="empty-state">אין פעילויות. לחץ "הוסף פעילות" או "טען דוגמה".</td>';
+    tr.innerHTML = '<td colspan="11" class="empty-state">אין פעילויות. לחץ "הוסף פעילות" או "טען דוגמה".</td>';
     tbody.appendChild(tr);
     return;
   }
@@ -2272,26 +2371,41 @@ function renderTable() {
     var critChip = critFlag ? '<span class="crit-chip" title="פעילות בנתיב הקריטי">⚡</span>' : '';
     var msIcon = isMilestone(a) ? '<span class="ms-chip" title="Milestone">◆</span>' : '';
 
+    var cf = a.computedFields || {};
+    var startCls = cf.start    ? "computed-cell" : "";
+    var endCls   = cf.end      ? "computed-cell" : "";
+    var durCls   = cf.duration ? "computed-cell" : "";
+
+    var lm = normalizeLockMode(a.lockMode, !!a.predecessorId);
+    var lmOpts =
+      '<option value="AUTO"'   + (lm === "AUTO"   ? " selected" : "") + ' title="התאריכים מחושבים מהקדם">🔗 אוטו</option>' +
+      '<option value="FIXED"'  + (lm === "FIXED"  ? " selected" : "") + ' title="אתה שולט בערכים, השדה השלישי מחושב">✏️ קבוע</option>' +
+      '<option value="FROZEN"' + (lm === "FROZEN" ? " selected" : "") + ' title="קפוא — אין שינוי אוטומטי">🔒 קפוא</option>';
+
     tr2.innerHTML =
       '<td><input class="id-input" type="text" data-field="id" value="' + escapeHtml(a.id) + '"></td>' +
       '<td><div class="desc-wrap"><input type="text" data-field="description" placeholder="תיאור" value="' + escapeHtml(a.description) + '">' + msIcon + critChip + '</div></td>' +
-      '<td><input type="date" data-field="startDate" value="' + escapeHtml(a.startDate) + '"></td>' +
-      '<td><input type="number" data-field="duration" min="0" step="1" value="' + escapeHtml(a.duration === "" || a.duration === null || a.duration === undefined ? "" : a.duration) + '"></td>' +
-      '<td><input type="date" data-field="endDate" value="' + escapeHtml(a.endDate) + '"></td>' +
+      '<td><input class="' + startCls + '" type="date" data-field="startDate" value="' + escapeHtml(a.startDate) + '"></td>' +
+      '<td><input class="' + durCls   + '" type="number" data-field="duration" min="0" step="1" value="' + escapeHtml(a.duration === "" || a.duration === null || a.duration === undefined ? "" : a.duration) + '"></td>' +
+      '<td><input class="' + endCls   + '" type="date" data-field="endDate" value="' + escapeHtml(a.endDate) + '"></td>' +
       '<td><input class="pred-input" type="text" data-field="predecessorId" placeholder="—" value="' + escapeHtml(a.predecessorId) + '"></td>' +
       '<td><select class="dep-select" data-field="predecessorType">' + depOpts + '</select></td>' +
       '<td><input type="number" data-field="lag" min="-99" step="1" value="' + (a.lag === "" || a.lag === null || a.lag === undefined ? 0 : a.lag) + '"></td>' +
+      '<td><select class="lm-select" data-field="lockMode">' + lmOpts + '</select></td>' +
       '<td><input type="text" data-field="status" placeholder="הערות" value="' + escapeHtml(a.status) + '"></td>' +
       '<td class="del no-print"><button class="del-btn" type="button" title="מחק">✕</button></td>';
 
     tbody.appendChild(tr2);
   }
 
-  // Wire up inputs and selects
+  // Wire up inputs and selects — live recompute while typing (debounced)
   var inputs = tbody.querySelectorAll("input, select");
   for (var j = 0; j < inputs.length; j++) {
     inputs[j].addEventListener("change", onCellChange);
-    inputs[j].addEventListener("input", onCellInput);
+    inputs[j].addEventListener("input", function (e) {
+      onCellInput(e);
+      scheduleRecompute(false);   // debounced — recalc while user types
+    });
   }
   var delBtns = tbody.querySelectorAll(".del-btn");
   for (var k = 0; k < delBtns.length; k++) {
@@ -2303,25 +2417,113 @@ function renderTable() {
   }
 }
 
+// Live recalc — every input change updates the model, re-runs computeSchedule
+// (and so CPM, Milestones, arrows), and re-renders. Debounced so typing isn't laggy.
+var recomputeTimer = null;
+function scheduleRecompute(immediate) {
+  if (recomputeTimer) { clearTimeout(recomputeTimer); recomputeTimer = null; }
+  if (immediate) { recomputeAndRender(); return; }
+  recomputeTimer = setTimeout(recomputeAndRender, 120);
+}
+function recomputeAndRender() {
+  recomputeTimer = null;
+  computeSchedule();
+  renderMessages();
+  renderGantt();
+  // Update computed cells in-place so focus is never stolen while typing
+  refreshComputedCells();
+}
+
+// Use this when the table structure changes (rows added/removed/sample loaded/import)
+function recomputeAndRenderAll() {
+  if (recomputeTimer) { clearTimeout(recomputeTimer); recomputeTimer = null; }
+  computeSchedule();
+  renderAll();
+}
+
+// Update the value of cells the engine just computed, without rebuilding the whole table
+// (rebuilding would steal focus while typing).
+function refreshComputedCells() {
+  var rows = document.querySelectorAll("#acts-body tr[data-index]");
+  for (var i = 0; i < rows.length; i++) {
+    var idx = parseInt(rows[i].getAttribute("data-index"), 10);
+    if (isNaN(idx)) continue;
+    var a = state.activities[idx];
+    if (!a) continue;
+    var fields = ["startDate","duration","endDate"];
+    for (var k = 0; k < fields.length; k++) {
+      var f = fields[k];
+      var input = rows[i].querySelector('[data-field="' + f + '"]');
+      if (!input || input === document.activeElement) continue; // don't yank value out from under typing
+      var v = a[f];
+      var newVal = (v === null || v === undefined) ? "" : String(v);
+      if (input.value !== newVal) input.value = newVal;
+      // Visual tint for computed fields
+      var key = (f === "startDate") ? "start" : (f === "endDate") ? "end" : "duration";
+      if (a.computedFields && a.computedFields[key]) input.classList.add("computed-cell");
+      else input.classList.remove("computed-cell");
+    }
+    // Lock-mode select reflects current state
+    var lmSel = rows[i].querySelector('[data-field="lockMode"]');
+    if (lmSel && lmSel !== document.activeElement) {
+      var lm = normalizeLockMode(a.lockMode, !!a.predecessorId);
+      if (lmSel.value !== lm) lmSel.value = lm;
+    }
+  }
+}
+
 function onCellInput(e) {
-  // Live-update state so we don't lose typing on re-render
   var tr = e.target.closest("tr");
   var idx = parseInt(tr.getAttribute("data-index"), 10);
   var field = e.target.getAttribute("data-field");
   var val = e.target.value;
-  if (field === "duration" || field === "lag") {
-    state.activities[idx][field] = val === "" ? (field === "lag" ? 0 : "") : Number(val);
+  var act = state.activities[idx];
+  if (!act) return;
+
+  // Type coercion per field
+  if (field === "duration") {
+    act.duration = (val === "") ? "" : Number(val);
+  } else if (field === "lag") {
+    act.lag = (val === "") ? 0 : Number(val);
+  } else if (field === "predecessorId") {
+    var hadPred = !!act.predecessorId;
+    act.predecessorId = String(val).trim();
+    // Empty → has → toggle lockMode default
+    var hasPredNow = !!act.predecessorId;
+    if (!hadPred && hasPredNow && (act.lockMode === "FIXED" || !act.lockMode)) {
+      act.lockMode = "AUTO";
+    } else if (hadPred && !hasPredNow && act.lockMode === "AUTO") {
+      act.lockMode = "FIXED";
+    }
+  } else if (field === "lockMode") {
+    act.lockMode = normalizeLockMode(val, !!act.predecessorId);
   } else {
-    state.activities[idx][field] = val;
+    act[field] = val;
+  }
+
+  // Update editIntent — which 2 fields the user is anchoring.
+  // Editing one of {startDate,endDate,duration} updates lockedFields and (in AUTO) switches to FIXED.
+  if (field === "startDate" || field === "endDate" || field === "duration") {
+    var key = (field === "startDate") ? "start" : (field === "endDate") ? "end" : "duration";
+    var locked = (act.lockedFields || ["start","duration"]).slice();
+    if (locked.indexOf(key) < 0) {
+      // Add new field; drop the "other" computed field by intent rule
+      if (key === "duration")    locked = ["start","duration"]; // editing dur → keep start, compute end
+      else if (key === "end")    locked = ["start","end"];      // editing end → keep start, compute dur
+      else /* key === "start" */ locked = (locked.indexOf("end") >= 0) ? ["start","end"] : ["start","duration"];
+    }
+    act.lockedFields = normalizeLockedFields(locked);
+    // If user was in AUTO with a pred, edits to start/end/duration auto-switch to FIXED
+    if (act.lockMode === "AUTO" && act.predecessorId) {
+      act.lockMode = "FIXED";
+    }
   }
 }
 
 function onCellChange(e) {
   onCellInput(e);
   saveState();
-  // Don't re-render full table, only gantt + messages
-  renderMessages();
-  renderGantt();
+  scheduleRecompute(true); // commit immediately on blur/change
 }
 
 function renderMessages() {
@@ -2595,53 +2797,97 @@ function renderGantt() {
   defs.appendChild(marker);
   svg.appendChild(defs);
 
-  // Draw arrows
+  // Build per-type arrowhead markers so each dependency color gets a matching head
+  var ARROW_COLORS = { FS: "#f59e0b", SS: "#10b981", FF: "#a855f7", SF: "#ec4899" };
+  // The default marker uses FS color; add the others
+  var addMarker = function (id, color) {
+    var mk = document.createElementNS(svgNS, "marker");
+    mk.setAttribute("id", id);
+    mk.setAttribute("markerWidth", "8");
+    mk.setAttribute("markerHeight", "8");
+    mk.setAttribute("refX", "7");
+    mk.setAttribute("refY", "4");
+    mk.setAttribute("orient", "auto");
+    mk.setAttribute("markerUnits", "userSpaceOnUse");
+    var pg = document.createElementNS(svgNS, "polygon");
+    pg.setAttribute("points", "0,0 8,4 0,8");
+    pg.setAttribute("fill", color);
+    mk.appendChild(pg);
+    defs.appendChild(mk);
+  };
+  addMarker("arr-head-ss", ARROW_COLORS.SS);
+  addMarker("arr-head-ff", ARROW_COLORS.FF);
+  addMarker("arr-head-sf", ARROW_COLORS.SF);
+
+  // Draw arrows — start/end side of each bar depends on dependency type
   for (var ai = 0; ai < validActs.length; ai++) {
     var aItem = validActs[ai];
     var predId = aItem.act.predecessorId;
     if (!predId || !posById[predId]) continue;
     var from = posById[predId];
     var to = posById[aItem.act.id];
+    var depType = normalizeDepType(aItem.act.predecessorType);
+    var lag = Number(aItem.act.lag) || 0;
 
-    // Connect from end of predecessor bar (right edge in LTR coords) to start of dependent bar (left edge)
-    // In our coord system, "left" is LTR-left (0 at LTR-leftmost). The track is in normal LTR coords.
-    var fromX = from.barLeft + from.barWidth;
+    // FS: end of pred → start of succ
+    // SS: start of pred → start of succ
+    // FF: end of pred → end of succ
+    // SF: start of pred → end of succ
+    var fromX = (depType === "FS" || depType === "FF") ? (from.barLeft + from.barWidth) : from.barLeft;
+    var toX   = (depType === "FS" || depType === "SF") ? to.barLeft : (to.barLeft + to.barWidth);
     var fromY = from.barTop + from.barHeight / 2;
-    var toX = to.barLeft;
-    var toY = to.barTop + to.barHeight / 2;
+    var toY   = to.barTop + to.barHeight / 2;
 
-    drawArrow(svg, svgNS, fromX, fromY, toX, toY);
+    drawArrow(svg, svgNS, fromX, fromY, toX, toY, depType, predId, aItem.act.id, lag);
   }
 
   container.appendChild(svg);
 }
 
-function drawArrow(svg, svgNS, x1, y1, x2, y2) {
-  // Path: from (x1,y1) → step out → step vertically → step into target
+function drawArrow(svg, svgNS, x1, y1, x2, y2, depType, fromId, toId, lag) {
+  depType = depType || "FS";
+  var ARROW_COLORS = { FS: "#f59e0b", SS: "#10b981", FF: "#a855f7", SF: "#ec4899" };
+  var color = ARROW_COLORS[depType] || ARROW_COLORS.FS;
+  var markerId = "arr-head" + (depType === "FS" ? "" : "-" + depType.toLowerCase());
+
+  // Route: step out from source, vertical move, step into target.
+  // Direction-aware so SS/FF/SF arrows that loop back stay tidy.
   var stepOut = 10;
-  var midY = y2;
+  var goingRight = (x2 > x1);
+  var clearance = goingRight ? 4 : -4;
+  var ex = goingRight ? (x2 - clearance) : (x2 - clearance);
+  var sx = goingRight ? (x1 + stepOut)  : (x1 - stepOut);
+
   var d;
-  if (x2 > x1) {
-    // Goes forward in time (typical case)
+  if (Math.abs(y2 - y1) < 2 && goingRight && (x2 - x1) > 20) {
+    // Straight horizontal — single segment
+    d = "M " + x1 + " " + y1 + " L " + ex + " " + y2;
+  } else if (goingRight) {
     d = "M " + x1 + " " + y1 +
-        " L " + (x1 + stepOut) + " " + y1 +
-        " L " + (x1 + stepOut) + " " + midY +
-        " L " + (x2 - 2) + " " + midY;
+        " L " + sx + " " + y1 +
+        " L " + sx + " " + y2 +
+        " L " + ex + " " + y2;
   } else {
-    // Goes backward (unusual) — route around
+    // Backwards — route around (vertical detour below source row)
+    var detourY = y1 + 14;
     d = "M " + x1 + " " + y1 +
         " L " + (x1 + stepOut) + " " + y1 +
-        " L " + (x1 + stepOut) + " " + (y1 + 12) +
-        " L " + (x2 - stepOut) + " " + (y1 + 12) +
-        " L " + (x2 - stepOut) + " " + midY +
-        " L " + (x2 - 2) + " " + midY;
+        " L " + (x1 + stepOut) + " " + detourY +
+        " L " + (x2 - stepOut) + " " + detourY +
+        " L " + (x2 - stepOut) + " " + y2 +
+        " L " + ex + " " + y2;
   }
   var path = document.createElementNS(svgNS, "path");
   path.setAttribute("d", d);
   path.setAttribute("fill", "none");
-  path.setAttribute("stroke", "#f59e0b");
+  path.setAttribute("stroke", color);
   path.setAttribute("stroke-width", "1.6");
-  path.setAttribute("marker-end", "url(#arr-head)");
+  path.setAttribute("marker-end", "url(#" + markerId + ")");
+  // Native tooltip on hover
+  var title = document.createElementNS(svgNS, "title");
+  title.textContent = fromId + " → " + toId + ", " + depType +
+                      (lag ? ", השהייה " + lag + " ימים" : "");
+  path.appendChild(title);
   svg.appendChild(path);
 }
 
