@@ -18,9 +18,11 @@ function calcEquipUsage(month, year) {
   return D.equipment.map(eq => {
     const entries = D.logEquip.filter(e => e.eqId===eq.id && e.date?.startsWith(pfx));
     const uniqueSiteIds = [...new Set(entries.map(e => e.siteId))];
+    const daysUsed = new Set(entries.map(e => e.date)).size;
+    const dailyRate = eq.dailyRate || 0;
     return {
       id: eq.id, name: eq.name, type: eq.type||'', active: eq.active,
-      daysUsed: new Set(entries.map(e => e.date)).size,
+      dailyRate, daysUsed, totalCost: daysUsed * dailyRate,
       sites: uniqueSiteIds.map(sid => D.sites.find(s=>s.id===sid)?.name||sid).filter(Boolean),
     };
   }).sort((a, b) => b.daysUsed - a.daysUsed);
