@@ -149,10 +149,21 @@
     width: 100%;
     direction: rtl;
   }
-  table.acts input[type="date"] { min-width: 130px; direction: ltr; text-align: right; }
-  table.acts input[type="number"] { min-width: 55px; text-align: center; direction: ltr; }
-  table.acts input.id-input { text-align: center; direction: ltr; min-width: 40px; }
-  table.acts input.pred-input { text-align: center; direction: ltr; min-width: 50px; }
+  table.acts input[type="date"] { min-width: 120px; direction: ltr; text-align: right; }
+  table.acts input[type="number"] { min-width: 50px; text-align: center; direction: ltr; }
+  table.acts input.id-input { text-align: center; direction: ltr; min-width: 36px; font-weight: 700; }
+  table.acts input.pred-input { text-align: center; direction: ltr; min-width: 44px; }
+  table.acts select.dep-select {
+    text-align: center;
+    direction: ltr;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: #7dd3fc;
+    cursor: pointer;
+    padding-right: 4px;
+    padding-left: 4px;
+  }
   table.acts input:focus, table.acts select:focus { outline: none; border-color: #38bdf8; }
   table.acts td.del { width: 40px; text-align: center; }
   .row-err input { border-color: #dc2626 !important; }
@@ -881,15 +892,16 @@
       <table class="acts" id="acts-table">
         <thead>
           <tr>
-            <th style="width:60px">ID</th>
+            <th style="width:50px">ID</th>
             <th>תיאור פעילות</th>
-            <th style="width:140px">תאריך התחלה</th>
-            <th style="width:80px">ימי עבודה</th>
-            <th style="width:140px">תאריך סיום</th>
-            <th style="width:70px">קדם</th>
-            <th style="width:80px">השהייה</th>
-            <th style="width:180px">סטטוס / הערות</th>
-            <th style="width:40px" class="no-print"></th>
+            <th style="width:130px">תאריך התחלה</th>
+            <th style="width:70px">ימי עבודה</th>
+            <th style="width:130px">תאריך סיום</th>
+            <th style="width:60px">קדם</th>
+            <th style="width:65px" title="סוג תלות בין משימת הקדם למשימה זו">סוג</th>
+            <th style="width:70px">השהייה</th>
+            <th style="width:160px">סטטוס / הערות</th>
+            <th style="width:36px" class="no-print"></th>
           </tr>
         </thead>
         <tbody id="acts-body"></tbody>
@@ -1506,6 +1518,20 @@ function advanceWorkDays(fromDate, n) {
   return d;
 }
 
+// Inverse of addWorkDays: returns the start date such that addWorkDays(start, duration) == endDate.
+// Used when an end date is anchored (FF, SF dependencies) and we need to back-compute start.
+function subtractWorkDays(endDate, duration) {
+  if (!endDate || !duration || duration < 1) return null;
+  var d = cloneDate(endDate);
+  while (!isWorkDay(d)) d.setDate(d.getDate() - 1);
+  var count = 1;
+  while (count < duration) {
+    d.setDate(d.getDate() - 1);
+    if (isWorkDay(d)) count++;
+  }
+  return d;
+}
+
 // Number of work days between start and end inclusive.
 function workDaysBetween(start, end) {
   if (!start || !end || end < start) return 0;
@@ -1547,6 +1573,12 @@ function loadState() {
   return false;
 }
 
+var DEP_TYPES = ["FS", "SS", "FF", "SF"];
+function normalizeDepType(t) {
+  t = String(t || "").toUpperCase();
+  return DEP_TYPES.indexOf(t) >= 0 ? t : "FS";
+}
+
 function normalizeActivity(a) {
   return {
     id: a.id ? String(a.id) : "",
@@ -1555,6 +1587,7 @@ function normalizeActivity(a) {
     duration: (a.duration === 0 || a.duration) ? Number(a.duration) : "",
     endDate: a.endDate || "",
     predecessorId: a.predecessorId ? String(a.predecessorId) : "",
+    predecessorType: normalizeDepType(a.predecessorType),
     lag: (a.lag === 0 || a.lag) ? Number(a.lag) : 0,
     status: a.status || ""
   };
@@ -1580,6 +1613,7 @@ function addActivity() {
     duration: "",
     endDate: "",
     predecessorId: "",
+    predecessorType: "FS",
     lag: 0,
     status: ""
   });
@@ -1766,32 +1800,58 @@ function computeOne(act, idMap, byId, cycles, warnings, errors) {
     return result;
   }
 
-  var predEnd = null;
+  var predResult = null;
   if (act.predecessorId && idMap[act.predecessorId] && byId[act.predecessorId] && byId[act.predecessorId].end) {
-    predEnd = byId[act.predecessorId].end;
+    predResult = byId[act.predecessorId];
   }
 
   var start = parseDate(act.startDate);
   var end = parseDate(act.endDate);
   var dur = (act.duration && Number(act.duration) > 0) ? Number(act.duration) : null;
-  var lag = (act.lag && Number(act.lag) >= 0) ? Number(act.lag) : 0;
+  var lag = (act.lag === 0 || act.lag) ? Number(act.lag) : 0;
+  var depType = normalizeDepType(act.predecessorType);
 
-  // 1) If predecessor exists & has end → derive start
-  if (predEnd) {
-    start = advanceWorkDays(predEnd, lag + 1);
-    result.fromPredecessor = true;
-  } else if (start) {
-    // Snap entered start to a work day (if it falls on weekend)
-    if (!isWorkDay(start)) {
-      var snapped = nextWorkDay(start);
-      warnings.push("פעילות " + act.id + ": תאריך התחלה היה ש״ק, הוזז ל-" + formatDate(snapped));
-      start = snapped;
+  // 1) Derive constrained edge from predecessor based on dep type.
+  //    FS: successor.start = pred.end + lag + 1 work day
+  //    SS: successor.start = pred.start + lag work days (lag=0 → same day)
+  //    FF: successor.end   = pred.end   + lag work days
+  //    SF: successor.end   = pred.start + lag work days
+  if (predResult) {
+    if (depType === "FS") {
+      start = advanceWorkDays(predResult.end, lag + 1);
+    } else if (depType === "SS") {
+      start = (lag === 0) ? cloneDate(predResult.start) : advanceWorkDays(predResult.start, lag);
+      if (!isWorkDay(start)) start = nextWorkDay(start);
+    } else if (depType === "FF") {
+      end = (lag === 0) ? cloneDate(predResult.end) : advanceWorkDays(predResult.end, lag);
+      if (!isWorkDay(end)) {
+        var fe = cloneDate(end);
+        while (!isWorkDay(fe)) fe.setDate(fe.getDate() - 1);
+        end = fe;
+      }
+      if (dur) start = subtractWorkDays(end, dur);
+    } else if (depType === "SF") {
+      end = (lag === 0) ? cloneDate(predResult.start) : advanceWorkDays(predResult.start, lag);
+      if (!isWorkDay(end)) {
+        var se = cloneDate(end);
+        while (!isWorkDay(se)) se.setDate(se.getDate() - 1);
+        end = se;
+      }
+      if (dur) start = subtractWorkDays(end, dur);
     }
+    result.fromPredecessor = true;
+  } else if (start && !isWorkDay(start)) {
+    var snapped = nextWorkDay(start);
+    warnings.push("פעילות " + act.id + ": תאריך התחלה היה ש״ק, הוזז ל-" + formatDate(snapped));
+    start = snapped;
   }
 
-  // 2) Determine end / duration
-  if (start && dur) {
+  // 2) Complete missing edge from duration / both dates
+  if (start && dur && !end) {
     end = addWorkDays(start, dur);
+    result.duration = dur;
+  } else if (end && dur && !start) {
+    start = subtractWorkDays(end, dur);
     result.duration = dur;
   } else if (start && end) {
     if (end < start) {
@@ -1799,7 +1859,6 @@ function computeOne(act, idMap, byId, cycles, warnings, errors) {
       result.valid = false;
     } else {
       if (!isWorkDay(end)) {
-        // Snap end backward to last work day
         var de = cloneDate(end);
         while (!isWorkDay(de)) de.setDate(de.getDate() - 1);
         end = de;
@@ -1809,7 +1868,7 @@ function computeOne(act, idMap, byId, cycles, warnings, errors) {
   } else if (start && !end && !dur) {
     warnings.push("פעילות " + act.id + ": חסר ימי עבודה או תאריך סיום");
     result.valid = false;
-  } else if (!start) {
+  } else if (!start && !end) {
     if (act.predecessorId && !idMap[act.predecessorId]) {
       // already warned
     } else if (!act.predecessorId) {
@@ -1911,6 +1970,13 @@ function renderTable() {
     var compRes = lastCompute.byId[a.id];
     if (compRes && compRes.valid === false) tr2.className = "row-warn";
 
+    var dt = normalizeDepType(a.predecessorType);
+    var depOpts =
+      '<option value="FS"' + (dt === "FS" ? " selected" : "") + ' title="Finish→Start: התחלה אחרי סיום הקדם">FS</option>' +
+      '<option value="SS"' + (dt === "SS" ? " selected" : "") + ' title="Start→Start: התחלה ביחד עם הקדם">SS</option>' +
+      '<option value="FF"' + (dt === "FF" ? " selected" : "") + ' title="Finish→Finish: סיום ביחד עם הקדם">FF</option>' +
+      '<option value="SF"' + (dt === "SF" ? " selected" : "") + ' title="Start→Finish: סיום עם התחלת הקדם (נדיר)">SF</option>';
+
     tr2.innerHTML =
       '<td><input class="id-input" type="text" data-field="id" value="' + escapeHtml(a.id) + '"></td>' +
       '<td><input type="text" data-field="description" placeholder="תיאור" value="' + escapeHtml(a.description) + '"></td>' +
@@ -1918,15 +1984,16 @@ function renderTable() {
       '<td><input type="number" data-field="duration" min="0" step="1" value="' + escapeHtml(a.duration === "" || a.duration === null || a.duration === undefined ? "" : a.duration) + '"></td>' +
       '<td><input type="date" data-field="endDate" value="' + escapeHtml(a.endDate) + '"></td>' +
       '<td><input class="pred-input" type="text" data-field="predecessorId" placeholder="—" value="' + escapeHtml(a.predecessorId) + '"></td>' +
-      '<td><input type="number" data-field="lag" min="0" step="1" value="' + (a.lag === "" || a.lag === null || a.lag === undefined ? 0 : a.lag) + '"></td>' +
+      '<td><select class="dep-select" data-field="predecessorType">' + depOpts + '</select></td>' +
+      '<td><input type="number" data-field="lag" min="-99" step="1" value="' + (a.lag === "" || a.lag === null || a.lag === undefined ? 0 : a.lag) + '"></td>' +
       '<td><input type="text" data-field="status" placeholder="הערות" value="' + escapeHtml(a.status) + '"></td>' +
       '<td class="del no-print"><button class="del-btn" type="button" title="מחק">✕</button></td>';
 
     tbody.appendChild(tr2);
   }
 
-  // Wire up inputs
-  var inputs = tbody.querySelectorAll("input");
+  // Wire up inputs and selects
+  var inputs = tbody.querySelectorAll("input, select");
   for (var j = 0; j < inputs.length; j++) {
     inputs[j].addEventListener("change", onCellChange);
     inputs[j].addEventListener("input", onCellInput);
@@ -2319,14 +2386,15 @@ function exportJSON() {
 
 function exportCSV() {
   var rows = [
-    ["ID","תיאור","תאריך התחלה","ימי עבודה","תאריך סיום","קדם","השהייה","סטטוס"]
+    ["ID","תיאור","תאריך התחלה","ימי עבודה","תאריך סיום","קדם","סוג תלות","השהייה","סטטוס"]
   ];
   for (var i = 0; i < state.activities.length; i++) {
     var a = state.activities[i];
     rows.push([
       a.id, a.description, a.startDate,
       String(a.duration || ""), a.endDate,
-      a.predecessorId, String(a.lag || 0), a.status
+      a.predecessorId, normalizeDepType(a.predecessorType),
+      String(a.lag || 0), a.status
     ]);
   }
   var csv = rows.map(function (r) {
