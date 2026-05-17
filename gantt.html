@@ -385,6 +385,79 @@
   .gantt-bar .bar-handle.right { right: 0; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
   .gantt-bar .bar-handle:hover { background: rgba(255,255,255,0.35); }
 
+  /* Critical path bar */
+  .gantt-bar.critical {
+    background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%);
+    border-color: #fca5a5;
+    box-shadow: 0 2px 8px rgba(220,38,38,0.45);
+  }
+  .gantt-bar.critical:hover { box-shadow: 0 3px 12px rgba(220,38,38,0.6); }
+
+  /* Milestone — diamond instead of bar */
+  .gantt-milestone {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+    border: 1.5px solid #fde68a;
+    transform: rotate(45deg);
+    box-shadow: 0 2px 6px rgba(217,119,6,0.5);
+    cursor: grab;
+    z-index: 3;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;
+  }
+  .gantt-milestone.critical {
+    background: linear-gradient(135deg, #f87171 0%, #b91c1c 100%);
+    border-color: #fecaca;
+    box-shadow: 0 2px 8px rgba(220,38,38,0.55);
+  }
+  .gantt-milestone.dragging { cursor: grabbing; opacity: 0.85; z-index: 5; }
+  .gantt-milestone-label {
+    position: absolute;
+    top: 8px;
+    right: 26px;   /* RTL: label to the left of the diamond (visually) — actually in LTR track this is to the right */
+    font-size: 11px;
+    font-weight: 700;
+    color: #fbbf24;
+    white-space: nowrap;
+    direction: rtl;
+    pointer-events: none;
+    text-shadow: 0 0 4px #0f172a, 0 0 4px #0f172a;
+  }
+  .gantt-milestone-label.critical { color: #fca5a5; }
+
+  /* Critical / milestone indicator chips in the table */
+  .desc-wrap { display: flex; align-items: center; gap: 4px; }
+  .desc-wrap input { flex: 1 1 auto; }
+  .crit-chip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    background: #7f1d1d;
+    color: #fecaca;
+    border: 1px solid #dc2626;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    line-height: 1;
+  }
+  .ms-chip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    background: rgba(217,119,6,0.15);
+    color: #fbbf24;
+    border: 1px solid #d97706;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 12px;
+    line-height: 1;
+  }
+
   .gantt-arrows {
     position: absolute;
     top: 0;
@@ -816,6 +889,11 @@
       border: 1px solid #0369a1 !important;
       font-size: 8.5pt !important;
     }
+    .gantt-bar.critical {
+      background: #dc2626 !important;
+      border-color: #991b1b !important;
+      color: #fff !important;
+    }
     .gantt-row-label {
       color: #111 !important;
       font-size: 9pt !important;
@@ -854,6 +932,8 @@
       vertical-align: middle;
     }
     .print-footer .pf-swatch.bar { background: #0ea5e9; border-color: #0369a1; }
+    .print-footer .pf-swatch.critical { background: #dc2626; border-color: #991b1b; }
+    .print-footer .pf-swatch.milestone { background: #d97706; border-color: #92400e; transform: rotate(45deg); width: 8px; height: 8px; }
     .print-footer .pf-swatch.weekend { background: rgba(100,116,139,0.25); }
     .print-footer .pf-swatch.arrow { background: #f59e0b; height: 2px; border: none; margin: 3px 0; }
 
@@ -960,6 +1040,8 @@
   <div class="print-only print-footer">
     <div class="pf-legend">
       <span><span class="pf-swatch bar"></span> פעילות</span>
+      <span><span class="pf-swatch critical"></span> נתיב קריטי</span>
+      <span><span class="pf-swatch milestone"></span> Milestone</span>
       <span><span class="pf-swatch weekend"></span> שישי / שבת</span>
       <span><span class="pf-swatch arrow"></span> תלות</span>
     </div>
@@ -1345,36 +1427,67 @@ function buildGanttSlicePage(range, sliceStartDay, sliceEndDay, pageNum, totalPa
     }
 
     if (visible) {
-      var barFromIdx = Math.max(actStartDayIdx, sliceStartDay);
-      var barToIdx = Math.min(actEndDayIdx, sliceEndDay - 1);
-      var barLeft = (barFromIdx - sliceStartDay) * dayWidth + 1;
-      var barWidth = (barToIdx - barFromIdx + 1) * dayWidth - 2;
-      if (barWidth < 3) barWidth = 3;
+      var ms = isMilestone(item.act);
+      var critP = (lastCompute && lastCompute.critical && lastCompute.critical[item.act.id]);
+      var critClass = critP ? ' critical' : '';
 
-      var clippedLeft = actStartDayIdx < sliceStartDay;
-      var clippedRight = actEndDayIdx >= sliceEndDay;
-      var radius = "5px";
-      var leftR = clippedLeft ? "0" : radius;
-      var rightR = clippedRight ? "0" : radius;
+      if (ms) {
+        // Diamond in print
+        var dmSize = Math.min(14, Math.max(8, dayWidth - 4));
+        var dmLeft = (actStartDayIdx - sliceStartDay) * dayWidth + (dayWidth - dmSize) / 2;
+        var dmTop = (PRINT_ROW_HEIGHT - dmSize) / 2;
+        var diamondFill = critP ? '#dc2626' : '#d97706';
+        rowsHTML +=
+          '<svg width="' + dmSize + '" height="' + dmSize + '" ' +
+          'style="position:absolute;left:' + dmLeft + 'px;top:' + dmTop + 'px;overflow:visible">' +
+          '<polygon points="' + (dmSize/2) + ',0 ' + dmSize + ',' + (dmSize/2) + ' ' + (dmSize/2) + ',' + dmSize + ' 0,' + (dmSize/2) + '" ' +
+          'fill="' + diamondFill + '" stroke="#000" stroke-width="0.5"/>' +
+          '</svg>';
+        // Milestone label
+        rowsHTML +=
+          '<span style="position:absolute;left:' + (dmLeft + dmSize + 4) + 'px;top:' + dmTop + 'px;' +
+          'font-size:8pt;font-weight:700;color:' + diamondFill + ';white-space:nowrap;direction:rtl">' +
+          '◆ ' + escapeHtml(item.act.id) + ' · ' + escapeHtml(labelText) + '</span>';
 
-      var showLabel = (actStartDayIdx >= sliceStartDay) && barWidth >= 40;
-      var labelInner = showLabel ? (escapeHtml(item.act.id) + ' · ' + escapeHtml(labelText)) : "";
-      var barFontStyle = dayWidth < 12 ? 'font-size:7pt;' : '';
+        posById[item.act.id] = {
+          row: r, visible: true,
+          barLeft: dmLeft, barWidth: dmSize,
+          barTop: r * PRINT_ROW_HEIGHT + dmTop, barHeight: dmSize,
+          clippedLeft: actStartDayIdx < sliceStartDay,
+          clippedRight: actStartDayIdx >= sliceEndDay
+        };
+      } else {
+        var barFromIdx = Math.max(actStartDayIdx, sliceStartDay);
+        var barToIdx = Math.min(actEndDayIdx, sliceEndDay - 1);
+        var barLeft = (barFromIdx - sliceStartDay) * dayWidth + 1;
+        var barWidth = (barToIdx - barFromIdx + 1) * dayWidth - 2;
+        if (barWidth < 3) barWidth = 3;
 
-      rowsHTML +=
-        '<div class="gantt-bar" style="left:' + barLeft + 'px;width:' + barWidth + 'px;' +
-        'border-top-right-radius:' + rightR + ';border-bottom-right-radius:' + rightR + ';' +
-        'border-top-left-radius:' + leftR + ';border-bottom-left-radius:' + leftR + ';' +
-        'top:' + Math.round((PRINT_ROW_HEIGHT - 18) / 2) + 'px;height:18px;' + barFontStyle + '">' +
-        '<span class="bar-label">' + labelInner + '</span></div>';
+        var clippedLeft = actStartDayIdx < sliceStartDay;
+        var clippedRight = actEndDayIdx >= sliceEndDay;
+        var radius = "5px";
+        var leftR = clippedLeft ? "0" : radius;
+        var rightR = clippedRight ? "0" : radius;
 
-      posById[item.act.id] = {
-        row: r, visible: true,
-        barLeft: barLeft, barWidth: barWidth,
-        barTop: r * PRINT_ROW_HEIGHT + Math.round((PRINT_ROW_HEIGHT - 18) / 2),
-        barHeight: 18,
-        clippedLeft: clippedLeft, clippedRight: clippedRight
-      };
+        var showLabel = (actStartDayIdx >= sliceStartDay) && barWidth >= 40;
+        var labelInner = showLabel ? (escapeHtml(item.act.id) + ' · ' + escapeHtml(labelText)) : "";
+        var barFontStyle = dayWidth < 12 ? 'font-size:7pt;' : '';
+
+        rowsHTML +=
+          '<div class="gantt-bar' + critClass + '" style="left:' + barLeft + 'px;width:' + barWidth + 'px;' +
+          'border-top-right-radius:' + rightR + ';border-bottom-right-radius:' + rightR + ';' +
+          'border-top-left-radius:' + leftR + ';border-bottom-left-radius:' + leftR + ';' +
+          'top:' + Math.round((PRINT_ROW_HEIGHT - 18) / 2) + 'px;height:18px;' + barFontStyle + '">' +
+          '<span class="bar-label">' + labelInner + '</span></div>';
+
+        posById[item.act.id] = {
+          row: r, visible: true,
+          barLeft: barLeft, barWidth: barWidth,
+          barTop: r * PRINT_ROW_HEIGHT + Math.round((PRINT_ROW_HEIGHT - 18) / 2),
+          barHeight: 18,
+          clippedLeft: clippedLeft, clippedRight: clippedRight
+        };
+      }
     } else {
       posById[item.act.id] = { visible: false, row: r };
     }
@@ -1610,6 +1723,12 @@ function normalizeDepType(t) {
   return DEP_TYPES.indexOf(t) >= 0 ? t : "FS";
 }
 
+// A milestone is an activity with explicit duration of 0 — a point in time,
+// no actual work, rendered as a diamond instead of a bar.
+function isMilestone(act) {
+  return act && Number(act.duration) === 0;
+}
+
 function normalizeActivity(a) {
   return {
     id: a.id ? String(a.id) : "",
@@ -1819,12 +1938,129 @@ function computeSchedule() {
   }
 
   lastCompute = { ok: errors.length === 0, errors: errors, warnings: warnings, byId: byId };
+  lastCompute.critical = computeCriticalPath(idMap);
   saveState();
   return lastCompute;
 }
 
+// ============================================================
+// CRITICAL PATH (CPM backward pass + slack)
+// ============================================================
+// Move backward N work days from a date (mirror of advanceWorkDays).
+function retreatWorkDays(fromDate, n) {
+  var d = cloneDate(fromDate);
+  var moved = 0;
+  while (moved < n) {
+    d.setDate(d.getDate() - 1);
+    if (isWorkDay(d)) moved++;
+  }
+  return d;
+}
+
+// Returns { id: true } map for activities on the critical path.
+// Algorithm:
+//   1. Use existing computed start/end (forward pass) as ES/EF.
+//   2. Project end = max EF.
+//   3. Backward pass: for each task, LF = min over successors of the constraint
+//      imposed by their dependency type + lag. Iterate to convergence.
+//   4. LS = LF - duration + 1 work day.
+//   5. Slack = work-days between EF and LF. Critical iff slack <= 0.
+function computeCriticalPath(idMap) {
+  var critical = {};
+  var ef = {}, es = {}, lf = {}, durs = {};
+  var n = state.activities.length;
+  if (n === 0) return critical;
+
+  // Successor index: predecessor.id → [ids of activities that depend on it]
+  var succMap = {};
+  for (var i = 0; i < n; i++) {
+    var a = state.activities[i];
+    if (a.predecessorId && idMap[a.predecessorId]) {
+      if (!succMap[a.predecessorId]) succMap[a.predecessorId] = [];
+      succMap[a.predecessorId].push(a.id);
+    }
+  }
+
+  // Forward pass = use computed dates already in state
+  var projectEnd = null;
+  for (var j = 0; j < n; j++) {
+    var aj = state.activities[j];
+    var s = parseDate(aj.startDate);
+    var e = parseDate(aj.endDate);
+    if (s && e) {
+      es[aj.id] = s; ef[aj.id] = e;
+      durs[aj.id] = isMilestone(aj) ? 0 : workDaysBetween(s, e);
+      if (!projectEnd || e > projectEnd) projectEnd = e;
+    }
+  }
+  if (!projectEnd) return critical;
+
+  // Backward pass — iterate until LF map stabilizes (at most n iterations).
+  // Initialize all LF to projectEnd; correct ones converge downward.
+  for (var k = 0; k < n; k++) lf[state.activities[k].id] = cloneDate(projectEnd);
+
+  for (var iter = 0; iter <= n; iter++) {
+    var changed = false;
+    for (var p = 0; p < n; p++) {
+      var ap = state.activities[p];
+      if (!(ap.id in ef)) continue;
+      var succIds = succMap[ap.id] || [];
+      var newLF;
+      if (succIds.length === 0) {
+        newLF = cloneDate(projectEnd);
+      } else {
+        newLF = null;
+        for (var q = 0; q < succIds.length; q++) {
+          var sid = succIds[q];
+          if (!(sid in lf) || !(sid in durs)) continue;
+          var sa = idMap[sid];
+          var lg = Number(sa.lag) || 0;
+          var dt = normalizeDepType(sa.predecessorType);
+          // successor's latest-start = LF - duration + 1 work day  (for tasks)
+          //                          = LF                          (for milestones)
+          var sLS = (durs[sid] === 0) ? cloneDate(lf[sid]) : subtractWorkDays(lf[sid], durs[sid]);
+          var constraint = null;
+          if (dt === "FS") {
+            // succ.start = pred.end + lag + 1 wd  ⇒  pred.LF = succ.LS shifted back lag+1 wd
+            constraint = retreatWorkDays(sLS, lg + 1);
+          } else if (dt === "SS") {
+            // succ.start = pred.start + lag wd  ⇒  pred.LS = succ.LS - lag wd
+            // pred.LF = pred.LS + dur - 1 wd
+            var predLS_ss = (lg === 0) ? cloneDate(sLS) : retreatWorkDays(sLS, lg);
+            constraint = (durs[ap.id] === 0) ? cloneDate(predLS_ss) : addWorkDays(predLS_ss, durs[ap.id]);
+          } else if (dt === "FF") {
+            // succ.end = pred.end + lag wd  ⇒  pred.LF = succ.LF - lag wd
+            constraint = (lg === 0) ? cloneDate(lf[sid]) : retreatWorkDays(lf[sid], lg);
+          } else if (dt === "SF") {
+            // succ.end = pred.start + lag wd  ⇒  pred.LS = succ.LF - lag wd
+            var predLS_sf = (lg === 0) ? cloneDate(lf[sid]) : retreatWorkDays(lf[sid], lg);
+            constraint = (durs[ap.id] === 0) ? cloneDate(predLS_sf) : addWorkDays(predLS_sf, durs[ap.id]);
+          }
+          if (constraint && (!newLF || constraint < newLF)) newLF = constraint;
+        }
+      }
+      if (newLF && (!lf[ap.id] || lf[ap.id].getTime() !== newLF.getTime())) {
+        lf[ap.id] = newLF;
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  // Determine critical (slack = 0)
+  for (var r = 0; r < n; r++) {
+    var ar = state.activities[r];
+    if (!(ar.id in ef) || !(ar.id in lf)) continue;
+    // Slack in work days between EF and LF (exclusive). 0 means the task lies on CP.
+    var slackDays = workDaysBetween(ef[ar.id], lf[ar.id]) - 1;
+    if (slackDays < 0) slackDays = 0;
+    if (slackDays === 0) critical[ar.id] = true;
+  }
+  return critical;
+}
+
 function computeOne(act, idMap, byId, cycles, warnings, errors) {
-  var result = { start: null, end: null, duration: null, fromPredecessor: false, valid: true };
+  var result = { start: null, end: null, duration: null, fromPredecessor: false, valid: true, milestone: false };
 
   if (cycles[act.id]) {
     result.valid = false;
@@ -1841,6 +2077,30 @@ function computeOne(act, idMap, byId, cycles, warnings, errors) {
   var dur = (act.duration && Number(act.duration) > 0) ? Number(act.duration) : null;
   var lag = (act.lag === 0 || act.lag) ? Number(act.lag) : 0;
   var depType = normalizeDepType(act.predecessorType);
+
+  // ---- Milestone branch: duration = 0, end = start, single point in time ----
+  if (isMilestone(act)) {
+    result.milestone = true;
+    if (predResult) {
+      if (depType === "FS")      start = advanceWorkDays(predResult.end,   lag + 1);
+      else if (depType === "SS") start = (lag === 0) ? cloneDate(predResult.start) : advanceWorkDays(predResult.start, lag);
+      else if (depType === "FF") start = (lag === 0) ? cloneDate(predResult.end)   : advanceWorkDays(predResult.end,   lag);
+      else if (depType === "SF") start = (lag === 0) ? cloneDate(predResult.start) : advanceWorkDays(predResult.start, lag);
+      result.fromPredecessor = true;
+    } else if (start && !isWorkDay(start)) {
+      start = nextWorkDay(start);
+    }
+    if (start) {
+      if (!isWorkDay(start)) start = nextWorkDay(start);
+      result.start = start;
+      result.end = cloneDate(start);
+      result.duration = 0;
+    } else {
+      warnings.push("Milestone " + act.id + ": חסר תאריך");
+      result.valid = false;
+    }
+    return result;
+  }
 
   // 1) Derive constrained edge from predecessor based on dep type.
   //    FS: successor.start = pred.end + lag + 1 work day
@@ -2008,9 +2268,13 @@ function renderTable() {
       '<option value="FF"' + (dt === "FF" ? " selected" : "") + ' title="Finish→Finish: סיום ביחד עם הקדם">FF</option>' +
       '<option value="SF"' + (dt === "SF" ? " selected" : "") + ' title="Start→Finish: סיום עם התחלת הקדם (נדיר)">SF</option>';
 
+    var critFlag = (lastCompute && lastCompute.critical && lastCompute.critical[a.id]);
+    var critChip = critFlag ? '<span class="crit-chip" title="פעילות בנתיב הקריטי">⚡</span>' : '';
+    var msIcon = isMilestone(a) ? '<span class="ms-chip" title="Milestone">◆</span>' : '';
+
     tr2.innerHTML =
       '<td><input class="id-input" type="text" data-field="id" value="' + escapeHtml(a.id) + '"></td>' +
-      '<td><input type="text" data-field="description" placeholder="תיאור" value="' + escapeHtml(a.description) + '"></td>' +
+      '<td><div class="desc-wrap"><input type="text" data-field="description" placeholder="תיאור" value="' + escapeHtml(a.description) + '">' + msIcon + critChip + '</div></td>' +
       '<td><input type="date" data-field="startDate" value="' + escapeHtml(a.startDate) + '"></td>' +
       '<td><input type="number" data-field="duration" min="0" step="1" value="' + escapeHtml(a.duration === "" || a.duration === null || a.duration === undefined ? "" : a.duration) + '"></td>' +
       '<td><input type="date" data-field="endDate" value="' + escapeHtml(a.endDate) + '"></td>' +
@@ -2233,25 +2497,48 @@ function renderGantt() {
       dwalk.setDate(dwalk.getDate() + 1);
     }
 
-    // Bar
+    // Bar (or milestone diamond)
     var barLeft = Math.round((item.start - start) / 86400000) * DAY_WIDTH;
-    var barDays = Math.round((item.end - item.start) / 86400000) + 1;
-    var barWidth = barDays * DAY_WIDTH - 2;
-    if (barWidth < DAY_WIDTH - 2) barWidth = DAY_WIDTH - 2;
-
-    var barEl = document.createElement("div");
-    barEl.className = "gantt-bar";
-    barEl.style.left = (barLeft + 1) + "px";
-    barEl.style.width = barWidth + "px";
+    var isCritical = (lastCompute && lastCompute.critical && lastCompute.critical[item.act.id]) || false;
     var dur = workDaysBetween(item.start, item.end);
-    barEl.innerHTML =
-      '<div class="bar-handle left"  data-drag="resize-start"></div>' +
-      '<span class="bar-label">' + escapeHtml(item.act.id) + ' · ' + escapeHtml(labelText) + '</span>' +
-      '<div class="bar-handle right" data-drag="resize-end"></div>';
-    barEl.setAttribute("data-tooltip", buildTooltip(item.act, item.start, item.end, dur));
+    var milestone = isMilestone(item.act);
+    var barEl;
+
+    if (milestone) {
+      var dmSize = 18;
+      var dmLeft = barLeft + (DAY_WIDTH - dmSize) / 2;
+      var dmTop = (rowHeight - dmSize) / 2;
+      barEl = document.createElement("div");
+      barEl.className = "gantt-milestone" + (isCritical ? " critical" : "");
+      barEl.style.left = dmLeft + "px";
+      barEl.style.top = dmTop + "px";
+      // Label sits next to the diamond (drawn outside in a separate span)
+      var lblEl = document.createElement("span");
+      lblEl.className = "gantt-milestone-label" + (isCritical ? " critical" : "");
+      lblEl.style.left = (dmLeft + dmSize + 6) + "px";
+      lblEl.style.top = dmTop + "px";
+      lblEl.style.right = "auto";
+      lblEl.textContent = "◆ " + item.act.id + " · " + labelText;
+      trackEl.appendChild(lblEl);
+    } else {
+      var barDays = Math.round((item.end - item.start) / 86400000) + 1;
+      var barWidth = barDays * DAY_WIDTH - 2;
+      if (barWidth < DAY_WIDTH - 2) barWidth = DAY_WIDTH - 2;
+      barEl = document.createElement("div");
+      barEl.className = "gantt-bar" + (isCritical ? " critical" : "");
+      barEl.style.left = (barLeft + 1) + "px";
+      barEl.style.width = barWidth + "px";
+      barEl.innerHTML =
+        '<div class="bar-handle left"  data-drag="resize-start"></div>' +
+        '<span class="bar-label">' + escapeHtml(item.act.id) + ' · ' + escapeHtml(labelText) + '</span>' +
+        '<div class="bar-handle right" data-drag="resize-end"></div>';
+    }
+
+    barEl.setAttribute("data-tooltip", buildTooltip(item.act, item.start, item.end, dur, isCritical));
     barEl.setAttribute("data-act-id", item.act.id);
     barEl.setAttribute("data-day-width", String(DAY_WIDTH));
     barEl.setAttribute("data-chart-start", formatDate(start));
+    if (milestone) barEl.setAttribute("data-milestone", "1");
     barEl.addEventListener("mouseenter", onBarHover);
     barEl.addEventListener("mouseleave", hideTooltip);
     barEl.addEventListener("mousemove", moveTooltip);
@@ -2358,14 +2645,22 @@ function drawArrow(svg, svgNS, x1, y1, x2, y2) {
   svg.appendChild(path);
 }
 
-function buildTooltip(act, start, end, dur) {
+function buildTooltip(act, start, end, dur, critical) {
   var lines = [];
-  lines.push("<strong>" + escapeHtml(act.description || "פעילות " + act.id) + "</strong>");
+  var heading = act.description || "פעילות " + act.id;
+  if (isMilestone(act)) heading = "◆ " + heading;
+  if (critical) heading += " · <span style='color:#fca5a5'>⚡ קריטי</span>";
+  lines.push("<strong>" + heading + "</strong>");
   lines.push("ID: " + escapeHtml(act.id));
-  lines.push("התחלה: " + formatDate(start));
-  lines.push("סיום: " + formatDate(end));
-  lines.push("ימי עבודה: " + dur);
-  if (act.predecessorId) lines.push("קדם: " + escapeHtml(act.predecessorId) + " · השהייה: " + (act.lag || 0));
+  if (isMilestone(act)) {
+    lines.push("תאריך: " + formatDate(start));
+    lines.push("(milestone — ללא משך)");
+  } else {
+    lines.push("התחלה: " + formatDate(start));
+    lines.push("סיום: " + formatDate(end));
+    lines.push("ימי עבודה: " + dur);
+  }
+  if (act.predecessorId) lines.push("קדם: " + escapeHtml(act.predecessorId) + " (" + normalizeDepType(act.predecessorType) + ") · השהייה: " + (act.lag || 0));
   if (act.status) lines.push("הערות: " + escapeHtml(act.status));
   return lines.join("<br>");
 }
@@ -2427,6 +2722,8 @@ function onBarDragStart(e) {
     mode = target.getAttribute("data-drag") || "move";
   }
   var barEl = e.currentTarget;
+  // Milestones can only be moved, not resized
+  if (barEl.getAttribute("data-milestone") === "1") mode = "move";
   var actId = barEl.getAttribute("data-act-id");
   var dayWidth = parseFloat(barEl.getAttribute("data-day-width")) || DAY_WIDTH;
 
@@ -2491,7 +2788,9 @@ function onBarDragMove(e) {
 
   if (dragCtx.mode === "move") {
     newStart = shiftDaysSnap(dragCtx.origStart, deltaDays, +1);
-    newEnd   = addWorkDays(newStart, dragCtx.origDuration);
+    newEnd = (dragCtx.origDuration === 0)
+      ? cloneDate(newStart)
+      : addWorkDays(newStart, dragCtx.origDuration);
     dragCtx.barEl.style.left = (dragCtx.origLeftPx + deltaDays * dragCtx.dayWidth) + "px";
   } else if (dragCtx.mode === "resize-end") {
     var newDurEnd = Math.max(1, dragCtx.origDuration + deltaDays);
