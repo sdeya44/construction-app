@@ -3505,18 +3505,37 @@ function exportExcel() {
 function loadSample() {
   var applySample = function () {
     state = {
-      projectName: "דוגמת שלד בניין",
+      projectName: "פרויקט בנייה לדוגמה",
       projectStart: "2026-06-01",
       activities: [
-        { id: "1", description: "התארגנות באתר",       startDate: "2026-06-01", duration: 3, endDate: "", predecessorId: "",  lag: 0, status: "" },
-        { id: "2", description: "עבודות עפר וחפירה",   startDate: "",            duration: 5, endDate: "", predecessorId: "1", lag: 0, status: "" },
-        { id: "3", description: "יציקת יסודות",        startDate: "",            duration: 4, endDate: "", predecessorId: "2", lag: 1, status: "" },
-        { id: "4", description: "קירות קומת קרקע",     startDate: "",            duration: 7, endDate: "", predecessorId: "3", lag: 2, status: "" },
-        { id: "5", description: "תקרה מעל קומת קרקע",  startDate: "",            duration: 6, endDate: "", predecessorId: "4", lag: 0, status: "" }
+        // id, description, startDate, duration, endDate, predecessorId, predecessorType, lag, status, lockMode
+        { id: "1",  description: "התארגנות באתר",          startDate: "2026-06-01", duration: 3,  predecessorId: "",   predecessorType: "FS", lag: 0,  status: "", lockMode: "FIXED" },
+        { id: "2",  description: "עבודות עפר",              duration: 6,  predecessorId: "1",  predecessorType: "FS", lag: 0,  status: "" },
+        { id: "3",  description: "יציקת כלונסאות",          duration: 8,  predecessorId: "2",  predecessorType: "FS", lag: 0,  status: "" },
+        { id: "4",  description: "קורות קשר",               duration: 5,  predecessorId: "3",  predecessorType: "FS", lag: 1,  status: "המתנה להתקשות" },
+        { id: "5",  description: "ביקורת קונסטרוקציה",     duration: 0,  predecessorId: "4",  predecessorType: "FS", lag: 0,  status: "מילסטון" },
+        { id: "6",  description: "רצפת בטון קומה -1",       duration: 7,  predecessorId: "5",  predecessorType: "FS", lag: 0,  status: "" },
+        { id: "7",  description: "שלד קומה 1",              duration: 12, predecessorId: "6",  predecessorType: "FS", lag: 0,  status: "" },
+        { id: "8",  description: "אינסטלציה גסה — מקביל",   duration: 10, predecessorId: "7",  predecessorType: "SS", lag: 3,  status: "מתחיל 3 ימים אחרי תחילת השלד" },
+        { id: "9",  description: "חשמל גס — נגרר עם השלד",  duration: 8,  predecessorId: "7",  predecessorType: "FF", lag: 0,  status: "מסתיים יחד עם השלד" },
+        { id: "10", description: "קונסטרוקציית פלדה לגג",   duration: 6,  predecessorId: "7",  predecessorType: "FS", lag: 0,  status: "" },
+        { id: "11", description: "גג רעפים",                duration: 5,  predecessorId: "10", predecessorType: "FS", lag: 0,  status: "" },
+        { id: "12", description: "סיום אטימות לפני גמרים",  duration: 2,  predecessorId: "13", predecessorType: "SF", lag: 0,  status: "חייב להסתיים עד שגמרים מתחילים" },
+        { id: "13", description: "גמרים פנים",              duration: 14, predecessorId: "11", predecessorType: "FS", lag: 2,  status: "" },
+        { id: "14", description: "פיתוח חוץ — מקביל לגמרים", duration: 8,  predecessorId: "13", predecessorType: "SS", lag: 0,  status: "" },
+        { id: "15", description: "מסירה ללקוח",             duration: 0,  predecessorId: "13", predecessorType: "FS", lag: 1,  status: "מילסטון סופי" }
       ]
     };
-    computeSchedule();
-    renderAll();
+    // Normalize all (fill in missing fields like predecessorType, lockMode, lockedFields)
+    state.activities = state.activities.map(normalizeActivity);
+    // Activities with predecessors default to AUTO
+    for (var i = 0; i < state.activities.length; i++) {
+      if (state.activities[i].predecessorId && !state.activities[i].lockMode) {
+        state.activities[i].lockMode = "AUTO";
+      }
+    }
+    saveState();
+    recomputeAndRenderAll();
   };
   if (state.activities.length > 0) {
     customConfirm("לטעון דוגמה? הנתונים הקיימים יוחלפו.", { icon: "📋", okText: "טען" })
