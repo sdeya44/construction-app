@@ -337,25 +337,53 @@
     color: #fff;
     font-size: 11px;
     font-weight: 700;
-    padding: 0 8px;
+    padding: 0 14px;
     display: flex;
     align-items: center;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     box-shadow: 0 2px 6px rgba(2,132,199,0.4);
-    cursor: pointer;
+    cursor: grab;
     z-index: 2;
     direction: rtl;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
   }
-  .gantt-bar:hover { filter: brightness(1.15); }
+  .gantt-bar:hover { filter: brightness(1.12); box-shadow: 0 3px 10px rgba(2,132,199,0.55); }
+  .gantt-bar.dragging {
+    cursor: grabbing;
+    opacity: 0.85;
+    box-shadow: 0 6px 16px rgba(2,132,199,0.65);
+    z-index: 5;
+  }
+  .gantt-bar.drag-invalid {
+    background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%) !important;
+    border-color: #f87171 !important;
+  }
   .gantt-bar .bar-label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     width: 100%;
     text-align: right;
+    pointer-events: none;
   }
+  .gantt-bar .bar-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: ew-resize;
+    background: rgba(255,255,255,0.0);
+    transition: background 0.12s;
+  }
+  .gantt-bar:hover .bar-handle { background: rgba(255,255,255,0.18); }
+  .gantt-bar .bar-handle.left  { left: 0; border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+  .gantt-bar .bar-handle.right { right: 0; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+  .gantt-bar .bar-handle:hover { background: rgba(255,255,255,0.35); }
 
   .gantt-arrows {
     position: absolute;
@@ -2213,12 +2241,20 @@ function renderGantt() {
     barEl.style.left = (barLeft + 1) + "px";
     barEl.style.width = barWidth + "px";
     var dur = workDaysBetween(item.start, item.end);
-    barEl.innerHTML = '<span class="bar-label">' + escapeHtml(item.act.id) + ' · ' + escapeHtml(labelText) + '</span>';
+    barEl.innerHTML =
+      '<div class="bar-handle left"  data-drag="resize-start"></div>' +
+      '<span class="bar-label">' + escapeHtml(item.act.id) + ' · ' + escapeHtml(labelText) + '</span>' +
+      '<div class="bar-handle right" data-drag="resize-end"></div>';
     barEl.setAttribute("data-tooltip", buildTooltip(item.act, item.start, item.end, dur));
+    barEl.setAttribute("data-act-id", item.act.id);
+    barEl.setAttribute("data-day-width", String(DAY_WIDTH));
+    barEl.setAttribute("data-chart-start", formatDate(start));
     barEl.addEventListener("mouseenter", onBarHover);
     barEl.addEventListener("mouseleave", hideTooltip);
     barEl.addEventListener("mousemove", moveTooltip);
     barEl.addEventListener("touchstart", onBarTouch, { passive: true });
+    barEl.addEventListener("mousedown", onBarDragStart);
+    barEl.addEventListener("touchstart", onBarDragStart, { passive: false });
 
     trackEl.appendChild(barEl);
     rowEl.appendChild(trackEl);
@@ -2373,6 +2409,223 @@ function onBarTouch(e) {
   var touch = e.touches[0];
   moveTooltip({ clientX: touch.clientX, clientY: touch.clientY });
   setTimeout(hideTooltip, 3500);
+}
+
+// ============================================================
+// DRAG & RESIZE (gantt bars)
+// ============================================================
+var dragCtx = null;
+
+function onBarDragStart(e) {
+  // Resolve which mode: move (body), resize-start (left handle), resize-end (right handle)
+  var target = e.target;
+  var mode = "move";
+  if (target && target.classList && target.classList.contains("bar-handle")) {
+    mode = target.getAttribute("data-drag") || "move";
+  }
+  var barEl = e.currentTarget;
+  var actId = barEl.getAttribute("data-act-id");
+  var dayWidth = parseFloat(barEl.getAttribute("data-day-width")) || DAY_WIDTH;
+
+  var idx = -1;
+  for (var i = 0; i < state.activities.length; i++) {
+    if (state.activities[i].id === actId) { idx = i; break; }
+  }
+  if (idx < 0) return;
+  var act = state.activities[idx];
+  var startD = parseDate(act.startDate);
+  var endD = parseDate(act.endDate);
+  if (!startD || !endD) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  var pointer = getPointer(e);
+  dragCtx = {
+    mode: mode,
+    barEl: barEl,
+    actId: actId,
+    actIdx: idx,
+    dayWidth: dayWidth,
+    pointerStartX: pointer.x,
+    origLeftPx: parseFloat(barEl.style.left) || 0,
+    origWidthPx: parseFloat(barEl.style.width) || 0,
+    origStart: startD,
+    origEnd: endD,
+    origDuration: workDaysBetween(startD, endD),
+    moved: false,
+    invalid: false
+  };
+
+  barEl.classList.add("dragging");
+  showDragTip(barEl, startD, endD, dragCtx.origDuration);
+
+  document.addEventListener("mousemove", onBarDragMove, { passive: false });
+  document.addEventListener("mouseup",   onBarDragEnd);
+  document.addEventListener("touchmove", onBarDragMove, { passive: false });
+  document.addEventListener("touchend",  onBarDragEnd);
+  document.addEventListener("touchcancel", onBarDragEnd);
+  hideTooltip();
+}
+
+function getPointer(e) {
+  if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  if (e.changedTouches && e.changedTouches[0]) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+  return { x: e.clientX, y: e.clientY };
+}
+
+function onBarDragMove(e) {
+  if (!dragCtx) return;
+  e.preventDefault();
+
+  var p = getPointer(e);
+  var deltaPx = p.x - dragCtx.pointerStartX;
+  var deltaDays = Math.round(deltaPx / dragCtx.dayWidth);
+  if (deltaDays !== 0) dragCtx.moved = true;
+
+  var newStart = cloneDate(dragCtx.origStart);
+  var newEnd = cloneDate(dragCtx.origEnd);
+
+  if (dragCtx.mode === "move") {
+    newStart = shiftDaysSnap(dragCtx.origStart, deltaDays, +1);
+    newEnd   = addWorkDays(newStart, dragCtx.origDuration);
+    dragCtx.barEl.style.left = (dragCtx.origLeftPx + deltaDays * dragCtx.dayWidth) + "px";
+  } else if (dragCtx.mode === "resize-end") {
+    var newDurEnd = Math.max(1, dragCtx.origDuration + deltaDays);
+    newStart = dragCtx.origStart;
+    newEnd = addWorkDays(newStart, newDurEnd);
+    dragCtx.barEl.style.width = (dragCtx.origWidthPx + deltaDays * dragCtx.dayWidth) + "px";
+  } else if (dragCtx.mode === "resize-start") {
+    var newDurStart = Math.max(1, dragCtx.origDuration - deltaDays);
+    newStart = subtractWorkDays(dragCtx.origEnd, newDurStart);
+    newEnd = dragCtx.origEnd;
+    dragCtx.barEl.style.left = (dragCtx.origLeftPx + deltaDays * dragCtx.dayWidth) + "px";
+    dragCtx.barEl.style.width = (dragCtx.origWidthPx - deltaDays * dragCtx.dayWidth) + "px";
+  }
+
+  // Validate against predecessor
+  var act = state.activities[dragCtx.actIdx];
+  var invalid = false;
+  if (act.predecessorId) {
+    var predIdx = findActIndex(act.predecessorId);
+    if (predIdx >= 0) {
+      var pred = state.activities[predIdx];
+      var ps = parseDate(pred.startDate), pe = parseDate(pred.endDate);
+      var lg = Number(act.lag) || 0;
+      if (ps && pe) {
+        var minDate = null;
+        switch (normalizeDepType(act.predecessorType)) {
+          case "FS": minDate = advanceWorkDays(pe, lg + 1); break;
+          case "SS": minDate = (lg === 0) ? ps : advanceWorkDays(ps, lg); break;
+          case "FF": var ffMinEnd = (lg === 0) ? pe : advanceWorkDays(pe, lg); if (newEnd < ffMinEnd) invalid = true; break;
+          case "SF": var sfMinEnd = (lg === 0) ? ps : advanceWorkDays(ps, lg); if (newEnd < sfMinEnd) invalid = true; break;
+        }
+        if (minDate && newStart < minDate) invalid = true;
+      }
+    }
+  }
+  dragCtx.invalid = invalid;
+  dragCtx.barEl.classList.toggle("drag-invalid", invalid);
+
+  dragCtx.previewStart = newStart;
+  dragCtx.previewEnd = newEnd;
+  var pdur = workDaysBetween(newStart, newEnd);
+  showDragTip(dragCtx.barEl, newStart, newEnd, pdur, invalid);
+}
+
+function onBarDragEnd(e) {
+  if (!dragCtx) return;
+
+  var ctx = dragCtx;
+  dragCtx = null;
+
+  document.removeEventListener("mousemove", onBarDragMove);
+  document.removeEventListener("mouseup",   onBarDragEnd);
+  document.removeEventListener("touchmove", onBarDragMove);
+  document.removeEventListener("touchend",  onBarDragEnd);
+  document.removeEventListener("touchcancel", onBarDragEnd);
+
+  ctx.barEl.classList.remove("dragging");
+  ctx.barEl.classList.remove("drag-invalid");
+  hideDragTip();
+
+  if (!ctx.moved) return;
+  if (ctx.invalid) {
+    // Snap back visually by re-rendering
+    renderGantt();
+    showMsg("הגרירה תפר את התלות — הפעולה בוטלה", "warn");
+    return;
+  }
+
+  var act = state.activities[ctx.actIdx];
+  if (ctx.previewStart) act.startDate = formatDate(ctx.previewStart);
+  if (ctx.previewEnd)   act.endDate   = formatDate(ctx.previewEnd);
+  if (ctx.previewStart && ctx.previewEnd) {
+    act.duration = workDaysBetween(ctx.previewStart, ctx.previewEnd);
+  }
+  saveState();
+  // Cascade dependents only — keep dragged task's manual dates
+  cascadeFromManualOverride(ctx.actId);
+  renderAll();
+}
+
+function findActIndex(id) {
+  for (var i = 0; i < state.activities.length; i++) {
+    if (state.activities[i].id === String(id)) return i;
+  }
+  return -1;
+}
+
+// Recompute schedule, but pin the manually-edited task so it isn't overwritten
+// by its own predecessor constraint after a drag.
+function cascadeFromManualOverride(pinId) {
+  // Temporarily clear pinned task's predecessor so its dates stick.
+  var pinIdx = findActIndex(pinId);
+  if (pinIdx < 0) { computeSchedule(); return; }
+  var saved = state.activities[pinIdx].predecessorId;
+  state.activities[pinIdx].predecessorId = "";
+  computeSchedule();
+  state.activities[pinIdx].predecessorId = saved;
+}
+
+function shiftDaysSnap(date, days /*, dir */) {
+  var d = cloneDate(date);
+  d.setDate(d.getDate() + days);
+  if (!isWorkDay(d)) {
+    // snap to nearest work day in drag direction
+    var fwd = cloneDate(d), bwd = cloneDate(d);
+    while (!isWorkDay(fwd)) fwd.setDate(fwd.getDate() + 1);
+    while (!isWorkDay(bwd)) bwd.setDate(bwd.getDate() - 1);
+    d = (days >= 0) ? fwd : bwd;
+  }
+  return d;
+}
+
+// Lightweight floating tooltip during drag (replaces hover tooltip while active)
+function showDragTip(barEl, s, e, dur, invalid) {
+  var t = getTipEl();
+  t.innerHTML =
+    '<strong>' + (invalid ? "⚠ פעולה אסורה" : "גרירה") + '</strong><br>' +
+    'התחלה: ' + formatDate(s) + '<br>' +
+    'סיום: ' + formatDate(e) + '<br>' +
+    'משך: ' + dur + ' ימי עבודה';
+  t.classList.remove("hidden");
+  var rect = barEl.getBoundingClientRect();
+  t.style.left = (rect.left) + "px";
+  t.style.top = (rect.top - 80) + "px";
+}
+function hideDragTip() { hideTooltip(); }
+
+function showMsg(text, kind) {
+  var box = document.getElementById("messages");
+  if (!box) return;
+  var d = document.createElement("div");
+  d.className = "msg " + (kind || "warn");
+  d.textContent = text;
+  box.appendChild(d);
+  setTimeout(function () {
+    if (d.parentNode) d.parentNode.removeChild(d);
+  }, 4000);
 }
 
 // ============================================================
