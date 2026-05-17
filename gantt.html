@@ -494,6 +494,39 @@
     text-align: center;
   }
   .orient-info strong { color: #f1f5f9; }
+  .orient-info.warn { background: #2a1d0c; border-color: #92400e; color: #fcd34d; }
+  .print-section { margin-bottom: 12px; }
+  .print-section .ps-label {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 700;
+    margin-bottom: 6px;
+    text-align: right;
+    letter-spacing: 0.3px;
+  }
+  .scale-grid {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .scale-chip {
+    flex: 1 1 auto;
+    min-width: 50px;
+    padding: 9px 10px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    text-align: center;
+  }
+  .scale-chip:hover { border-color: #475569; background: #0c2331; }
+  .scale-chip.selected { background: #0c2331; border-color: #38bdf8; color: #7dd3fc; box-shadow: 0 0 0 2px rgba(56,189,248,0.12); }
 
   /* Mobile */
   @media (max-width: 720px) {
@@ -509,7 +542,10 @@
 
   /* Print-only elements hidden on screen */
   .print-only { display: none; }
-  #gantt-print-pages { display: none; }
+  #gantt-print-pages { display: none; direction: ltr; }
+  #gantt-print-pages .gantt-bar,
+  #gantt-print-pages .gantt-row-label,
+  #gantt-print-pages .gantt-label-col { direction: rtl; }
 
   /* Multi-page sliced gantt for print — lives in a separate container so the
      on-screen chart is never touched (avoids browsers re-rendering the live
@@ -905,20 +941,38 @@
 <div id="print-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
   <div class="modal-box">
     <div class="modal-icon">🖨️</div>
-    <div class="modal-msg">בחר כיוון הדפסה</div>
-    <div class="orient-grid">
-      <div class="orient-card portrait selected" data-orient="portrait">
-        <div class="oc-icon"></div>
-        <div class="oc-name">לאורך</div>
-        <div class="oc-sub">A4 Portrait</div>
-      </div>
-      <div class="orient-card landscape" data-orient="landscape">
-        <div class="oc-icon"></div>
-        <div class="oc-name">לרוחב</div>
-        <div class="oc-sub">A4 Landscape</div>
+    <div class="modal-msg">הגדרות הדפסה</div>
+
+    <div class="print-section">
+      <div class="ps-label">כיוון נייר</div>
+      <div class="orient-grid">
+        <div class="orient-card portrait selected" data-orient="portrait">
+          <div class="oc-icon"></div>
+          <div class="oc-name">לאורך</div>
+          <div class="oc-sub">A4 Portrait</div>
+        </div>
+        <div class="orient-card landscape" data-orient="landscape">
+          <div class="oc-icon"></div>
+          <div class="oc-name">לרוחב</div>
+          <div class="oc-sub">A4 Landscape</div>
+        </div>
       </div>
     </div>
-    <div class="orient-info" id="orient-info">התרשים יחולק ל-<strong>—</strong> דפים</div>
+
+    <div class="print-section">
+      <div class="ps-label">סקלת תרשים — מספר עמודים</div>
+      <div class="scale-grid">
+        <button class="scale-chip selected" data-scale="auto" type="button">אוטומטי</button>
+        <button class="scale-chip" data-scale="1" type="button">1</button>
+        <button class="scale-chip" data-scale="2" type="button">2</button>
+        <button class="scale-chip" data-scale="3" type="button">3</button>
+        <button class="scale-chip" data-scale="4" type="button">4</button>
+        <button class="scale-chip" data-scale="5" type="button">5</button>
+      </div>
+    </div>
+
+    <div class="orient-info" id="orient-info">—</div>
+
     <div class="modal-buttons">
       <button class="btn primary" id="print-go" type="button">הדפס</button>
       <button class="btn" id="print-cancel" type="button">ביטול</button>
@@ -992,38 +1046,59 @@ function showPrintDialog() {
     var cancelBtn = document.getElementById("print-cancel");
     var info = document.getElementById("orient-info");
     var cards = overlay.querySelectorAll(".orient-card");
+    var chips = overlay.querySelectorAll(".scale-chip");
 
-    var selected = "portrait";
+    var selectedOrient = "portrait";
+    var selectedScale = "auto";
 
     function updateInfo() {
-      var pages = estimateGanttPages(selected);
-      info.innerHTML = pages > 0
-        ? "התרשים יחולק ל-<strong>" + pages + "</strong> " + (pages === 1 ? "דף" : "דפים")
-        : "אין נתונים בתרשים";
+      var plan = planPrintLayout(selectedOrient, selectedScale);
+      if (!plan) {
+        info.classList.remove("warn");
+        info.innerHTML = "אין נתונים בתרשים";
+        return;
+      }
+      var dpStr = plan.dayWidth.toFixed(0) + " px/יום";
+      var warn = plan.dayWidth < 8;
+      info.classList.toggle("warn", warn);
+      info.innerHTML =
+        "<strong>" + plan.totalPages + "</strong> " + (plan.totalPages === 1 ? "עמוד" : "עמודים") +
+        " · " + plan.daysPerPage + " ימים בעמוד · <strong>" + dpStr + "</strong>" +
+        (warn ? "<br><span style='font-size:11px'>שים לב: רוחב היום קטן — מספרי הימים עשויים להיות זעירים</span>" : "");
     }
     function selectCard(orient) {
-      selected = orient;
+      selectedOrient = orient;
       cards.forEach(function (c) {
         c.classList.toggle("selected", c.getAttribute("data-orient") === orient);
       });
       updateInfo();
     }
+    function selectChip(scale) {
+      selectedScale = scale;
+      chips.forEach(function (c) {
+        c.classList.toggle("selected", c.getAttribute("data-scale") === scale);
+      });
+      updateInfo();
+    }
 
     cards.forEach(function (c) {
-      c.classList.toggle("selected", c.getAttribute("data-orient") === selected);
+      c.classList.toggle("selected", c.getAttribute("data-orient") === selectedOrient);
       c.addEventListener("click", onCardClick);
+    });
+    chips.forEach(function (c) {
+      c.classList.toggle("selected", c.getAttribute("data-scale") === selectedScale);
+      c.addEventListener("click", onChipClick);
     });
     updateInfo();
 
-    function onCardClick(e) {
-      selectCard(e.currentTarget.getAttribute("data-orient"));
-    }
-    function onGo()     { cleanup(selected); }
+    function onCardClick(e) { selectCard(e.currentTarget.getAttribute("data-orient")); }
+    function onChipClick(e) { selectChip(e.currentTarget.getAttribute("data-scale")); }
+    function onGo()     { cleanup({ orientation: selectedOrient, scale: selectedScale }); }
     function onCancel() { cleanup(null); }
     function onBackdrop(e) { if (e.target === overlay) cleanup(null); }
     function onKey(e) {
       if (e.key === "Escape") cleanup(null);
-      else if (e.key === "Enter") cleanup(selected);
+      else if (e.key === "Enter") cleanup({ orientation: selectedOrient, scale: selectedScale });
     }
     function cleanup(result) {
       overlay.classList.add("hidden");
@@ -1032,6 +1107,7 @@ function showPrintDialog() {
       overlay.removeEventListener("click", onBackdrop);
       document.removeEventListener("keydown", onKey);
       cards.forEach(function (c) { c.removeEventListener("click", onCardClick); });
+      chips.forEach(function (c) { c.removeEventListener("click", onChipClick); });
       resolve(result);
     }
 
@@ -1043,18 +1119,42 @@ function showPrintDialog() {
   });
 }
 
-// Approximate page count for the current chart at a given orientation.
-// Numbers chosen to leave safety margin against page printable area:
-//   Portrait  A4 usable = 190mm ≈ 718px; 24 days × 20px + 130px label = 610px
-//   Landscape A4 usable = 277mm ≈ 1047px; 42 days × 20px + 130px label = 970px
-function PRINT_DAYS_PER_PAGE(orientation) {
-  return orientation === "portrait" ? 24 : 42;
-}
+// A4 usable print area (mm → CSS px @ 96dpi), minus safety margin
+var PRINT_USABLE_PX = { portrait: 700, landscape: 1030 };
+var PRINT_LABEL_WIDTH_AUTO = 130;
+var PRINT_LABEL_WIDTH_TIGHT = 110;
+var PRINT_DEFAULT_DAY_WIDTH = 20;
+var PRINT_MIN_DAY_WIDTH = 5;
 
-function estimateGanttPages(orientation) {
+// Returns { totalPages, daysPerPage, dayWidth, labelWidth, totalDays } or null.
+// Auto mode keeps day width fixed (20px) and slices by what fits per page.
+// Numeric scale forces a specific page count and shrinks day width to fit.
+function planPrintLayout(orientation, scale) {
   var range = computeChartRange();
-  if (!range) return 0;
-  return Math.ceil(range.totalDays / PRINT_DAYS_PER_PAGE(orientation));
+  if (!range) return null;
+
+  var labelWidth = (scale === "auto") ? PRINT_LABEL_WIDTH_AUTO : PRINT_LABEL_WIDTH_TIGHT;
+  var usable = PRINT_USABLE_PX[orientation] - labelWidth;
+  var totalPages, daysPerPage, dayWidth;
+
+  if (scale === "auto") {
+    dayWidth = PRINT_DEFAULT_DAY_WIDTH;
+    var capPerPage = Math.floor(usable / dayWidth);
+    totalPages = Math.max(1, Math.ceil(range.totalDays / capPerPage));
+    daysPerPage = Math.ceil(range.totalDays / totalPages); // balance evenly
+  } else {
+    totalPages = Math.max(1, parseInt(scale, 10) || 1);
+    daysPerPage = Math.ceil(range.totalDays / totalPages);
+    dayWidth = Math.max(PRINT_MIN_DAY_WIDTH, Math.floor(usable / daysPerPage));
+  }
+
+  return {
+    totalDays: range.totalDays,
+    totalPages: totalPages,
+    daysPerPage: daysPerPage,
+    dayWidth: dayWidth,
+    labelWidth: labelWidth
+  };
 }
 
 function computeChartRange() {
@@ -1085,11 +1185,9 @@ function computeChartRange() {
 // ============================================================
 // BUILD PRINT GANTT (sliced across pages)
 // ============================================================
-var PRINT_DAY_WIDTH = 20;
-var PRINT_LABEL_WIDTH = 130;
 var PRINT_ROW_HEIGHT = 28;
 
-function buildPrintGanttPages(orientation) {
+function buildPrintGanttPages(orientation, scale) {
   var container = document.getElementById("gantt-print-pages");
   var range = computeChartRange();
   if (!range) {
@@ -1097,8 +1195,11 @@ function buildPrintGanttPages(orientation) {
     return;
   }
 
-  var daysPerPage = PRINT_DAYS_PER_PAGE(orientation);
-  var totalPages = Math.ceil(range.totalDays / daysPerPage);
+  var plan = planPrintLayout(orientation, scale);
+  var daysPerPage = plan.daysPerPage;
+  var totalPages = plan.totalPages;
+  var dayWidth = plan.dayWidth;
+  var labelWidth = plan.labelWidth;
 
   var actPageMap = {};
   for (var ai = 0; ai < range.validActs.length; ai++) {
@@ -1112,7 +1213,8 @@ function buildPrintGanttPages(orientation) {
   for (var p = 0; p < totalPages; p++) {
     var sliceStartDay = p * daysPerPage;
     var sliceEndDay = Math.min(sliceStartDay + daysPerPage, range.totalDays);
-    allHTML += buildGanttSlicePage(range, sliceStartDay, sliceEndDay, p + 1, totalPages, actPageMap);
+    if (sliceEndDay <= sliceStartDay) break;
+    allHTML += buildGanttSlicePage(range, sliceStartDay, sliceEndDay, p + 1, totalPages, actPageMap, dayWidth, labelWidth);
   }
   container.innerHTML = allHTML;
 }
@@ -1126,10 +1228,10 @@ function daysBetweenIdx(start, target) {
   return Math.round((target - start) / 86400000);
 }
 
-function buildGanttSlicePage(range, sliceStartDay, sliceEndDay, pageNum, totalPages, actPageMap) {
+function buildGanttSlicePage(range, sliceStartDay, sliceEndDay, pageNum, totalPages, actPageMap, dayWidth, labelWidth) {
   var sliceDays = sliceEndDay - sliceStartDay;
-  var sliceWidth = sliceDays * PRINT_DAY_WIDTH;
-  var totalWidth = PRINT_LABEL_WIDTH + sliceWidth;
+  var sliceWidth = sliceDays * dayWidth;
+  var totalWidth = labelWidth + sliceWidth;
   var bodyHeight = range.validActs.length * PRINT_ROW_HEIGHT;
 
   var sliceStartDate = new Date(range.chartStart.getTime() + sliceStartDay * 86400000);
@@ -1138,13 +1240,16 @@ function buildGanttSlicePage(range, sliceStartDay, sliceEndDay, pageNum, totalPa
   var titleText = "תרשים גאנט" + (totalPages > 1 ? " — דף " + pageNum + " מתוך " + totalPages : "");
   var rangeText = formatDate(sliceStartDate) + "  →  " + formatDate(sliceEndDate);
 
+  // Show day numbers only when there's room
+  var showDayNumber = dayWidth >= 11;
+  var dayFontStyle = dayWidth < 14 ? 'font-size:7pt;' : '';
+
   // Header: weeks + days
   var weeksHTML = "", daysHTML = "";
   var d = cloneDate(sliceStartDate);
   var weekStart = cloneDate(d);
   var weekDays = 0;
   var sliceEndDateBoundary = cloneDate(sliceEndDate);
-
   var todayStr = formatDate(new Date());
 
   while (d <= sliceEndDateBoundary) {
@@ -1152,11 +1257,13 @@ function buildGanttSlicePage(range, sliceStartDay, sliceEndDay, pageNum, totalPa
     var isTodayDay = formatDate(d) === todayStr;
     daysHTML +=
       '<div class="gantt-day' + (weekend ? ' weekend' : '') + (isTodayDay ? ' today' : '') +
-      '" style="width:' + PRINT_DAY_WIDTH + 'px"><div>' + d.getDate() + '</div></div>';
+      '" style="width:' + dayWidth + 'px;' + dayFontStyle + '">' +
+      (showDayNumber ? ('<div>' + d.getDate() + '</div>') : '') +
+      '</div>';
     weekDays++;
     if (d.getDay() === 6 || d.getTime() === sliceEndDateBoundary.getTime()) {
       weeksHTML +=
-        '<div class="gantt-week" style="width:' + (weekDays * PRINT_DAY_WIDTH) + 'px">' +
+        '<div class="gantt-week" style="width:' + (weekDays * dayWidth) + 'px">' +
         formatDateShort(weekStart) + " — " + formatDateShort(d) + '</div>';
       weekDays = 0;
       var nx = cloneDate(d); nx.setDate(nx.getDate() + 1);
@@ -1177,57 +1284,53 @@ function buildGanttSlicePage(range, sliceStartDay, sliceEndDay, pageNum, totalPa
     var labelText = item.act.description || "פעילות " + item.act.id;
 
     rowsHTML += '<div class="gantt-row" style="height:' + PRINT_ROW_HEIGHT + 'px">';
-    rowsHTML += '<div class="gantt-row-label" style="width:' + PRINT_LABEL_WIDTH + 'px">' +
+    rowsHTML += '<div class="gantt-row-label" style="width:' + labelWidth + 'px">' +
                 '<span class="rid">' + escapeHtml(item.act.id) + '</span>' +
                 '<span class="rname" title="' + escapeHtml(labelText) + '">' + escapeHtml(labelText) + '</span>' +
                 '</div>';
     rowsHTML += '<div class="gantt-track" style="width:' + sliceWidth + 'px;height:' + PRINT_ROW_HEIGHT + 'px">';
 
-    // Weekend / today backdrop
+    // Weekend backdrop
     var dd = cloneDate(sliceStartDate);
     var xx = 0;
     while (dd <= sliceEndDateBoundary) {
       if (!isWorkDay(dd)) {
-        rowsHTML += '<div class="gantt-grid-cell weekend" style="left:' + xx + 'px;width:' + PRINT_DAY_WIDTH + 'px"></div>';
+        rowsHTML += '<div class="gantt-grid-cell weekend" style="left:' + xx + 'px;width:' + dayWidth + 'px"></div>';
       }
-      xx += PRINT_DAY_WIDTH;
+      xx += dayWidth;
       dd.setDate(dd.getDate() + 1);
     }
 
     if (visible) {
-      // Compute bar position relative to slice
       var barFromIdx = Math.max(actStartDayIdx, sliceStartDay);
       var barToIdx = Math.min(actEndDayIdx, sliceEndDay - 1);
-      var barLeft = (barFromIdx - sliceStartDay) * PRINT_DAY_WIDTH + 1;
-      var barWidth = (barToIdx - barFromIdx + 1) * PRINT_DAY_WIDTH - 2;
-      if (barWidth < 4) barWidth = 4;
+      var barLeft = (barFromIdx - sliceStartDay) * dayWidth + 1;
+      var barWidth = (barToIdx - barFromIdx + 1) * dayWidth - 2;
+      if (barWidth < 3) barWidth = 3;
 
       var clippedLeft = actStartDayIdx < sliceStartDay;
       var clippedRight = actEndDayIdx >= sliceEndDay;
-      var radius = "6px";
+      var radius = "5px";
       var leftR = clippedLeft ? "0" : radius;
       var rightR = clippedRight ? "0" : radius;
 
-      // Show label only on first occurrence page of this bar
-      var showLabel = (actStartDayIdx >= sliceStartDay);
+      var showLabel = (actStartDayIdx >= sliceStartDay) && barWidth >= 40;
       var labelInner = showLabel ? (escapeHtml(item.act.id) + ' · ' + escapeHtml(labelText)) : "";
+      var barFontStyle = dayWidth < 12 ? 'font-size:7pt;' : '';
 
       rowsHTML +=
         '<div class="gantt-bar" style="left:' + barLeft + 'px;width:' + barWidth + 'px;' +
         'border-top-right-radius:' + rightR + ';border-bottom-right-radius:' + rightR + ';' +
         'border-top-left-radius:' + leftR + ';border-bottom-left-radius:' + leftR + ';' +
-        'top:' + Math.round((PRINT_ROW_HEIGHT - 18) / 2) + 'px;height:18px">' +
+        'top:' + Math.round((PRINT_ROW_HEIGHT - 18) / 2) + 'px;height:18px;' + barFontStyle + '">' +
         '<span class="bar-label">' + labelInner + '</span></div>';
 
       posById[item.act.id] = {
-        row: r,
-        visible: true,
-        barLeft: barLeft,
-        barWidth: barWidth,
+        row: r, visible: true,
+        barLeft: barLeft, barWidth: barWidth,
         barTop: r * PRINT_ROW_HEIGHT + Math.round((PRINT_ROW_HEIGHT - 18) / 2),
         barHeight: 18,
-        clippedLeft: clippedLeft,
-        clippedRight: clippedRight
+        clippedLeft: clippedLeft, clippedRight: clippedRight
       };
     } else {
       posById[item.act.id] = { visible: false, row: r };
@@ -1235,7 +1338,7 @@ function buildGanttSlicePage(range, sliceStartDay, sliceEndDay, pageNum, totalPa
     rowsHTML += '</div></div>';
   }
 
-  // Arrows: draw only when BOTH predecessor and dependent are visible on this page
+  // Arrows
   var arrowsHTML = "";
   for (var ai2 = 0; ai2 < range.validActs.length; ai2++) {
     var aItem = range.validActs[ai2];
@@ -1271,7 +1374,7 @@ function buildGanttSlicePage(range, sliceStartDay, sliceEndDay, pageNum, totalPa
   var svgHTML = '';
   if (arrowsHTML) {
     svgHTML =
-      '<svg class="gantt-arrows" style="position:absolute;top:0;left:' + PRINT_LABEL_WIDTH + 'px;width:' + sliceWidth + 'px;height:' + bodyHeight + 'px;pointer-events:none">' +
+      '<svg class="gantt-arrows" style="position:absolute;top:0;left:' + labelWidth + 'px;width:' + sliceWidth + 'px;height:' + bodyHeight + 'px;pointer-events:none">' +
       '<defs><marker id="arr-head-print-' + pageNum + '" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">' +
       '<polygon points="0,0 7,3.5 0,7" fill="#f59e0b"/></marker></defs>' +
       arrowsHTML + '</svg>';
@@ -1283,7 +1386,7 @@ function buildGanttSlicePage(range, sliceStartDay, sliceEndDay, pageNum, totalPa
       '<div class="gpp-range">' + escapeHtml(rangeText) + '</div>' +
       '<div class="gantt-print-frame" style="position:relative;width:' + totalWidth + 'px;border:1px solid #cbd5e1;background:#fff">' +
         '<div class="gantt-header" style="display:flex">' +
-          '<div class="gantt-label-col" style="width:' + PRINT_LABEL_WIDTH + 'px">פעילות</div>' +
+          '<div class="gantt-label-col" style="width:' + labelWidth + 'px">פעילות</div>' +
           '<div class="gantt-time-header">' +
             '<div class="gantt-weeks" style="display:flex">' + weeksHTML + '</div>' +
             '<div class="gantt-days" style="display:flex">' + daysHTML + '</div>' +
@@ -2353,10 +2456,10 @@ function wire() {
   document.getElementById("btn-print").addEventListener("click", function () {
     computeSchedule();
     renderAll();
-    showPrintDialog().then(function (orientation) {
-      if (!orientation) return;
-      applyPrintOrientation(orientation);
-      buildPrintGanttPages(orientation);
+    showPrintDialog().then(function (result) {
+      if (!result) return;
+      applyPrintOrientation(result.orientation);
+      buildPrintGanttPages(result.orientation, result.scale);
       // Give layout one tick to settle (the slices live in their own container
       // so the on-screen chart is never modified — no restoration needed)
       setTimeout(function () { window.print(); }, 150);
