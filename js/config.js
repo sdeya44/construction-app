@@ -11,7 +11,7 @@ export const DAYS_HE  = ['ראשון','שני','שלישי','רביעי','חמי
 export const HDR = {
   Sites:           ['SiteID','SiteName','Address','Status','Notes'],
   Employees:       ['EmployeeID','EmployeeName','Phone','Profession','ActiveStatus','Notes','DailyRate'],
-  Equipment:       ['EquipmentID','EquipmentName','EquipmentType','ActiveStatus','Notes'],
+  Equipment:       ['EquipmentID','EquipmentName','EquipmentType','ActiveStatus','Notes','DailyRate'],
   Suppliers:       ['SupplierID','SupplierName','Phone','Notes','Status'],
   DailyLogs:       ['LogID','Date','SiteID','SiteName','ManagerEmail','Act_Digging','Act_Base','Act_Formwork','Act_Casting','Act_Stripping','Act_Other','Notes','CreatedAt','Version','UpdatedAt','UpdatedBy'],
   Attendance:      ['AttendanceID','LogID','EmployeeID','EmployeeName','Date','SiteID'],

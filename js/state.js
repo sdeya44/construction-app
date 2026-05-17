@@ -42,7 +42,7 @@ export async function loadAll() {
     active:r[4]||'פעיל', notes:r[5]||'', dailyRate: r[6] ? +r[6] : 0
   }));
   D.equipment  = (eq||[]).filter(r=>r[0]).map(r=>({
-    id:r[0], name:r[1]||'', type:r[2]||'', active:r[3]||'פעיל', notes:r[4]||''
+    id:r[0], name:r[1]||'', type:r[2]||'', active:r[3]||'פעיל', notes:r[4]||'', dailyRate:r[5] ? +r[5] : 0
   }));
   D.suppliers  = (su||[]).filter(r=>r[0]).map(r=>({
     id:r[0], name:r[1]||'', phone:r[2]||'', notes:r[3]||'', status:r[4]||'פעיל'

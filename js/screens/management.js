@@ -109,6 +109,7 @@ function equipRow(e) {
     <div class="avatar av-gold">🚜</div>
     <div class="li-info"><div class="li-name">${e.name}</div><div class="li-sub">${e.type||''}</div></div>
     <span class="badge ${e.active==='פעיל'?'b-green':'b-orange'}">${e.active}</span>
+      ${e.dailyRate>0 ? `<span class="badge b-gold" style="margin-right:4px">${e.dailyRate.toLocaleString('he-IL')}₪/יום</span>` : ''}
   </div>`;
 }
 
@@ -116,6 +117,7 @@ export function openAddEquip() {
   D.editEquipId = null; D.equipStatus = 'פעיל';
   document.getElementById('equip-sh-title').textContent = '➕ הוספת ציוד';
   document.getElementById('eq-name').value = '';
+  document.getElementById('eq-rate').value = 0;
   selectEquipStatus('פעיל'); openSheet('sh-equip');
 }
 
@@ -125,6 +127,7 @@ export function openEditEquip(id) {
   document.getElementById('equip-sh-title').textContent = '✏️ עריכת ציוד';
   document.getElementById('eq-name').value = e.name;
   document.getElementById('eq-type').value = e.type || 'כבד';
+  document.getElementById('eq-rate').value = e.dailyRate || 0;
   selectEquipStatus(e.active || 'פעיל'); openSheet('sh-equip');
 }
 
@@ -139,18 +142,19 @@ export async function saveEquip() {
   const name = document.getElementById('eq-name').value.trim();
   if (!name) { toast('יש להזין שם ציוד','err'); return; }
   const type = document.getElementById('eq-type').value;
+  const dailyRate = +(document.getElementById('eq-rate').value) || 0;
   setBtn('btn-save-equip', true, 'שומר...');
   try {
     if (D.editEquipId) {
       const i = D.equipment.findIndex(e => e.id === D.editEquipId);
-      D.equipment[i] = { ...D.equipment[i], name, type, active: D.equipStatus };
-      await sWrite('Equipment','A1',[HDR.Equipment,...D.equipment.map(e=>[e.id,e.name,e.type,e.active,e.notes||''])]);
+      D.equipment[i] = { ...D.equipment[i], name, type, active: D.equipStatus, dailyRate };
+      await sWrite('Equipment','A1',[HDR.Equipment,...D.equipment.map(e=>[e.id,e.name,e.type,e.active,e.notes||'',e.dailyRate||0])]);
       await logAudit('UPDATE','Equipment',D.editEquipId,`עדכון ציוד: ${name}`);
       toast('ציוד עודכן ✓','ok');
     } else {
       const id = uid();
-      await sAppend('Equipment',[id,name,type,D.equipStatus,'']);
-      D.equipment.push({ id, name, type, active: D.equipStatus, notes: '' });
+      await sAppend('Equipment',[id,name,type,D.equipStatus,'',dailyRate]);
+      D.equipment.push({ id, name, type, active: D.equipStatus, notes: '', dailyRate });
       await logAudit('CREATE','Equipment',id,`הוספת ציוד: ${name}`);
       toast('ציוד נוסף ✓','ok');
     }

@@ -29,6 +29,7 @@ function calcEquipUsage(month, year) {
 function renderResults(month, year) {
   const rows = calcEquipUsage(month, year);
   const totalDays = rows.reduce((s, r) => s + r.daysUsed, 0);
+  const totalCost = rows.reduce((s, r) => s + r.totalCost, 0);
   const usedCount = rows.filter(r => r.daysUsed > 0).length;
   const listHtml  = rows.map(r => `
     <div class="card" style="margin-bottom:8px">
@@ -41,7 +42,10 @@ function renderResults(month, year) {
               ${r.active!=='פעיל'?'<span class="badge b-gray" style="font-size:11px;margin-right:4px">לא פעיל</span>':''}</div>
           </div>
         </div>
-        ${r.daysUsed>0?`<span class="badge b-gold">${r.daysUsed} ימי שימוש</span>`:'<span class="badge b-gray">0</span>'}
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          ${r.daysUsed>0?`<span class="badge b-gold">${r.daysUsed} ימי שימוש</span>`:'<span class="badge b-gray">0</span>'}
+          ${r.dailyRate>0?`<span class="badge b-green">${r.totalCost.toLocaleString('he-IL')} ₪</span>`:''}
+        </div>
       </div>
       ${r.daysUsed>0?`<div style="margin-top:6px;font-size:12px;color:var(--muted)">📍 ${r.sites.join(', ')}</div>`:'<div class="muted" style="margin-top:6px;font-size:12px">לא נעשה שימוש החודש</div>'}
     </div>`).join('');
@@ -52,7 +56,8 @@ function renderResults(month, year) {
       <div class="card-title">סיכום ${MN[month]} ${year}</div>
       <div class="list-item" style="border:none;padding:4px 0"><span>פריטי ציוד</span><span style="font-weight:700;margin-right:auto">${rows.length}</span></div>
       <div class="list-item" style="border:none;padding:4px 0"><span>בשימוש החודש</span><span style="font-weight:700;margin-right:auto">${usedCount}</span></div>
-      <div class="list-item" style="border:none;padding:4px 0"><span>סה"כ ימי שימוש</span><span style="font-weight:700;margin-right:auto;color:#f59e0b">${totalDays}</span></div>
+      <div class="list-item" style="border:none;padding:4px 0"><span>סה"כ ימי שימוש</span><span style="font-weight:700;margin-right:auto;color:var(--gold)">${totalDays}</span></div>
+      <div class="list-item" style="border:none;padding:4px 0"><span>סה"כ עלות ציוד</span><span style="font-weight:700;margin-right:auto;color:var(--gold)">${totalCost.toLocaleString('he-IL')} ₪</span></div>
     </div>
     <div id="eq-rep-list">${listHtml||'<div class="empty"><div class="empty-icon">🚜</div><div class="empty-title">אין ציוד</div></div>'}</div>
     <div class="btn-row">
@@ -64,30 +69,33 @@ function renderResults(month, year) {
   document.getElementById('btn-eq-pdf').addEventListener('click', () => {
     const tableRows = rows.map((r, i) => `<tr>
       <td>${i+1}</td><td style="text-align:right">${r.name}</td><td>${r.type||'—'}</td>
-      <td>${r.daysUsed}</td><td style="text-align:right">${r.sites.join(', ')||'—'}</td>
+      <td>${r.dailyRate>0?r.dailyRate.toLocaleString('he-IL')+' ₪':'—'}</td>
+      <td>${r.daysUsed}</td>
+      <td>${r.dailyRate>0?r.totalCost.toLocaleString('he-IL')+' ₪':'—'}</td>
+      <td style="text-align:right">${r.sites.join(', ')||'—'}</td>
     </tr>`).join('');
     openPrint(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
       <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;800&display=swap" rel="stylesheet">
       <style>*{font-family:'Heebo',sans-serif;box-sizing:border-box}body{margin:20px;direction:rtl;font-size:12px;background:#fff}
-      .biz{color:#888;font-size:12px;text-align:center;margin-bottom:4px}h2{color:#4f46e5;text-align:center;font-size:20px;margin-bottom:4px;font-weight:800}
+      .biz{color:#888;font-size:12px;text-align:center;margin-bottom:4px}h2{color:#B8922C;text-align:center;font-size:20px;margin-bottom:4px;font-weight:800}
       .sub{color:#666;text-align:center;font-size:12px;margin-bottom:18px}table{width:100%;border-collapse:collapse}
-      th{background:#4f46e5;color:#fff;padding:9px 7px;font-size:11px;text-align:center}
-      td{padding:7px;border-bottom:1px solid rgba(99,102,241,.12);font-size:11px;text-align:center;vertical-align:middle}
-      tr:nth-child(even) td{background:#f5f3ff}tfoot tr td{background:#4f46e5;color:#fff;font-weight:800;font-size:12px}
+      th{background:#B8922C;color:#fff;padding:9px 7px;font-size:11px;text-align:center}
+      td{padding:7px;border-bottom:1px solid rgba(184,146,44,0.10);font-size:11px;text-align:center;vertical-align:middle}
+      tr:nth-child(even) td{background:#FEFCF5}tfoot tr td{background:#B8922C;color:#fff;font-weight:800;font-size:12px}
       @media print{body{margin:8px}}</style></head><body>
       <div class="biz">${BUSINESS_NAME}</div>
       <h2>דוח שימוש ציוד — ${MN[month]} ${year}</h2>
       <div class="sub">תאריך הפקה: ${new Date().toLocaleDateString('he-IL')}</div>
-      <table><thead><tr><th>#</th><th style="text-align:right">ציוד</th><th>סוג</th><th>ימי שימוש</th><th style="text-align:right">אתרים</th></tr></thead>
+      <table><thead><tr><th>#</th><th style="text-align:right">ציוד</th><th>סוג</th><th>תעריף יומי</th><th>ימי שימוש</th><th>עלות</th><th style="text-align:right">אתרים</th></tr></thead>
       <tbody>${tableRows}</tbody>
-      <tfoot><tr><td colspan="3" style="text-align:right">סה"כ</td><td>${totalDays}</td><td></td></tr></tfoot>
+      <tfoot><tr><td colspan="3" style="text-align:right">סה"כ</td><td>${totalDays}</td><td>${totalCost.toLocaleString('he-IL')} ₪</td><td></td></tr></tfoot>
       </table></body></html>`);
     toast('נפתח חלון הדפסה', 'ok');
   });
 
   document.getElementById('btn-eq-csv').addEventListener('click', () => {
-    exportCSV(['ציוד','סוג','ימי שימוש','אתרים'],
-      rows.map(r => [r.name, r.type||'', r.daysUsed, r.sites.join(', ')]),
+    exportCSV(['ציוד','סוג','תעריף יומי (₪)','ימי שימוש','עלות (₪)','אתרים'],
+      rows.map(r => [r.name, r.type||'', r.dailyRate||0, r.daysUsed, r.totalCost, r.sites.join(', ')]),
       `ציוד_${MN[month]}_${year}.csv`);
     toast('קובץ CSV הורד', 'ok');
   });
