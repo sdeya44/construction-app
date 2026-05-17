@@ -901,13 +901,16 @@
       <button class="btn primary" id="btn-add">+ הוסף פעילות</button>
       <button class="btn success" id="btn-calc">חשב לוח זמנים</button>
       <button class="btn warn"    id="btn-sample">טען דוגמה</button>
-      <button class="btn"         id="btn-export-json">ייצוא JSON</button>
+      <button class="btn"         id="btn-import-excel">📥 ייבוא Excel</button>
+      <button class="btn"         id="btn-export-excel">📤 ייצוא Excel</button>
+      <button class="btn"         id="btn-export-csv">CSV</button>
+      <button class="btn"         id="btn-export-json">JSON</button>
       <button class="btn"         id="btn-import-json">ייבוא JSON</button>
-      <button class="btn"         id="btn-export-csv">ייצוא CSV</button>
-      <button class="btn"         id="btn-print">הדפסה</button>
+      <button class="btn"         id="btn-print">🖨️ הדפסה</button>
       <button class="btn danger"  id="btn-clear">נקה הכל</button>
     </div>
-    <input type="file" id="file-input" class="hidden-file" accept=".json,application/json">
+    <input type="file" id="file-input"       class="hidden-file" accept=".json,application/json">
+    <input type="file" id="file-input-excel" class="hidden-file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
   </div>
 
   <div class="print-only print-section-title">טבלת פעילויות</div>
@@ -2713,6 +2716,245 @@ function importJSON(file) {
 }
 
 // ============================================================
+// EXCEL IMPORT / EXPORT (SheetJS, lazy-loaded from CDN)
+// ============================================================
+var XLSX_CDN = "https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js";
+var xlsxLoadPromise = null;
+
+function loadXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (xlsxLoadPromise) return xlsxLoadPromise;
+  xlsxLoadPromise = new Promise(function (resolve, reject) {
+    var s = document.createElement("script");
+    s.src = XLSX_CDN;
+    s.async = true;
+    s.onload = function () {
+      if (window.XLSX) resolve(window.XLSX);
+      else reject(new Error("XLSX לא נטען"));
+    };
+    s.onerror = function () { reject(new Error("נכשלה טעינת ספריית Excel (בדוק חיבור לאינטרנט)")); };
+    document.head.appendChild(s);
+  });
+  return xlsxLoadPromise;
+}
+
+// Header recognition: maps lowercased header text to canonical field name.
+// Supports Hebrew + English aliases used by various PM tools.
+var HEADER_ALIASES = {
+  "id": "id", "מזהה": "id", "מספר": "id", "מס": "id", "task id": "id", "uniqueid": "id", "wbs": "id",
+  "תיאור": "description", "תיאור פעילות": "description", "description": "description", "task": "description", "task name": "description", "name": "description", "פעילות": "description",
+  "תאריך התחלה": "startDate", "התחלה": "startDate", "start": "startDate", "start date": "startDate", "starts": "startDate",
+  "ימי עבודה": "duration", "משך": "duration", "duration": "duration", "days": "duration",
+  "תאריך סיום": "endDate", "סיום": "endDate", "end": "endDate", "end date": "endDate", "finish": "endDate",
+  "קדם": "predecessorId", "פעילות קדם": "predecessorId", "predecessor": "predecessorId", "predecessors": "predecessorId", "depends on": "predecessorId",
+  "סוג": "predecessorType", "סוג תלות": "predecessorType", "type": "predecessorType", "dep type": "predecessorType", "dependency type": "predecessorType",
+  "השהייה": "lag", "lag": "lag", "lead": "lag", "delay": "lag", "ימי השהייה": "lag",
+  "סטטוס": "status", "status": "status", "הערות": "status", "notes": "status", "remarks": "status"
+};
+
+function detectColumnMap(headers) {
+  var map = {};
+  for (var i = 0; i < headers.length; i++) {
+    var raw = headers[i];
+    if (raw === null || raw === undefined) continue;
+    var key = String(raw).trim().toLowerCase();
+    var field = HEADER_ALIASES[key];
+    if (field && !(field in map)) map[field] = i;
+  }
+  return map;
+}
+
+function excelDateToISO(v) {
+  if (v === null || v === undefined || v === "") return "";
+  // Already an ISO/dash date string
+  if (typeof v === "string") {
+    var m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) {
+      var y = m[1], mo = String(parseInt(m[2],10)).padStart(2,"0"), d = String(parseInt(m[3],10)).padStart(2,"0");
+      return y + "-" + mo + "-" + d;
+    }
+    // DD/MM/YYYY or D/M/YY
+    m = v.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+    if (m) {
+      var dd = String(parseInt(m[1],10)).padStart(2,"0");
+      var mm = String(parseInt(m[2],10)).padStart(2,"0");
+      var yy = m[3].length === 2 ? ("20" + m[3]) : m[3];
+      return yy + "-" + mm + "-" + dd;
+    }
+  }
+  // JS Date
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    var Y = v.getFullYear(), M = String(v.getMonth()+1).padStart(2,"0"), D = String(v.getDate()).padStart(2,"0");
+    return Y + "-" + M + "-" + D;
+  }
+  // Excel serial number (days since 1900-01-01, with the 1900 leap bug)
+  if (typeof v === "number" && isFinite(v)) {
+    var ms = Math.round((v - 25569) * 86400 * 1000);
+    var dt = new Date(ms);
+    if (!isNaN(dt.getTime())) {
+      var Y2 = dt.getUTCFullYear(), M2 = String(dt.getUTCMonth()+1).padStart(2,"0"), D2 = String(dt.getUTCDate()).padStart(2,"0");
+      return Y2 + "-" + M2 + "-" + D2;
+    }
+  }
+  return "";
+}
+
+function importExcel(file) {
+  loadXLSX().then(function (XLSX) {
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var wb = XLSX.read(e.target.result, { type: "array", cellDates: true });
+        var sheetName = wb.SheetNames[0];
+        var sheet = wb.Sheets[sheetName];
+        var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        if (!rows || rows.length < 2) { customAlert("הקובץ ריק או חסר שורת כותרות", "❌"); return; }
+
+        var headers = rows[0];
+        var map = detectColumnMap(headers);
+        if (!("id" in map) || !("description" in map)) {
+          customAlert("לא נמצאו עמודות חיוניות. נדרשות לפחות עמודות: ID ותיאור.\nכותרות שזוהו: " + headers.join(", "), "❌");
+          return;
+        }
+
+        var imported = [];
+        for (var r = 1; r < rows.length; r++) {
+          var row = rows[r];
+          var idRaw = ("id" in map) ? row[map.id] : "";
+          if (idRaw === "" || idRaw === null || idRaw === undefined) continue;
+          imported.push({
+            id: String(idRaw),
+            description: ("description" in map ? String(row[map.description] || "") : ""),
+            startDate:   ("startDate" in map ? excelDateToISO(row[map.startDate]) : ""),
+            duration:    ("duration"  in map ? (row[map.duration]   === "" ? "" : Number(row[map.duration]) || "") : ""),
+            endDate:     ("endDate"   in map ? excelDateToISO(row[map.endDate]) : ""),
+            predecessorId:   ("predecessorId" in map ? String(row[map.predecessorId] || "").trim() : ""),
+            predecessorType: ("predecessorType" in map ? normalizeDepType(row[map.predecessorType]) : "FS"),
+            lag:    ("lag"    in map ? (Number(row[map.lag]) || 0) : 0),
+            status: ("status" in map ? String(row[map.status] || "") : "")
+          });
+        }
+        if (imported.length === 0) { customAlert("לא נמצאו שורות תקינות לייבוא", "❌"); return; }
+
+        var hasExisting = state.activities.length > 0;
+        var doMerge = function () {
+          // Merge by ID: update existing, add new
+          var byId = {};
+          for (var i = 0; i < state.activities.length; i++) byId[state.activities[i].id] = state.activities[i];
+          var added = 0, updated = 0;
+          for (var j = 0; j < imported.length; j++) {
+            var im = imported[j];
+            if (byId[im.id]) {
+              var existing = byId[im.id];
+              for (var k in im) if (im[k] !== "" && im[k] !== null) existing[k] = im[k];
+              updated++;
+            } else {
+              state.activities.push(normalizeActivity(im));
+              added++;
+            }
+          }
+          computeSchedule();
+          saveState();
+          renderAll();
+          customAlert("ייבוא הסתיים · נוספו " + added + " · עודכנו " + updated, "✅");
+        };
+        var doReplace = function () {
+          state = {
+            projectName: state.projectName,
+            projectStart: state.projectStart,
+            activities: imported.map(normalizeActivity)
+          };
+          computeSchedule();
+          saveState();
+          renderAll();
+          customAlert("נטענו " + imported.length + " פעילויות (החלפה מלאה)", "✅");
+        };
+
+        if (!hasExisting) { doReplace(); return; }
+        chooseImportMode().then(function (mode) {
+          if (mode === "merge") doMerge();
+          else if (mode === "replace") doReplace();
+        });
+      } catch (err) {
+        customAlert("שגיאה בקריאת קובץ Excel: " + err.message, "❌");
+      }
+    };
+    reader.onerror = function () { customAlert("לא ניתן לקרוא את הקובץ", "❌"); };
+    reader.readAsArrayBuffer(file);
+  }).catch(function (err) {
+    customAlert(err.message, "❌");
+  });
+}
+
+// 3-option modal: merge by ID / full replace / cancel
+function chooseImportMode() {
+  return new Promise(function (resolve) {
+    var overlay = document.getElementById("modal");
+    var msgEl   = document.getElementById("modal-msg");
+    var iconEl  = document.getElementById("modal-icon");
+    var okBtn   = document.getElementById("modal-ok");
+    var cancelBtn = document.getElementById("modal-cancel");
+
+    iconEl.textContent = "📥";
+    msgEl.innerHTML = "כיצד לשלב את הנתונים?<br><span style='font-size:12px;color:#94a3b8'>מיזוג: עדכון לפי ID, הוספת חדשים. החלפה: מחיקת הקיים.</span>";
+    okBtn.textContent = "מיזוג לפי ID";
+    okBtn.className = "btn primary";
+    cancelBtn.textContent = "החלפה מלאה";
+    cancelBtn.className = "btn warn";
+    cancelBtn.style.display = "";
+
+    // Add a third 'cancel' link inline
+    var extra = document.createElement("button");
+    extra.type = "button";
+    extra.className = "btn ghost";
+    extra.textContent = "ביטול";
+    extra.style.marginRight = "8px";
+    cancelBtn.parentNode.insertBefore(extra, cancelBtn.nextSibling);
+
+    overlay.classList.remove("hidden");
+    function cleanup(r) {
+      overlay.classList.add("hidden");
+      okBtn.removeEventListener("click", onMerge);
+      cancelBtn.removeEventListener("click", onReplace);
+      extra.removeEventListener("click", onCancel);
+      if (extra.parentNode) extra.parentNode.removeChild(extra);
+      cancelBtn.className = "btn"; // restore
+      resolve(r);
+    }
+    function onMerge()   { cleanup("merge"); }
+    function onReplace() { cleanup("replace"); }
+    function onCancel()  { cleanup(null); }
+    okBtn.addEventListener("click", onMerge);
+    cancelBtn.addEventListener("click", onReplace);
+    extra.addEventListener("click", onCancel);
+  });
+}
+
+function exportExcel() {
+  loadXLSX().then(function (XLSX) {
+    var rows = [["ID","תיאור פעילות","תאריך התחלה","ימי עבודה","תאריך סיום","קדם","סוג תלות","השהייה","סטטוס / הערות"]];
+    for (var i = 0; i < state.activities.length; i++) {
+      var a = state.activities[i];
+      rows.push([
+        a.id, a.description, a.startDate,
+        (a.duration === "" ? "" : Number(a.duration) || ""),
+        a.endDate, a.predecessorId,
+        normalizeDepType(a.predecessorType),
+        Number(a.lag) || 0, a.status
+      ]);
+    }
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"] = [{wch:6},{wch:30},{wch:14},{wch:10},{wch:14},{wch:8},{wch:8},{wch:10},{wch:24}];
+    ws["!rtl"] = true;
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, state.projectName ? state.projectName.substring(0,28) : "Gantt");
+    XLSX.writeFile(wb, (state.projectName || "gantt") + ".xlsx");
+  }).catch(function (err) {
+    customAlert(err.message, "❌");
+  });
+}
+
+// ============================================================
 // SAMPLE DATA
 // ============================================================
 function loadSample() {
@@ -2795,6 +3037,16 @@ function wire() {
     if (f) importJSON(f);
     e.target.value = ""; // allow re-selecting same file
   });
+
+  document.getElementById("btn-import-excel").addEventListener("click", function () {
+    document.getElementById("file-input-excel").click();
+  });
+  document.getElementById("file-input-excel").addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (f) importExcel(f);
+    e.target.value = "";
+  });
+  document.getElementById("btn-export-excel").addEventListener("click", exportExcel);
 
   window.addEventListener("resize", function () {
     // Only re-render gantt arrows on resize
