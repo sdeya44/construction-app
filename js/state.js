@@ -22,7 +22,7 @@ export async function loadAll() {
   const [si,em,eq,su,lg,at,le,dl,ml,ph,us,sa] = await Promise.all([
     sRead('Sites',           'A2:E5000'),
     sRead('Employees',       'A2:G5000'),
-    sRead('Equipment',       'A2:E5000'),
+    sRead('Equipment',       'A2:F5000'),
     sRead('Suppliers',       'A2:E5000'),
     sRead('DailyLogs',       'A2:P5000'),
     sRead('Attendance',      'A2:F5000'),

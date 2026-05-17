@@ -1,4 +1,4 @@
-const CACHE = 'cnstr-v19';
+const CACHE = 'cnstr-v20';
 const ASSETS = [
   './',
   './index.html',
