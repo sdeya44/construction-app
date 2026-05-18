@@ -6,7 +6,6 @@ import { renderLogs, setLogTab, filterLogs, populateLogFilters } from './screens
 import { renderEmps, setEmpTab, filterEmps, openAddEmp, selectStatus, saveEmp } from './screens/employees.js';
 import { renderSites, setSiteTab, openAddSite, selectSiteStatus, saveSite } from './screens/sites.js';
 import { renderMgmt, mgmtAdd, selectSuppStatus, selectEquipStatus, saveSupp, saveEquip } from './screens/management.js';
-import { startLog } from './screens/wizard.js';
 import { handlePhotoUpload } from './screens/photos.js';
 import { renderReports, exportSiteMonthPDF, lockMonth, drawLocks, initSelects } from './screens/reports.js';
 import { renderSearch } from './screens/search.js';
@@ -123,7 +122,7 @@ function bindEvents() {
 
   document.getElementById('nav-dash')?.addEventListener('click',    () => navigate('dash'));
   document.getElementById('nav-sites')?.addEventListener('click',   () => navigate('sites'));
-  document.getElementById('nav-newlog')?.addEventListener('click',  startLog);
+  document.getElementById('nav-newlog')?.addEventListener('click', () => import('./screens/wizard.js').then(m => m.startLog()));
   document.getElementById('nav-logs')?.addEventListener('click',    () => { populateLogFilters(); navigate('logs'); });
   document.getElementById('nav-reports')?.addEventListener('click', () => navigate('reports'));
   document.getElementById('nav-search')?.addEventListener('click',  () => navigate('search'));
