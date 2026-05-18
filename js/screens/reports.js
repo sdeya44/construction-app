@@ -15,7 +15,6 @@ export function renderReports() {
       ${[
         ['attendance','👷 נוכחות'],
         ['site',      '📍 יומן אתר'],
-        ['equip',     '🚜 ציוד'],
         ['payroll',   '💰 שכר'],
         ['builder',   '⚙️ מחולל'],
       ].map(([k,l])=>`<button class="status-chip${_type===k?' active-s':''}" style="white-space:nowrap;flex-shrink:0" data-rtype="${k}">${l}</button>`).join('')}
@@ -25,7 +24,6 @@ export function renderReports() {
     btn.addEventListener('click', () => { _type = btn.dataset.rtype; renderReports(); }));
   if      (_type==='attendance') _renderAttendance(cm, cy);
   else if (_type==='site')       _renderSite(cm, cy);
-  else if (_type==='equip')      _renderEquip(cm, cy);
   else if (_type==='payroll')    _renderPayroll(cm, cy);
   else if (_type==='builder')    _renderBuilder(cm, cy);
 }
@@ -99,7 +97,6 @@ function _getAttData(month, year) {
   D.employees.filter(e=>e.active==='פעיל').forEach(e=>{
     if (!empMap[e.id]) empMap[e.id]={name:e.name,days:0,dates:new Set()};
   });
-  D.reportMonth=month; D.reportYear=year;
   return {empMap, siteD, total:ma.length, month, year};
 }
 
@@ -187,64 +184,6 @@ function _showSite(month, year) {
   if (existing) existing.outerHTML = html; else el.insertAdjacentHTML('beforeend', html);
   el.querySelectorAll('.site-pdf-btn').forEach(btn =>
     btn.addEventListener('click', ()=>exportSiteMonthPDF(btn.dataset.sid,+btn.dataset.month,+btn.dataset.year)));
-}
-
-// ── EQUIP (redirect to equipment tab) ────────────────────────────────────────
-function _renderEquip(cm, cy) {
-  const b = document.getElementById('rep-body');
-  b.innerHTML = _periodRow(cm, cy, 'eqrep');
-  document.getElementById('eqrep-gen').onclick = () => _showEquipReport(_getm('eqrep'), _gety('eqrep'));
-  _showEquipReport(cm, cy);
-}
-
-function _showEquipReport(month, year) {
-  const pfx = monthPrefix(month,year);
-  const rows = D.equipment.map(eq=>{
-    const entries=D.logEquip.filter(e=>e.eqId===eq.id&&e.date?.startsWith(pfx));
-    const daysUsed=new Set(entries.map(e=>e.date)).size, dailyRate=eq.dailyRate||0;
-    const sites=[...new Set(entries.map(e=>e.siteId))].map(sid=>D.sites.find(s=>s.id===sid)?.name||sid).filter(Boolean);
-    return {id:eq.id,name:eq.name,type:eq.type||'',dailyRate,daysUsed,totalCost:daysUsed*dailyRate,sites};
-  }).sort((a,b)=>b.daysUsed-a.daysUsed);
-  const totalDays=rows.reduce((s,r)=>s+r.daysUsed,0), totalCost=rows.reduce((s,r)=>s+r.totalCost,0);
-  const el = document.getElementById('rep-body');
-  const existing = el.querySelector('#eqrep-results');
-  const html = `<div id="eqrep-results">
-    <div class="card">
-      <div class="card-title">סיכום ${MN[month]} ${year}</div>
-      <div class="list-item" style="border:none;padding:4px 0"><span>בשימוש</span><span style="font-weight:700;margin-right:auto">${rows.filter(r=>r.daysUsed>0).length}</span></div>
-      <div class="list-item" style="border:none;padding:4px 0"><span>סה"כ ימי שימוש</span><span style="font-weight:700;margin-right:auto;color:var(--gold)">${totalDays}</span></div>
-      ${totalCost>0?`<div class="list-item" style="border:none;padding:4px 0"><span>סה"כ עלות</span><span style="font-weight:700;margin-right:auto;color:var(--gold)">${totalCost.toLocaleString('he-IL')} ₪</span></div>`:''}
-    </div>
-    ${rows.map(r=>`<div class="card" style="margin-bottom:8px">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div class="avatar av-gold">🚜</div>
-          <div class="li-info"><div class="li-name">${r.name}</div><div class="li-sub">${r.type||''}</div></div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-          ${r.daysUsed>0?`<span class="badge b-gold">${r.daysUsed} ימים</span>`:'<span class="badge b-gray">0</span>'}
-          ${r.dailyRate>0&&r.daysUsed>0?`<span class="badge b-green">${r.totalCost.toLocaleString('he-IL')} ₪</span>`:''}
-        </div>
-      </div>
-      ${r.daysUsed>0?`<div style="margin-top:6px;font-size:12px;color:var(--muted)">📍 ${r.sites.join(', ')}</div>`:''}
-    </div>`).join('')}
-    <div class="btn-row mt8">
-      <button class="btn btn-ghost btn-sm fg" id="eqrep-pdf">📄 PDF</button>
-      <button class="btn btn-ghost btn-sm fg" id="eqrep-csv">📥 CSV</button>
-    </div>
-  </div>`;
-  if (existing) existing.outerHTML = html; else el.insertAdjacentHTML('beforeend', html);
-  document.getElementById('eqrep-pdf').onclick = () => {
-    const tableRows=rows.map((r,i)=>`<tr><td>${i+1}</td><td style="text-align:right">${r.name}</td><td>${r.type||'—'}</td><td>${r.dailyRate>0?r.dailyRate.toLocaleString('he-IL')+' ₪':'—'}</td><td>${r.daysUsed}</td><td>${r.dailyRate>0&&r.daysUsed>0?r.totalCost.toLocaleString('he-IL')+' ₪':'—'}</td><td style="text-align:right;font-size:10px">${r.sites.join(', ')||'—'}</td></tr>`).join('');
-    _openPrint(_buildDoc(`דוח ציוד — ${MN[month]} ${year}`,`הופק: ${new Date().toLocaleDateString('he-IL')}`,
-      `<table><thead><tr><th>#</th><th style="text-align:right">ציוד</th><th>סוג</th><th>תעריף/יום</th><th>ימי שימוש</th><th>עלות</th><th>אתרים</th></tr></thead><tbody>${tableRows}</tbody><tfoot><tr><td colspan="4" style="text-align:right">סה"כ</td><td>${totalDays}</td><td>${totalCost>0?totalCost.toLocaleString('he-IL')+' ₪':''}</td><td></td></tr></tfoot></table>`));
-    toast('נפתח חלון הדפסה','ok');
-  };
-  document.getElementById('eqrep-csv').onclick = () => {
-    exportCSV(['ציוד','סוג','תעריף יומי (₪)','ימי שימוש','עלות (₪)','אתרים'],
-      rows.map(r=>[r.name,r.type||'',r.dailyRate||0,r.daysUsed,r.totalCost,r.sites.join(', ')]),
-      `ציוד_${MN[month]}_${year}.csv`); toast('CSV הורד','ok');
-  };
 }
 
 // ── PAYROLL ───────────────────────────────────────────────────────────────────
@@ -479,10 +418,6 @@ async function _togLock(id) {
 }
 
 // ── LEGACY EXPORTS (kept for app.js compatibility) ────────────────────────────
-export function genReport()             { renderReports(); }
-export function exportSummaryPDF()      { const d=_getAttData(D.reportMonth,D.reportYear); if(!d) return; _doSummaryPDF(d); }
-export function exportAllEmployeesPDF() { const d=_getAttData(D.reportMonth,D.reportYear); if(!d) return; _doFullPDF(d); }
-export function exportMonthCSV()        { const d=_getAttData(D.reportMonth,D.reportYear); if(!d) return; _doCSV(d); }
 export function exportSiteMonthPDF(siteId,month,year) { _doSitePDF(siteId,month,year); }
 
 function _doSummaryPDF({month,year,empMap}) {

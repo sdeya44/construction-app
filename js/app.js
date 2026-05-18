@@ -5,10 +5,10 @@ import { renderDash, refreshData } from './screens/dashboard.js';
 import { renderLogs, setLogTab, filterLogs, populateLogFilters } from './screens/logs.js';
 import { renderEmps, setEmpTab, filterEmps, openAddEmp, selectStatus, saveEmp } from './screens/employees.js';
 import { renderSites, setSiteTab, openAddSite, selectSiteStatus, saveSite } from './screens/sites.js';
-import { renderMgmt, setMgmtTab, mgmtAdd, selectSuppStatus, selectEquipStatus, saveSupp, saveEquip } from './screens/management.js';
+import { renderMgmt, mgmtAdd, selectSuppStatus, selectEquipStatus, saveSupp, saveEquip } from './screens/management.js';
 import { startLog } from './screens/wizard.js';
 import { handlePhotoUpload } from './screens/photos.js';
-import { renderReports, genReport, exportSummaryPDF, exportAllEmployeesPDF, exportMonthCSV, exportSiteMonthPDF, lockMonth, drawLocks, initSelects } from './screens/reports.js';
+import { renderReports, exportSiteMonthPDF, lockMonth, drawLocks, initSelects } from './screens/reports.js';
 import { renderSearch } from './screens/search.js';
 
 const DARK_KEY = 'cnstr_dark';
@@ -162,12 +162,7 @@ function bindEvents() {
   document.getElementById('ssp-frozen')?.addEventListener('click', () => selectSuppStatus('מוקפא'));
   document.getElementById('seq-active')?.addEventListener('click', () => selectEquipStatus('פעיל'));
   document.getElementById('seq-frozen')?.addEventListener('click', () => selectEquipStatus('מוקפא'));
-  document.querySelectorAll('#s-mgmt .tab').forEach(tab => tab.addEventListener('click', () => setMgmtTab(tab.dataset.tab, tab)));
 
-  document.getElementById('btn-gen-report')?.addEventListener('click', genReport);
-  document.getElementById('btn-summary-pdf')?.addEventListener('click', exportSummaryPDF);
-  document.getElementById('btn-full-pdf')?.addEventListener('click', exportAllEmployeesPDF);
-  document.getElementById('btn-csv')?.addEventListener('click', exportMonthCSV);
 
   document.getElementById('btn-lock-month')?.addEventListener('click', lockMonth);
   document.getElementById('sh-lock')?.addEventListener('click', e => { if (e.target === document.getElementById('sh-lock')) closeSheet('sh-lock'); });

@@ -11,11 +11,11 @@ export const D = {
   sites: [], employees: [], equipment: [], suppliers: [],
   logs: [], attendance: [], logEquip: [], deliveries: [],
   monthLocks: [], photos: [], users: [], siteAssignments: [],
-  logTab: 'all', empTab: 'active', siteTab: 'active', mgmtTab: 'suppliers',
+  logTab: 'all', empTab: 'active', siteTab: 'active',
   gmTab: 'payroll',
   editSiteId: null, editEmpId: null, editSuppId: null, editEquipId: null,
   empStatus: 'פעיל', siteStatus: 'פעיל', suppStatus: 'פעיל', equipStatus: 'פעיל',
-  wiz: {}, reportMonth: null, reportYear: null,
+  wiz: {},
 };
 
 export async function loadAll() {
