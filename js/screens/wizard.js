@@ -268,8 +268,8 @@ function wiz2() {
     <input type="text" class="form-input" id="w-note" placeholder="הערה..." value="${D.wiz.note}"></div>
   <div class="divider"></div>
   <div class="chip day-off-chip ${D.wiz.dayOff?'on':''}" id="wiz-dayoff-toggle">🚫 אתר לא עבד היום</div>
-  \${D.wiz.dayOff ? `<div class="chips mt8">
-    \${dayOffReasons.map(r=>`<div class="chip \${D.wiz.dayOffReason===r.k?'on dayoff-sel':''} wiz-dayoff-reason" data-reason="\${r.k}">\${r.i} \${r.k}</div>`).join('')}
+  ${D.wiz.dayOff ? `<div class="chips mt8">
+    ${dayOffReasons.map(r=>`<div class="chip ${D.wiz.dayOffReason===r.k?'on dayoff-sel':''} wiz-dayoff-reason" data-reason="${r.k}">${r.i} ${r.k}</div>`).join('')}
   </div>
   <div class="muted tc mt8" style="font-size:12px">הסיבה תירשם ביומן. שלבים הבאים אופציונליים.</div>` : ''}`;
 }
