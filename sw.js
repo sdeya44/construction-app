@@ -1,4 +1,4 @@
-const CACHE = 'cnstr-v26';
+const CACHE = 'cnstr-v27';
 const ASSETS = [
   './',
   './index.html',
@@ -24,7 +24,8 @@ const ASSETS = [
   './js/screens/search.js',
   './js/screens/admin.js',
   './js/screens/payroll.js',
-  './js/screens/equip-report.js',
+  './js/screens/equipment.js',
+  './js/screens/activities.js',
   './js/screens/calendar.js',
 ];
 
