@@ -16,6 +16,22 @@ const WSTEPS = [
 
 const ACT_KEYS = ['dig','base','form','cast','strip'];
 
+// Parse custom activity IDs stored in Act_Other: "[id1||id2]note"
+function parseCustomActIds(other) {
+  if (!other || !other.startsWith('[')) return [];
+  const m = other.match(/^\[([^\]]*)\]/);
+  return m ? m[1].split('||').filter(Boolean) : [];
+}
+function parseActNote(other) {
+  if (!other || !other.startsWith('[')) return other || '';
+  const m = other.match(/^\[([^\]]*)\](.*)/s);
+  return m ? m[2].trim() : other;
+}
+function buildActOther(customIds, note) {
+  const customStr = customIds.length ? '[' + customIds.join('||') + ']' : '';
+  return customStr + (note || '');
+}
+
 function getAvailableSites() {
   const active = D.sites.filter(s => s.status === 'פעיל');
   if (D.role === 'SiteManager') {
@@ -59,9 +75,11 @@ export function editLog(id) {
   const att  = D.attendance.filter(a => a.logId===id).map(a => a.empId);
   const eq   = D.logEquip.filter(e => e.logId===id).map(e => e.eqId);
   const dels = D.deliveries.filter(d => d.logId===id).map(d => ({ suppId:d.suppId, suppName:d.suppName, material:d.material, qty:d.qty }));
-  const acts = ACT_KEYS.filter(k => log[k]);
+  const presetActIds = ACT_KEYS.filter(k => log[k]).map(k => D.activities.find(a=>a.presetKey===k)?.id).filter(Boolean);
+  const customActIds = parseCustomActIds(log.other);
+  const acts = [...presetActIds, ...customActIds];
   const isDayOff = (log.other||'').startsWith('יום חופש:');
-  D.wiz = { step:1, date:log.date, siteId:log.siteId, acts, note:isDayOff ? '' : (log.other||''), gNote:log.notes||'',
+  D.wiz = { step:1, date:log.date, siteId:log.siteId, acts, note:isDayOff ? '' : parseActNote(log.other), gNote:log.notes||'',
             emps:att, equip:eq, dels, editLogId:id, editVersion:log.version||1, editMode:true, photos:[],
             dayOff:isDayOff, dayOffReason:isDayOff ? log.other.replace('יום חופש: ','') : '' };
   drawWiz(); go('newlog');
@@ -236,25 +254,22 @@ function wiz1() {
 }
 
 function wiz2() {
-  const acts = [
-    {k:'dig',l:'חפירה',i:'⛏️'},{k:'base',l:'מצעים',i:'🪨'},
-    {k:'form',l:'טפסנות',i:'🪵'},{k:'cast',l:'יציקה',i:'🏗️'},
-    {k:'strip',l:'פירוק טפסנות',i:'🔧'}
-  ];
+  const activeActs = (D.activities?.length ? D.activities : []).filter(a => a.active).sort((a,b)=>a.order-b.order);
   const dayOffReasons = [{k:'חג',i:'🎉'},{k:'גשם',i:'🌧️'},{k:'תקלה',i:'🔧'},{k:'אחר',i:'📝'}];
   const dim = D.wiz.dayOff ? 'style="opacity:.35;pointer-events:none"' : '';
   return `<div style="margin-bottom:10px">
     <button class="btn btn-ghost btn-sm" id="btn-copy-yesterday" style="width:auto">📋 העתק מאתמול</button>
   </div>
   <div class="chips" ${dim}>
-    ${acts.map(a=>`<div class="chip wiz-act-chip ${D.wiz.acts.includes(a.k)?'on':''}" data-act="${a.k}">${a.i} ${a.l}</div>`).join('')}
+    ${activeActs.map(a=>`<div class="chip wiz-act-chip ${D.wiz.acts.includes(a.id)?'on':''}" data-act="${a.id}">${a.emoji||'⚡'} ${a.name}</div>`).join('')}
   </div>
-  <div class="form-group mt12" ${dim}><label class="form-label">פעילות נוספת / הערת פעילות</label>
-    <input type="text" class="form-input" id="w-note" placeholder="פעילות אחרת..." value="${D.wiz.note}"></div>
+  ${!activeActs.length ? '<div class="muted tc mt8" style="font-size:12px">אין פעילויות מוגדרות — הוסף דרך פאנל מנהל ראשי → ⚡ פעילויות</div>' : ''}
+  <div class="form-group mt12" ${dim}><label class="form-label">הערת פעילות (אופציונלי)</label>
+    <input type="text" class="form-input" id="w-note" placeholder="הערה..." value="${D.wiz.note}"></div>
   <div class="divider"></div>
   <div class="chip day-off-chip ${D.wiz.dayOff?'on':''}" id="wiz-dayoff-toggle">🚫 אתר לא עבד היום</div>
-  ${D.wiz.dayOff ? `<div class="chips mt8">
-    ${dayOffReasons.map(r=>`<div class="chip ${D.wiz.dayOffReason===r.k?'on dayoff-sel':''} wiz-dayoff-reason" data-reason="${r.k}">${r.i} ${r.k}</div>`).join('')}
+  \${D.wiz.dayOff ? `<div class="chips mt8">
+    \${dayOffReasons.map(r=>`<div class="chip \${D.wiz.dayOffReason===r.k?'on dayoff-sel':''} wiz-dayoff-reason" data-reason="\${r.k}">\${r.i} \${r.k}</div>`).join('')}
   </div>
   <div class="muted tc mt8" style="font-size:12px">הסיבה תירשם ביומן. שלבים הבאים אופציונליים.</div>` : ''}`;
 }
@@ -382,8 +397,10 @@ function handleWizPhoto(e) {
 }
 
 function applyLogToDwiz(prev) {
-  D.wiz.acts  = ACT_KEYS.filter(k => prev[k]);
-  D.wiz.note  = (prev.other||'').startsWith('יום חופש:') ? '' : (prev.other||'');
+  const presetIds = ACT_KEYS.filter(k => prev[k]).map(k => D.activities.find(a=>a.presetKey===k)?.id).filter(Boolean);
+  const customIds = parseCustomActIds(prev.other);
+  D.wiz.acts  = [...presetIds, ...customIds];
+  D.wiz.note  = (prev.other||'').startsWith('יום חופש:') ? '' : parseActNote(prev.other);
   D.wiz.emps  = D.attendance.filter(a => a.logId===prev.id).map(a => a.empId);
   D.wiz.equip = D.logEquip.filter(e => e.logId===prev.id).map(e => e.eqId);
   D.wiz.dels  = D.deliveries.filter(d => d.logId===prev.id).map(d => ({ suppId:d.suppId, suppName:d.suppName, material:d.material, qty:d.qty }));
@@ -419,8 +436,10 @@ async function saveLog() {
   if (!site) { toast('אתר לא נמצא','err'); return; }
   setBtn('wiz-btn', true, 'שומר...');
   const logId = uid(), now = new Date().toISOString();
-  const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason||'אחר'}` : (w.note||'');
-  const tf = k => w.acts.includes(k)?'TRUE':'FALSE';
+  const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason||'אחר'}` : buildActOther(customIds, w.note);
+  const selActs  = (w.acts||[]).map(aid => D.activities.find(a=>a.id===aid)).filter(Boolean);
+  const tf = k => selActs.some(a=>a.presetKey===k) ? 'TRUE' : 'FALSE';
+  const customIds = selActs.filter(a=>!a.isPreset).map(a=>a.id);
   try {
     await sAppend('DailyLogs',[logId, w.date, w.siteId, site.name, D.user?.email||'',
       tf('dig'),tf('base'),tf('form'),tf('cast'),tf('strip'),
@@ -450,7 +469,7 @@ async function saveLogEdit() {
   const log = D.logs.find(l => l.id===w.editLogId); if (!log) { toast('יומן לא נמצא','err'); return; }
   setBtn('wiz-btn', true, 'שומר...');
   try {
-    const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason||'אחר'}` : (w.note||'');
+    const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason||'אחר'}` : buildActOther(customIds2, w.note);
     const { conflict, deleted } = await checkLogVersion(w.editLogId, w.editVersion);
     if (deleted)  { toast('יומן זה נמחק ע"י משתמש אחר','err'); setBtn('wiz-btn',false,'💾 עדכן יומן'); return; }
     if (conflict) { toast('⚠️ היומן שונה ע"י משתמש אחר. סגור וטען מחדש.','err'); setBtn('wiz-btn',false,'💾 עדכן יומן'); return; }
@@ -461,7 +480,9 @@ async function saveLogEdit() {
     ]);
 
     const newVersion = (w.editVersion||1) + 1, now = new Date().toISOString();
-    const tf = k => w.acts.includes(k)?'TRUE':'FALSE';
+    const selActs2  = (w.acts||[]).map(aid => D.activities.find(a=>a.id===aid)).filter(Boolean);
+    const tf = k => selActs2.some(a=>a.presetKey===k) ? 'TRUE' : 'FALSE';
+    const customIds2 = selActs2.filter(a=>!a.isPreset).map(a=>a.id);
     const newLg = lg.filter(r=>r[0]).map(r => r[0]!==w.editLogId ? r : [
       r[0],r[1],r[2],r[3],r[4], tf('dig'),tf('base'),tf('form'),tf('cast'),tf('strip'),
       noteVal, w.gNote||'', r[12]||'', newVersion, now, D.user?.email||''
@@ -478,7 +499,7 @@ async function saveLogEdit() {
     ]);
 
     const li = D.logs.findIndex(l => l.id===w.editLogId);
-    D.logs[li] = { ...D.logs[li], dig:w.acts.includes('dig'), base:w.acts.includes('base'), form:w.acts.includes('form'), cast:w.acts.includes('cast'), strip:w.acts.includes('strip'), other:noteVal, notes:w.gNote||'', version:newVersion, updatedAt:now, updatedBy:D.user?.email||'' };
+    D.logs[li] = { ...D.logs[li], dig:selActs2.some(a=>a.presetKey==='dig'), base:selActs2.some(a=>a.presetKey==='base'), form:selActs2.some(a=>a.presetKey==='form'), cast:selActs2.some(a=>a.presetKey==='cast'), strip:selActs2.some(a=>a.presetKey==='strip'), other:noteVal, notes:w.gNote||'', version:newVersion, updatedAt:now, updatedBy:D.user?.email||'' };
     D.attendance = D.attendance.filter(a=>a.logId!==w.editLogId);
     newAtAdd.forEach(r => D.attendance.push({id:r[0],logId:r[1],empId:r[2],empName:r[3],date:r[4],siteId:r[5]}));
     D.logEquip = D.logEquip.filter(e=>e.logId!==w.editLogId);

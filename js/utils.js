@@ -104,12 +104,31 @@ export function isDayOff(l) {
 export function getActs(l) {
   if (isDayOff(l)) return [];
   const a = [];
-  if (l.dig)  a.push('חפירה');
-  if (l.base) a.push('מצעים');
-  if (l.form) a.push('טפסנות');
-  if (l.cast) a.push('יציקה');
-  if (l.strip)a.push('פירוק טפסנות');
-  if (l.other)a.push(l.other);
+  // Preset activities — look up name from D.activities, fallback to hardcoded
+  const actName = (key, fallback) => D.activities?.find(x=>x.presetKey===key)?.name || fallback;
+  if (l.dig)  a.push(actName('dig',  'חפירה'));
+  if (l.base) a.push(actName('base', 'מצעים'));
+  if (l.form) a.push(actName('form', 'טפסנות'));
+  if (l.cast) a.push(actName('cast', 'יציקה'));
+  if (l.strip)a.push(actName('strip','פירוק טפסנות'));
+  // Custom activities stored as [id1||id2]note in other field
+  if (l.other) {
+    if (l.other.startsWith('[')) {
+      const m = l.other.match(/^\[([^\]]*)\](.*)/s);
+      if (m) {
+        m[1].split('||').filter(Boolean).forEach(aid => {
+          const act = D.activities?.find(x=>x.id===aid);
+          a.push(act?.name || aid);
+        });
+        const note = m[2].trim();
+        if (note) a.push(note);
+      } else {
+        a.push(l.other);
+      }
+    } else {
+      a.push(l.other);
+    }
+  }
   return a;
 }
 

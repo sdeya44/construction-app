@@ -74,7 +74,7 @@ export function renderCurrentScreen() {
 
 function navigate(s) { go(s); renderCurrentScreen(); }
 
-const GM_PANEL_TABS = new Set(['payroll','equip','calendar','search','admin']);
+const GM_PANEL_TABS = new Set(['payroll','equip','calendar','search','admin','activities']);
 const GM_NAV_TABS   = { reports:'reports', logs:'logs', sites:'sites', emp:'emp', mgmt:'mgmt' };
 
 export function openGMPanel() {
@@ -99,6 +99,7 @@ export function renderGMTab(tab) {
   else if (tab === 'calendar') import('./screens/calendar.js').then(m => m.renderCalendar());
   else if (tab === 'search')   import('./screens/search.js').then(m => m.renderSearch('gm'));
   else if (tab === 'admin')    import('./screens/admin.js').then(m => m.renderAdmin());
+  else if (tab === 'activities') import('./screens/activities.js').then(m => m.renderActivities());
   else if (tab in GM_NAV_TABS) {
     closeGMPanel();
     if (tab === 'logs') { populateLogFilters(); navigate('logs'); }
@@ -172,6 +173,8 @@ function bindEvents() {
   document.getElementById('btn-cancel-site')?.addEventListener('click',  () => closeSheet('sh-site'));
   document.getElementById('btn-cancel-supp')?.addEventListener('click',  () => closeSheet('sh-supp'));
   document.getElementById('btn-cancel-equip')?.addEventListener('click', () => closeSheet('sh-equip'));
+  document.getElementById('btn-save-act')?.addEventListener('click', () => import('./screens/activities.js').then(m => m.saveAct()));
+  document.getElementById('btn-cancel-act')?.addEventListener('click', () => closeSheet('sh-act'));
 
   document.getElementById('photo-input')?.addEventListener('change',    e => handlePhotoUpload(e));
   document.getElementById('site-cam-input')?.addEventListener('change', e => handlePhotoUpload(e));

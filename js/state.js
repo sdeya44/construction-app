@@ -1,5 +1,5 @@
 import { ROLES } from './config.js';
-import { sRead } from './api.js';
+import { sRead, sWrite, sAppend } from './api.js';
 import { saveCache } from './offline.js';
 
 export const D = {
@@ -8,7 +8,7 @@ export const D = {
   isOnline: navigator.onLine,
   lastSync: null,
   activeScreen: 'dash',
-  sites: [], employees: [], equipment: [], suppliers: [],
+  sites: [], employees: [], equipment: [], suppliers: [], activities: [],
   logs: [], attendance: [], logEquip: [], deliveries: [],
   monthLocks: [], photos: [], users: [], siteAssignments: [],
   logTab: 'all', empTab: 'active', siteTab: 'active',
@@ -19,7 +19,7 @@ export const D = {
 };
 
 export async function loadAll() {
-  const [si,em,eq,su,lg,at,le,dl,ml,ph,us,sa] = await Promise.all([
+  const [si,em,eq,su,lg,at,le,dl,ml,ph,us,sa,ac] = await Promise.all([
     sRead('Sites',           'A2:E5000'),
     sRead('Employees',       'A2:G5000'),
     sRead('Equipment',       'A2:F5000'),
@@ -32,6 +32,7 @@ export async function loadAll() {
     sRead('SitePhotos',      'A2:J5000'),
     sRead('Users',           'A2:F5000'),
     sRead('SiteAssignments', 'A2:F5000'),
+    sRead('Activities',      'A2:G5000').catch(()=>[]),
   ]);
 
   D.sites      = (si||[]).filter(r=>r[0]).map(r=>({
@@ -77,7 +78,27 @@ export async function loadAll() {
     id:r[0], email:r[1]||'', name:r[2]||'', role:r[3]||'SiteManager',
     addedAt:r[4]||'', addedBy:r[5]||''
   }));
-  D.siteAssignments = (sa||[]).filter(r=>r[0]).map(r=>({
+  // Activities — seed defaults if sheet empty
+  const ACT_DEFAULTS = [
+    ['act-preset-1','חפירה','⛏️','TRUE','dig','1','TRUE'],
+    ['act-preset-2','מצעים','🪨','TRUE','base','2','TRUE'],
+    ['act-preset-3','טפסנות','🪵','TRUE','form','3','TRUE'],
+    ['act-preset-4','יציקה','🏗️','TRUE','cast','4','TRUE'],
+    ['act-preset-5','פירוק טפסנות','🔧','TRUE','strip','5','TRUE'],
+  ];
+  if (!ac?.length) {
+    try {
+      const { HDR: H } = await import('./config.js');
+      await sWrite('Activities','A1',[H.Activities,...ACT_DEFAULTS]);
+    } catch(e) { /* sheet may not exist yet */ }
+    D.activities = ACT_DEFAULTS.map(r=>({id:r[0],name:r[1],emoji:r[2],isPreset:true,presetKey:r[4],order:+r[5],active:true}));
+  } else {
+    D.activities = (ac||[]).filter(r=>r[0]).map(r=>({
+      id:r[0], name:r[1]||'', emoji:r[2]||'', isPreset:r[3]==='TRUE', presetKey:r[4]||'', order:+r[5]||99, active:r[6]!=='FALSE'
+    })).sort((a,b)=>a.order-b.order);
+  }
+
+    D.siteAssignments = (sa||[]).filter(r=>r[0]).map(r=>({
     id:r[0], email:r[1]||'', siteId:r[2]||'', siteName:r[3]||'',
     addedAt:r[4]||'', addedBy:r[5]||''
   }));

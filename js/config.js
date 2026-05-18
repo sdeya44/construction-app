@@ -20,6 +20,7 @@ export const HDR = {
   MonthLocks:      ['MonthLockID','Month','Year','StatusLocked','LockedBy','LockedAt','UnlockedBy','UnlockedAt'],
   SitePhotos:      ['PhotoID','SiteID','SiteName','Date','Description','DriveFileID','ThumbnailURL','UploadedBy','UploadedAt','LogID'],
   AuditLog:        ['AuditID','Timestamp','UserEmail','UserName','Action','EntityType','EntityID','Summary'],
+  Activities:      ['ActivityID','Name','Emoji','IsPreset','PresetKey','SortOrder','Active'],
   Users:           ['UserID','Email','Name','Role','AddedAt','AddedBy'],
   SiteAssignments: ['AssignmentID','UserEmail','SiteID','SiteName','AddedAt','AddedBy'],
 };
