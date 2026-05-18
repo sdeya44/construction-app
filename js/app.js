@@ -8,7 +8,7 @@ import { renderSites, setSiteTab, openAddSite, selectSiteStatus, saveSite } from
 import { renderMgmt, setMgmtTab, mgmtAdd, selectSuppStatus, selectEquipStatus, saveSupp, saveEquip } from './screens/management.js';
 import { startLog } from './screens/wizard.js';
 import { handlePhotoUpload } from './screens/photos.js';
-import { genReport, exportSummaryPDF, exportAllEmployeesPDF, exportMonthCSV, exportSiteMonthPDF, lockMonth, drawLocks, initSelects } from './screens/reports.js';
+import { renderReports, genReport, exportSummaryPDF, exportAllEmployeesPDF, exportMonthCSV, exportSiteMonthPDF, lockMonth, drawLocks, initSelects } from './screens/reports.js';
 import { renderSearch } from './screens/search.js';
 
 const DARK_KEY = 'cnstr_dark';
@@ -68,6 +68,7 @@ export function renderCurrentScreen() {
   else if (s==='emp')    renderEmps();
   else if (s==='sites')  renderSites();
   else if (s==='mgmt')   renderMgmt();
+  else if (s==='reports') renderReports();
   else if (s==='search') renderSearch('field');
 }
 
