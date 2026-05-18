@@ -145,8 +145,9 @@ function _showAttendance(month, year) {
 // ── SITE JOURNAL ──────────────────────────────────────────────────────────────
 function _renderSite(cm, cy) {
   const b = document.getElementById('rep-body');
-  b.innerHTML = _periodRow(cm, cy, 'site');
+  b.innerHTML = _periodRow(cm, cy, 'site') + '<div id="site-results"></div>';
   document.getElementById('site-gen').onclick = () => _showSite(_getm('site'), _gety('site'));
+  _showSite(cm, cy);
 }
 
 function _showSite(month, year) {
