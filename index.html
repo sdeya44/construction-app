@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#6366f1">
+  <meta name="theme-color" content="#B8922C">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="כיאן הנדסה">
@@ -53,7 +53,7 @@
     <div class="topbar">
       <div class="fg"><div class="topbar-title">כיאן הנדסה</div><div class="topbar-sub" id="d-date"></div></div>
       <button class="topbar-btn" id="refresh-btn" style="margin-left:6px">🔄</button>
-      <button class="topbar-btn" id="btn-open-gm" title="מנהל ראשי" style="display:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border-radius:50px;padding:8px 14px;font-size:13px;font-weight:700;border:none;box-shadow:0 4px 16px rgba(99,102,241,.4)">מנהל ראשי ▲</button>
+      <button class="topbar-btn" id="btn-open-gm" title="מנהל ראשי" style="display:none;background:linear-gradient(135deg,#B8922C,#CCA848);color:#fff;border-radius:50px;padding:8px 14px;font-size:13px;font-weight:700;border:none;box-shadow:0 4px 16px rgba(184,146,44,.4)">מנהל ראשי ▲</button>
       <button class="topbar-btn" id="logout-btn">⚙️</button>
     </div>
     <div class="scroll" id="dash-scroll">
@@ -167,27 +167,8 @@
       <div class="topbar-title fg">דוחות</div>
       <button class="topbar-btn" data-role-require="lock_month">🔒</button>
     </div>
-    <div class="scroll">
-      <div class="card">
-        <div class="card-title">בחר חודש לדוח</div>
-        <div class="row">
-          <select class="form-input fg" id="r-month"></select>
-          <select class="form-input fg" id="r-year"></select>
-        </div>
-        <button class="btn btn-primary mt8" id="btn-gen-report">📊 הפק דוח</button>
-      </div>
-      <div id="r-out" style="display:none">
-        <div class="card">
-          <div class="card-title">ייצוא</div>
-          <div class="pdf-action-row">
-            <button class="btn btn-purple btn-sm" id="btn-summary-pdf">📄 ריכוז PDF</button>
-            <button class="btn btn-gold btn-sm" id="btn-full-pdf">📋 דוח מלא PDF</button>
-          </div>
-          <button class="btn btn-outline btn-sm mt8" id="btn-csv">📥 ייצוא CSV</button>
-          <div class="muted mt8" style="font-size:12px;line-height:1.5">ריכוז = רשימה + ימים. דוח מלא = כל עובד בדף נפרד עם טבלת נוכחות. CSV = ייצוא לאקסל.</div>
-        </div>
-        <div id="r-content"></div>
-      </div>
+    <div class="scroll" style="padding:12px 16px">
+      <div id="rep-body"></div>
     </div>
   </div>
 
@@ -205,7 +186,7 @@
       <span class="nav-icon">📍</span><span class="nav-label">אתרים</span><div class="nav-dot"></div>
     </button>
     <button class="nav-item" id="nav-newlog">
-      <span class="nav-icon" style="font-size:28px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:16px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;margin-top:-12px;box-shadow:0 4px 20px rgba(99,102,241,.45)">➕</span>
+      <span class="nav-icon" style="font-size:28px;background:linear-gradient(135deg,#B8922C,#CCA848);border-radius:16px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;margin-top:-12px;box-shadow:0 4px 20px rgba(184,146,44,.45)">➕</span>
       <span class="nav-label" style="margin-top:2px">דיווח</span><div class="nav-dot"></div>
     </button>
     <button class="nav-item" id="nav-logs">

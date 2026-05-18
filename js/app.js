@@ -94,7 +94,7 @@ export function renderGMTab(tab) {
   if (GM_PANEL_TABS.has(tab)) D.gmTab = tab;
   document.querySelectorAll('#gm-tabs .gm-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   if (tab === 'payroll')  import('./screens/payroll.js').then(m => m.renderPayroll());
-  else if (tab === 'equip')    import('./screens/equip-report.js').then(m => m.renderEquipReport());
+  else if (tab === 'equip')    import('./screens/equipment.js').then(m => m.renderEquipScreen());
   else if (tab === 'calendar') import('./screens/calendar.js').then(m => m.renderCalendar());
   else if (tab === 'search')   import('./screens/search.js').then(m => m.renderSearch('gm'));
   else if (tab === 'admin')    import('./screens/admin.js').then(m => m.renderAdmin());

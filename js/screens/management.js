@@ -3,9 +3,13 @@ import { D } from '../state.js';
 import { uid, toast, can, openSheet, closeSheet, setBtn } from '../utils.js';
 import { sAppend, sWrite, logAudit } from '../api.js';
 
+// Equipment functions live in equipment.js — re-export so app.js bindings work
+export { selectEquipStatus, saveEquip } from './equipment.js';
+
 export function renderMgmt() {
   const el = document.getElementById('mgmt-content');
-  if (D.mgmtTab === 'suppliers') renderSuppliers(el); else renderEquipment(el);
+  if (!el) return;
+  renderSuppliers(el);
 }
 
 export function setMgmtTab(t, el) {
@@ -90,79 +94,6 @@ export async function saveSupp() {
   setBtn('btn-save-supp', false, 'שמור ספק');
 }
 
-// ── EQUIPMENT ─────────────────────────────────────────────────────────────────
-function renderEquipment(el) {
-  const active = D.equipment.filter(e => e.active === 'פעיל');
-  const frozen = D.equipment.filter(e => e.active !== 'פעיל');
-  el.innerHTML = [
-    active.length ? `<div class="card"><div class="card-title">פעיל (${active.length})</div>${active.map(equipRow).join('')}</div>` : '',
-    frozen.length ? `<div class="card"><div class="card-title">מוקפא (${frozen.length})</div>${frozen.map(equipRow).join('')}</div>` : '',
-    !D.equipment.length ? `<div class="empty"><div class="empty-icon">🚜</div><div class="empty-title">אין ציוד עדיין</div></div>` : '',
-  ].join('');
-  document.querySelectorAll('#mgmt-content .equip-row').forEach(row => {
-    row.onclick = () => openEditEquip(row.dataset.id);
-  });
-}
-
-function equipRow(e) {
-  return `<div class="list-item clickable equip-row" data-id="${e.id}">
-    <div class="avatar av-gold">🚜</div>
-    <div class="li-info"><div class="li-name">${e.name}</div><div class="li-sub">${e.type||''}</div></div>
-    <span class="badge ${e.active==='פעיל'?'b-green':'b-orange'}">${e.active}</span>
-      ${e.dailyRate>0 ? `<span class="badge b-gold" style="margin-right:4px">${e.dailyRate.toLocaleString('he-IL')}₪/יום</span>` : ''}
-  </div>`;
-}
-
-export function openAddEquip() {
-  D.editEquipId = null; D.equipStatus = 'פעיל';
-  document.getElementById('equip-sh-title').textContent = '➕ הוספת ציוד';
-  document.getElementById('eq-name').value = '';
-  document.getElementById('eq-rate').value = 0;
-  selectEquipStatus('פעיל'); openSheet('sh-equip');
-}
-
-export function openEditEquip(id) {
-  const e = D.equipment.find(x => x.id === id); if (!e) return;
-  D.editEquipId = id; D.equipStatus = e.active || 'פעיל';
-  document.getElementById('equip-sh-title').textContent = '✏️ עריכת ציוד';
-  document.getElementById('eq-name').value = e.name;
-  document.getElementById('eq-type').value = e.type || 'כבד';
-  document.getElementById('eq-rate').value = e.dailyRate || 0;
-  selectEquipStatus(e.active || 'פעיל'); openSheet('sh-equip');
-}
-
-export function selectEquipStatus(v) {
-  D.equipStatus = v;
-  document.getElementById('seq-active')?.classList.toggle('active-s', v==='פעיל');
-  document.getElementById('seq-frozen')?.classList.toggle('frozen-s', v!=='פעיל');
-}
-
-export async function saveEquip() {
-  if (!can('manage_equipment')) { toast('אין הרשאה','err'); return; }
-  const name = document.getElementById('eq-name').value.trim();
-  if (!name) { toast('יש להזין שם ציוד','err'); return; }
-  const type = document.getElementById('eq-type').value;
-  const dailyRate = +(document.getElementById('eq-rate').value) || 0;
-  setBtn('btn-save-equip', true, 'שומר...');
-  try {
-    if (D.editEquipId) {
-      const i = D.equipment.findIndex(e => e.id === D.editEquipId);
-      D.equipment[i] = { ...D.equipment[i], name, type, active: D.equipStatus, dailyRate };
-      await sWrite('Equipment','A1',[HDR.Equipment,...D.equipment.map(e=>[e.id,e.name,e.type,e.active,e.notes||'',e.dailyRate||0])]);
-      await logAudit('UPDATE','Equipment',D.editEquipId,`עדכון ציוד: ${name}`);
-      toast('ציוד עודכן ✓','ok');
-    } else {
-      const id = uid();
-      await sAppend('Equipment',[id,name,type,D.equipStatus,'',dailyRate]);
-      D.equipment.push({ id, name, type, active: D.equipStatus, notes: '', dailyRate });
-      await logAudit('CREATE','Equipment',id,`הוספת ציוד: ${name}`);
-      toast('ציוד נוסף ✓','ok');
-    }
-    closeSheet('sh-equip'); renderMgmt();
-  } catch(e) { toast('שגיאה: '+e.message,'err'); }
-  setBtn('btn-save-equip', false, 'שמור ציוד');
-}
-
 export function mgmtAdd() {
-  if (D.mgmtTab === 'suppliers') openAddSupp(); else openAddEquip();
+  openAddSupp();
 }
