@@ -436,10 +436,10 @@ async function saveLog() {
   if (!site) { toast('אתר לא נמצא','err'); return; }
   setBtn('wiz-btn', true, 'שומר...');
   const logId = uid(), now = new Date().toISOString();
-  const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason||'אחר'}` : buildActOther(customIds, w.note);
   const selActs  = (w.acts||[]).map(aid => D.activities.find(a=>a.id===aid)).filter(Boolean);
   const tf = k => selActs.some(a=>a.presetKey===k) ? 'TRUE' : 'FALSE';
   const customIds = selActs.filter(a=>!a.isPreset).map(a=>a.id);
+  const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason||'אחר'}` : buildActOther(customIds, w.note);
   try {
     await sAppend('DailyLogs',[logId, w.date, w.siteId, site.name, D.user?.email||'',
       tf('dig'),tf('base'),tf('form'),tf('cast'),tf('strip'),
@@ -469,6 +469,9 @@ async function saveLogEdit() {
   const log = D.logs.find(l => l.id===w.editLogId); if (!log) { toast('יומן לא נמצא','err'); return; }
   setBtn('wiz-btn', true, 'שומר...');
   try {
+    const selActs2  = (w.acts||[]).map(aid => D.activities.find(a=>a.id===aid)).filter(Boolean);
+    const tf = k => selActs2.some(a=>a.presetKey===k) ? 'TRUE' : 'FALSE';
+    const customIds2 = selActs2.filter(a=>!a.isPreset).map(a=>a.id);
     const noteVal = w.dayOff ? `יום חופש: ${w.dayOffReason||'אחר'}` : buildActOther(customIds2, w.note);
     const { conflict, deleted } = await checkLogVersion(w.editLogId, w.editVersion);
     if (deleted)  { toast('יומן זה נמחק ע"י משתמש אחר','err'); setBtn('wiz-btn',false,'💾 עדכן יומן'); return; }
@@ -480,9 +483,6 @@ async function saveLogEdit() {
     ]);
 
     const newVersion = (w.editVersion||1) + 1, now = new Date().toISOString();
-    const selActs2  = (w.acts||[]).map(aid => D.activities.find(a=>a.id===aid)).filter(Boolean);
-    const tf = k => selActs2.some(a=>a.presetKey===k) ? 'TRUE' : 'FALSE';
-    const customIds2 = selActs2.filter(a=>!a.isPreset).map(a=>a.id);
     const newLg = lg.filter(r=>r[0]).map(r => r[0]!==w.editLogId ? r : [
       r[0],r[1],r[2],r[3],r[4], tf('dig'),tf('base'),tf('form'),tf('cast'),tf('strip'),
       noteVal, w.gNote||'', r[12]||'', newVersion, now, D.user?.email||''
