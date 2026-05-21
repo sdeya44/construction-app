@@ -134,9 +134,9 @@ function _showAttendance(month, year) {
     </div>
   </div>`;
   if (existing) existing.outerHTML = html; else el.insertAdjacentHTML('beforeend', html);
-  document.getElementById('att-pdf-sum').onclick  = () => exportSummaryPDF();
-  document.getElementById('att-pdf-full').onclick = () => exportAllEmployeesPDF();
-  document.getElementById('att-csv').onclick      = () => exportMonthCSV();
+  document.getElementById('att-pdf-sum').onclick  = () => _doSummaryPDF({month, year, empMap});
+  document.getElementById('att-pdf-full').onclick = () => _doFullPDF({month, year, empMap});
+  document.getElementById('att-csv').onclick      = () => _doCSV({month, year, empMap});
 }
 
 // ── SITE JOURNAL ──────────────────────────────────────────────────────────────
