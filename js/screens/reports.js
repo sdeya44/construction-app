@@ -27,6 +27,7 @@ export function renderReports() {
       ${[
         ['attendance','👷 נוכחות'],
         ['site',      '📍 יומן אתר'],
+        ['equip',     '🏗️ ציוד'],
         ['payroll',   '💰 שכר'],
         ['builder',   '⚙️ מחולל'],
       ].map(([k,l])=>`<button class="status-chip${_type===k?' active-s':''}" style="white-space:nowrap;flex-shrink:0" data-rtype="${k}">${l}</button>`).join('')}
@@ -37,6 +38,7 @@ export function renderReports() {
   }));
   if      (_type==='attendance') _renderAttendance(cm, cy);
   else if (_type==='site')       _renderSite(cm, cy);
+  else if (_type==='equip')      _renderEquipReport(cm, cy);
   else if (_type==='payroll')    _renderPayroll(cm, cy);
   else if (_type==='builder')    _renderBuilder(cm, cy);
 }
@@ -396,6 +398,169 @@ function _doCSV({month, year, empMap}) {
     `נוכחות_${MN[month]}_${year}.csv`
   );
   toast('CSV הורד','ok');
+}
+
+// ── R3: EQUIPMENT COST REPORT ────────────────────────────────────────────────
+function _renderEquipReport(cm, cy) {
+  const b = document.getElementById('rep-body');
+  b.innerHTML = _periodRow(cm, cy, 'eq') + '<div id="eq-results"></div>';
+  document.getElementById('eq-gen').onclick = () => _showEquipReport(_getm('eq'), _gety('eq'));
+  _showEquipReport(cm, cy);
+}
+
+function _buildEquipRows(month, year) {
+  const pfx = monthPrefix(month, year);
+  return D.equipment
+    .map(eq => {
+      const entries  = D.logEquip.filter(e => e.eqId === eq.id && e.date?.startsWith(pfx));
+      const daysUsed = new Set(entries.map(e => e.date)).size;
+      const dailyRate = eq.dailyRate || 0;
+      const totalCost = daysUsed * dailyRate;
+      const sites = [...new Set(entries.map(e => e.siteId))]
+        .map(sid => D.sites.find(s => s.id === sid)?.name || sid)
+        .filter(Boolean);
+      return { name: eq.name, type: eq.type || '', dailyRate, daysUsed, totalCost, sites };
+    })
+    .sort((a, b) => b.daysUsed - a.daysUsed);
+}
+
+function _showEquipReport(month, year) {
+  const rows       = _buildEquipRows(month, year);
+  const activeRows = rows.filter(r => r.daysUsed > 0);
+  const totalDays  = rows.reduce((s, r) => s + r.daysUsed, 0);
+  const grandTotal = rows.reduce((s, r) => s + r.totalCost, 0);
+
+  const el       = document.getElementById('rep-body');
+  const existing = el.querySelector('#eq-results');
+
+  const html = `<div id="eq-results">
+    <div class="card">
+      <div class="card-title">ציוד — ${MN[month]} ${year}</div>
+      <div class="list-item" style="border:none;padding:4px 0"><span>סה״כ ציוד</span><span style="font-weight:700;margin-right:auto">${rows.length}</span></div>
+      <div class="list-item" style="border:none;padding:4px 0"><span>ציוד בשימוש</span><span style="font-weight:700;margin-right:auto">${activeRows.length}</span></div>
+      <div class="list-item" style="border:none;padding:4px 0"><span>סה״כ ימי שימוש</span><span style="font-weight:700;margin-right:auto">${totalDays}</span></div>
+      <div class="list-item" style="border:none;padding:4px 0"><span>עלות כוללת</span><span style="font-weight:700;margin-right:auto;color:var(--gold)">${grandTotal > 0 ? grandTotal.toLocaleString('he-IL') + ' ₪' : '—'}</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">פירוט ציוד</div>
+      ${rows.length ? rows.map(r => `
+        <div class="list-item" style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div class="avatar av-gold">🏗️</div>
+          <div class="li-info">
+            <div class="li-name">${r.name}${r.type ? ` · <span style="font-weight:400;color:var(--muted)">${r.type}</span>` : ''}</div>
+            <div class="li-sub">${r.daysUsed} ימים × ${r.dailyRate > 0 ? r.dailyRate.toLocaleString('he-IL') + ' ₪' : '—'}</div>
+          </div>
+          <span class="badge ${r.totalCost > 0 ? 'b-gold' : 'b-gray'}">${r.totalCost > 0 ? r.totalCost.toLocaleString('he-IL') + ' ₪' : '0 ₪'}</span>
+        </div>`).join('') :
+        '<div class="empty"><div class="empty-icon">🏗️</div><div class="empty-title">אין ציוד רשום</div></div>'}
+    </div>
+    <div class="btn-row mt8">
+      <button class="btn btn-ghost btn-sm fg" id="eq-pdf">🖨️ PDF</button>
+      <button class="btn btn-ghost btn-sm fg" id="eq-csv">📥 CSV</button>
+    </div>
+  </div>`;
+
+  if (existing) existing.outerHTML = html; else el.insertAdjacentHTML('beforeend', html);
+
+  document.getElementById('eq-pdf').onclick = () => _doEquipPDF({ month, year, rows });
+  document.getElementById('eq-csv').onclick = () => {
+    exportCSV(
+      ['ציוד', 'סוג', 'תעריף יומי (₪)', 'ימי שימוש', 'עלות כוללת (₪)'],
+      rows.map(r => [r.name, r.type, r.dailyRate, r.daysUsed, r.totalCost]),
+      `ציוד_${MN[month]}_${year}.csv`
+    );
+    toast('CSV הורד', 'ok');
+  };
+}
+
+function _doEquipPDF({ month, year, rows }) {
+  const grandTotal = rows.reduce((s, r) => s + r.totalCost, 0);
+  const totalDays  = rows.reduce((s, r) => s + r.daysUsed, 0);
+  const activeRows = rows.filter(r => r.daysUsed > 0);
+
+  const tableRows = rows.map((r, i) => `
+    <tr>
+      <td class="tc muted">${i + 1}</td>
+      <td class="tname">${r.name}${r.type ? `<br><span class="sub-cell">${r.type}</span>` : ''}</td>
+      <td class="tc mono">${r.dailyRate > 0 ? r.dailyRate.toLocaleString('he-IL') + ' ₪' : '—'}</td>
+      <td class="tc mono bold ${r.daysUsed > 0 ? 'gold' : ''}">${r.daysUsed}</td>
+      <td class="tc mono bold ${r.totalCost > 0 ? 'green' : ''}">${r.totalCost > 0 ? r.totalCost.toLocaleString('he-IL') + ' ₪' : '—'}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Heebo',sans-serif;direction:rtl;background:#fff;color:#181410}
+  .page{width:794px;padding:0;background:#fff}
+  .page-header{background:linear-gradient(135deg,#1A1714 0%,#2C2620 100%);padding:28px 36px 24px;border-bottom:3px solid #B8922C}
+  .biz-name{color:#B8922C;font-size:11px;font-weight:800;letter-spacing:1.5px;margin-bottom:10px}
+  .rep-title{color:#EDE8DF;font-size:26px;font-weight:800;margin-bottom:4px}
+  .rep-sub{color:rgba(237,232,223,.65);font-size:13px}
+  .page-body{padding:28px 36px}
+  table{width:100%;border-collapse:collapse;margin-bottom:20px}
+  thead tr{background:#B8922C}
+  thead th{color:#fff;padding:10px;font-size:11px;font-weight:700;text-align:center}
+  thead th.tleft{text-align:right}
+  tbody tr:nth-child(even){background:#FBF9F4}
+  tbody tr:hover{background:#FBF6EC}
+  td{padding:9px 10px;font-size:12px;border-bottom:1px solid rgba(184,146,44,.10)}
+  td.tc{text-align:center}
+  td.tname{text-align:right;font-weight:600;color:#181410}
+  td.mono{font-family:'JetBrains Mono',monospace}
+  td.bold{font-weight:700}
+  td.green{color:#2A6B47}
+  td.gold{color:#B8922C}
+  td.muted{color:#9A9189;font-size:11px}
+  .sub-cell{font-size:10px;color:#9A9189;font-weight:400}
+  tfoot tr{background:#B8922C}
+  tfoot td{color:#fff;padding:10px;font-weight:800;text-align:center;font-size:13px}
+  tfoot td.tname{text-align:right}
+  tfoot td.mono{font-family:'JetBrains Mono',monospace}
+  .stats-banner{display:flex;gap:0;border:1.5px solid rgba(184,146,44,.30);border-radius:10px;overflow:hidden;margin-bottom:20px}
+  .stat-item{flex:1;padding:14px 10px;text-align:center;background:#FBF6EC;border-left:1px solid rgba(184,146,44,.20)}
+  .stat-item:last-child{border-left:none}
+  .stat-label{font-size:10px;color:#9A9189;margin-bottom:5px;font-weight:600}
+  .stat-value{font-size:22px;font-weight:800;color:#B8922C;font-family:'JetBrains Mono',monospace}
+  .stat-value.grn{color:#2A6B47}
+  .page-footer{text-align:center;font-size:10px;color:#9A9189;border-top:1px solid #E5E0D8;padding-top:12px;margin-top:4px}
+  @media print{body{background:#fff}@page{size:A4 portrait;margin:0}.page{width:auto}}
+</style>
+</head><body><div class="page">
+  <div class="page-header">
+    <div class="biz-name">${BUSINESS_NAME}</div>
+    <div class="rep-title">דוח עלויות ציוד</div>
+    <div class="rep-sub">${MN[month]} ${year}</div>
+  </div>
+  <div class="page-body">
+    <div class="stats-banner">
+      <div class="stat-item"><div class="stat-label">סה״כ ציוד</div><div class="stat-value">${rows.length}</div></div>
+      <div class="stat-item"><div class="stat-label">ציוד פעיל</div><div class="stat-value">${activeRows.length}</div></div>
+      <div class="stat-item"><div class="stat-label">ימי שימוש</div><div class="stat-value">${totalDays}</div></div>
+      <div class="stat-item"><div class="stat-label">עלות כוללת</div><div class="stat-value grn" style="font-size:${grandTotal > 99999 ? '15' : '18'}px">${grandTotal > 0 ? grandTotal.toLocaleString('he-IL') + ' ₪' : '—'}</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:36px">#</th>
+        <th class="tleft">ציוד</th>
+        <th>תעריף יומי</th>
+        <th>ימי שימוש</th>
+        <th>עלות כוללת</th>
+      </tr></thead>
+      <tbody>${tableRows}</tbody>
+      <tfoot><tr>
+        <td></td>
+        <td class="tname">סה״כ</td>
+        <td></td>
+        <td class="mono">${totalDays}</td>
+        <td class="mono">${grandTotal > 0 ? grandTotal.toLocaleString('he-IL') + ' ₪' : '—'}</td>
+      </tr></tfoot>
+    </table>
+    <div class="page-footer">תאריך הפקה: ${new Date().toLocaleDateString('he-IL')} &nbsp;|&nbsp; ${BUSINESS_NAME}</div>
+  </div>
+</div></body></html>`;
+  _openPrint(html);
+  toast('מפיק PDF ציוד', 'ok');
 }
 
 // ── SITE JOURNAL ─────────────────────────────────────────────────────────────
