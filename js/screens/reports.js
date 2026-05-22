@@ -529,8 +529,8 @@ const BUILDER_COLS = {
     {id:'name',     label:'שם אתר',          def:true},
     {id:'address',  label:'כתובת',           def:false},
     {id:'logDays',  label:'ימי דיווח',       def:true},
-    {id:'empCount', label:"מס' עובדים",     def:true},
-    {id:'eqCount',  label:"מס' ציוד",       def:false},
+    {id:'empCount', label:'מס\' עובדים',     def:true},
+    {id:'eqCount',  label:'מס\' ציוד',       def:false},
     {id:'status',   label:'סטטוס',           def:false},
   ],
   logs: [
@@ -541,97 +541,6 @@ const BUILDER_COLS = {
     {id:'equip',      label:'ציוד',           def:false},
     {id:'notes',      label:'הערות',          def:false},
     {id:'deliveries', label:'אספקות',         def:false},
-  ],
-};
-let _bSource = 'employees', _bCols = null;
-
-function _renderBuilder(cm, cy) {
-  if (!_bCols) _bCols = {
-    employees: new Set(BUILDER_COLS.employees.filter(c=>c.def).map(c=>c.id)),
-    equipment: new Set(BUILDER_COLS.equipment.filter(c=>c.def).map(c=>c.id)),
-    sites:     new Set(BUILDER_COLS.sites.filter(c=>c.def).map(c=>c.id)),
-    logs:      new Set(BUILDER_COLS.logs.filter(c=>c.def).map(c=>c.id)),
-  };
-  const b = document.getElementById('rep-body');
-  b.innerHTML = `
-    <div class="card">
-      <div class="card-title">⚙️ מחולל דוחות מותאם</div>
-      <div class="form-group"><label class="form-label">מקור נתונים</label>
-        <div class="status-toggle" id="bld-src">
-          ${[['employees','👷 עובדים'],['equipment','🚜 ציוד'],['sites','📍 אתרים'],['logs','📋 יומנים']].map(([k,l])=>
-            `<div class="status-chip${_bSource===k?' active-s':''}" data-src="${k}">${l}</div>`).join('')}
-        </div>
-      </div>
-      ${_periodRow(cm, cy, 'bld')}
-      <div class="form-group mt8">
-        <label class="form-label">עמודות להצגה</label>
-        <div id="bld-cols" style="display:flex;flex-wrap:wrap;gap:8px">
-          ${BUILDER_COLS[_bSource].map(c=>`
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 10px;border-radius:10px;border:1.5px solid ${_bCols[_bSource].has(c.id)?'var(--gold)':'var(--border)'};background:${_bCols[_bSource].has(c.id)?'var(--gold-bg)':'transparent'};font-size:13px;font-weight:600;color:${_bCols[_bSource].has(c.id)?'var(--gold-d)':'var(--muted)'};transition:all .15s">
-              <input type="checkbox" data-col="${c.id}" ${_bCols[_bSource].has(c.id)?'checked':''} style="width:14px;height:14px;accent-color:var(--gold)">
-              ${c.label}
-            </label>`).join('')}
-        </div>
-      </div>
-    </div>
-    <div id="bld-results"></div>`;
-  document.querySelectorAll('#bld-src [data-src]').forEach(btn=>btn.addEventListener('click',()=>{
-    _bSource=btn.dataset.src;
-    _renderBuilder(document.getElementById('bld-m').value, document.getElementById('bld-y').value);
-  }));
-  document.querySelectorAll('#bld-cols input[data-col]').forEach(cb=>cb.addEventListener('change',()=>{
-    if(cb.checked) _bCols[_bSource].add(cb.dataset.col); else _bCols[_bSource].delete(cb.dataset.col);
-    const lbl=cb.closest('label');
-    lbl.style.borderColor=cb.checked?'var(--gold)':'var(--border)';
-    lbl.style.background=cb.checked?'var(--gold-bg)':'transparent';
-    lbl.style.color=cb.checked?'var(--gold-d)':'var(--muted)';
-  }));
-  document.getElementById('bld-gen').onclick = () => _runBuilder(_getm('bld'), _gety('bld'));
-}
-
-function _runBuilder(month, year) {
-  const pfx     = monthPrefix(month, year);
-  const cols    = [..._bCols[_bSource]];
-  const colDefs = BUILDER_COLS[_bSource].filter(c=>cols.includes(c.id));
-  let rows = [];
-  if (_bSource === 'employees') {
-    const ma=D.attendance.filter(a=>a.date?.startsWith(pfx)), empMap={};
-    ma.forEach(a=>{ if(!empMap[a.empId]){const e=D.employees.find(x=>x.id===a.empId);empMap[a.empId]={name:a.empName,days:0,rate:e?.dailyRate||0,profession:e?.profession||'',phone:e?.phone||''};} empMap[a.empId].days++; });
-    D.employees.filter(e=>e.active==='פעיל').forEach(e=>{ if(!empMap[e.id]) empMap[e.id]={name:e.name,days:0,rate:e.dailyRate||0,profession:e.profession||'',phone:e.phone||''}; });
-    rows=Object.values(empMap).sort((a,b)=>b.days-a.days).map(e=>({name:e.name,days:e.days,rate:e.rate,total:e.days*e.rate,profession:e.profession,phone:e.phone}));
-  } else if (_bSource === 'equipment') {
-    rows=D.equipment.map(eq=>{ const entries=D.logEquip.filter(e=>e.eqId===eq.id&&e.date?.startsWith(pfx)); const daysUsed=new Set(entries.map(e=>e.date)).size,dailyRate=eq.dailyRate||0; const sites=[...new Set(entries.map(e=>e.siteId))].map(sid=>D.sites.find(s=>s.id===sid)?.name||sid).filter(Boolean); return {name:eq.name,type:eq.type||'',dailyRate,daysUsed,totalCost:daysUsed*dailyRate,sites:sites.join(', '),active:eq.active}; }).sort((a,b)=>b.daysUsed-a.daysUsed);
-  } else if (_bSource === 'sites') {
-    const ml=D.logs.filter(l=>l.date?.startsWith(pfx)),siteMap={};
-    D.sites.filter(s=>s.status==='פעיל').forEach(s=>{ siteMap[s.id]={name:s.name,address:s.address||'',logDays:0,emps:new Set(),eqs:new Set(),status:s.status}; });
-    ml.forEach(l=>{ if(!siteMap[l.siteId]) siteMap[l.siteId]={name:l.siteName,address:'',logDays:0,emps:new Set(),eqs:new Set(),status:'פעיל'}; siteMap[l.siteId].logDays++; D.attendance.filter(a=>a.logId===l.id).forEach(a=>siteMap[l.siteId].emps.add(a.empId)); D.logEquip.filter(e=>e.logId===l.id).forEach(e=>siteMap[l.siteId].eqs.add(e.eqId)); });
-    rows=Object.values(siteMap).sort((a,b)=>b.logDays-a.logDays).map(s=>({name:s.name,address:s.address,logDays:s.logDays,empCount:s.emps.size,eqCount:s.eqs.size,status:s.status}));
-  } else if (_bSource === 'logs') {
-    rows=D.logs.filter(l=>l.date?.startsWith(pfx)).sort((a,b)=>a.date.localeCompare(b.date)).map(l=>{ const site=D.sites.find(s=>s.id===l.siteId); return {date:new Date(l.date+'T12:00:00').toLocaleDateString('he-IL'),site:site?.name||l.siteName,acts:getActs(l).join(', ')||'—',emps:D.attendance.filter(a=>a.logId===l.id).map(a=>a.empName).join(', ')||'—',equip:D.logEquip.filter(e=>e.logId===l.id).map(e=>e.eqName).join(', ')||'—',notes:l.notes||'',deliveries:D.deliveries.filter(d=>d.logId===l.id).map(d=>d.material+(d.qty?' ('+d.qty+')':'')).join(', ')||''}; });
-  }
-  const el=document.getElementById('bld-results');
-  if (!rows.length) { el.innerHTML='<div class="empty mt12"><div class="empty-title">אין נתונים לתקופה</div></div>'; return; }
-  el.innerHTML=`
-    <div class="card mt12" style="overflow-x:auto">
-      <div class="card-title" style="margin-bottom:8px">${rows.length} רשומות — ${MN[month]} ${year}</div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="border-bottom:2px solid var(--gold-border)">${colDefs.map(c=>`<th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--gold);font-weight:800;white-space:nowrap">${c.label}</th>`).join('')}</tr></thead>
-        <tbody>${rows.map((r,i)=>`<tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'rgba(184,146,44,.03)'}">${colDefs.map(c=>`<td style="text-align:right;padding:6px 8px;font-size:12px;color:var(--text)">${_fmtCell(r[c.id])}</td>`).join('')}</tr>`).join('')}</tbody>
-      </table>
-    </div>
-    <div class="btn-row mt8">
-      <button class="btn btn-ghost btn-sm fg" id="bld-pdf">📄 PDF</button>
-      <button class="btn btn-ghost btn-sm fg" id="bld-csv">📥 CSV</button>
-    </div>`;
-  document.getElementById('bld-pdf').onclick=()=>{ const src={employees:'עובדים',equipment:'ציוד',sites:'אתרים',logs:'יומנים'}[_bSource]; const tableRows=rows.map(r=>`<tr>${colDefs.map(c=>`<td>${_fmtCell(r[c.id])}</td>`).join('')}</tr>`).join(''); _openPrint(_buildDoc(`דוח ${src} — ${MN[month]} ${year}`,`הופק: ${new Date().toLocaleDateString('he-IL')}`,`<table><thead><tr>${colDefs.map(c=>`<th>${c.label}</th>`).join('')}</tr></thead><tbody>${tableRows}</tbody></table>`)); toast('נפתח חלון הדפסה','ok'); };
-  document.getElementById('bld-csv').onclick=()=>{ exportCSV(colDefs.map(c=>c.label),rows.map(r=>colDefs.map(c=>r[c.id]??'')),`דוח_${MN[month]}_${year}.csv`); toast('CSV הורד','ok'); };
-}
-
-function _fmtCell(v) {
-  if (v===null||v===undefined) return '—';
-  if (typeof v==='number') return v.toLocaleString('he-IL');
-  return String(v)||'—';
-}קות',         def:false},
   ],
 };
 let _bSource = 'employees', _bCols = null;
