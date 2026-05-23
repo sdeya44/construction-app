@@ -150,20 +150,23 @@ export async function delLog(id, log) {
   closeSheet('sh-log');
   toast('מוחק...','');
   try {
-    const [lg,at,le,dl] = await Promise.all([
+    const [lg,at,le,dl,ph] = await Promise.all([
       sRead('DailyLogs','A2:P5000'), sRead('Attendance','A2:F5000'),
-      sRead('LogEquipment','A2:F5000'), sRead('Deliveries','A2:G5000')
+      sRead('LogEquipment','A2:F5000'), sRead('Deliveries','A2:G5000'),
+      sRead('SitePhotos','A2:K5000')
     ]);
     await Promise.all([
-      rebuildTab('DailyLogs',  lg.filter(r=>r[0] && r[0]!==id)),
-      rebuildTab('Attendance', at.filter(r=>r[0] && r[1]!==id)),
+      rebuildTab('DailyLogs',   lg.filter(r=>r[0] && r[0]!==id)),
+      rebuildTab('Attendance',  at.filter(r=>r[0] && r[1]!==id)),
       rebuildTab('LogEquipment',le.filter(r=>r[0] && r[1]!==id)),
-      rebuildTab('Deliveries', dl.filter(r=>r[0] && r[1]!==id)),
+      rebuildTab('Deliveries',  dl.filter(r=>r[0] && r[1]!==id)),
+      rebuildTab('SitePhotos',  ph.filter(r=>r[0] && r[9]!==id)),
     ]);
     D.logs       = D.logs.filter(l => l.id !== id);
     D.attendance = D.attendance.filter(a => a.logId !== id);
     D.logEquip   = D.logEquip.filter(e => e.logId !== id);
     D.deliveries = D.deliveries.filter(d => d.logId !== id);
+    D.photos     = D.photos.filter(p => p.logId !== id);
     await logAudit('DELETE','DailyLog',id, `מחיקת יומן: ${log?.siteName||''} ${log?.date||''}`);
     filterLogs(); renderDash();
     toast('יומן נמחק','ok');
