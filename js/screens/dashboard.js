@@ -28,6 +28,7 @@ export function renderDash() {
     : `<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">אין יומנים עדיין</div><div class="empty-sub">לחץ ➕ כדי ליצור דיווח ראשון</div></div>`;
   renderAlerts(t);
   renderQuickSites(t);
+  renderSiteStatusBoard(t);
   bindDashLogCards();
   renderRoleBadge();
 }
@@ -95,6 +96,51 @@ function renderQuickSites(today) {
   });
 }
 
+function renderSiteStatusBoard(today) {
+  const el = document.getElementById('d-site-board'); if (!el) return;
+  if (D.role !== 'GeneralManager') { el.innerHTML = ''; return; }
+  const active = D.sites.filter(s => s.status === 'פעיל');
+  if (!active.length) { el.innerHTML = ''; return; }
+  const reportedIds = new Set(D.logs.filter(l => l.date === today).map(l => l.siteId));
+  const workerMap = {};
+  D.attendance.filter(a => a.date === today).forEach(a => { workerMap[a.siteId] = (workerMap[a.siteId]||0)+1; });
+  const repCount = active.filter(s => reportedIds.has(s.id)).length;
+  const sorted = [...active].sort((a,b) => (reportedIds.has(a.id)?1:0)-(reportedIds.has(b.id)?1:0));
+  el.innerHTML = `
+    <div class="sec-hdr" style="display:flex;align-items:center;justify-content:space-between">
+      <div class="sec-title">מצב אתרים היום</div>
+      <div style="font-size:12px;color:var(--muted)">${repCount}/${active.length} דווחו</div>
+    </div>
+    <div class="site-board">
+      ${sorted.map(s => {
+        const rep = reportedIds.has(s.id);
+        const wk  = workerMap[s.id] || 0;
+        return `<div class="site-board-row" data-site-id="${s.id}" data-reported="${rep?'1':'0'}">
+          <div class="sb-dot ${rep?'sb-green':'sb-red'}"></div>
+          <div class="sb-name">${s.name}</div>
+          <div class="sb-workers">👷 ${wk}</div>
+          <div class="sb-status ${rep?'sb-ok':'sb-miss'}">${rep?'✓ דווח':'ללא דיווח'}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  el.querySelectorAll('.site-board-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const sid = row.dataset.siteId;
+      if (row.dataset.reported === '0') {
+        import('./wizard.js').then(m => m.startLogForSite(sid));
+      } else {
+        import('./logs.js').then(m => { m.populateLogFilters(); go('logs'); }).then(() => {
+          const sel = document.getElementById('log-filter-site');
+          if (sel) { sel.value = sid; import('./logs.js').then(m => m.filterLogs()); }
+          document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+          document.getElementById('nav-logs')?.classList.add('active');
+          D.activeScreen = 'logs';
+        });
+      }
+    });
+  });
+}
+
 function renderRoleBadge() {
   const el = document.getElementById('d-role-badge'); if (!el) return;
   const labels = { GeneralManager:'מנהל ראשי', SiteManager:'מנהל אתר', Admin:'מנהל ראשי', Manager:'מנהל אתר', Viewer:'צופה' };
@@ -115,7 +161,7 @@ export async function refreshData() {
   try {
     await loadAll();
     renderCurrentScreen();
-    toast('נתונים עודכנו ✓','ok');
+    toast('נתוניםעודכנו ✓');
   } catch(e) {
     toast('שגיאת רענון: '+e.message,'err');
   } finally {
