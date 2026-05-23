@@ -53,7 +53,6 @@
     <div class="topbar">
       <div class="fg"><div class="topbar-title">כיאן הנדסה</div><div class="topbar-sub" id="d-date"></div></div>
       <button class="topbar-btn" id="refresh-btn" style="margin-left:6px">🔄</button>
-      <button class="topbar-btn" id="btn-open-gm" title="מנהל ראשי" style="display:none;background:linear-gradient(135deg,#B8922C,#CCA848);color:#fff;border-radius:50px;padding:8px 14px;font-size:13px;font-weight:700;border:none;box-shadow:0 4px 16px rgba(184,146,44,.4)">מנהל ראשי ▲</button>
       <button class="topbar-btn" id="logout-btn">⚙️</button>
     </div>
     <div class="scroll" id="dash-scroll">
@@ -158,6 +157,22 @@
     </div>
   </div>
 
+  <!-- EQUIPMENT -->
+  <div id="s-equip" class="screen">
+    <div class="topbar">
+      <div class="topbar-title fg">ציוד</div>
+      <button class="topbar-btn" id="btn-add-equip" data-role-require="manage_suppliers">➕</button>
+    </div>
+    <div class="scroll" id="equip-scroll"></div>
+  </div>
+  <!-- SUPPLIERS -->
+  <div id="s-suppliers" class="screen">
+    <div class="topbar">
+      <div class="topbar-title fg">ספקים</div>
+      <button class="topbar-btn" id="btn-add-supp2" data-role-require="manage_suppliers">➕</button>
+    </div>
+    <div class="scroll" id="suppliers-scroll"></div>
+  </div>
   <!-- REPORTS -->
   <div id="s-reports" class="screen">
     <div class="topbar">
@@ -179,21 +194,27 @@
     <button class="nav-item active" id="nav-dash">
       <span class="nav-icon">🏠</span><span class="nav-label">בית</span><div class="nav-dot"></div>
     </button>
-    <button class="nav-item" id="nav-sites">
-      <span class="nav-icon">📍</span><span class="nav-label">אתרים</span><div class="nav-dot"></div>
-    </button>
-    <button class="nav-item" id="nav-newlog">
-      <span class="nav-icon" style="font-size:28px;background:linear-gradient(135deg,#B8922C,#CCA848);border-radius:16px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;margin-top:-12px;box-shadow:0 4px 20px rgba(184,146,44,.45)">➕</span>
-      <span class="nav-label" style="margin-top:2px">דיווח</span><div class="nav-dot"></div>
-    </button>
     <button class="nav-item" id="nav-logs">
       <span class="nav-icon">📋</span><span class="nav-label">יומנים</span><div class="nav-dot"></div>
     </button>
-    <button class="nav-item" id="nav-reports">
-      <span class="nav-icon">📊</span><span class="nav-label">דוחות</span><div class="nav-dot"></div>
+    <button class="nav-item" id="nav-newlog" style="display:none">
+      <span class="nav-icon" style="font-size:28px;background:linear-gradient(135deg,#B8922C,#CCA848);border-radius:16px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;margin-top:-12px;box-shadow:0 4px 20px rgba(184,146,44,.45)">➕</span>
+      <span class="nav-label" style="margin-top:2px">דיווח</span><div class="nav-dot"></div>
     </button>
-    <button class="nav-item" id="nav-search" style="display:none">
-      <span class="nav-icon">🔍</span><span class="nav-label">חיפוש</span><div class="nav-dot"></div>
+    <button class="nav-item" id="nav-sites" style="display:none">
+      <span class="nav-icon">📍</span><span class="nav-label">אתרים</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-equip" style="display:none">
+      <span class="nav-icon">🚜</span><span class="nav-label">ציוד</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-suppliers" style="display:none">
+      <span class="nav-icon">🚚</span><span class="nav-label">ספקים</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-emp" style="display:none">
+      <span class="nav-icon">👷</span><span class="nav-label">עובדים</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-mgmt" style="display:none">
+      <span class="nav-icon">⚙️</span><span class="nav-label">ניהול</span><div class="nav-dot"></div>
     </button>
   </div>
 </div>
@@ -376,40 +397,6 @@
 <input type="file" id="wiz-cam-input" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="wiz-gal-input" accept="image/*" multiple style="display:none">
 
-<!-- GM PANEL -->
-<div id="gm-panel" style="display:none">
-  <div class="gm-inner">
-    <div class="gm-topbar">
-      <div>
-        <div class="gm-biz">כיאן הנדסה</div>
-        <div class="gm-subtitle">ממשק מנהל ראשי</div>
-      </div>
-      <button class="gm-close-btn" id="btn-close-gm">✕</button>
-    </div>
-    <div class="gm-tabs" id="gm-tabs">
-      <div class="gm-tab-label">כלים</div>
-      <button class="gm-tab active" data-tab="payroll">💰 שכר</button>
-      <button class="gm-tab" data-tab="equip">🚜 ציוד</button>
-      <button class="gm-tab" data-tab="calendar">📅 לוח שנה</button>
-      <button class="gm-tab" data-tab="search">🔍 חיפוש</button>
-      <button class="gm-tab" data-tab="admin">👤 משתמשים</button>
-      <button class="gm-tab" data-tab="activities">⚡ פעילויות</button>
-      <div class="gm-tab-sep"></div>
-      <div class="gm-tab-label">ניווט</div>
-      <button class="gm-tab gm-tab-nav" data-tab="reports">📊 דוחות ↗</button>
-      <button class="gm-tab gm-tab-nav" data-tab="logs">📋 יומנים ↗</button>
-      <button class="gm-tab gm-tab-nav" data-tab="sites">📍 אתרים ↗</button>
-      <button class="gm-tab gm-tab-nav" data-tab="emp">👷 עובדים ↗</button>
-      <button class="gm-tab gm-tab-nav" data-tab="mgmt">⚙️ ניהול ↗</button>
-    </div>
-    <div class="gm-content" id="gm-content">
-      <div class="empty" style="margin-top:40px">
-        <div class="empty-icon">📊</div>
-        <div class="empty-title">בחר לשונית</div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- LIGHTBOX -->
 <div id="sh-lightbox"></div>
