@@ -81,13 +81,15 @@ function navigate(s) { go(s); renderCurrentScreen(); }
 export function applyRoleUI() {
   const isGM = D.role === 'GeneralManager';
   const g = id => document.getElementById(id);
-  if (g('nav-newlog'))    g('nav-newlog').style.display    = (can('create_log') && !isGM) ? '' : 'none';
+  // Field worker: dash, logs, newlog, sites, equip, suppliers
+  // GM:           dash, logs, emp,    equip, suppliers, reports
+  if (g('nav-newlog'))    g('nav-newlog').style.display    = (!isGM && can('create_log')) ? '' : 'none';
   if (g('nav-sites'))     g('nav-sites').style.display     = !isGM ? '' : 'none';
-  if (g('nav-reports'))   g('nav-reports') && (g('nav-reports').style.display = 'none');
-  if (g('nav-equip'))     g('nav-equip').style.display     = isGM ? '' : 'none';
-  if (g('nav-suppliers')) g('nav-suppliers').style.display = isGM ? '' : 'none';
+  if (g('nav-equip'))     g('nav-equip').style.display     = '';        // both roles
+  if (g('nav-suppliers')) g('nav-suppliers').style.display = '';        // both roles
   if (g('nav-emp'))       g('nav-emp').style.display       = isGM ? '' : 'none';
-  if (g('nav-mgmt'))      g('nav-mgmt').style.display      = isGM ? '' : 'none';
+  if (g('nav-reports'))   g('nav-reports').style.display   = isGM ? '' : 'none';
+  if (g('nav-mgmt'))      g('nav-mgmt').style.display      = 'none';    // removed from nav
   document.querySelectorAll('[data-role-require]').forEach(el => {
     el.style.display = can(el.dataset.roleRequire) ? '' : 'none';
   });
@@ -103,6 +105,7 @@ function bindEvents() {
   document.getElementById('nav-equip')?.addEventListener('click',     () => navigate('equip'));
   document.getElementById('nav-suppliers')?.addEventListener('click', () => navigate('suppliers'));
   document.getElementById('nav-emp')?.addEventListener('click',       () => navigate('emp'));
+  document.getElementById('nav-reports')?.addEventListener('click',   () => navigate('reports'));
   document.getElementById('nav-mgmt')?.addEventListener('click',      () => navigate('mgmt'));
 
   document.getElementById('refresh-btn')?.addEventListener('click', refreshData);
