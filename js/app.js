@@ -62,56 +62,32 @@ function initRipple() {
 
 export function renderCurrentScreen() {
   const s = D.activeScreen || 'dash';
-  if (s==='dash')    renderDash();
-  else if (s==='logs')   { populateLogFilters(); renderLogs(); }
-  else if (s==='emp')    renderEmps();
-  else if (s==='sites')  renderSites();
-  else if (s==='mgmt')   renderMgmt();
-  else if (s==='reports') renderReports();
-  else if (s==='search') renderSearch('field');
+  if (s==='dash')           renderDash();
+  else if (s==='logs')      { populateLogFilters(); renderLogs(); }
+  else if (s==='emp')       renderEmps();
+  else if (s==='sites')     renderSites();
+  else if (s==='mgmt')      renderMgmt();
+  else if (s==='equip')     import('./screens/equipment.js').then(m => m.renderEquipScreen());
+  else if (s==='suppliers') import('./screens/suppliers.js').then(m => m.renderSuppliers()).catch(() => {
+    const el = document.getElementById('s-suppliers');
+    if (el) el.innerHTML = '<div class="empty"><div class="empty-title">...</div></div>';
+  });
+  else if (s==='reports')   renderReports();
+  else if (s==='search')    renderSearch('field');
 }
 
 function navigate(s) { go(s); renderCurrentScreen(); }
 
-const GM_PANEL_TABS = new Set(['payroll','equip','calendar','search','admin','activities']);
-const GM_NAV_TABS   = { reports:'reports', logs:'logs', sites:'sites', emp:'emp', mgmt:'mgmt' };
-
-export function openGMPanel() {
-  const panel = document.getElementById('gm-panel'); if (!panel) return;
-  if (panel.classList.contains('open')) return;
-  panel.style.display = 'flex';
-  requestAnimationFrame(() => panel.classList.add('open'));
-  renderGMTab(GM_PANEL_TABS.has(D.gmTab) ? D.gmTab : 'payroll');
-}
-
-export function closeGMPanel() {
-  const panel = document.getElementById('gm-panel'); if (!panel) return;
-  panel.classList.remove('open');
-  setTimeout(() => { if (!panel.classList.contains('open')) panel.style.display = 'none'; }, 380);
-}
-
-export function renderGMTab(tab) {
-  if (GM_PANEL_TABS.has(tab)) D.gmTab = tab;
-  document.querySelectorAll('#gm-tabs .gm-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
-  if (tab === 'payroll')  import('./screens/payroll.js').then(m => m.renderPayroll());
-  else if (tab === 'equip')    import('./screens/equipment.js').then(m => m.renderEquipScreen());
-  else if (tab === 'calendar') import('./screens/calendar.js').then(m => m.renderCalendar());
-  else if (tab === 'search')   import('./screens/search.js').then(m => m.renderSearch('gm'));
-  else if (tab === 'admin')    import('./screens/admin.js').then(m => m.renderAdmin());
-  else if (tab === 'activities') import('./screens/activities.js').then(m => m.renderActivities());
-  else if (tab in GM_NAV_TABS) {
-    closeGMPanel();
-    if (tab === 'logs') { populateLogFilters(); navigate('logs'); }
-    else navigate(GM_NAV_TABS[tab]);
-  }
-}
-
 export function applyRoleUI() {
   const isGM = D.role === 'GeneralManager';
-  document.getElementById('nav-newlog').style.display    = can('create_log') ? '' : 'none';
-  document.getElementById('btn-open-gm').style.display   = isGM ? '' : 'none';
-  document.getElementById('nav-search').style.display    = isGM ? '' : 'none';
-  document.getElementById('nav-reports').style.display   = isGM ? 'none' : '';
+  const g = id => document.getElementById(id);
+  if (g('nav-newlog'))    g('nav-newlog').style.display    = (can('create_log') && !isGM) ? '' : 'none';
+  if (g('nav-sites'))     g('nav-sites').style.display     = !isGM ? '' : 'none';
+  if (g('nav-reports'))   g('nav-reports') && (g('nav-reports').style.display = 'none');
+  if (g('nav-equip'))     g('nav-equip').style.display     = isGM ? '' : 'none';
+  if (g('nav-suppliers')) g('nav-suppliers').style.display = isGM ? '' : 'none';
+  if (g('nav-emp'))       g('nav-emp').style.display       = isGM ? '' : 'none';
+  if (g('nav-mgmt'))      g('nav-mgmt').style.display      = isGM ? '' : 'none';
   document.querySelectorAll('[data-role-require]').forEach(el => {
     el.style.display = can(el.dataset.roleRequire) ? '' : 'none';
   });
@@ -120,18 +96,14 @@ export function applyRoleUI() {
 function bindEvents() {
   document.getElementById('g-btn')?.addEventListener('click', signIn);
 
-  document.getElementById('nav-dash')?.addEventListener('click',    () => navigate('dash'));
-  document.getElementById('nav-sites')?.addEventListener('click',   () => navigate('sites'));
-  document.getElementById('nav-newlog')?.addEventListener('click', () => import('./screens/wizard.js').then(m => m.startLog()));
-  document.getElementById('nav-logs')?.addEventListener('click',    () => { populateLogFilters(); navigate('logs'); });
-  document.getElementById('nav-reports')?.addEventListener('click', () => navigate('reports'));
-  document.getElementById('nav-search')?.addEventListener('click',  () => navigate('search'));
-
-  document.getElementById('btn-open-gm')?.addEventListener('click', openGMPanel);
-  document.getElementById('btn-close-gm')?.addEventListener('click', closeGMPanel);
-  document.getElementById('gm-panel')?.addEventListener('click', e => { if (e.target === document.getElementById('gm-panel')) closeGMPanel(); });
-
-  document.querySelectorAll('#gm-tabs .gm-tab').forEach(tab => tab.addEventListener('click', () => renderGMTab(tab.dataset.tab)));
+  document.getElementById('nav-dash')?.addEventListener('click',      () => navigate('dash'));
+  document.getElementById('nav-logs')?.addEventListener('click',      () => { populateLogFilters(); navigate('logs'); });
+  document.getElementById('nav-newlog')?.addEventListener('click',    () => import('./screens/wizard.js').then(m => m.startLog()));
+  document.getElementById('nav-sites')?.addEventListener('click',     () => navigate('sites'));
+  document.getElementById('nav-equip')?.addEventListener('click',     () => navigate('equip'));
+  document.getElementById('nav-suppliers')?.addEventListener('click', () => navigate('suppliers'));
+  document.getElementById('nav-emp')?.addEventListener('click',       () => navigate('emp'));
+  document.getElementById('nav-mgmt')?.addEventListener('click',      () => navigate('mgmt'));
 
   document.getElementById('refresh-btn')?.addEventListener('click', refreshData);
   document.getElementById('logout-btn')?.addEventListener('click', openSettings);
