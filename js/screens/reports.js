@@ -175,6 +175,7 @@ function _showAttendance(month, year) {
     </div>
   </div>`;
   if (existing) existing.outerHTML = html; else el.insertAdjacentHTML('beforeend', html);
+  if (eqId) { var _eqr = D.equipment.find(function(e){return e.id===eqId;}); if(_eqr && el.querySelector('#eq-results .card-title')) el.querySelector('#eq-results .card-title').textContent = _eqr.name; }
   document.getElementById('att-pdf-sum').onclick  = () => _doSummaryPDF({month, year, empMap});
   document.getElementById('att-pdf-full').onclick = () => {
     const empId = document.getElementById('att-emp-sel').value || null;
@@ -467,6 +468,7 @@ function _showEquipReport(month, year) {
   </div>`;
 
   if (existing) existing.outerHTML = html; else el.insertAdjacentHTML('beforeend', html);
+  if (eqId) { var _eqr = D.equipment.find(function(e){return e.id===eqId;}); if(_eqr && el.querySelector('#eq-results .card-title')) el.querySelector('#eq-results .card-title').textContent = _eqr.name; }
 
   document.getElementById('eq-pdf').onclick = () => _doEquipPDF({ month, year, rows });
   document.getElementById('eq-csv').onclick = () => {
@@ -616,6 +618,7 @@ function _showSite(month, year) {
     ${siteCards||'<div class="empty"><div class="empty-icon">📍</div><div class="empty-title">אין יומנים לחודש זה</div></div>'}
   </div>`;
   if (existing) existing.outerHTML = html; else el.insertAdjacentHTML('beforeend', html);
+  if (eqId) { var _eqr = D.equipment.find(function(e){return e.id===eqId;}); if(_eqr && el.querySelector('#eq-results .card-title')) el.querySelector('#eq-results .card-title').textContent = _eqr.name; }
   el.querySelectorAll('.site-pdf-btn').forEach(btn => btn.addEventListener('click',
     ()=>exportSiteMonthPDF(btn.dataset.sid,+btn.dataset.month,+btn.dataset.year)));
 }
@@ -665,6 +668,7 @@ function _showPayroll(month, year) {
     </div>
   </div>`;
   if (existing) existing.outerHTML = html; else el.insertAdjacentHTML('beforeend', html);
+  if (eqId) { var _eqr = D.equipment.find(function(e){return e.id===eqId;}); if(_eqr && el.querySelector('#eq-results .card-title')) el.querySelector('#eq-results .card-title').textContent = _eqr.name; }
   document.getElementById('pay-pdf').onclick = () => {
     const tableRows=rows.map((r,i)=>`<tr><td>${i+1}</td><td style="text-align:right">${r.name}</td><td>${r.days}</td><td>${r.rate.toLocaleString('he-IL')} ₪</td><td style="font-weight:700">${r.total.toLocaleString('he-IL')} ₪</td></tr>`).join('');
     _openPrint(_buildDoc(`דוח שכר — ${MN[month]} ${year}`,`הופק: ${new Date().toLocaleDateString('he-IL')}`,
