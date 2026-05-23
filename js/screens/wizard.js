@@ -389,10 +389,10 @@ function addDel() {
 }
 
 function handleWizPhoto(e) {
-  const f = e.target.files[0]; if (!f) return;
+  const files = Array.from(e.target.files); if (!files.length) return;
   e.target.value = '';
   if (!D.wiz.photos) D.wiz.photos = [];
-  D.wiz.photos.push({ file:f, url:URL.createObjectURL(f), name:f.name });
+  files.forEach(f => D.wiz.photos.push({ file:f, url:URL.createObjectURL(f), name:f.name }));
   drawWiz();
 }
 
@@ -497,6 +497,11 @@ async function saveLogEdit() {
       rebuildTab('LogEquipment',[...le.filter(r=>r[0]&&r[1]!==w.editLogId),...newLeAdd]),
       rebuildTab('Deliveries', [...dl.filter(r=>r[0]&&r[1]!==w.editLogId), ...newDlAdd]),
     ]);
+
+    if (w.photos?.length) {
+      const site = D.sites.find(s => s.id === log.siteId);
+      await uploadWizPhotos(log.siteId, site?.name || log.siteName, log.date, w.editLogId);
+    }
 
     const li = D.logs.findIndex(l => l.id===w.editLogId);
     D.logs[li] = { ...D.logs[li], dig:selActs2.some(a=>a.presetKey==='dig'), base:selActs2.some(a=>a.presetKey==='base'), form:selActs2.some(a=>a.presetKey==='form'), cast:selActs2.some(a=>a.presetKey==='cast'), strip:selActs2.some(a=>a.presetKey==='strip'), other:noteVal, notes:w.gNote||'', version:newVersion, updatedAt:now, updatedBy:D.user?.email||'' };
