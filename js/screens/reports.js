@@ -403,14 +403,19 @@ function _doCSV({month, year, empMap}) {
 // ── R3: EQUIPMENT COST REPORT ────────────────────────────────────────────────
 function _renderEquipReport(cm, cy) {
   const b = document.getElementById('rep-body');
-  b.innerHTML = _periodRow(cm, cy, 'eq') + '<div id="eq-results"></div>';
+  const eqOpts = '<option value="">׳›׳ ׳”׳¦׳™׳•׳“</option>' +
+    D.equipment.filter(e=>e.active).map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  b.innerHTML = _periodRow(cm, cy, 'eq') +
+    `<div style="margin:8px 0"><select id="eq-filter" style="padding:4px 8px">${eqOpts}</select></div>` +
+    '<div id="eq-results"></div>';
   document.getElementById('eq-gen').onclick = () => _showEquipReport(_getm('eq'), _gety('eq'));
   _showEquipReport(cm, cy);
 }
 
-function _buildEquipRows(month, year) {
+function _buildEquipRows(month, year, eqId) {
   const pfx = monthPrefix(month, year);
-  return D.equipment
+  const eqs = eqId ? D.equipment.filter(e => e.id === eqId) : D.equipment;
+  return eqs
     .map(eq => {
       const entries  = D.logEquip.filter(e => e.eqId === eq.id && e.date?.startsWith(pfx));
       const daysUsed = new Set(entries.map(e => e.date)).size;
@@ -425,7 +430,8 @@ function _buildEquipRows(month, year) {
 }
 
 function _showEquipReport(month, year) {
-  const rows       = _buildEquipRows(month, year);
+  const eqId = (document.getElementById('eq-filter') || {}).value || '';
+  const rows       = _buildEquipRows(month, year, eqId);
   const activeRows = rows.filter(r => r.daysUsed > 0);
   const totalDays  = rows.reduce((s, r) => s + r.daysUsed, 0);
   const grandTotal = rows.reduce((s, r) => s + r.totalCost, 0);
