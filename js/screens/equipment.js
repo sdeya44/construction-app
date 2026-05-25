@@ -270,34 +270,79 @@ export async function saveEquip() {
 
 // ── PDF EXPORT ─────────────────────────────────────────────────────────────────
 function _exportPDF(rows, month, year, totalDays, totalCost) {
-  const tableRows = rows.map((r,i) => `<tr>
-    <td>${i+1}</td><td style="text-align:right">${r.name}</td><td>${r.type||'—'}</td>
-    <td>${r.dailyRate>0?r.dailyRate.toLocaleString('he-IL')+' ₪':'—'}</td>
-    <td>${r.daysUsed}</td>
-    <td>${r.dailyRate>0&&r.daysUsed>0?r.totalCost.toLocaleString('he-IL')+' ₪':'—'}</td>
-    <td style="text-align:right;font-size:10px">${r.sites.join(', ')||'—'}</td>
-  </tr>`).join('');
   const w = window.open('', '_blank');
   if (!w) { toast('אפשר חלונות קופצים', 'err'); return; }
+  const activeRows = rows.filter(r => r.daysUsed > 0);
+  const tableRows = rows.map((r,i) => `
+    <tr>
+      <td class="tc muted">${i+1}</td>
+      <td class="tname">${r.name}${r.type?`<br><span class="sub-cell">${r.type}</span>`:''}</td>
+      <td class="tc mono">${r.dailyRate>0?r.dailyRate.toLocaleString('he-IL')+' ₪':'—'}</td>
+      <td class="tc mono bold ${r.daysUsed>0?'gold':''}">${r.daysUsed}</td>
+      <td class="tc mono bold ${r.totalCost>0?'green':''}">${r.totalCost>0?r.totalCost.toLocaleString('he-IL')+' ₪':'—'}</td>
+      <td class="tc" style="font-size:10px;text-align:right">${r.sites.join(', ')||'—'}</td>
+    </tr>`).join('');
   w.document.write(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;800&display=swap" rel="stylesheet">
-  <style>*{font-family:'Heebo',sans-serif;box-sizing:border-box}body{margin:16px;direction:rtl;font-size:12px}
-  .biz{color:#B8922C;font-size:13px;font-weight:800;text-align:center;margin-bottom:2px}
-  h2{color:#B8922C;text-align:center;font-size:18px;margin-bottom:4px;font-weight:800}
-  .sub{color:#726E68;text-align:center;font-size:12px;margin-bottom:16px}
-  table{width:100%;border-collapse:collapse}
-  th{background:#B8922C;color:#fff;padding:8px 6px;font-size:11px;text-align:center}
-  td{padding:7px 6px;border-bottom:1px solid rgba(184,146,44,.12);font-size:11px;text-align:center;vertical-align:top}
-  tr:nth-child(even) td{background:#FEFCF5}
-  tfoot td{background:#B8922C;color:#fff;font-weight:800}
-  @media print{body{margin:8px}}</style></head><body>
-  <div class="biz">${BUSINESS_NAME}</div>
-  <h2>דוח שימוש ציוד — ${MN[month]} ${year}</h2>
-  <div class="sub">הופק: ${new Date().toLocaleDateString('he-IL')}</div>
-  <table><thead><tr><th>#</th><th style="text-align:right">ציוד</th><th>סוג</th><th>תעריף/יום</th><th>ימי שימוש</th><th>עלות</th><th style="text-align:right">אתרים</th></tr></thead>
-  <tbody>${tableRows}</tbody>
-  <tfoot><tr><td colspan="4" style="text-align:right">סה"כ</td><td>${totalDays}</td><td>${totalCost>0?totalCost.toLocaleString('he-IL')+' ₪':''}</td><td></td></tr></tfoot>
-  </table></body></html>`);
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Heebo',sans-serif;direction:rtl;background:#fff;color:#181410}
+  .page{width:794px;padding:0;background:#fff}
+  .page-header{background:linear-gradient(135deg,#1A1714 0%,#2C2620 100%);padding:28px 36px 24px;border-bottom:3px solid #B8922C}
+  .biz-name{color:#B8922C;font-size:11px;font-weight:800;letter-spacing:1.5px;margin-bottom:10px}
+  .rep-title{color:#EDE8DF;font-size:26px;font-weight:800;margin-bottom:4px}
+  .rep-sub{color:rgba(237,232,223,.65);font-size:13px}
+  .page-body{padding:28px 36px}
+  table{width:100%;border-collapse:collapse;margin-bottom:20px}
+  thead tr{background:#B8922C}
+  thead th{color:#fff;padding:10px;font-size:11px;font-weight:700;text-align:center}
+  thead th.tleft{text-align:right}
+  tbody tr:nth-child(even){background:#FBF9F4}
+  td{padding:9px 10px;font-size:12px;border-bottom:1px solid rgba(184,146,44,.10)}
+  td.tc{text-align:center} td.tname{text-align:right;font-weight:600;color:#181410}
+  td.mono{font-family:'JetBrains Mono',monospace} td.bold{font-weight:700}
+  td.green{color:#2A6B47} td.gold{color:#B8922C} td.muted{color:#9A9189;font-size:11px}
+  .sub-cell{font-size:10px;color:#9A9189;font-weight:400}
+  tfoot tr{background:#B8922C}
+  tfoot td{color:#fff;padding:10px;font-weight:800;text-align:center;font-size:13px}
+  tfoot td.tname{text-align:right} tfoot td.mono{font-family:'JetBrains Mono',monospace}
+  .stats-banner{display:flex;gap:0;border:1.5px solid rgba(184,146,44,.30);border-radius:10px;overflow:hidden;margin-bottom:20px}
+  .stat-item{flex:1;padding:14px 10px;text-align:center;background:#FBF6EC;border-left:1px solid rgba(184,146,44,.20)}
+  .stat-item:last-child{border-left:none}
+  .stat-label{font-size:10px;color:#9A9189;margin-bottom:5px;font-weight:600}
+  .stat-value{font-size:22px;font-weight:800;color:#B8922C;font-family:'JetBrains Mono',monospace}
+  .stat-value.grn{color:#2A6B47}
+  .page-footer{text-align:center;font-size:10px;color:#9A9189;border-top:1px solid #E5E0D8;padding-top:12px;margin-top:4px}
+  @media print{body{background:#fff}@page{size:A4 portrait;margin:0}.page{width:auto}}
+</style>
+</head><body><div class="page">
+  <div class="page-header">
+    <div class="biz-name">${BUSINESS_NAME}</div>
+    <div class="rep-title">דוח עלויות ציוד</div>
+    <div class="rep-sub">${MN[month]} ${year}</div>
+  </div>
+  <div class="page-body">
+    <div class="stats-banner">
+      <div class="stat-item"><div class="stat-label">סה״כ ציוד</div><div class="stat-value">${rows.length}</div></div>
+      <div class="stat-item"><div class="stat-label">ציוד פעיל</div><div class="stat-value">${activeRows.length}</div></div>
+      <div class="stat-item"><div class="stat-label">ימי שימוש</div><div class="stat-value">${totalDays}</div></div>
+      <div class="stat-item"><div class="stat-label">עלות כוללת</div><div class="stat-value grn" style="font-size:${totalCost>99999?'15':'18'}px">${totalCost>0?totalCost.toLocaleString('he-IL')+' ₪':'—'}</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:36px">#</th><th class="tleft">ציוד</th>
+        <th>תעריף יומי</th><th>ימי שימוש</th><th>עלות כוללת</th><th class="tleft">אתרים</th>
+      </tr></thead>
+      <tbody>${tableRows}</tbody>
+      <tfoot><tr>
+        <td></td><td class="tname">סה״כ</td>
+        <td></td><td class="mono">${totalDays}</td>
+        <td class="mono">${totalCost>0?totalCost.toLocaleString('he-IL')+' ₪':'—'}</td><td></td>
+      </tr></tfoot>
+    </table>
+    <div class="page-footer">תאריך הפקה: ${new Date().toLocaleDateString('he-IL')} &nbsp;|&nbsp; ${BUSINESS_NAME}</div>
+  </div>
+</div></body></html>`);
   w.document.close(); setTimeout(() => w.print(), 700);
   toast('נפתח חלון הדפסה', 'ok');
 }
