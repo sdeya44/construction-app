@@ -130,7 +130,7 @@ function _showEmpMonthly(empId, emp, month, year) {
 
   if (workDays) {
     document.getElementById('btn-emp-pdf').onclick = () =>
-      _exportPayslipPDF(emp, month, year, workDays, rate, totalPay, sites, days, siteMap);
+      _exportPayslipPDF(emp, month, year, workDays, rate, totalPay, attEntries, days, siteMap);
     document.getElementById('btn-emp-csv').onclick = () => {
       exportCSV(['תאריך','יום','אתר'], days.map(date => {
         const a = attEntries.find(x => x.date === date);
@@ -142,7 +142,7 @@ function _showEmpMonthly(empId, emp, month, year) {
   }
 }
 
-function _exportPayslipPDF(emp, month, year, workDays, rate, totalPay, sites, days, siteMap) {
+function _exportPayslipPDF(emp, month, year, workDays, rate, totalPay, attEntries, days, siteMap) {
   const w = window.open('', '_blank');
   if (!w) { toast('אפשר חלונות קופצים','err'); return; }
   const pad = n => String(n).padStart(2, '0');
@@ -158,7 +158,12 @@ function _exportPayslipPDF(emp, month, year, workDays, rate, totalPay, sites, da
     dayHeaders += `<th class="${wknd?'wh':''}">${d}<br><span class="dow">${DS[dow]}</span></th>`;
     dayCells   += `<td class="${wknd?'wd':''} ${did?'wk':''}">${did?'✓':''}</td>`;
   }
-  const estHours = workDays * 9;
+  const detailRows = (days||[]).map(date => {
+    const a = attEntries.find(x => x.date === date);
+    const siteName = siteMap.get(a?.siteId) || '—';
+    const dow = new Date(date+'T12:00:00').getDay();
+    return `<tr><td class="ddate">${date}</td><td class="tc day-col">${DAYS_HE[dow]}</td><td class="dsite">${siteName}</td></tr>`;
+  }).join('');
   w.document.write(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -170,7 +175,7 @@ function _exportPayslipPDF(emp, month, year, workDays, rate, totalPay, sites, da
   .emp-name{font-size:21px;font-weight:800;margin-bottom:3px}
   .emp-sub{font-size:11.5px;color:rgba(237,232,223,.70)}
   .month-badge{text-align:center;background:rgba(184,146,44,.18);border:1.5px solid rgba(184,146,44,.45);border-radius:8px;padding:8px 16px;font-size:15px;font-weight:800;color:#D4A843;line-height:1.4;min-width:70px}
-  .grid-wrap{border:1.5px solid rgba(184,146,44,.22);border-top:none;border-radius:0 0 8px 8px;overflow:hidden;margin-bottom:14px}
+  .grid-wrap{border:1.5px solid rgba(184,146,44,.22);border-top:none;border-radius:0;overflow:hidden;margin-bottom:0}
   table.dg{width:100%;border-collapse:collapse}
   .dg thead tr{background:#B8922C}
   .dg th{color:#fff;padding:3px 1px;text-align:center;font-size:8.5px;font-weight:700;border-left:1px solid rgba(255,255,255,.15);white-space:nowrap}
@@ -181,12 +186,21 @@ function _exportPayslipPDF(emp, month, year, workDays, rate, totalPay, sites, da
   .wh{background:#8B6E14 !important}
   .wd{background:#F7F4EE}
   .wk{color:#2A6B47;font-weight:900;font-size:12px}
+  .detail-wrap{border:1.5px solid rgba(184,146,44,.22);border-top:1px solid rgba(184,146,44,.10);border-radius:0 0 8px 8px;overflow:hidden;margin-bottom:14px}
+  table.dt{width:100%;border-collapse:collapse}
+  .dt thead tr{background:rgba(184,146,44,.10)}
+  .dt th{color:#9A7B2C;padding:7px 12px;font-size:10px;font-weight:700;text-align:right;border-bottom:1px solid rgba(184,146,44,.18)}
+  .dt th.tc{text-align:center}
+  .dt tbody tr:nth-child(even){background:#FDFBF7}
+  .dt td{padding:6px 12px;font-size:11px;border-bottom:1px solid rgba(184,146,44,.06)}
+  .ddate{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6C6259;direction:ltr;text-align:left}
+  .day-col{text-align:center;color:#9A9189;font-size:10.5px}
+  .dsite{text-align:right;font-weight:600;color:#181410}
   .stats-strip{display:flex;align-items:stretch;background:#FBF6EC;border:1.5px solid rgba(184,146,44,.28);border-radius:10px;padding:14px 16px;margin-bottom:14px}
   .stat{flex:1;text-align:center}
   .sl{font-size:9.5px;color:#9A9189;margin-bottom:4px;font-weight:600}
   .sv{font-size:20px;font-weight:800;font-family:'JetBrains Mono',monospace;color:#181410;line-height:1}
   .sv.gold{color:#B8922C} .sv.grn{color:#2A6B47}
-  .sn{font-size:8.5px;color:#9A9189;margin-top:3px}
   .sdiv{width:1px;background:rgba(184,146,44,.25);margin:0 6px;flex-shrink:0}
   .sig-row{display:flex;gap:28px;margin-bottom:10px;padding-top:6px}
   .sig{flex:1;text-align:center}
@@ -210,10 +224,14 @@ function _exportPayslipPDF(emp, month, year, workDays, rate, totalPay, sites, da
       <tbody><tr><td class="rn">${emp.name}</td>${dayCells}</tr></tbody>
     </table>
   </div>
+  <div class="detail-wrap">
+    <table class="dt">
+      <thead><tr><th>תאריך</th><th class="tc">יום</th><th>אתר עבודה</th></tr></thead>
+      <tbody>${detailRows}</tbody>
+    </table>
+  </div>
   <div class="stats-strip">
     <div class="stat"><div class="sl">ימי עבודה</div><div class="sv gold">${workDays}</div></div>
-    <div class="sdiv"></div>
-    <div class="stat"><div class="sl">שעות מוערכות</div><div class="sv">${estHours}</div><div class="sn">× 9 שע'</div></div>
     <div class="sdiv"></div>
     <div class="stat"><div class="sl">תעריף יומי</div><div class="sv" style="font-size:16px">${rate>0?rate.toLocaleString('he-IL')+' ₪':'לא הוגדר'}</div></div>
     <div class="sdiv"></div>
@@ -224,7 +242,7 @@ function _exportPayslipPDF(emp, month, year, workDays, rate, totalPay, sites, da
     <div class="sig"><div class="sig-line"></div><div class="sig-lbl">אישור מנהל</div></div>
     <div class="sig"><div class="sig-line"></div><div class="sig-lbl">תאריך</div></div>
   </div>
-  <div class="fnote">* שעות מוערכות לפי 9 שעות ביום — אינן כוללות שעות נוספות &nbsp;|&nbsp; הופק: ${new Date().toLocaleDateString('he-IL')}</div>
+  <div class="fnote">הופק: ${new Date().toLocaleDateString('he-IL')} &nbsp;|&nbsp; ${BUSINESS_NAME}</div>
 </div></body></html>`);
   w.document.close(); setTimeout(() => w.print(), 700);
   toast('נפתח חלון הדפסה','ok');
