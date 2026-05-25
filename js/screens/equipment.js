@@ -116,8 +116,13 @@ function _showEqMonthly(eqId, eq, month, year) {
     </div>`:''}`;
 
   if (daysUsed) {
-    document.getElementById('btn-eq-pdf').onclick = () =>
-      _exportPDF([{ id:eqId, name:eq.name, type:eq.type||'', active:eq.active, dailyRate, daysUsed, totalCost, sites }], month, year, daysUsed, totalCost);
+    document.getElementById('btn-eq-pdf').onclick = () => {
+      const daysSiteMap = new Map(days.map(date => {
+        const e = entries.find(x => x.date === date);
+        return [date, siteMap.get(e?.siteId) || '—'];
+      }));
+      _exportPDF([{ id:eqId, name:eq.name, type:eq.type||'', active:eq.active, dailyRate, daysUsed, totalCost, sites }], month, year, daysUsed, totalCost, days, daysSiteMap);
+    };
     document.getElementById('btn-eq-csv').onclick = () => {
       exportCSV(['תאריך','יום','אתר'], days.map(date => {
         const e = entries.find(x => x.date === date);
@@ -269,10 +274,11 @@ export async function saveEquip() {
 }
 
 // ── PDF EXPORT ─────────────────────────────────────────────────────────────────
-function _exportPDF(rows, month, year, totalDays, totalCost) {
+function _exportPDF(rows, month, year, totalDays, totalCost, detailDays = null, daysSiteMap = null) {
   const w = window.open('', '_blank');
   if (!w) { toast('אפשר חלונות קופצים', 'err'); return; }
   const activeRows = rows.filter(r => r.daysUsed > 0);
+  const single = rows.length === 1;
   const tableRows = rows.map((r,i) => `
     <tr>
       <td class="tc muted">${i+1}</td>
@@ -280,8 +286,14 @@ function _exportPDF(rows, month, year, totalDays, totalCost) {
       <td class="tc mono">${r.dailyRate>0?r.dailyRate.toLocaleString('he-IL')+' ₪':'—'}</td>
       <td class="tc mono bold ${r.daysUsed>0?'gold':''}">${r.daysUsed}</td>
       <td class="tc mono bold ${r.totalCost>0?'green':''}">${r.totalCost>0?r.totalCost.toLocaleString('he-IL')+' ₪':'—'}</td>
-      <td class="tc" style="font-size:10px;text-align:right">${r.sites.join(', ')||'—'}</td>
+      ${!single?`<td class="tc" style="font-size:10px;text-align:right">${r.sites.join(', ')||'—'}</td>`:''}
     </tr>`).join('');
+  const dayDetailRows = (single && detailDays && detailDays.length > 0)
+    ? detailDays.map(date => {
+        const dow = new Date(date+'T12:00:00').getDay();
+        return `<tr><td class="ddate">${date}</td><td class="tc day-col">${DAYS_HE[dow]}</td><td class="dsite">${daysSiteMap?.get(date)||'—'}</td></tr>`;
+      }).join('')
+    : '';
   w.document.write(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -312,23 +324,27 @@ function _exportPDF(rows, month, year, totalDays, totalCost) {
   .stat-label{font-size:10px;color:#9A9189;margin-bottom:5px;font-weight:600}
   .stat-value{font-size:22px;font-weight:800;color:#B8922C;font-family:'JetBrains Mono',monospace}
   .stat-value.grn{color:#2A6B47}
+  .sec-title{font-size:12px;font-weight:800;color:#B8922C;border-bottom:1.5px solid rgba(184,146,44,.25);padding-bottom:5px;margin:0 0 10px}
+  .ddate{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6C6259;direction:ltr;text-align:left}
+  .day-col{color:#9A9189;font-size:10.5px}
+  .dsite{text-align:right;font-weight:600;color:#181410}
   .page-footer{text-align:center;font-size:10px;color:#9A9189;border-top:1px solid #E5E0D8;padding-top:12px;margin-top:4px}
   @media print{body{background:#fff}@page{size:A4 portrait;margin:0}.page{width:auto}}
 </style>
 </head><body><div class="page">
   <div class="page-header">
     <div class="biz-name">${BUSINESS_NAME}</div>
-    <div class="rep-title">דוח עלויות ציוד</div>
+    <div class="rep-title">דוח עלויות ציוד${single?' — '+rows[0].name:''}</div>
     <div class="rep-sub">${MN[month]} ${year}</div>
   </div>
   <div class="page-body">
     <div class="stats-banner">
-      <div class="stat-item"><div class="stat-label">סה״כ ציוד</div><div class="stat-value">${rows.length}</div></div>
-      <div class="stat-item"><div class="stat-label">ציוד פעיל</div><div class="stat-value">${activeRows.length}</div></div>
+      <div class="stat-item"><div class="stat-label">${single?'סוג ציוד':'סה״כ ציוד'}</div><div class="stat-value" style="font-size:${single?'14':'22'}px">${single?(rows[0].type||'—'):rows.length}</div></div>
+      <div class="stat-item"><div class="stat-label">${single?'סטטוס':'ציוד פעיל'}</div><div class="stat-value" style="font-size:${single?'14':'22'}px">${single?rows[0].active:activeRows.length}</div></div>
       <div class="stat-item"><div class="stat-label">ימי שימוש</div><div class="stat-value">${totalDays}</div></div>
       <div class="stat-item"><div class="stat-label">עלות כוללת</div><div class="stat-value grn" style="font-size:${totalCost>99999?'15':'18'}px">${totalCost>0?totalCost.toLocaleString('he-IL')+' ₪':'—'}</div></div>
     </div>
-    <table>
+    ${!single?`<table>
       <thead><tr>
         <th style="width:36px">#</th><th class="tleft">ציוד</th>
         <th>תעריף יומי</th><th>ימי שימוש</th><th>עלות כוללת</th><th class="tleft">אתרים</th>
@@ -339,7 +355,13 @@ function _exportPDF(rows, month, year, totalDays, totalCost) {
         <td></td><td class="mono">${totalDays}</td>
         <td class="mono">${totalCost>0?totalCost.toLocaleString('he-IL')+' ₪':'—'}</td><td></td>
       </tr></tfoot>
-    </table>
+    </table>`:''}
+    ${dayDetailRows ? `
+    <div class="sec-title">פירוט ימי שימוש (${totalDays} ימים)</div>
+    <table>
+      <thead><tr><th class="tleft">תאריך</th><th>יום</th><th class="tleft">אתר עבודה</th></tr></thead>
+      <tbody>${dayDetailRows}</tbody>
+    </table>` : ''}
     <div class="page-footer">תאריך הפקה: ${new Date().toLocaleDateString('he-IL')} &nbsp;|&nbsp; ${BUSINESS_NAME}</div>
   </div>
 </div></body></html>`);
