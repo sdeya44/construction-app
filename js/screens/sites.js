@@ -1,6 +1,6 @@
-import { HDR, MN, BUSINESS_NAME } from '../config.js';
+import { HDR, MN, DAYS_HE, BUSINESS_NAME } from '../config.js';
 import { D } from '../state.js';
-import { uid, todayStr, toast, can, openSheet, closeSheet, setBtn, monthPrefix, exportCSV } from '../utils.js';
+import { uid, todayStr, toast, can, openSheet, closeSheet, setBtn, monthPrefix, exportCSV, getActs } from '../utils.js';
 import { sAppend, sWrite, logAudit } from '../api.js';
 import { openSitePhotos } from './photos.js';
 
@@ -121,7 +121,7 @@ function _showSiteReport(siteId, site, month, year) {
 
   if (workDays > 0) {
     document.getElementById('btn-site-pdf').onclick = () =>
-      _exportSitePDF(site, month, year, workDays, siteLogs.length, workers, equipUsed, totalEquipCost);
+      _exportSitePDF(site, month, year, workDays, siteLogs, workers, equipUsed, totalEquipCost, siteId);
     document.getElementById('btn-site-csv').onclick = () => {
       exportCSV(
         ['תאריך','עובדים','ציוד'],
@@ -137,34 +137,100 @@ function _showSiteReport(siteId, site, month, year) {
   }
 }
 
-function _exportSitePDF(site, month, year, workDays, logCount, workers, equipUsed, totalEquipCost) {
+function _exportSitePDF(site, month, year, workDays, siteLogs, workers, equipUsed, totalEquipCost, siteId) {
   const w = window.open('', '_blank');
   if (!w) { toast('אפשר חלונות קופצים', 'err'); return; }
+  const sortedLogs = [...siteLogs].sort((a,b) => a.date.localeCompare(b.date));
+  const dayRows = sortedLogs.map(log => {
+    const dow = new Date(log.date+'T12:00:00').getDay();
+    const wc  = (log.workers || []).length;
+    const dayEquip = D.logEquip
+      .filter(e => e.siteId === siteId && e.date === log.date)
+      .map(e => D.equipment.find(x => x.id === e.eqId)?.name || '')
+      .filter(Boolean);
+    const logActs = getActs(log);
+    return `<tr>
+      <td class="ddate">${log.date}</td>
+      <td class="tc daycol">${DAYS_HE[dow]}</td>
+      <td class="tc mono bold ${wc>0?'gold':''}">${wc}</td>
+      <td class="tleft">${dayEquip.join(', ')||'—'}</td>
+      <td class="tleft">${logActs.join(', ')||'—'}</td>
+    </tr>`;
+  }).join('');
+  const equipRows = equipUsed.map(e => `<tr>
+    <td class="tname">🚜 ${e.name}</td>
+    <td class="tc mono bold">${e.days}</td>
+    <td class="tc mono ${e.cost>0?'grn':''}">${e.cost>0?e.cost.toLocaleString('he-IL')+' ₪':'—'}</td>
+  </tr>`).join('');
   w.document.write(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;800&display=swap" rel="stylesheet">
-  <style>*{font-family:'Heebo',sans-serif;box-sizing:border-box}body{margin:16px;direction:rtl;font-size:12px}
-  .biz{color:#B8922C;font-size:13px;font-weight:800;text-align:center;margin-bottom:2px}
-  h2{color:#B8922C;text-align:center;font-size:18px;margin-bottom:4px;font-weight:800}
-  .sub{color:#726E68;text-align:center;font-size:12px;margin-bottom:16px}
-  .sec{font-weight:800;font-size:13px;color:#B8922C;border-bottom:2px solid #B8922C;padding-bottom:4px;margin:16px 0 8px}
-  .kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}
-  table{width:100%;border-collapse:collapse;margin-top:8px}
-  th{background:#B8922C;color:#fff;padding:8px 6px;font-size:11px;text-align:center}
-  td{padding:7px 6px;border-bottom:1px solid rgba(184,146,44,.12);font-size:11px;text-align:center}
-  @media print{body{margin:8px}}</style></head><body>
-  <div class="biz">${BUSINESS_NAME}</div>
-  <h2>דוח חודשי — ${site.name}</h2>
-  <div class="sub">${MN[month]} ${year}${site.address?' | '+site.address:''} | הופק: ${new Date().toLocaleDateString('he-IL')}</div>
-  <div class="sec">סיכום</div>
-  <div class="kv"><span>ימי עבודה</span><strong>${workDays}</strong></div>
-  <div class="kv"><span>יומנים</span><strong>${logCount}</strong></div>
-  ${workers.length?`<div class="kv"><span>עובדים</span><strong>${workers.join(', ')}</strong></div>`:''}
-  ${equipUsed.length?`<div class="sec">ציוד בשימוש</div>
-  <table><thead><tr><th style="text-align:right">ציוד</th><th>ימים</th><th>עלות</th></tr></thead><tbody>
-  ${equipUsed.map(e=>`<tr><td style="text-align:right">${e.name}</td><td>${e.days}</td><td>${e.cost>0?e.cost.toLocaleString('he-IL')+' ₪':'—'}</td></tr>`).join('')}
-  ${totalEquipCost>0?`<tr><td style="text-align:right;font-weight:800">סה"כ</td><td></td><td style="font-weight:800">${totalEquipCost.toLocaleString('he-IL')} ₪</td></tr>`:''}
-  </tbody></table>`:''}
-  </body></html>`);
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Heebo',sans-serif;direction:rtl;background:#fff;color:#181410}
+  .page{width:794px;padding:0;background:#fff}
+  .page-header{background:linear-gradient(135deg,#1A1714 0%,#2C2620 100%);padding:28px 36px 24px;border-bottom:3px solid #B8922C}
+  .biz-name{color:#B8922C;font-size:11px;font-weight:800;letter-spacing:1.5px;margin-bottom:10px}
+  .rep-title{color:#EDE8DF;font-size:26px;font-weight:800;margin-bottom:4px}
+  .rep-sub{color:rgba(237,232,223,.65);font-size:13px}
+  .page-body{padding:24px 36px}
+  .stats-banner{display:flex;gap:0;border:1.5px solid rgba(184,146,44,.30);border-radius:10px;overflow:hidden;margin-bottom:20px}
+  .stat-item{flex:1;padding:14px 10px;text-align:center;background:#FBF6EC;border-left:1px solid rgba(184,146,44,.20)}
+  .stat-item:last-child{border-left:none}
+  .stat-label{font-size:10px;color:#9A9189;margin-bottom:5px;font-weight:600}
+  .stat-value{font-size:22px;font-weight:800;color:#B8922C;font-family:'JetBrains Mono',monospace}
+  .stat-value.grn{color:#2A6B47}
+  .sec-title{font-size:12px;font-weight:800;color:#B8922C;border-bottom:1.5px solid rgba(184,146,44,.25);padding-bottom:5px;margin:18px 0 10px}
+  table{width:100%;border-collapse:collapse;margin-bottom:8px}
+  thead tr{background:#B8922C}
+  thead th{color:#fff;padding:9px 10px;font-size:11px;font-weight:700;text-align:center}
+  thead th.tleft{text-align:right}
+  tbody tr:nth-child(even){background:#FBF9F4}
+  td{padding:8px 10px;font-size:11.5px;border-bottom:1px solid rgba(184,146,44,.08)}
+  td.tc{text-align:center} td.tname{text-align:right;font-weight:600;color:#181410}
+  td.tleft{text-align:right;font-size:11px;color:#4A4540}
+  td.mono{font-family:'JetBrains Mono',monospace} td.bold{font-weight:700}
+  td.gold{color:#B8922C} td.grn{color:#2A6B47}
+  td.daycol{color:#9A9189;font-size:10.5px}
+  .ddate{font-family:'JetBrains Mono',monospace;font-size:11px;color:#6C6259;direction:ltr;text-align:left}
+  tfoot tr{background:rgba(184,146,44,.12)}
+  tfoot td{color:#B8922C;padding:9px 10px;font-weight:800;font-size:12px;text-align:center}
+  tfoot td.tname{text-align:right}
+  .page-footer{text-align:center;font-size:10px;color:#9A9189;border-top:1px solid #E5E0D8;padding-top:12px;margin-top:4px}
+  @media print{body{background:#fff}@page{size:A4 landscape;margin:0}.page{width:auto}}
+</style></head><body><div class="page">
+  <div class="page-header">
+    <div class="biz-name">${BUSINESS_NAME}</div>
+    <div class="rep-title">דוח חודשי — ${site.name}</div>
+    <div class="rep-sub">${MN[month]} ${year}${site.address?' · '+site.address:''}</div>
+  </div>
+  <div class="page-body">
+    <div class="stats-banner">
+      <div class="stat-item"><div class="stat-label">ימי עבודה</div><div class="stat-value">${workDays}</div></div>
+      <div class="stat-item"><div class="stat-label">יומנים</div><div class="stat-value">${siteLogs.length}</div></div>
+      <div class="stat-item"><div class="stat-label">עובדים</div><div class="stat-value">${workers.length}</div></div>
+      <div class="stat-item"><div class="stat-label">עלות ציוד</div><div class="stat-value grn" style="font-size:${totalEquipCost>99999?'14':'18'}px">${totalEquipCost>0?totalEquipCost.toLocaleString('he-IL')+' ₪':'—'}</div></div>
+    </div>
+    ${dayRows ? `
+    <div class="sec-title">פירוט ימי עבודה</div>
+    <table>
+      <thead><tr>
+        <th class="tleft" style="min-width:90px">תאריך</th>
+        <th>יום</th><th>עובדים</th>
+        <th class="tleft">ציוד</th>
+        <th class="tleft">פעילויות</th>
+      </tr></thead>
+      <tbody>${dayRows}</tbody>
+    </table>` : ''}
+    ${equipUsed.length ? `
+    <div class="sec-title">ציוד בשימוש</div>
+    <table>
+      <thead><tr><th class="tleft">ציוד</th><th>ימי שימוש</th><th>עלות</th></tr></thead>
+      <tbody>${equipRows}</tbody>
+      ${totalEquipCost>0?`<tfoot><tr><td class="tname">סה"כ</td><td class="mono">${equipUsed.reduce((s,e)=>s+e.days,0)}</td><td class="mono">${totalEquipCost.toLocaleString('he-IL')} ₪</td></tr></tfoot>`:''}
+    </table>` : ''}
+    <div class="page-footer">הופק: ${new Date().toLocaleDateString('he-IL')} &nbsp;|&nbsp; ${BUSINESS_NAME}</div>
+  </div>
+</div></body></html>`);
   w.document.close(); setTimeout(() => w.print(), 700);
   toast('נפתח חלון הדפסה', 'ok');
 }
