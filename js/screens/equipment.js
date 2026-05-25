@@ -1,4 +1,4 @@
-import { HDR, MN, BUSINESS_NAME } from '../config.js';
+import { HDR, MN, DAYS_HE, BUSINESS_NAME } from '../config.js';
 import { D } from '../state.js';
 import { uid, toast, can, openSheet, closeSheet, setBtn, monthPrefix, exportCSV } from '../utils.js';
 import { sAppend, sWrite, logAudit } from '../api.js';
@@ -16,10 +16,12 @@ function _renderList() {
   const active = D.equipment.filter(e => e.active === 'פעיל');
   const frozen = D.equipment.filter(e => e.active !== 'פעיל');
   el.innerHTML = [
+    `<button class="btn btn-ghost btn-sm mt8" id="btn-all-equip-report" style="width:auto">📊 דוח כל הציוד</button>`,
     active.length ? `<div class="card mt12"><div class="card-title">פעיל (${active.length})</div>${active.map(_eqRow).join('')}</div>` : '',
     frozen.length ? `<div class="card mt12"><div class="card-title">מוקפא (${frozen.length})</div>${frozen.map(_eqRow).join('')}</div>` : '',
     !D.equipment.length ? `<div class="empty mt16"><div class="empty-icon">🚜</div><div class="empty-title">אין ציוד עדיין</div><div class="empty-sub">לחץ ➕ להוספת ציוד</div></div>` : '',
   ].join('');
+  document.getElementById('btn-all-equip-report').onclick = _openAllEquipReport;
   document.querySelectorAll('#eq-body .eq-row').forEach(r => { r.onclick = () => _openDetails(r.dataset.id); });
 }
 
@@ -74,11 +76,26 @@ function _openDetails(id) {
 function _showEqMonthly(eqId, eq, month, year) {
   const pfx      = monthPrefix(month, year);
   const entries  = D.logEquip.filter(e => e.eqId === eqId && e.date?.startsWith(pfx));
-  const daysUsed = new Set(entries.map(e => e.date)).size;
+  const days     = [...new Set(entries.map(e => e.date))].sort();
+  const daysUsed = days.length;
   const dailyRate = eq.dailyRate || 0;
   const totalCost = daysUsed * dailyRate;
-  const sites = [...new Set(entries.map(e => e.siteId))]
-    .map(sid => D.sites.find(s => s.id===sid)?.name || sid).filter(Boolean);
+  const siteMap  = new Map();
+  entries.forEach(e => {
+    if (!siteMap.has(e.siteId)) siteMap.set(e.siteId, D.sites.find(s=>s.id===e.siteId)?.name||e.siteId);
+  });
+  const sites = [...siteMap.values()];
+
+  const dayRows = days.map(date => {
+    const e = entries.find(x => x.date === date);
+    const siteName = siteMap.get(e?.siteId) || '—';
+    const d = new Date(date); const dayHe = DAYS_HE[d.getDay()];
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <span style="color:var(--muted);direction:ltr;font-family:monospace;min-width:90px">${date}</span>
+      <span style="color:var(--muted);min-width:40px;text-align:center">${dayHe}</span>
+      <span style="color:var(--text);text-align:right;flex:1;padding-right:4px">${siteName}</span>
+    </div>`;
+  }).join('');
 
   document.getElementById('eq-r-out').innerHTML = `
     <div class="card mt8">
@@ -86,8 +103,12 @@ function _showEqMonthly(eqId, eq, month, year) {
       <div class="list-item" style="border:none;padding:4px 0"><span>ימי שימוש</span><span style="font-weight:700;margin-right:auto;color:var(--gold)">${daysUsed}</span></div>
       <div class="list-item" style="border:none;padding:4px 0"><span>תעריף יומי</span><span style="font-weight:700;margin-right:auto">${dailyRate?dailyRate.toLocaleString('he-IL')+' ₪':'לא הוגדר'}</span></div>
       ${totalCost>0?`<div class="list-item" style="border:none;padding:6px 0;border-top:1px solid var(--border)"><span style="font-weight:700">סה"כ עלות</span><span style="font-weight:800;margin-right:auto;color:var(--gold);font-size:16px">${totalCost.toLocaleString('he-IL')} ₪</span></div>`:''}
-      ${sites.length?`<div style="padding:6px 0"><div style="font-size:12px;color:var(--muted);margin-bottom:6px">אתרים</div><div style="display:flex;flex-wrap:wrap;gap:4px">${sites.map(s=>`<span class="badge b-blue">${s}</span>`).join('')}</div></div>`:''}
     </div>
+    ${daysUsed ? `
+    <div class="card mt8">
+      <div class="card-title">פירוט ימי שימוש</div>
+      ${dayRows}
+    </div>` : ''}
     ${!daysUsed?`<div class="empty mt16"><div class="empty-icon">🚜</div><div class="empty-title">לא נעשה שימוש בחודש זה</div></div>`:''}
     ${daysUsed?`<div class="btn-row mt8">
       <button class="btn btn-ghost btn-sm fg" id="btn-eq-pdf">📄 PDF</button>
@@ -98,16 +119,98 @@ function _showEqMonthly(eqId, eq, month, year) {
     document.getElementById('btn-eq-pdf').onclick = () =>
       _exportPDF([{ id:eqId, name:eq.name, type:eq.type||'', active:eq.active, dailyRate, daysUsed, totalCost, sites }], month, year, daysUsed, totalCost);
     document.getElementById('btn-eq-csv').onclick = () => {
-      exportCSV(['תאריך','אתר'],
-        [...new Set(entries.map(e=>e.date))].sort().map(date => {
-          const e = entries.find(x => x.date===date);
-          return [date, D.sites.find(s=>s.id===e?.siteId)?.name||''];
-        }),
-        `${eq.name}_${MN[month]}_${year}.csv`
-      );
+      exportCSV(['תאריך','יום','אתר'], days.map(date => {
+        const e = entries.find(x => x.date === date);
+        const d = new Date(date);
+        return [date, DAYS_HE[d.getDay()], D.sites.find(s=>s.id===e?.siteId)?.name||''];
+      }), `${eq.name}_${MN[month]}_${year}.csv`);
       toast('CSV הורד', 'ok');
     };
   }
+}
+
+// ── ALL EQUIPMENT REPORT ──────────────────────────────────────────────────────
+
+function _openAllEquipReport() {
+  const el = document.getElementById('eq-body');
+  const now = new Date(), cm = now.getMonth()+1, cy = now.getFullYear();
+  el.innerHTML = `
+    <button class="btn btn-ghost btn-sm mt8" id="eq-rpt-back">← חזרה לרשימה</button>
+    <div class="card mt12">
+      <div class="card-title">דוח שימוש — כל הציוד</div>
+      <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div class="form-group" style="flex:1;min-width:100px"><label class="form-label">חודש</label>
+          <select class="form-input" id="all-eq-r-month">${MN.slice(1).map((n,i)=>`<option value="${i+1}">${n}</option>`).join('')}</select></div>
+        <div class="form-group" style="flex:1;min-width:80px"><label class="form-label">שנה</label>
+          <select class="form-input" id="all-eq-r-year">${[cy,cy-1,cy-2].map(y=>`<option value="${y}">${y}</option>`).join('')}</select></div>
+        <button class="btn btn-primary" id="btn-all-eq-gen" style="width:auto;padding:12px 20px;margin-bottom:2px">📊 הפק</button>
+      </div>
+    </div>
+    <div id="all-eq-r-out"></div>`;
+  document.getElementById('eq-rpt-back').onclick = _renderList;
+  document.getElementById('all-eq-r-month').value = cm;
+  document.getElementById('all-eq-r-year').value  = cy;
+  document.getElementById('btn-all-eq-gen').onclick = () =>
+    _showAllEquipMonthly(+document.getElementById('all-eq-r-month').value, +document.getElementById('all-eq-r-year').value);
+  _showAllEquipMonthly(cm, cy);
+}
+
+function _showAllEquipMonthly(month, year) {
+  const pfx = monthPrefix(month, year);
+  const data = D.equipment.map(eq => {
+    const entries  = D.logEquip.filter(e => e.eqId === eq.id && e.date?.startsWith(pfx));
+    const daysUsed = new Set(entries.map(e => e.date)).size;
+    const dailyRate = eq.dailyRate || 0;
+    const totalCost = daysUsed * dailyRate;
+    const sites = [...new Set(entries.map(e => e.siteId))]
+      .map(sid => D.sites.find(s=>s.id===sid)?.name||sid).filter(Boolean);
+    return { id:eq.id, name:eq.name, type:eq.type||'', active:eq.active, dailyRate, daysUsed, totalCost, sites };
+  }).filter(r => r.daysUsed > 0).sort((a,b) => b.daysUsed - a.daysUsed);
+
+  const totalDays = data.reduce((s,r) => s + r.daysUsed, 0);
+  const grandTotal = data.reduce((s,r) => s + r.totalCost, 0);
+  const out = document.getElementById('all-eq-r-out');
+
+  if (!data.length) {
+    out.innerHTML = `<div class="empty mt16"><div class="empty-icon">🚜</div><div class="empty-title">לא נעשה שימוש בחודש זה</div></div>`;
+    return;
+  }
+
+  out.innerHTML = `
+    <div class="card mt8">
+      <div class="card-title">סיכום ${MN[month]} ${year}</div>
+      <div class="list-item" style="border:none;padding:4px 0"><span>פריטים שהופעלו</span><span style="font-weight:700;margin-right:auto">${data.length}</span></div>
+      <div class="list-item" style="border:none;padding:4px 0"><span>סה"כ ימי שימוש</span><span style="font-weight:700;margin-right:auto;color:var(--gold)">${totalDays}</span></div>
+      ${grandTotal>0?`<div class="list-item" style="border:none;padding:6px 0;border-top:1px solid var(--border)"><span style="font-weight:700">סה"כ עלות</span><span style="font-weight:800;margin-right:auto;color:var(--gold);font-size:16px">${grandTotal.toLocaleString('he-IL')} ₪</span></div>`:''}
+    </div>
+    <div class="card mt8">
+      ${data.map(r => `
+        <div class="list-item" style="padding:8px 0">
+          <div class="li-info" style="flex:1">
+            <div class="li-name">${r.name}</div>
+            <div class="li-sub">${r.type}${r.sites.length?' · '+r.sites.join(', '):''}</div>
+          </div>
+          <div style="text-align:left">
+            <div style="font-weight:700;color:var(--gold)">${r.daysUsed} ימים</div>
+            ${r.totalCost>0?`<div style="font-size:12px;color:var(--muted)">${r.totalCost.toLocaleString('he-IL')} ₪</div>`:''}
+          </div>
+        </div>`).join('')}
+    </div>
+    <div class="btn-row mt8">
+      <button class="btn btn-ghost btn-sm fg" id="btn-all-eq-pdf">📄 PDF</button>
+      <button class="btn btn-ghost btn-sm fg" id="btn-all-eq-csv">📥 CSV</button>
+    </div>`;
+
+  document.getElementById('btn-all-eq-pdf').onclick = () =>
+    _exportPDF(data, month, year, totalDays, grandTotal);
+  document.getElementById('btn-all-eq-csv').onclick = () => {
+    exportCSV(
+      ['ציוד','סוג','תעריף יומי','ימי שימוש','סה"כ עלות','אתרים'],
+      data.map(r => [r.name, r.type||'', r.dailyRate||'', r.daysUsed, r.totalCost||'', r.sites.join(', ')]),
+      `ציוד_${MN[month]}_${year}.csv`
+    );
+    toast('CSV הורד','ok');
+  };
 }
 
 // ── ADD / EDIT ─────────────────────────────────────────────────────────────────
