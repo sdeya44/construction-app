@@ -38,6 +38,12 @@ export function renderTopics() {
       show: true,
     },
     {
+      icon: '⚡', title: 'פעילויות', screen: 'activities',
+      sub: `${D.activities?.filter(a=>a.active).length||0} פעילויות פעילות`,
+      desc: 'ניהול סוגי פעילויות ביומן',
+      show: isGM,
+    },
+    {
       icon: '👷', title: 'עובדים', screen: 'emp',
       sub: `${activeEmps} עובדים פעילים`,
       desc: 'רשימה, נוכחות חודשית, חישוב שכר',
