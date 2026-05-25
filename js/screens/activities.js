@@ -5,7 +5,7 @@ import { sWrite, logAudit } from '../api.js';
 
 // ── ENTRY POINT ───────────────────────────────────────────────────────────────
 export function renderActivities() {
-  const el = document.getElementById('gm-content');
+  const el = document.getElementById('activities-content');
   if (!el) return;
   const active  = D.activities.filter(a => a.active);
   const inactive = D.activities.filter(a => !a.active);
