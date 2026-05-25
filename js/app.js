@@ -6,6 +6,7 @@ import { renderLogs, setLogTab, filterLogs, populateLogFilters } from './screens
 import { renderEmps, setEmpTab, filterEmps, openAddEmp, selectStatus, saveEmp } from './screens/employees.js';
 import { renderSites, setSiteTab, openAddSite, selectSiteStatus, saveSite } from './screens/sites.js';
 import { renderMgmt, mgmtAdd, selectSuppStatus, selectEquipStatus, saveSupp, saveEquip } from './screens/management.js';
+import { openAddEquip } from './screens/equipment.js';
 import { handlePhotoUpload } from './screens/photos.js';
 import { renderReports, exportSiteMonthPDF, lockMonth, drawLocks, initSelects } from './screens/reports.js';
 import { renderSearch } from './screens/search.js';
@@ -132,6 +133,7 @@ function bindEvents() {
 
   document.getElementById('mgmt-add-btn')?.addEventListener('click', mgmtAdd);
   document.getElementById('btn-save-supp')?.addEventListener('click', saveSupp);
+  document.getElementById('btn-add-equip')?.addEventListener('click', openAddEquip);
   document.getElementById('btn-save-equip')?.addEventListener('click', saveEquip);
   document.getElementById('ssp-active')?.addEventListener('click', () => selectSuppStatus('פעיל'));
   document.getElementById('ssp-frozen')?.addEventListener('click', () => selectSuppStatus('מוקפא'));
