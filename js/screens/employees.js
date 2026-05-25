@@ -145,42 +145,87 @@ function _showEmpMonthly(empId, emp, month, year) {
 function _exportPayslipPDF(emp, month, year, workDays, rate, totalPay, sites, days, siteMap) {
   const w = window.open('', '_blank');
   if (!w) { toast('אפשר חלונות קופצים','err'); return; }
-  const dayRows = (days||[]).map(date => {
-    const d = new Date(date); const dayHe = DAYS_HE[d.getDay()];
-    const a = D.attendance.find(x => x.empId === emp.id && x.date === date);
-    const siteName = siteMap?.get(a?.siteId) || '—';
-    return `<tr><td style="direction:ltr;font-family:monospace;text-align:left">${date}</td><td>${dayHe}</td><td style="text-align:right">${siteName}</td></tr>`;
-  }).join('');
+  const pad = n => String(n).padStart(2, '0');
+  const daysCount = new Date(year, month, 0).getDate();
+  const DS = ['א','ב','ג','ד','ה','ו','ש'];
+  const workedSet = new Set(days||[]);
+  let dayHeaders = '', dayCells = '';
+  for (let d = 1; d <= daysCount; d++) {
+    const ds = `${year}-${pad(month)}-${pad(d)}`;
+    const dow = new Date(ds+'T12:00:00').getDay();
+    const wknd = dow === 5 || dow === 6;
+    const did = workedSet.has(ds);
+    dayHeaders += `<th class="${wknd?'wh':''}">${d}<br><span class="dow">${DS[dow]}</span></th>`;
+    dayCells   += `<td class="${wknd?'wd':''} ${did?'wk':''}">${did?'✓':''}</td>`;
+  }
+  const estHours = workDays * 9;
   w.document.write(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;800&display=swap" rel="stylesheet">
-  <style>*{font-family:'Heebo',sans-serif;box-sizing:border-box}body{margin:16px;direction:rtl;font-size:12px}
-  .biz{color:#B8922C;font-size:13px;font-weight:800;text-align:center;margin-bottom:2px}
-  h2{color:#B8922C;text-align:center;font-size:18px;margin-bottom:4px;font-weight:800}
-  .sub{color:#726E68;text-align:center;font-size:12px;margin-bottom:16px}
-  .sec{font-weight:800;font-size:13px;color:#B8922C;border-bottom:2px solid #B8922C;padding-bottom:4px;margin:16px 0 8px}
-  .kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}
-  .total{display:flex;justify-content:space-between;padding:10px 0;font-weight:800;font-size:15px;border-top:2px solid #B8922C;margin-top:8px}
-  table{width:100%;border-collapse:collapse;margin-top:8px}
-  th{background:#B8922C;color:#fff;padding:6px;font-size:11px;text-align:center}
-  td{padding:5px 6px;border-bottom:1px solid rgba(184,146,44,.12);font-size:11px;text-align:center}
-  tr:nth-child(even) td{background:#FEFCF5}
-  @media print{body{margin:8px}}</style></head><body>
-  <div class="biz">${BUSINESS_NAME}</div>
-  <h2>תלוש שכר — ${emp.name}</h2>
-  <div class="sub">${MN[month]} ${year} | הופק: ${new Date().toLocaleDateString('he-IL')}</div>
-  <div class="sec">פרטי עובד</div>
-  <div class="kv"><span>שם</span><strong>${emp.name}</strong></div>
-  ${emp.profession?`<div class="kv"><span>מקצוע</span><strong>${emp.profession}</strong></div>`:''}
-  ${emp.phone?`<div class="kv"><span>טלפון</span><strong>${emp.phone}</strong></div>`:''}
-  <div class="sec">נוכחות ושכר</div>
-  <div class="kv"><span>ימי עבודה</span><strong>${workDays}</strong></div>
-  <div class="kv"><span>תעריף יומי</span><strong>${rate.toLocaleString('he-IL')} ₪</strong></div>
-  ${sites.length?`<div class="kv"><span>אתרים</span><strong>${sites.join(', ')}</strong></div>`:''}
-  <div class="total"><span>סה"כ לתשלום</span><span>${totalPay.toLocaleString('he-IL')} ₪</span></div>
-  ${dayRows?`<div class="sec">פירוט ימי עבודה</div>
-  <table><thead><tr><th>תאריך</th><th>יום</th><th style="text-align:right">אתר</th></tr></thead>
-  <tbody>${dayRows}</tbody></table>`:''}
-  </body></html>`);
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Heebo',sans-serif;direction:rtl;background:#fff;color:#181410}
+  .page{width:794px;padding:28px 28px 20px;background:#fff}
+  .card-hdr{background:linear-gradient(135deg,#1A1714 0%,#2C2620 100%);border-radius:10px 10px 0 0;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;color:#EDE8DF}
+  .biz-label{font-size:9.5px;color:#B8922C;font-weight:800;letter-spacing:.8px;margin-bottom:8px}
+  .emp-name{font-size:21px;font-weight:800;margin-bottom:3px}
+  .emp-sub{font-size:11.5px;color:rgba(237,232,223,.70)}
+  .month-badge{text-align:center;background:rgba(184,146,44,.18);border:1.5px solid rgba(184,146,44,.45);border-radius:8px;padding:8px 16px;font-size:15px;font-weight:800;color:#D4A843;line-height:1.4;min-width:70px}
+  .grid-wrap{border:1.5px solid rgba(184,146,44,.22);border-top:none;border-radius:0 0 8px 8px;overflow:hidden;margin-bottom:14px}
+  table.dg{width:100%;border-collapse:collapse}
+  .dg thead tr{background:#B8922C}
+  .dg th{color:#fff;padding:3px 1px;text-align:center;font-size:8.5px;font-weight:700;border-left:1px solid rgba(255,255,255,.15);white-space:nowrap}
+  .dg th.rl{min-width:52px;text-align:right;padding-right:6px;font-size:9.5px;border-left:2px solid rgba(255,255,255,.25)}
+  .dow{font-size:7px;opacity:.8;font-weight:400;display:block}
+  .dg td{text-align:center;padding:5px 1px;border:1px solid rgba(184,146,44,.08);font-size:9px}
+  .dg td.rn{text-align:right;padding-right:7px;font-weight:700;font-size:10px;background:#FBF9F4;border-left:2px solid rgba(184,146,44,.18)}
+  .wh{background:#8B6E14 !important}
+  .wd{background:#F7F4EE}
+  .wk{color:#2A6B47;font-weight:900;font-size:12px}
+  .stats-strip{display:flex;align-items:stretch;background:#FBF6EC;border:1.5px solid rgba(184,146,44,.28);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+  .stat{flex:1;text-align:center}
+  .sl{font-size:9.5px;color:#9A9189;margin-bottom:4px;font-weight:600}
+  .sv{font-size:20px;font-weight:800;font-family:'JetBrains Mono',monospace;color:#181410;line-height:1}
+  .sv.gold{color:#B8922C} .sv.grn{color:#2A6B47}
+  .sn{font-size:8.5px;color:#9A9189;margin-top:3px}
+  .sdiv{width:1px;background:rgba(184,146,44,.25);margin:0 6px;flex-shrink:0}
+  .sig-row{display:flex;gap:28px;margin-bottom:10px;padding-top:6px}
+  .sig{flex:1;text-align:center}
+  .sig-line{height:1px;background:#181410;margin-bottom:5px;margin-top:24px}
+  .sig-lbl{font-size:10px;color:#6C6259}
+  .fnote{font-size:8.5px;color:#9A9189;text-align:center;border-top:1px solid #E5E0D8;padding-top:8px}
+  @media print{body{background:#fff}@page{size:A4 portrait;margin:0}.page{width:auto;padding:20px 20px 16px}}
+</style>
+</head><body><div class="page">
+  <div class="card-hdr">
+    <div>
+      <div class="biz-label">${BUSINESS_NAME} — תלוש שכר</div>
+      <div class="emp-name">${emp.name}</div>
+      <div class="emp-sub">${MN[month]} ${year}${emp.profession?' | '+emp.profession:''}</div>
+    </div>
+    <div class="month-badge">${MN[month]}<br><span style="font-size:13px;opacity:.8">${year}</span></div>
+  </div>
+  <div class="grid-wrap">
+    <table class="dg">
+      <thead><tr><th class="rl">ימי עבודה</th>${dayHeaders}</tr></thead>
+      <tbody><tr><td class="rn">${emp.name}</td>${dayCells}</tr></tbody>
+    </table>
+  </div>
+  <div class="stats-strip">
+    <div class="stat"><div class="sl">ימי עבודה</div><div class="sv gold">${workDays}</div></div>
+    <div class="sdiv"></div>
+    <div class="stat"><div class="sl">שעות מוערכות</div><div class="sv">${estHours}</div><div class="sn">× 9 שע'</div></div>
+    <div class="sdiv"></div>
+    <div class="stat"><div class="sl">תעריף יומי</div><div class="sv" style="font-size:16px">${rate>0?rate.toLocaleString('he-IL')+' ₪':'לא הוגדר'}</div></div>
+    <div class="sdiv"></div>
+    <div class="stat"><div class="sl">שכר לתשלום</div><div class="sv grn" style="font-size:${totalPay>99999?'14':'18'}px">${totalPay>0?totalPay.toLocaleString('he-IL')+' ₪':'—'}</div></div>
+  </div>
+  <div class="sig-row">
+    <div class="sig"><div class="sig-line"></div><div class="sig-lbl">חתימת עובד</div></div>
+    <div class="sig"><div class="sig-line"></div><div class="sig-lbl">אישור מנהל</div></div>
+    <div class="sig"><div class="sig-line"></div><div class="sig-lbl">תאריך</div></div>
+  </div>
+  <div class="fnote">* שעות מוערכות לפי 9 שעות ביום — אינן כוללות שעות נוספות &nbsp;|&nbsp; הופק: ${new Date().toLocaleDateString('he-IL')}</div>
+</div></body></html>`);
   w.document.close(); setTimeout(() => w.print(), 700);
   toast('נפתח חלון הדפסה','ok');
 }
@@ -269,33 +314,74 @@ function _showAllEmpMonthly(month, year) {
 function _exportAllEmpPDF(data, month, year, totalDays, grandTotal) {
   const w = window.open('', '_blank');
   if (!w) { toast('אפשר חלונות קופצים','err'); return; }
-  const tableRows = data.map((r,i) => `<tr>
-    <td>${i+1}</td>
-    <td style="text-align:right">${r.emp.name}</td>
-    <td>${r.emp.profession||'—'}</td>
-    <td>${r.rate?r.rate.toLocaleString('he-IL')+' ₪':'—'}</td>
-    <td>${r.workDays}</td>
-    <td>${r.totalPay>0?r.totalPay.toLocaleString('he-IL')+' ₪':'—'}</td>
-  </tr>`).join('');
+  const tableRows = data.map((r,i) => `
+    <tr>
+      <td class="tc muted">${i+1}</td>
+      <td class="tname">${r.emp.name}${r.emp.profession?`<br><span class="sub-cell">${r.emp.profession}</span>`:''}</td>
+      <td class="tc mono bold ${r.workDays>0?'green':''}">${r.workDays}</td>
+      <td class="tc mono">${r.rate>0?r.rate.toLocaleString('he-IL')+' ₪':'—'}</td>
+      <td class="tc mono bold ${r.totalPay>0?'green':''}">${r.totalPay>0?r.totalPay.toLocaleString('he-IL')+' ₪':'—'}</td>
+    </tr>`).join('');
   w.document.write(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;800&display=swap" rel="stylesheet">
-  <style>*{font-family:'Heebo',sans-serif;box-sizing:border-box}body{margin:16px;direction:rtl;font-size:12px}
-  .biz{color:#B8922C;font-size:13px;font-weight:800;text-align:center;margin-bottom:2px}
-  h2{color:#B8922C;text-align:center;font-size:18px;margin-bottom:4px;font-weight:800}
-  .sub{color:#726E68;text-align:center;font-size:12px;margin-bottom:16px}
-  table{width:100%;border-collapse:collapse}
-  th{background:#B8922C;color:#fff;padding:8px 6px;font-size:11px;text-align:center}
-  td{padding:7px 6px;border-bottom:1px solid rgba(184,146,44,.12);font-size:11px;text-align:center;vertical-align:top}
-  tr:nth-child(even) td{background:#FEFCF5}
-  tfoot td{background:#B8922C;color:#fff;font-weight:800}
-  @media print{body{margin:8px}}</style></head><body>
-  <div class="biz">${BUSINESS_NAME}</div>
-  <h2>דוח נוכחות עובדים — ${MN[month]} ${year}</h2>
-  <div class="sub">הופק: ${new Date().toLocaleDateString('he-IL')}</div>
-  <table><thead><tr><th>#</th><th style="text-align:right">שם עובד</th><th>מקצוע</th><th>תעריף/יום</th><th>ימי עבודה</th><th>סה"כ שכר</th></tr></thead>
-  <tbody>${tableRows}</tbody>
-  <tfoot><tr><td colspan="4" style="text-align:right">סה"כ</td><td>${totalDays}</td><td>${grandTotal>0?grandTotal.toLocaleString('he-IL')+' ₪':''}</td></tr></tfoot>
-  </table></body></html>`);
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Heebo',sans-serif;direction:rtl;background:#fff;color:#181410}
+  .page{width:794px;padding:0;background:#fff}
+  .page-header{background:linear-gradient(135deg,#1A1714 0%,#2C2620 100%);padding:28px 36px 24px;border-bottom:3px solid #B8922C}
+  .biz-name{color:#B8922C;font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px}
+  .rep-title{color:#EDE8DF;font-size:26px;font-weight:800;margin-bottom:4px}
+  .rep-sub{color:rgba(237,232,223,.65);font-size:13px}
+  .page-body{padding:28px 36px}
+  table{width:100%;border-collapse:collapse;margin-bottom:20px}
+  thead tr{background:#B8922C}
+  thead th{color:#fff;padding:10px;font-size:11px;font-weight:700;text-align:center}
+  thead th.tleft{text-align:right}
+  tbody tr:nth-child(even){background:#FBF9F4}
+  td{padding:9px 10px;font-size:12px;border-bottom:1px solid rgba(184,146,44,.10)}
+  td.tc{text-align:center} td.tname{text-align:right;font-weight:600;color:#181410}
+  td.mono{font-family:'JetBrains Mono',monospace} td.bold{font-weight:700}
+  td.green{color:#2A6B47} td.muted{color:#9A9189;font-size:11px}
+  .sub-cell{font-size:10px;color:#9A9189;font-weight:400}
+  tfoot tr{background:#B8922C}
+  tfoot td{color:#fff;padding:10px;font-weight:800;text-align:center;font-size:13px}
+  tfoot td.tname{text-align:right} tfoot td.mono{font-family:'JetBrains Mono',monospace}
+  .stats-banner{display:flex;gap:0;border:1.5px solid rgba(184,146,44,.30);border-radius:10px;overflow:hidden;margin-bottom:20px}
+  .stat-item{flex:1;padding:14px 10px;text-align:center;background:#FBF6EC;border-left:1px solid rgba(184,146,44,.20)}
+  .stat-item:last-child{border-left:none}
+  .stat-label{font-size:10px;color:#9A9189;margin-bottom:5px;font-weight:600}
+  .stat-value{font-size:22px;font-weight:800;color:#B8922C;font-family:'JetBrains Mono',monospace}
+  .page-footer{text-align:center;font-size:10px;color:#9A9189;border-top:1px solid #E5E0D8;padding-top:12px}
+  @media print{body{background:#fff}@page{size:A4 portrait;margin:0}.page{width:auto}}
+</style>
+</head><body><div class="page">
+  <div class="page-header">
+    <div class="biz-name">${BUSINESS_NAME}</div>
+    <div class="rep-title">דוח נוכחות חודשי</div>
+    <div class="rep-sub">${MN[month]} ${year}</div>
+  </div>
+  <div class="page-body">
+    <table>
+      <thead><tr>
+        <th style="width:36px">#</th><th class="tleft">שם עובד</th>
+        <th>ימי עבודה</th><th>תעריף יומי</th><th>סה"כ לתשלום</th>
+      </tr></thead>
+      <tbody>${tableRows}</tbody>
+      <tfoot><tr>
+        <td></td><td class="tname">סה"כ</td>
+        <td class="mono">${totalDays}</td><td>—</td>
+        <td class="mono">${grandTotal>0?grandTotal.toLocaleString('he-IL')+' ₪':'—'}</td>
+      </tr></tfoot>
+    </table>
+    <div class="stats-banner">
+      <div class="stat-item"><div class="stat-label">עובדים ברשימה</div><div class="stat-value">${data.length}</div></div>
+      <div class="stat-item"><div class="stat-label">עובדים שהגיעו</div><div class="stat-value">${data.filter(r=>r.workDays>0).length}</div></div>
+      <div class="stat-item"><div class="stat-label">ימי נוכחות</div><div class="stat-value">${totalDays}</div></div>
+      <div class="stat-item"><div class="stat-label">שכר כולל מוערך</div><div class="stat-value" style="font-size:${grandTotal>999999?'14':'17'}px">${grandTotal>0?grandTotal.toLocaleString('he-IL')+' ₪':'—'}</div></div>
+    </div>
+    <div class="page-footer">הופק: ${new Date().toLocaleDateString('he-IL')} &nbsp;|&nbsp; ${BUSINESS_NAME} &nbsp;|&nbsp; * תעריפים לפי נתוני מערכת</div>
+  </div>
+</div></body></html>`);
   w.document.close(); setTimeout(() => w.print(), 700);
   toast('נפתח חלון הדפסה','ok');
 }
