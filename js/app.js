@@ -72,6 +72,7 @@ export function renderCurrentScreen() {
   else if (s==='topics')    renderTopics();
   else if (s==='equip')     import('./screens/equipment.js').then(m => m.renderEquipScreen());
   else if (s==='suppliers') import('./screens/suppliers.js').then(m => m.renderSuppliersScreen());
+  else if (s==='activities') import('./screens/activities.js').then(m => m.renderActivities());
   else if (s==='reports')   renderReports();
   else if (s==='search')    renderSearch('field');
 }
