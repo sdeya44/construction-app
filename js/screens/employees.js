@@ -1,6 +1,6 @@
-import { HDR, MN } from '../config.js';
+import { HDR, MN, BUSINESS_NAME } from '../config.js';
 import { D } from '../state.js';
-import { uid, monthPrefix, todayStr, toast, can, openSheet, closeSheet, setBtn } from '../utils.js';
+import { uid, monthPrefix, todayStr, toast, can, openSheet, closeSheet, setBtn, exportCSV } from '../utils.js';
 import { sAppend, sWrite, logAudit } from '../api.js';
 
 export function renderEmps() { filterEmps(); }
@@ -40,7 +40,114 @@ export function filterEmps() {
         </div>`;
       }).join('')}
     </div>`).join('');
-  document.querySelectorAll('.emp-row').forEach(row => { row.onclick = () => openEmpHistory(row.dataset.id); });
+  document.querySelectorAll('.emp-row').forEach(row => { row.onclick = () => _openEmpDetails(row.dataset.id); });
+}
+
+function _openEmpDetails(id) {
+  const emp = D.employees.find(e => e.id === id); if (!emp) return;
+  const el = document.getElementById('emp-list');
+  const now = new Date(), cm = now.getMonth()+1, cy = now.getFullYear();
+  el.innerHTML = `
+    <button class="btn btn-ghost btn-sm mt8" id="emp-back">← חזרה לרשימה</button>
+    <div class="card mt12">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="min-width:0">
+          <div style="font-size:20px;font-weight:800;color:var(--text)">${emp.name}</div>
+          <div style="color:var(--muted);font-size:13px;margin-top:4px">${emp.profession||''}${emp.phone?' · '+emp.phone:''}</div>
+          ${emp.dailyRate?`<div style="margin-top:6px;font-size:13px">תעריף יומי: <strong>${(+emp.dailyRate).toLocaleString('he-IL')} ₪</strong></div>`:''}
+        </div>
+        <span class="badge ${emp.active==='פעיל'?'b-green':'b-orange'}" style="flex-shrink:0">${emp.active==='פעיל'?'פעיל':'מוקפא'}</span>
+      </div>
+      ${can('manage_employees')?`<button class="btn btn-ghost fg mt12" id="emp-det-edit">✏️ עריכה</button>`:''}
+    </div>
+    <div class="card mt8">
+      <div class="card-title">דוח נוכחות ושכר</div>
+      <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div class="form-group" style="flex:1;min-width:100px"><label class="form-label">חודש</label>
+          <select class="form-input" id="emp-r-month">${MN.slice(1).map((n,i)=>`<option value="${i+1}">${n}</option>`).join('')}</select></div>
+        <div class="form-group" style="flex:1;min-width:80px"><label class="form-label">שנה</label>
+          <select class="form-input" id="emp-r-year">${[cy,cy-1,cy-2].map(y=>`<option value="${y}">${y}</option>`).join('')}</select></div>
+        <button class="btn btn-primary" id="btn-emp-gen" style="width:auto;padding:12px 20px;margin-bottom:2px">📊 הפק</button>
+      </div>
+    </div>
+    <div id="emp-r-out"></div>`;
+  document.getElementById('emp-back').onclick = filterEmps;
+  document.getElementById('emp-det-edit')?.addEventListener('click', () => openEditEmp(id));
+  document.getElementById('emp-r-month').value = cm;
+  document.getElementById('emp-r-year').value  = cy;
+  document.getElementById('btn-emp-gen').onclick = () =>
+    _showEmpMonthly(id, emp, +document.getElementById('emp-r-month').value, +document.getElementById('emp-r-year').value);
+  _showEmpMonthly(id, emp, cm, cy);
+}
+
+function _showEmpMonthly(empId, emp, month, year) {
+  const pfx = monthPrefix(month, year);
+  const attEntries = D.attendance.filter(a => a.empId === empId && a.date?.startsWith(pfx));
+  const workDays   = new Set(attEntries.map(a => a.date)).size;
+  const rate       = +(emp.dailyRate||0);
+  const totalPay   = workDays * rate;
+  const siteMap    = new Map();
+  attEntries.forEach(a => {
+    if (!siteMap.has(a.siteId)) siteMap.set(a.siteId, D.sites.find(s=>s.id===a.siteId)?.name||a.siteId);
+  });
+  const sites = [...siteMap.values()];
+
+  document.getElementById('emp-r-out').innerHTML = `
+    <div class="card mt8">
+      <div class="card-title">סיכום ${MN[month]} ${year}</div>
+      <div class="list-item" style="border:none;padding:4px 0"><span>ימי עבודה</span><span style="font-weight:700;margin-right:auto;color:var(--gold)">${workDays}</span></div>
+      <div class="list-item" style="border:none;padding:4px 0"><span>תעריף יומי</span><span style="font-weight:700;margin-right:auto">${rate?rate.toLocaleString('he-IL')+' ₪':'לא הוגדר'}</span></div>
+      ${rate?`<div class="list-item" style="border:none;padding:6px 0;border-top:1px solid var(--border)"><span style="font-weight:700">סה"כ לתשלום</span><span style="font-weight:800;margin-right:auto;color:var(--gold);font-size:16px">${totalPay.toLocaleString('he-IL')} ₪</span></div>`:''}
+      ${sites.length?`<div style="padding:6px 0"><div style="font-size:12px;color:var(--muted);margin-bottom:6px">אתרים</div><div style="display:flex;flex-wrap:wrap;gap:4px">${sites.map(s=>`<span class="badge b-blue">${s}</span>`).join('')}</div></div>`:''}
+    </div>
+    ${!workDays?`<div class="empty mt16"><div class="empty-icon">📋</div><div class="empty-title">אין נוכחות לחודש זה</div></div>`:''}
+    ${workDays?`<div class="btn-row mt8">
+      <button class="btn btn-ghost btn-sm fg" id="btn-emp-pdf">📄 תלוש שכר</button>
+      <button class="btn btn-ghost btn-sm fg" id="btn-emp-csv">📥 CSV</button>
+    </div>`:''}`;
+
+  if (workDays) {
+    document.getElementById('btn-emp-pdf').onclick = () =>
+      _exportPayslipPDF(emp, month, year, workDays, rate, totalPay, sites);
+    document.getElementById('btn-emp-csv').onclick = () => {
+      const rows = [...new Set(attEntries.map(a=>a.date))].sort().map(date => {
+        const a = attEntries.find(x=>x.date===date);
+        return [date, siteMap.get(a?.siteId)||''];
+      });
+      exportCSV(['תאריך','אתר'], rows, `${emp.name}_${MN[month]}_${year}.csv`);
+      toast('CSV הורד','ok');
+    };
+  }
+}
+
+function _exportPayslipPDF(emp, month, year, workDays, rate, totalPay, sites) {
+  const w = window.open('', '_blank');
+  if (!w) { toast('אפשר חלונות קופצים','err'); return; }
+  w.document.write(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;800&display=swap" rel="stylesheet">
+  <style>*{font-family:'Heebo',sans-serif;box-sizing:border-box}body{margin:16px;direction:rtl;font-size:12px}
+  .biz{color:#B8922C;font-size:13px;font-weight:800;text-align:center;margin-bottom:2px}
+  h2{color:#B8922C;text-align:center;font-size:18px;margin-bottom:4px;font-weight:800}
+  .sub{color:#726E68;text-align:center;font-size:12px;margin-bottom:16px}
+  .sec{font-weight:800;font-size:13px;color:#B8922C;border-bottom:2px solid #B8922C;padding-bottom:4px;margin:16px 0 8px}
+  .kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}
+  .total{display:flex;justify-content:space-between;padding:10px 0;font-weight:800;font-size:15px;border-top:2px solid #B8922C;margin-top:8px}
+  @media print{body{margin:8px}}</style></head><body>
+  <div class="biz">${BUSINESS_NAME}</div>
+  <h2>תלוש שכר — ${emp.name}</h2>
+  <div class="sub">${MN[month]} ${year} | הופק: ${new Date().toLocaleDateString('he-IL')}</div>
+  <div class="sec">פרטי עובד</div>
+  <div class="kv"><span>שם</span><strong>${emp.name}</strong></div>
+  ${emp.profession?`<div class="kv"><span>מקצוע</span><strong>${emp.profession}</strong></div>`:''}
+  ${emp.phone?`<div class="kv"><span>טלפון</span><strong>${emp.phone}</strong></div>`:''}
+  <div class="sec">נוכחות ושכר</div>
+  <div class="kv"><span>ימי עבודה</span><strong>${workDays}</strong></div>
+  <div class="kv"><span>תעריף יומי</span><strong>${rate.toLocaleString('he-IL')} ₪</strong></div>
+  ${sites.length?`<div class="kv"><span>אתרים</span><strong>${sites.join(', ')}</strong></div>`:''}
+  <div class="total"><span>סה"כ לתשלום</span><span>${totalPay.toLocaleString('he-IL')} ₪</span></div>
+  </body></html>`);
+  w.document.close(); setTimeout(() => w.print(), 700);
+  toast('נפתח חלון הדפסה','ok');
 }
 
 export function openEmpHistory(id) {
