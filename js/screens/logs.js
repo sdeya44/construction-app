@@ -1,4 +1,4 @@
-import { BUSINESS_NAME } from '../config.js';
+import { BUSINESS_NAME, DAYS_HE } from '../config.js';
 import { D } from '../state.js';
 import { todayStr, fmtDate, toast, can, confirm2, openSheet, closeSheet, isLocked, getActs, isDayOff, logCardHtml } from '../utils.js';
 import { sRead, rebuildTab, logAudit } from '../api.js';
@@ -95,6 +95,7 @@ export function showLog(id) {
       <button class="btn btn-ghost fg" id="log-wa-btn" style="background:#25d366;color:#fff;border:none">
         <span style="font-size:1.1em">💬</span> שתף בוואטסאפ
       </button>
+      <button class="btn btn-ghost fg" id="log-pdf-btn">📄 PDF</button>
     </div>
     ${canEdit||canDel ? `<div class="btn-row mt8">
       ${canEdit ? `<button class="btn btn-outline fg" id="log-edit-btn">✏️ ערוך</button>` : ''}
@@ -104,6 +105,7 @@ export function showLog(id) {
 
   document.getElementById('log-close-btn')?.addEventListener('click', () => closeSheet('sh-log'));
   document.getElementById('log-wa-btn')?.addEventListener('click', () => shareLogWhatsApp(log, att, eq, dl));
+  document.getElementById('log-pdf-btn')?.addEventListener('click', () => _exportLogPDF(log, att, eq, dl, ph, acts));
   if (ph.length) {
     document.querySelectorAll('#log-photos-grid .photo-thumb').forEach((img, i) => {
       img.addEventListener('click', () => openLightbox(ph, i));
@@ -144,6 +146,82 @@ function confirmDelLog(id, log) {
   confirm2('מחיקת יומן', `האם למחוק את היומן של ${log.siteName} מתאריך ${fmtDate(log.date)}?`, async () => {
     await delLog(id, log);
   });
+}
+
+function _exportLogPDF(log, att, eq, dl, ph, acts) {
+  const w = window.open('', '_blank');
+  if (!w) { toast('אפשר חלונות קופצים', 'err'); return; }
+  const dow = DAYS_HE[new Date(log.date+'T12:00:00').getDay()];
+  const attRows = att.map((a,i) => `<tr><td class="tc muted">${i+1}</td><td class="tname">👷 ${a.empName}</td></tr>`).join('');
+  const eqRows  = eq.map((e,i)  => `<tr><td class="tc muted">${i+1}</td><td class="tname">🚜 ${e.eqName}</td></tr>`).join('');
+  const dlRows  = dl.map((d,i)  => `<tr><td class="tc muted">${i+1}</td><td class="tname">${d.material}</td><td class="tc">${d.suppName||'—'}</td><td class="tc mono">${d.qty||'—'}</td></tr>`).join('');
+  const photoGrid = ph.map(p => `<div style="border-radius:8px;overflow:hidden;background:#F0EDE8">
+    <img src="${p.url}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block"
+      data-fileid="${p.fileId||''}"
+      onerror="if(this.dataset.fileid&&!this.dataset.retried){this.dataset.retried='1';this.src='https://drive.google.com/thumbnail?id='+this.dataset.fileid+'&sz=w400';}else{this.parentElement.style.display='none';}">
+  </div>`).join('');
+  w.document.write(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Heebo',sans-serif;direction:rtl;background:#fff;color:#181410}
+  .page{width:794px;padding:0;background:#fff}
+  .page-header{background:linear-gradient(135deg,#1A1714 0%,#2C2620 100%);padding:28px 36px 24px;border-bottom:3px solid #B8922C}
+  .biz-name{color:#B8922C;font-size:11px;font-weight:800;letter-spacing:1.5px;margin-bottom:10px}
+  .rep-title{color:#EDE8DF;font-size:26px;font-weight:800;margin-bottom:4px}
+  .rep-sub{color:rgba(237,232,223,.65);font-size:13px}
+  .page-body{padding:28px 36px}
+  .stats-banner{display:flex;gap:0;border:1.5px solid rgba(184,146,44,.30);border-radius:10px;overflow:hidden;margin-bottom:20px}
+  .stat-item{flex:1;padding:14px 10px;text-align:center;background:#FBF6EC;border-left:1px solid rgba(184,146,44,.20)}
+  .stat-item:last-child{border-left:none}
+  .stat-label{font-size:10px;color:#9A9189;margin-bottom:5px;font-weight:600}
+  .stat-value{font-size:22px;font-weight:800;color:#B8922C;font-family:'JetBrains Mono',monospace}
+  .sec-title{font-size:12px;font-weight:800;color:#B8922C;border-bottom:1.5px solid rgba(184,146,44,.25);padding-bottom:5px;margin:18px 0 10px}
+  table{width:100%;border-collapse:collapse;margin-bottom:4px}
+  thead tr{background:#B8922C}
+  thead th{color:#fff;padding:8px 10px;font-size:11px;font-weight:700;text-align:center}
+  thead th.tleft{text-align:right}
+  tbody tr:nth-child(even){background:#FBF9F4}
+  td{padding:8px 10px;font-size:12px;border-bottom:1px solid rgba(184,146,44,.08)}
+  td.tc{text-align:center} td.tname{text-align:right;font-weight:600;color:#181410}
+  td.mono{font-family:'JetBrains Mono',monospace} td.muted{color:#9A9189;font-size:11px}
+  .acts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+  .act-badge{background:rgba(184,146,44,.12);border:1px solid rgba(184,146,44,.28);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;color:#B8922C}
+  .notes-box{background:#FBF9F4;border:1.5px solid rgba(184,146,44,.15);border-radius:8px;padding:12px 16px;font-size:12px;line-height:1.7;color:#3D3530;margin-bottom:4px}
+  .photos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:4px}
+  .page-footer{text-align:center;font-size:10px;color:#9A9189;border-top:1px solid #E5E0D8;padding-top:12px;margin-top:20px}
+  @media print{body{background:#fff}@page{size:A4 portrait;margin:0}.page{width:auto}}
+</style>
+</head><body><div class="page">
+  <div class="page-header">
+    <div class="biz-name">${BUSINESS_NAME} — יומן עבודה</div>
+    <div class="rep-title">${log.siteName}</div>
+    <div class="rep-sub">${log.date} · ${dow} · ${log.manager?.split('@')[0]||''}</div>
+  </div>
+  <div class="page-body">
+    <div class="stats-banner">
+      <div class="stat-item"><div class="stat-label">עובדים</div><div class="stat-value">${att.length}</div></div>
+      <div class="stat-item"><div class="stat-label">ציוד</div><div class="stat-value">${eq.length}</div></div>
+      <div class="stat-item"><div class="stat-label">אספקות</div><div class="stat-value">${dl.length}</div></div>
+      <div class="stat-item"><div class="stat-label">תמונות</div><div class="stat-value">${ph.length}</div></div>
+    </div>
+    ${acts.length ? `<div class="sec-title">פעילויות</div><div class="acts">${acts.map(a=>`<span class="act-badge">${a}</span>`).join('')}</div>` : ''}
+    ${att.length ? `<div class="sec-title">עובדים (${att.length})</div>
+    <table><thead><tr><th style="width:36px">#</th><th class="tleft">שם עובד</th></tr></thead>
+    <tbody>${attRows}</tbody></table>` : ''}
+    ${eq.length ? `<div class="sec-title">ציוד (${eq.length})</div>
+    <table><thead><tr><th style="width:36px">#</th><th class="tleft">ציוד</th></tr></thead>
+    <tbody>${eqRows}</tbody></table>` : ''}
+    ${dl.length ? `<div class="sec-title">אספקות (${dl.length})</div>
+    <table><thead><tr><th style="width:36px">#</th><th class="tleft">חומר</th><th>ספק</th><th>כמות</th></tr></thead>
+    <tbody>${dlRows}</tbody></table>` : ''}
+    ${log.notes ? `<div class="sec-title">הערות</div><div class="notes-box">${log.notes}</div>` : ''}
+    ${ph.length ? `<div class="sec-title">תמונות (${ph.length})</div><div class="photos-grid">${photoGrid}</div>` : ''}
+    <div class="page-footer">הופק: ${new Date().toLocaleDateString('he-IL')} &nbsp;|&nbsp; ${BUSINESS_NAME}</div>
+  </div>
+</div></body></html>`);
+  w.document.close(); setTimeout(() => w.print(), ph.length > 0 ? 1500 : 700);
+  toast('נפתח חלון הדפסה', 'ok');
 }
 
 export async function delLog(id, log) {
