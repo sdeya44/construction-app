@@ -146,7 +146,6 @@
     <div class="scroll" style="padding-top:0"><div id="sites-list"></div></div>
   </div>
 
-  <!-- MANAGEMENT (suppliers + equipment) -->
   <!-- TOPICS HUB -->
   <div id="s-topics" class="screen">
     <div class="topbar">
@@ -154,6 +153,7 @@
     </div>
     <div class="scroll" id="topics-scroll" style="padding:16px"></div>
   </div>
+
   <!-- EQUIPMENT -->
   <div id="s-equip" class="screen">
     <div class="topbar">
@@ -162,6 +162,7 @@
     </div>
     <div class="scroll" id="equip-scroll"></div>
   </div>
+
   <!-- SUPPLIERS -->
   <div id="s-suppliers" class="screen">
     <div class="topbar">
@@ -170,6 +171,17 @@
     </div>
     <div class="scroll" id="suppliers-scroll"></div>
   </div>
+
+  <!-- ACTIVITIES -->
+  <div id="s-activities" class="screen">
+    <div class="topbar">
+      <div class="topbar-title fg">פעילויות</div>
+    </div>
+    <div class="scroll" style="padding:12px 16px">
+      <div id="activities-content"></div>
+    </div>
+  </div>
+
   <!-- REPORTS -->
   <div id="s-reports" class="screen">
     <div class="topbar">
@@ -180,15 +192,7 @@
       <div id="rep-body"></div>
     </div>
   </div>
-    <!-- ACTIVITIES -->
-  <div id="s-activities" class="screen">
-    <div class="topbar">
-      <div class="topbar-title fg">פעילויות</div>
-    </div>
-    <div class="scroll" style="padding:12px 16px">
-      <div id="activities-content"></div>
-    </div>
-  </div>
+
   <!-- SEARCH -->
   <div id="s-search" class="screen">
     <div class="topbar"><div class="topbar-title fg">חיפוש</div></div>
@@ -196,6 +200,22 @@
   </div>
 
   <div class="bottom-nav">
+    <button class="nav-item active" id="nav-dash">
+      <span class="nav-icon">🏠</span><span class="nav-label">בית</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-logs">
+      <span class="nav-icon">📋</span><span class="nav-label">יומנים</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-newlog" style="display:none">
+      <span class="nav-icon" style="font-size:28px;background:linear-gradient(135deg,#B8922C,#CCA848);border-radius:16px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;margin-top:-12px;box-shadow:0 4px 20px rgba(184,146,44,.45)">➕</span>
+      <span class="nav-label" style="margin-top:2px">דיווח</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-topics">
+      <span class="nav-icon">🏗️</span><span class="nav-label">נושאים</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-emp" style="display:none">
+      <span class="nav-icon">👷</span><span class="nav-label">עובדים</span><div class="nav-dot"></div>
+    </button>
   </div>
 </div>
 </div>
@@ -376,7 +396,6 @@
 <input type="file" id="site-cam-input" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="wiz-cam-input" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="wiz-gal-input" accept="image/*" multiple style="display:none">
-
 
 <!-- LIGHTBOX -->
 <div id="sh-lightbox"></div>
