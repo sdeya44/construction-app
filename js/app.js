@@ -68,7 +68,7 @@ export function renderCurrentScreen() {
   else if (s==='sites')     renderSites();
   else if (s==='mgmt')      renderMgmt();
   else if (s==='equip')     import('./screens/equipment.js').then(m => m.renderEquipScreen());
-  else if (s==='suppliers') import('./screens/suppliers.js').then(m => m.renderSuppliers()).catch(() => {
+  else if (s==='suppliers') import('./screens/suppliers.js').then(m => m.renderSuppliersScreen()).catch(() => {
     const el = document.getElementById('s-suppliers');
     if (el) el.innerHTML = '<div class="empty"><div class="empty-title">...</div></div>';
   });
