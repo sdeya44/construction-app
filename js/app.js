@@ -7,9 +7,11 @@ import { renderEmps, setEmpTab, filterEmps, openAddEmp, selectStatus, saveEmp } 
 import { renderSites, setSiteTab, openAddSite, selectSiteStatus, saveSite } from './screens/sites.js';
 import { renderMgmt, mgmtAdd, selectSuppStatus, selectEquipStatus, saveSupp, saveEquip } from './screens/management.js';
 import { openAddEquip } from './screens/equipment.js';
+import { openAddSupp } from './screens/suppliers.js';
 import { handlePhotoUpload } from './screens/photos.js';
 import { renderReports, exportSiteMonthPDF, lockMonth, drawLocks, initSelects } from './screens/reports.js';
 import { renderSearch } from './screens/search.js';
+import { renderTopics } from './screens/topics.js';
 
 const DARK_KEY = 'cnstr_dark';
 const FONT_KEY = 'cnstr_font';
@@ -63,16 +65,13 @@ function initRipple() {
 
 export function renderCurrentScreen() {
   const s = D.activeScreen || 'dash';
-  if (s==='dash')           renderDash();
+  if      (s==='dash')      renderDash();
   else if (s==='logs')      { populateLogFilters(); renderLogs(); }
   else if (s==='emp')       renderEmps();
   else if (s==='sites')     renderSites();
-  else if (s==='mgmt')      renderMgmt();
+  else if (s==='topics')    renderTopics();
   else if (s==='equip')     import('./screens/equipment.js').then(m => m.renderEquipScreen());
-  else if (s==='suppliers') import('./screens/suppliers.js').then(m => m.renderSuppliersScreen()).catch(() => {
-    const el = document.getElementById('s-suppliers');
-    if (el) el.innerHTML = '<div class="empty"><div class="empty-title">...</div></div>';
-  });
+  else if (s==='suppliers') import('./screens/suppliers.js').then(m => m.renderSuppliersScreen());
   else if (s==='reports')   renderReports();
   else if (s==='search')    renderSearch('field');
 }
@@ -82,15 +81,8 @@ function navigate(s) { go(s); renderCurrentScreen(); }
 export function applyRoleUI() {
   const isGM = D.role === 'GeneralManager';
   const g = id => document.getElementById(id);
-  // Field worker: dash, logs, newlog, sites, equip, suppliers
-  // GM:           dash, logs, emp,    equip, suppliers, reports
-  if (g('nav-newlog'))    g('nav-newlog').style.display    = (!isGM && can('create_log')) ? '' : 'none';
-  if (g('nav-sites'))     g('nav-sites').style.display     = !isGM ? '' : 'none';
-  if (g('nav-equip'))     g('nav-equip').style.display     = '';        // both roles
-  if (g('nav-suppliers')) g('nav-suppliers').style.display = '';        // both roles
-  if (g('nav-emp'))       g('nav-emp').style.display       = isGM ? '' : 'none';
-  if (g('nav-reports'))   g('nav-reports').style.display   = isGM ? '' : 'none';
-  if (g('nav-mgmt'))      g('nav-mgmt').style.display      = 'none';    // removed from nav
+  if (g('nav-newlog')) g('nav-newlog').style.display = (!isGM && can('create_log')) ? '' : 'none';
+  if (g('nav-emp'))    g('nav-emp').style.display    = isGM ? '' : 'none';
   document.querySelectorAll('[data-role-require]').forEach(el => {
     el.style.display = can(el.dataset.roleRequire) ? '' : 'none';
   });
@@ -99,15 +91,11 @@ export function applyRoleUI() {
 function bindEvents() {
   document.getElementById('g-btn')?.addEventListener('click', signIn);
 
-  document.getElementById('nav-dash')?.addEventListener('click',      () => navigate('dash'));
-  document.getElementById('nav-logs')?.addEventListener('click',      () => { populateLogFilters(); navigate('logs'); });
-  document.getElementById('nav-newlog')?.addEventListener('click',    () => import('./screens/wizard.js').then(m => m.startLog()));
-  document.getElementById('nav-sites')?.addEventListener('click',     () => navigate('sites'));
-  document.getElementById('nav-equip')?.addEventListener('click',     () => navigate('equip'));
-  document.getElementById('nav-suppliers')?.addEventListener('click', () => navigate('suppliers'));
-  document.getElementById('nav-emp')?.addEventListener('click',       () => navigate('emp'));
-  document.getElementById('nav-reports')?.addEventListener('click',   () => navigate('reports'));
-  document.getElementById('nav-mgmt')?.addEventListener('click',      () => navigate('mgmt'));
+  document.getElementById('nav-dash')?.addEventListener('click',   () => navigate('dash'));
+  document.getElementById('nav-logs')?.addEventListener('click',   () => { populateLogFilters(); navigate('logs'); });
+  document.getElementById('nav-newlog')?.addEventListener('click', () => import('./screens/wizard.js').then(m => m.startLog()));
+  document.getElementById('nav-topics')?.addEventListener('click', () => navigate('topics'));
+  document.getElementById('nav-emp')?.addEventListener('click',    () => navigate('emp'));
 
   document.getElementById('refresh-btn')?.addEventListener('click', refreshData);
   document.getElementById('logout-btn')?.addEventListener('click', openSettings);
@@ -131,15 +119,15 @@ function bindEvents() {
   document.getElementById('ss-ended')?.addEventListener('click',  () => selectSiteStatus('הסתיים'));
   document.querySelectorAll('#s-sites .tab').forEach(tab => tab.addEventListener('click', () => setSiteTab(tab.dataset.tab, tab)));
 
-  document.getElementById('mgmt-add-btn')?.addEventListener('click', mgmtAdd);
-  document.getElementById('btn-save-supp')?.addEventListener('click', saveSupp);
   document.getElementById('btn-add-equip')?.addEventListener('click', openAddEquip);
   document.getElementById('btn-save-equip')?.addEventListener('click', saveEquip);
-  document.getElementById('ssp-active')?.addEventListener('click', () => selectSuppStatus('פעיל'));
-  document.getElementById('ssp-frozen')?.addEventListener('click', () => selectSuppStatus('מוקפא'));
   document.getElementById('seq-active')?.addEventListener('click', () => selectEquipStatus('פעיל'));
   document.getElementById('seq-frozen')?.addEventListener('click', () => selectEquipStatus('מוקפא'));
 
+  document.getElementById('btn-add-supp2')?.addEventListener('click', openAddSupp);
+  document.getElementById('btn-save-supp')?.addEventListener('click', saveSupp);
+  document.getElementById('ssp-active')?.addEventListener('click', () => selectSuppStatus('פעיל'));
+  document.getElementById('ssp-frozen')?.addEventListener('click', () => selectSuppStatus('מוקפא'));
 
   document.getElementById('btn-lock-month')?.addEventListener('click', lockMonth);
   document.getElementById('sh-lock')?.addEventListener('click', e => { if (e.target === document.getElementById('sh-lock')) closeSheet('sh-lock'); });
