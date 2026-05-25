@@ -3,6 +3,7 @@ export const SHEET_ID     = '19XGP8YC1U4vwKnfxeBFxY78aBNUjJKMX3wPApBYmiog';
 export const SCOPES       = 'openid email profile https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 export const USER_KEY     = 'cnstr_usr_v1';
 export const SW_VERSION   = 'cnstr-v17';
+export const APP_VERSION   = 'v34';
 export const BUSINESS_NAME = 'כיאן הנדסה';
 
 export const MN       = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
