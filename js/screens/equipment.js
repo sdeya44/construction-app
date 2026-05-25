@@ -6,7 +6,7 @@ import { sAppend, sWrite, logAudit } from '../api.js';
 let _tab = 'list';
 
 export function renderEquipScreen() {
-  const el = document.getElementById('gm-content');
+  const el = document.getElementById('equip-scroll');
   if (!el) return;
   el.innerHTML = `
     <div class="tabs">
