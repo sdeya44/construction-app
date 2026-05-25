@@ -1,6 +1,6 @@
 import { HDR, MN, BUSINESS_NAME } from '../config.js';
 import { D } from '../state.js';
-import { uid, toast, can, openSheet, closeSheet, setBtn, monthPrefix } from '../utils.js';
+import { uid, toast, can, openSheet, closeSheet, setBtn, monthPrefix, exportCSV } from '../utils.js';
 import { sAppend, sWrite, logAudit } from '../api.js';
 
 export function renderEquipScreen() {
@@ -10,17 +10,16 @@ export function renderEquipScreen() {
   _renderList();
 }
 
+// ── LIST ──────────────────────────────────────────────────────────────────────
 function _renderList() {
   const el = document.getElementById('eq-body');
   const active = D.equipment.filter(e => e.active === 'פעיל');
   const frozen = D.equipment.filter(e => e.active !== 'פעיל');
   el.innerHTML = [
-    `<button class="btn btn-primary mt8" id="btn-eq-add">➕ הוסף ציוד</button>`,
     active.length ? `<div class="card mt12"><div class="card-title">פעיל (${active.length})</div>${active.map(_eqRow).join('')}</div>` : '',
     frozen.length ? `<div class="card mt12"><div class="card-title">מוקפא (${frozen.length})</div>${frozen.map(_eqRow).join('')}</div>` : '',
-    !D.equipment.length ? `<div class="empty mt16"><div class="empty-icon">🚜</div><div class="empty-title">אין ציוד עדיין</div><div class="empty-sub">הוסף ציוד ראשון</div></div>` : '',
+    !D.equipment.length ? `<div class="empty mt16"><div class="empty-icon">🚜</div><div class="empty-title">אין ציוד עדיין</div><div class="empty-sub">לחץ ➕ להוספת ציוד</div></div>` : '',
   ].join('');
-  document.getElementById('btn-eq-add').onclick = () => openAddEquip();
   document.querySelectorAll('#eq-body .eq-row').forEach(r => { r.onclick = () => _openDetails(r.dataset.id); });
 }
 
@@ -35,56 +34,89 @@ function _eqRow(e) {
   </div>`;
 }
 
+// ── DETAILS ───────────────────────────────────────────────────────────────────
 function _openDetails(id) {
-  const e = D.equipment.find(x => x.id === id); if (!e) return;
+  const eq = D.equipment.find(x => x.id === id); if (!eq) return;
   const el = document.getElementById('eq-body');
   const now = new Date(), cm = now.getMonth()+1, cy = now.getFullYear();
-  const pfx = monthPrefix(cm, cy);
-  const entries  = D.logEquip.filter(x => x.eqId === id && x.date?.startsWith(pfx));
-  const daysUsed = new Set(entries.map(x => x.date)).size;
-  const totalCost = daysUsed * (e.dailyRate || 0);
-  const sites = [...new Set(entries.map(x => x.siteId))]
-    .map(sid => D.sites.find(s => s.id === sid)?.name || sid).filter(Boolean);
-
   el.innerHTML = `
     <button class="btn btn-ghost btn-sm mt8" id="eq-back">← חזרה לרשימה</button>
     <div class="card mt12">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-        <div class="avatar av-gold" style="width:52px;height:52px;font-size:24px">🚜</div>
-        <div class="li-info">
-          <div class="li-name" style="font-size:18px;font-weight:800">${e.name}</div>
-          <div class="li-sub">${e.type || ''}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="min-width:0">
+          <div style="font-size:20px;font-weight:800;color:var(--text)">${eq.name}</div>
+          <div style="color:var(--muted);font-size:13px;margin-top:4px">${eq.type||''}${eq.dailyRate>0?' · '+eq.dailyRate.toLocaleString('he-IL')+' ₪/יום':''}</div>
         </div>
-        <span class="badge ${e.active==='פעיל'?'b-green':'b-orange'}">${e.active}</span>
+        <span class="badge ${eq.active==='פעיל'?'b-green':'b-orange'}" style="flex-shrink:0">${eq.active}</span>
       </div>
-      ${e.dailyRate > 0 ? `<div class="list-item" style="border:none;padding:4px 0"><span>תעריף יומי</span><span style="font-weight:700;margin-right:auto">${e.dailyRate.toLocaleString('he-IL')} ₪</span></div>` : ''}
-      <div class="divider"></div>
-      <div class="card-title">שימוש החודש — ${MN[cm]} ${cy}</div>
-      <div class="list-item" style="border:none;padding:4px 0"><span>ימי שימוש</span><span style="font-weight:700;margin-right:auto;color:var(--gold)">${daysUsed}</span></div>
-      ${totalCost > 0 ? `<div class="list-item" style="border:none;padding:4px 0"><span>עלות</span><span style="font-weight:700;margin-right:auto;color:var(--gold)">${totalCost.toLocaleString('he-IL')} ₪</span></div>` : ''}
-      ${sites.length ? `<div class="list-item" style="border:none;padding:4px 0;align-items:flex-start"><span>אתרים</span><span style="font-weight:600;margin-right:auto;font-size:13px">${sites.join(', ')}</span></div>` : ''}
+      <button class="btn btn-ghost fg mt12" id="eq-det-edit">✏️ עריכה</button>
     </div>
-    <div class="btn-row mt8">
-      <button class="btn btn-ghost fg" id="eq-det-edit">✏️ עריכה</button>
-      <button class="btn btn-primary fg" id="eq-det-report">📊 הפק דוח</button>
-    </div>`;
-
-  document.getElementById('eq-back').onclick    = () => _renderList();
+    <div class="card mt8">
+      <div class="card-title">דוח שימוש חודשי</div>
+      <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div class="form-group" style="flex:1;min-width:100px"><label class="form-label">חודש</label>
+          <select class="form-input" id="eq-r-month">${MN.slice(1).map((n,i)=>`<option value="${i+1}">${n}</option>`).join('')}</select></div>
+        <div class="form-group" style="flex:1;min-width:80px"><label class="form-label">שנה</label>
+          <select class="form-input" id="eq-r-year">${[cy,cy-1,cy-2].map(y=>`<option value="${y}">${y}</option>`).join('')}</select></div>
+        <button class="btn btn-primary" id="btn-eq-gen" style="width:auto;padding:12px 20px;margin-bottom:2px">📊 הפק</button>
+      </div>
+    </div>
+    <div id="eq-r-out"></div>`;
+  document.getElementById('eq-back').onclick = _renderList;
   document.getElementById('eq-det-edit').onclick = () => _openEdit(id);
-  document.getElementById('eq-det-report').onclick = () => {
-    const rows = _calcRows(cm, cy).filter(r => r.id === id);
-    const td = rows.reduce((s,r) => s+r.daysUsed, 0);
-    const tc = rows.reduce((s,r) => s+r.totalCost, 0);
-    _exportPDF(rows, cm, cy, td, tc);
-  };
+  document.getElementById('eq-r-month').value = cm;
+  document.getElementById('eq-r-year').value  = cy;
+  document.getElementById('btn-eq-gen').onclick = () =>
+    _showEqMonthly(id, eq, +document.getElementById('eq-r-month').value, +document.getElementById('eq-r-year').value);
+  _showEqMonthly(id, eq, cm, cy);
 }
 
+function _showEqMonthly(eqId, eq, month, year) {
+  const pfx      = monthPrefix(month, year);
+  const entries  = D.logEquip.filter(e => e.eqId === eqId && e.date?.startsWith(pfx));
+  const daysUsed = new Set(entries.map(e => e.date)).size;
+  const dailyRate = eq.dailyRate || 0;
+  const totalCost = daysUsed * dailyRate;
+  const sites = [...new Set(entries.map(e => e.siteId))]
+    .map(sid => D.sites.find(s => s.id===sid)?.name || sid).filter(Boolean);
+
+  document.getElementById('eq-r-out').innerHTML = `
+    <div class="card mt8">
+      <div class="card-title">סיכום ${MN[month]} ${year}</div>
+      <div class="list-item" style="border:none;padding:4px 0"><span>ימי שימוש</span><span style="font-weight:700;margin-right:auto;color:var(--gold)">${daysUsed}</span></div>
+      <div class="list-item" style="border:none;padding:4px 0"><span>תעריף יומי</span><span style="font-weight:700;margin-right:auto">${dailyRate?dailyRate.toLocaleString('he-IL')+' ₪':'לא הוגדר'}</span></div>
+      ${totalCost>0?`<div class="list-item" style="border:none;padding:6px 0;border-top:1px solid var(--border)"><span style="font-weight:700">סה"כ עלות</span><span style="font-weight:800;margin-right:auto;color:var(--gold);font-size:16px">${totalCost.toLocaleString('he-IL')} ₪</span></div>`:''}
+      ${sites.length?`<div style="padding:6px 0"><div style="font-size:12px;color:var(--muted);margin-bottom:6px">אתרים</div><div style="display:flex;flex-wrap:wrap;gap:4px">${sites.map(s=>`<span class="badge b-blue">${s}</span>`).join('')}</div></div>`:''}
+    </div>
+    ${!daysUsed?`<div class="empty mt16"><div class="empty-icon">🚜</div><div class="empty-title">לא נעשה שימוש בחודש זה</div></div>`:''}
+    ${daysUsed?`<div class="btn-row mt8">
+      <button class="btn btn-ghost btn-sm fg" id="btn-eq-pdf">📄 PDF</button>
+      <button class="btn btn-ghost btn-sm fg" id="btn-eq-csv">📥 CSV</button>
+    </div>`:''}`;
+
+  if (daysUsed) {
+    document.getElementById('btn-eq-pdf').onclick = () =>
+      _exportPDF([{ id:eqId, name:eq.name, type:eq.type||'', active:eq.active, dailyRate, daysUsed, totalCost, sites }], month, year, daysUsed, totalCost);
+    document.getElementById('btn-eq-csv').onclick = () => {
+      exportCSV(['תאריך','אתר'],
+        [...new Set(entries.map(e=>e.date))].sort().map(date => {
+          const e = entries.find(x => x.date===date);
+          return [date, D.sites.find(s=>s.id===e?.siteId)?.name||''];
+        }),
+        `${eq.name}_${MN[month]}_${year}.csv`
+      );
+      toast('CSV הורד', 'ok');
+    };
+  }
+}
+
+// ── ADD / EDIT ─────────────────────────────────────────────────────────────────
 export function openAddEquip() {
   D.editEquipId = null; D.equipStatus = 'פעיל';
   document.getElementById('equip-sh-title').textContent = '➕ הוספת ציוד';
-  document.getElementById('eq-name').value = '';
-  document.getElementById('eq-type').value = 'כבד';
-  document.getElementById('eq-rate').value = 0;
+  document.getElementById('eq-name').value  = '';
+  document.getElementById('eq-type').value  = 'כבד';
+  document.getElementById('eq-rate').value  = '';
   selectEquipStatus('פעיל');
   openSheet('sh-equip');
 }
@@ -93,9 +125,9 @@ function _openEdit(id) {
   const e = D.equipment.find(x => x.id === id); if (!e) return;
   D.editEquipId = id; D.equipStatus = e.active || 'פעיל';
   document.getElementById('equip-sh-title').textContent = '✏️ עריכת ציוד';
-  document.getElementById('eq-name').value = e.name;
-  document.getElementById('eq-type').value = e.type || 'כבד';
-  document.getElementById('eq-rate').value = e.dailyRate || 0;
+  document.getElementById('eq-name').value  = e.name;
+  document.getElementById('eq-type').value  = e.type || 'כבד';
+  document.getElementById('eq-rate').value  = e.dailyRate || '';
   selectEquipStatus(e.active || 'פעיל');
   openSheet('sh-equip');
 }
@@ -133,18 +165,7 @@ export async function saveEquip() {
   setBtn('btn-save-equip', false, 'שמור ציוד');
 }
 
-function _calcRows(month, year) {
-  const pfx = monthPrefix(month, year);
-  return D.equipment.map(eq => {
-    const entries  = D.logEquip.filter(e => e.eqId===eq.id && e.date?.startsWith(pfx));
-    const daysUsed = new Set(entries.map(e => e.date)).size;
-    const dailyRate = eq.dailyRate || 0;
-    const sites = [...new Set(entries.map(e => e.siteId))]
-      .map(sid => D.sites.find(s => s.id===sid)?.name || sid).filter(Boolean);
-    return { id:eq.id, name:eq.name, type:eq.type||'', active:eq.active, dailyRate, daysUsed, totalCost:daysUsed*dailyRate, sites };
-  }).sort((a,b) => b.daysUsed - a.daysUsed);
-}
-
+// ── PDF EXPORT ─────────────────────────────────────────────────────────────────
 function _exportPDF(rows, month, year, totalDays, totalCost) {
   const tableRows = rows.map((r,i) => `<tr>
     <td>${i+1}</td><td style="text-align:right">${r.name}</td><td>${r.type||'—'}</td>
