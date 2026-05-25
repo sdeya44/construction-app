@@ -1,5 +1,5 @@
 import { D } from '../state.js';
-import { go, can } from '../utils.js';
+import { go } from '../utils.js';
 import { renderCurrentScreen } from '../app.js';
 
 function _navigate(screen) {
@@ -16,7 +16,6 @@ export function renderTopics() {
   const activeSites     = D.sites.filter(s => s.status === 'פעיל').length;
   const activeEquip     = D.equipment.filter(e => e.active === 'פעיל').length;
   const activeSuppliers = D.suppliers.filter(s => s.status === 'פעיל').length;
-  const activeEmps      = D.employees.filter(e => e.active === 'פעיל').length;
 
   const cards = [
     {
@@ -41,12 +40,6 @@ export function renderTopics() {
       icon: '⚡', title: 'פעילויות', screen: 'activities',
       sub: `${D.activities?.filter(a=>a.active).length||0} פעילויות פעילות`,
       desc: 'ניהול סוגי פעילויות ביומן',
-      show: isGM,
-    },
-    {
-      icon: '👷', title: 'עובדים', screen: 'emp',
-      sub: `${activeEmps} עובדים פעילים`,
-      desc: 'רשימה, נוכחות חודשית, חישוב שכר',
       show: isGM,
     },
   ];
