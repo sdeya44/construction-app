@@ -1,6 +1,7 @@
 import { D, loadAll } from '../state.js';
-import { APP_VERSION } from '../config.js';
 import { todayStr, fmtDate, toast, go, logCardHtml, can, setBtn } from '../utils.js';
+
+const APP_VERSION = 'v34';
 import { renderCurrentScreen } from '../app.js';
 
 let _autoTimer = null;
