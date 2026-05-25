@@ -1,4 +1,5 @@
 import { D, loadAll } from '../state.js';
+import { APP_VERSION } from '../config.js';
 import { todayStr, fmtDate, toast, go, logCardHtml, can, setBtn } from '../utils.js';
 import { renderCurrentScreen } from '../app.js';
 
@@ -17,7 +18,7 @@ export function renderDash() {
   const t = todayStr();
   const g = id => document.getElementById(id);
   g('d-name').textContent    = D.user?.given_name || D.user?.name?.split(' ')[0] || 'מנהל';
-  g('d-date').textContent    = fmtDate(t);
+  g('d-date').textContent    = fmtDate(t) + ' · ' + APP_VERSION;
   g('d-sites').textContent   = D.logs.filter(l => l.date === t).length;
   g('d-workers').textContent = D.attendance.filter(a => a.date === t).length;
   g('d-mlogs').textContent   = D.logs.filter(l => l.date?.startsWith(t.slice(0,7))).length;
