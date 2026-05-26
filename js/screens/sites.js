@@ -89,7 +89,8 @@ function _showSiteReport(siteId, site, month, year) {
   const pfx      = monthPrefix(month, year);
   const siteLogs = D.logs.filter(l => l.siteId === siteId && l.date?.startsWith(pfx));
   const workDays = new Set(siteLogs.map(l => l.date)).size;
-  const workerIds = [...new Set(siteLogs.flatMap(l => l.workers || []))];
+  const logIds = new Set(siteLogs.map(l => l.id));
+  const workerIds = [...new Set(D.attendance.filter(a => logIds.has(a.logId)).map(a => a.empId))];
   const workers  = workerIds.map(wid => D.employees.find(e => e.id === wid)?.name || wid).filter(Boolean);
   const equipEntries = D.logEquip.filter(e => e.siteId === siteId && e.date?.startsWith(pfx));
   const equipUsed = [...new Set(equipEntries.map(e => e.eqId))].map(eid => {
@@ -143,7 +144,7 @@ function _exportSitePDF(site, month, year, workDays, siteLogs, workers, equipUse
   const sortedLogs = [...siteLogs].sort((a,b) => a.date.localeCompare(b.date));
   const dayRows = sortedLogs.map(log => {
     const dow = new Date(log.date+'T12:00:00').getDay();
-    const wc  = (log.workers || []).length;
+    const wc  = D.attendance.filter(a => a.logId === log.id).length;
     const dayEquip = D.logEquip
       .filter(e => e.siteId === siteId && e.date === log.date)
       .map(e => D.equipment.find(x => x.id === e.eqId)?.name || '')
