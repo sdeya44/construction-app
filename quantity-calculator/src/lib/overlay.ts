@@ -37,6 +37,7 @@ export function makeCrop(
   points: Point[],
   shape: AnnotationShape,
   isDeduction: boolean,
+  holes: Point[][] = [],
 ): string | undefined {
   if (!img || !img.naturalWidth || points.length === 0) return undefined;
 

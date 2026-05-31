@@ -76,9 +76,17 @@ export function computeRow(row: CalcRow): ComputeResult {
       baseExpr = '';
       break;
     case 'measured_length':
-    case 'measured_area':
       base = num(row.measuredValue);
       baseExpr = `${fmt(base)} (נמדד)`;
+      break;
+    case 'measured_area':
+      base = num(row.measuredValue);
+      if (row.measuredGross != null && row.measuredDeductions && row.measuredDeductions.length > 0) {
+        // שטח ברוטו פחות ניכויים (cut-out)
+        baseExpr = `${fmt(row.measuredGross)} - ${row.measuredDeductions.map((d) => fmt(d)).join(' - ')}`;
+      } else {
+        baseExpr = `${fmt(base)} (נמדד)`;
+      }
       break;
   }
 

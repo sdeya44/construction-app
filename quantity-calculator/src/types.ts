@@ -50,7 +50,9 @@ export interface CalcRow {
   unit: Unit;
   note: string;
   kind: RowKind; // רגיל / הפחתה
-  measuredValue?: number; // ערך שנמדד מהתוכנית (לאורך/שטח שנמדדו)
+  measuredValue?: number; // ערך נטו שנמדד מהתוכנית (לאורך/שטח שנמדדו)
+  measuredGross?: number; // שטח ברוטו לפני ניכויים (cut-out)
+  measuredDeductions?: number[]; // ניכויי שטח (cut-out) ביחידות מ״ר, לתצוגת הנוסחה
   annotation?: AnnotationGeometry; // גאומטריית הסימון לשכבה קבועה על התוכנית
   cropDataUrl?: string; // תצלום חתוך של אזור המדידה (לביקורת בדוח)
   createdAt: number;
@@ -64,6 +66,7 @@ export interface AnnotationGeometry {
   pageId: string; // העמוד שעליו בוצעה המדידה
   shape: AnnotationShape;
   points: { x: number; y: number }[];
+  holes?: { x: number; y: number }[][]; // פוליגוני ניכוי (cut-out) בתוך השטח
 }
 
 /** סעיף בספריית הסעיפים */
