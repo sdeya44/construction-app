@@ -387,16 +387,31 @@ body {
 /* ---------- Print ---------- */
 @media print {
   @page { size: A4; margin: 10mm; }
-  body { background: #fff; }
+  html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .app, .report-toolbar { display: none !important; }
-  .report-overlay { position: static; background: #fff; }
-  .report-pages { padding: 0; display: block; overflow: visible; }
-  .sheet {
-    box-shadow: none; width: auto; min-height: auto; padding: 0;
-    page-break-after: always; margin: 0;
+
+  /* הסתר הכל כברירת מחדל, והצג רק את שכבת הדוח */
+  body * { visibility: hidden; }
+  .report-overlay, .report-overlay * { visibility: visible; }
+  .report-toolbar { display: none !important; }
+
+  /* שכבת הדוח: הוצא ממצב fixed כדי שתזרום על פני כל העמודים */
+  .report-overlay {
+    position: static !important; inset: auto !important;
+    background: #fff !important; z-index: auto !important;
+    display: block !important; height: auto !important; overflow: visible !important;
   }
-  .sheet:last-child { page-break-after: auto; }
+  .report-pages {
+    padding: 0 !important; margin: 0 !important; gap: 0 !important;
+    display: block !important; overflow: visible !important; height: auto !important;
+  }
+  .sheet {
+    box-shadow: none !important; width: auto !important; min-height: auto !important;
+    padding: 0 !important; margin: 0 !important;
+    page-break-after: always; break-after: page;
+  }
+  .sheet:last-child { page-break-after: auto; break-after: auto; }
   .rp-table { page-break-inside: auto; }
-  .rp-table tr { page-break-inside: avoid; }
+  .rp-table tr { page-break-inside: avoid; break-inside: avoid; }
+  .rp-crop-img, .crop { page-break-inside: avoid; break-inside: avoid; }
 }
