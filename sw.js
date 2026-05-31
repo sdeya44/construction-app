@@ -1,4 +1,4 @@
-const CACHE = 'cnstr-v34';
+const CACHE = 'cnstr-v35';
 const ASSETS = [
   './',
   './index.html',
@@ -29,6 +29,7 @@ const ASSETS = [
   './js/screens/topics.js',
   './js/screens/activities.js',
   './js/screens/calendar.js',
+  './js/screens/crosssection.js',
 ];
 
 self.addEventListener('install', e => {
