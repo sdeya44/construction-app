@@ -81,6 +81,7 @@ export function Toolbar({ project, tool, setTool, onNewProject, onOpenProject, o
         {tbtn('scale', '📏 קנה מידה', 'קביעת קנה מידה לעמוד')}
         {tbtn('length', '╱ אורך', 'מדידת אורך')}
         {tbtn('area', '▱ שטח', 'מדידת שטח')}
+        {tbtn('cutout', '✂ ניכוי', 'ניכוי שטח - חור בתוך שטח שנמדד')}
         {tbtn('count', '#️⃣ ספירה', 'ספירת פריטים')}
         {tbtn('pan', '✋ הזזה', 'גרירת התצוגה')}
       </div>

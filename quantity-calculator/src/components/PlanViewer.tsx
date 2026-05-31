@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AnnotationGeometry, AnnotationShape, CalcRow, PageScale, Project } from '../types';
 import { useStore } from '../store/projectStore';
-import { Point, dist, polygonArea, polylineLength, pixelAreaToM2, pixelsToMeters } from '../lib/geometry';
+import { Point, dist, pointInPolygon, polygonArea, polygonCentroid, polylineLength, pixelAreaToM2, pixelsToMeters } from '../lib/geometry';
 import { fmt, round } from '../lib/calc';
 import { makeCrop, overlayColor } from '../lib/overlay';
 import { Modal } from './Modal';
 
-export type Tool = 'pan' | 'scale' | 'length' | 'area' | 'count';
+export type Tool = 'pan' | 'scale' | 'length' | 'area' | 'count' | 'cutout';
 
 interface Props {
   project: Project;
@@ -26,7 +26,7 @@ interface ViewTransform {
 const FIT_MARGIN = 0.96;
 
 export function PlanViewer({ project, tool, setTool, onMeasured, highlightRowId }: Props) {
-  const { ui, selectPage, setPageScale } = useStore();
+  const { ui, selectPage, setPageScale, updateRow, showToast } = useStore();
   const page = project.pages.find((p) => p.id === ui.selectedPageId) ?? null;
 
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -92,7 +92,7 @@ export function PlanViewer({ project, tool, setTool, onMeasured, highlightRowId 
   }
 
   const scale = page?.scale;
-  const needsScale = tool === 'length' || tool === 'area';
+  const needsScale = tool === 'length' || tool === 'area' || tool === 'cutout';
   const hasScale = !!scale?.pixelsPerMeter;
 
   function handleSvgClick(e: React.MouseEvent) {
@@ -138,7 +138,55 @@ export function PlanViewer({ project, tool, setTool, onMeasured, highlightRowId 
     } else if (tool === 'count' && points.length >= 1) {
       onMeasured({ type: 'count', count: points.length, unit: 'יח׳', page: page.name, ...buildAnnotation('count', points) });
       setPoints([]);
+    } else if (tool === 'cutout' && points.length >= 3) {
+      finishCutout();
     }
+  }
+
+  // ניכוי (cut-out): צייר פוליגון בתוך שטח שנמדד והפחת אותו מהכמות נטו
+  function finishCutout() {
+    if (!page || points.length < 3) return;
+    const ppm = scale!.pixelsPerMeter;
+    const centroid = polygonCentroid(points);
+    // מצא את שורות השטח שעל עמוד זה שמכילות את מרכז הניכוי
+    const candidates = project.rows.filter(
+      (r) =>
+        r.type === 'measured_area' &&
+        r.annotation &&
+        r.annotation.pageId === page.id &&
+        r.annotation.points.length >= 3 &&
+        pointInPolygon(centroid, r.annotation.points),
+    );
+    if (candidates.length === 0) {
+      showToast('יש לצייר את הניכוי בתוך שטח שנמדד מהתוכנית');
+      setPoints([]);
+      return;
+    }
+    // אם יש כמה - בחר את הקטן ביותר (הפנימי)
+    const target = candidates.sort(
+      (a, b) => polygonArea(a.annotation!.points) - polygonArea(b.annotation!.points),
+    )[0];
+
+    const outer = target.annotation!.points;
+    const grossM2 = round(pixelAreaToM2(polygonArea(outer), ppm));
+    const newHole = points.map((p) => ({ x: p.x, y: p.y }));
+    const holes = [...(target.annotation!.holes ?? []), newHole];
+    const deductions = holes.map((h) => round(pixelAreaToM2(polygonArea(h), ppm)));
+    const net = round(grossM2 - deductions.reduce((a, b) => a + b, 0));
+
+    const img = imgRef.current;
+    const cropDataUrl = img ? makeCrop(img, outer, 'area', false, holes) : target.cropDataUrl;
+    const holeM2 = round(pixelAreaToM2(polygonArea(newHole), ppm));
+
+    updateRow(target.id, {
+      measuredValue: net,
+      measuredGross: grossM2,
+      measuredDeductions: deductions,
+      annotation: { ...target.annotation!, holes },
+      cropDataUrl,
+    });
+    showToast(`ניכוי ${fmt(holeM2)} מ״ר נוסף ל"${target.description || 'שטח'}" — נטו ${fmt(net)} מ״ר`);
+    setPoints([]);
   }
 
   function applyScale(meters: number) {
@@ -170,7 +218,7 @@ export function PlanViewer({ project, tool, setTool, onMeasured, highlightRowId 
       setView((v) => ({ ...v, panX: panState.current!.panX + dx, panY: panState.current!.panY + dy }));
       return;
     }
-    if (points.length > 0 && (tool === 'length' || tool === 'area')) {
+    if (points.length > 0 && (tool === 'length' || tool === 'area' || tool === 'cutout')) {
       setCursor(screenToImage(e.clientX, e.clientY));
     }
   }
@@ -201,12 +249,13 @@ export function PlanViewer({ project, tool, setTool, onMeasured, highlightRowId 
 
   // תצוגת ערך חי
   let liveText = '';
-  if ((tool === 'length' || tool === 'area') && hasScale && points.length > 0) {
+  if ((tool === 'length' || tool === 'area' || tool === 'cutout') && hasScale && points.length > 0) {
     const pts = cursor ? [...points, cursor] : points;
     if (tool === 'length' && pts.length >= 2) {
       liveText = `אורך: ${fmt(pixelsToMeters(polylineLength(pts), scale!.pixelsPerMeter))} מ׳`;
-    } else if (tool === 'area' && pts.length >= 3) {
-      liveText = `שטח: ${fmt(pixelAreaToM2(polygonArea(pts), scale!.pixelsPerMeter))} מ״ר`;
+    } else if ((tool === 'area' || tool === 'cutout') && pts.length >= 3) {
+      const label = tool === 'cutout' ? 'ניכוי' : 'שטח';
+      liveText = `${label}: ${fmt(pixelAreaToM2(polygonArea(pts), scale!.pixelsPerMeter))} מ״ר`;
     }
   }
   if (tool === 'count') liveText = `נספרו: ${points.length} פריטים`;
@@ -291,7 +340,7 @@ export function PlanViewer({ project, tool, setTool, onMeasured, highlightRowId 
                 viewBox={`0 0 ${natural.w} ${natural.h}`}
                 style={{ position: 'absolute', inset: 0 }}
                 onClick={handleSvgClick}
-                onDoubleClick={() => { if (tool === 'length' || tool === 'area') finishMeasurement(); }}
+                onDoubleClick={() => { if (tool === 'length' || tool === 'area' || tool === 'cutout') finishMeasurement(); }}
               >
                 {/* שכבת מדידות קבועה - כל המדידות שבוצעו על עמוד זה */}
                 {project.rows
@@ -316,16 +365,26 @@ export function PlanViewer({ project, tool, setTool, onMeasured, highlightRowId 
                         {a.shape === 'count' && a.points.map((p, i) => (
                           <text key={'n' + i} x={p.x} y={p.y - sw(7)} fontSize={sw(13)} textAnchor="middle" fill={c.dot} fontWeight="bold">{i + 1}</text>
                         ))}
+                        {/* ניכויים (cut-out) באדום */}
+                        {a.holes?.map((h, hi) => (
+                          <polygon
+                            key={'h' + hi}
+                            points={h.map((p) => `${p.x},${p.y}`).join(' ')}
+                            fill="rgba(192,57,43,0.30)"
+                            stroke="#c0392b"
+                            strokeWidth={sw(hl ? 3 : 1.6)}
+                          />
+                        ))}
                       </g>
                     );
                   })}
 
                 {/* פוליגון/קו בתהליך */}
-                {tool === 'area' && points.length >= 2 && (
+                {(tool === 'area' || tool === 'cutout') && points.length >= 2 && (
                   <polygon
                     points={[...points, ...(cursor ? [cursor] : [])].map((p) => `${p.x},${p.y}`).join(' ')}
-                    fill="rgba(37,99,235,0.18)"
-                    stroke="#2563eb"
+                    fill={tool === 'cutout' ? 'rgba(192,57,43,0.22)' : 'rgba(37,99,235,0.18)'}
+                    stroke={tool === 'cutout' ? '#c0392b' : '#2563eb'}
                     strokeWidth={sw(2)}
                   />
                 )}
@@ -338,7 +397,7 @@ export function PlanViewer({ project, tool, setTool, onMeasured, highlightRowId 
                   />
                 )}
                 {points.map((p, i) => (
-                  <circle key={i} cx={p.x} cy={p.y} r={sw(4)} fill={tool === 'scale' ? '#dc2626' : tool === 'count' ? '#16a34a' : '#2563eb'} stroke="#fff" strokeWidth={sw(1)} />
+                  <circle key={i} cx={p.x} cy={p.y} r={sw(4)} fill={tool === 'scale' || tool === 'cutout' ? '#dc2626' : tool === 'count' ? '#16a34a' : '#2563eb'} stroke="#fff" strokeWidth={sw(1)} />
                 ))}
                 {tool === 'count' && points.map((p, i) => (
                   <text key={'t' + i} x={p.x} y={p.y - sw(7)} fontSize={sw(13)} textAnchor="middle" fill="#16a34a" fontWeight="bold">{i + 1}</text>
@@ -355,6 +414,7 @@ export function PlanViewer({ project, tool, setTool, onMeasured, highlightRowId 
               {tool === 'scale' && 'כיול קנה מידה: סמן שתי נקודות'}
               {tool === 'length' && 'מדידת אורך: לחץ נקודות, לחיצה כפולה לסיום'}
               {tool === 'area' && 'מדידת שטח: לחץ נקודות, לחיצה כפולה לסיום'}
+              {tool === 'cutout' && 'ניכוי: סמן פוליגון בתוך שטח שנמדד, לחיצה כפולה לסיום'}
               {tool === 'count' && 'ספירה: לחץ על כל פריט'}
             </div>
             {liveText && <div className="mh-live">{liveText}</div>}
