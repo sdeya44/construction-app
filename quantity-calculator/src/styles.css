@@ -415,3 +415,80 @@ body {
   .rp-table tr { page-break-inside: avoid; break-inside: avoid; }
   .rp-crop-img, .crop { page-break-inside: avoid; break-inside: avoid; }
 }
+
+/* ============================================================
+   מסך כמויות חפירה/מילוי בחתכים
+   ============================================================ */
+.cs-overlay {
+  position: fixed; inset: 0; background: var(--bg); z-index: 250;
+  display: flex; flex-direction: column;
+}
+.cs-topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; background: var(--head); color: #fff;
+}
+.cs-topbar h2 { margin: 0; font-size: 17px; }
+.cs-topbar .cs-sub { font-size: 12px; color: #aeb8c4; }
+.cs-content { flex: 1; overflow: auto; padding: 18px; max-width: 1000px; width: 100%; margin: 0 auto; }
+
+.cs-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; margin-bottom: 14px; box-shadow: var(--shadow);
+}
+.cs-card-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--text); }
+.cs-scale-row { display: flex; gap: 14px; max-width: 340px; }
+.cs-scale-row .field { flex: 1; }
+
+.cs-totals { display: flex; gap: 12px; margin-bottom: 8px; }
+.cs-total { flex: 1; border-radius: 12px; padding: 16px; text-align: center; }
+.cs-total.cut { background: #fdecea; }
+.cs-total.fill { background: #eaf1f9; }
+.cs-total-num { font-size: 28px; font-weight: 800; }
+.cs-total.cut .cs-total-num { color: var(--deduction); }
+.cs-total.fill .cs-total-num { color: var(--primary); }
+.cs-total-lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.cs-vol-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+.cs-vol-table th { background: var(--head); color: #fff; padding: 7px; text-align: start; }
+.cs-vol-table td { padding: 6px 7px; border-bottom: 1px solid var(--border); }
+.cs-vol-table .cut { color: var(--deduction); font-weight: 700; }
+.cs-vol-table .fill { color: var(--primary); font-weight: 700; }
+
+.cs-empty { text-align: center; color: var(--muted); padding: 24px; }
+.cs-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.cs-thumb {
+  display: flex; align-items: center; gap: 14px; padding: 10px;
+  border: 1px solid var(--border); border-radius: 10px; cursor: pointer; background: #fff;
+}
+.cs-thumb:hover { border-color: var(--primary); background: #f5f9ff; }
+.cs-thumb canvas { width: 150px; height: 93px; border: 1px solid var(--border); border-radius: 6px; flex-shrink: 0; background: #fbfbf8; }
+.cs-thumb-info { flex: 1; min-width: 0; }
+.cs-thumb-name { font-weight: 700; font-size: 15px; }
+.cs-thumb-sub { font-size: 12px; color: var(--muted); margin: 3px 0; }
+.cs-thumb-areas { font-size: 13px; }
+.cs-thumb-areas .cut { color: var(--deduction); font-weight: 700; }
+.cs-thumb-areas .fill { color: var(--primary); font-weight: 700; }
+.cs-chev { color: var(--muted); font-size: 22px; }
+.cs-add { margin-top: 4px; }
+
+/* עורך חתך */
+.cs-editor .cs-edit-canvas {
+  width: 100%; height: auto; aspect-ratio: 340 / 210; display: block;
+  border: 1px solid var(--border-strong); border-radius: 10px; background: #fbfbf8;
+  cursor: crosshair; touch-action: none; margin-top: 4px;
+}
+.cs-edit-hint { text-align: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.cs-legend { display: flex; gap: 16px; justify-content: center; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+.cs-legend span { display: flex; align-items: center; gap: 5px; }
+.cs-legend i { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
+.cs-legend i.dash { height: 0; border-top: 3px dashed; }
+.cs-mode-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.cs-mode-row .btn { flex: 1; min-width: 110px; }
+.cs-edit-areas { display: flex; gap: 12px; margin-top: 14px; }
+.cs-edit-areas div { flex: 1; text-align: center; padding: 12px; border-radius: 10px; }
+.cs-edit-areas .cut { background: #fdecea; }
+.cs-edit-areas .fill { background: #eaf1f9; }
+.cs-edit-areas b { display: block; font-size: 22px; }
+.cs-edit-areas .cut b { color: var(--deduction); }
+.cs-edit-areas .fill b { color: var(--primary); }
+.cs-edit-areas span { font-size: 11px; color: var(--muted); }

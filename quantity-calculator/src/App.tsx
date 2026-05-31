@@ -7,6 +7,7 @@ import { PlanViewer, Tool } from './components/PlanViewer';
 import { CalcTable } from './components/CalcTable';
 import { RowEditor } from './components/RowEditor';
 import { ReportA4 } from './components/ReportA4';
+import { CrossSectionScreen } from './components/CrossSectionScreen';
 import { NewProjectDialog, OpenProjectDialog, ProjectMetaDialog } from './components/ProjectDialogs';
 
 interface EditorState {
@@ -21,6 +22,7 @@ export default function App() {
   const [highlightRowId, setHighlightRowId] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>({ open: false, initial: {} });
   const [showReport, setShowReport] = useState(false);
+  const [showCrossSection, setShowCrossSection] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showOpen, setShowOpen] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
@@ -60,6 +62,7 @@ export default function App() {
         onEditMeta={() => setShowMeta(true)}
         onAddManual={openManual}
         onReport={() => setShowReport(true)}
+        onCrossSection={() => setShowCrossSection(true)}
       />
 
       <div className="project-strip">
@@ -88,6 +91,7 @@ export default function App() {
       )}
 
       {showReport && <ReportA4 project={project} onClose={() => setShowReport(false)} />}
+      {showCrossSection && <CrossSectionScreen project={project} onClose={() => setShowCrossSection(false)} />}
       {showNew && <NewProjectDialog onClose={() => setShowNew(false)} />}
       {showOpen && <OpenProjectDialog onClose={() => setShowOpen(false)} />}
       {showMeta && <ProjectMetaDialog project={project} onClose={() => setShowMeta(false)} />}

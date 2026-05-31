@@ -14,9 +14,10 @@ interface Props {
   onEditMeta: () => void;
   onAddManual: () => void;
   onReport: () => void;
+  onCrossSection: () => void;
 }
 
-export function Toolbar({ project, tool, setTool, onNewProject, onOpenProject, onEditMeta, onAddManual, onReport }: Props) {
+export function Toolbar({ project, tool, setTool, onNewProject, onOpenProject, onEditMeta, onAddManual, onReport, onCrossSection }: Props) {
   const { saveNow, undo, addPages, importProject, showToast } = useStore();
   const planInput = useRef<HTMLInputElement>(null);
   const jsonInput = useRef<HTMLInputElement>(null);
@@ -89,6 +90,7 @@ export function Toolbar({ project, tool, setTool, onNewProject, onOpenProject, o
       <div className="tb-group">
         <button className="btn btn-primary" onClick={onAddManual}>＋ חישוב ידני</button>
         <button className="btn btn-primary" onClick={onReport}>🖨 דוח A4</button>
+        <button className="btn btn-accent" onClick={onCrossSection}>📐 חפירה/מילוי</button>
       </div>
 
       <div className="tb-group">

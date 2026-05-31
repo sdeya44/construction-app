@@ -96,6 +96,29 @@ export interface PlanPage {
   scale?: PageScale; // קנה מידה לעמוד זה
 }
 
+/** נקודה בקואורדינטות קנבס החתך (פיקסלים פנימיים) */
+export interface CSPoint {
+  x: number;
+  y: number;
+}
+
+/** חתך בודד לחישוב חפירה/מילוי */
+export interface CrossSection {
+  id: string;
+  name: string;
+  station: string; // תחנה (אופציונלי)
+  dist: number; // מרחק לחתך הבא (מ׳)
+  existing: CSPoint[]; // פרופיל קיים
+  proposed: CSPoint[]; // פרופיל מתוכנן
+}
+
+/** מודל כמויות חפירה/מילוי בחתכים */
+export interface CrossSectionData {
+  scaleW: number; // רוחב הקנבס במטרים
+  scaleH: number; // גובה הקנבס במטרים
+  sections: CrossSection[];
+}
+
 /** הפרויקט המלא */
 export interface Project {
   id: string;
@@ -111,6 +134,7 @@ export interface Project {
   sections: Section[];
   rows: CalcRow[];
   pages: PlanPage[];
+  crossSection?: CrossSectionData; // כמויות חפירה/מילוי בחתכים
   // מטא
   createdAt: number;
   updatedAt: number;
