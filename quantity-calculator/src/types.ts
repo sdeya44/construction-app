@@ -51,7 +51,19 @@ export interface CalcRow {
   note: string;
   kind: RowKind; // רגיל / הפחתה
   measuredValue?: number; // ערך שנמדד מהתוכנית (לאורך/שטח שנמדדו)
+  annotation?: AnnotationGeometry; // גאומטריית הסימון לשכבה קבועה על התוכנית
+  cropDataUrl?: string; // תצלום חתוך של אזור המדידה (לביקורת בדוח)
   createdAt: number;
+}
+
+/** סוג צורת הסימון על התוכנית */
+export type AnnotationShape = 'length' | 'area' | 'count';
+
+/** גאומטריית סימון השמורה בקואורדינטות התמונה הטבעיות (פיקסלים) */
+export interface AnnotationGeometry {
+  pageId: string; // העמוד שעליו בוצעה המדידה
+  shape: AnnotationShape;
+  points: { x: number; y: number }[];
 }
 
 /** סעיף בספריית הסעיפים */

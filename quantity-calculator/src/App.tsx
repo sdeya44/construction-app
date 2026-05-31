@@ -18,6 +18,7 @@ export default function App() {
   const { project, init, addRow, updateRow, toast, saving } = useStore();
   const [tool, setTool] = useState<Tool>('pan');
   const [filter, setFilter] = useState<string | null | 'all'>('all');
+  const [highlightRowId, setHighlightRowId] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>({ open: false, initial: {} });
   const [showReport, setShowReport] = useState(false);
   const [showNew, setShowNew] = useState(false);
@@ -71,8 +72,8 @@ export default function App() {
       <div className="main">
         <SectionsPanel project={project} activeFilter={filter} onFilter={setFilter} />
         <div className="center-col">
-          <PlanViewer project={project} tool={tool} setTool={setTool} onMeasured={openMeasured} />
-          <CalcTable project={project} activeFilter={filter} onEdit={openEdit} onAddManual={openManual} />
+          <PlanViewer project={project} tool={tool} setTool={setTool} onMeasured={openMeasured} highlightRowId={highlightRowId} />
+          <CalcTable project={project} activeFilter={filter} onEdit={openEdit} onAddManual={openManual} onHoverRow={setHighlightRowId} />
         </div>
       </div>
 

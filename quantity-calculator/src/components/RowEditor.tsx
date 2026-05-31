@@ -79,6 +79,8 @@ export function RowEditor({ initial, sections, pages, onSave, onClose }: Props) 
       note,
       kind,
       measuredValue: initial.measuredValue,
+      annotation: initial.annotation,
+      cropDataUrl: initial.cropDataUrl,
     });
   }
 
@@ -182,6 +184,13 @@ export function RowEditor({ initial, sections, pages, onSave, onClose }: Props) 
           <input value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
       </div>
+
+      {initial.cropDataUrl && (
+        <div className="crop-preview">
+          <div className="fp-label">קטע מהתוכנית (אזור המדידה):</div>
+          <img src={initial.cropDataUrl} alt="קטע מהתוכנית" />
+        </div>
+      )}
 
       <div className={'formula-preview' + (kind === 'deduction' ? ' deduction' : '')}>
         <div className="fp-label">נוסחה מוצגת:</div>

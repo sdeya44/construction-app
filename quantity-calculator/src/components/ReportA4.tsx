@@ -12,7 +12,9 @@ interface Props {
 export function ReportA4({ project, onClose }: Props) {
   const [type, setType] = useState<ReportType>('all');
   const [showFormulas, setShowFormulas] = useState(true);
+  const [showCrops, setShowCrops] = useState(true);
   const [sectionId, setSectionId] = useState<string>(project.sections[0]?.id ?? '');
+  const anyCrops = project.rows.some((r) => r.cropDataUrl);
 
   const sectionsToShow: Section[] =
     type === 'single' ? project.sections.filter((s) => s.id === sectionId) : project.sections;
@@ -50,6 +52,12 @@ export function ReportA4({ project, onClose }: Props) {
             הצג נוסחאות
           </label>
         )}
+        {type !== 'summary' && anyCrops && (
+          <label className="rt-check">
+            <input type="checkbox" checked={showCrops} onChange={(e) => setShowCrops(e.target.checked)} />
+            הצג קטעי תוכנית
+          </label>
+        )}
         <span style={{ flex: 1 }} />
         <button className="btn btn-primary" onClick={() => window.print()}>🖨 הדפסה / שמירה כ-PDF</button>
       </div>
@@ -68,6 +76,7 @@ export function ReportA4({ project, onClose }: Props) {
                   section={s}
                   rows={rowsBySection(s.id)}
                   showFormulas={showFormulas}
+                  showCrops={showCrops}
                 />
               ))}
             {type === 'all' && unassigned.length > 0 && (
@@ -76,6 +85,7 @@ export function ReportA4({ project, onClose }: Props) {
                 section={{ id: '', code: '', name: 'שורות ללא סעיף', unit: '', description: '' }}
                 rows={unassigned}
                 showFormulas={showFormulas}
+                showCrops={showCrops}
               />
             )}
           </>
@@ -122,8 +132,9 @@ function ReportFooter({ subtotalText, project }: { subtotalText?: string; projec
   );
 }
 
-function DetailSheet({ project, section, rows, showFormulas }: { project: Project; section: Omit<Section, 'unit'> & { unit: string }; rows: CalcRow[]; showFormulas: boolean }) {
+function DetailSheet({ project, section, rows, showFormulas, showCrops }: { project: Project; section: Omit<Section, 'unit'> & { unit: string }; rows: CalcRow[]; showFormulas: boolean; showCrops: boolean }) {
   const subtotal = round(rows.reduce((a, r) => a + computeRow(r).quantity, 0));
+  const cropCol = showCrops && rows.some((r) => r.cropDataUrl);
   return (
     <div className="sheet">
       <ReportHeader project={project} />
@@ -137,6 +148,7 @@ function DetailSheet({ project, section, rows, showFormulas }: { project: Projec
           <tr>
             <th className="c-no">מס׳</th>
             <th className="c-desc">תיאור החישוב</th>
+            {cropCol && <th className="c-crop">קטע מהתוכנית</th>}
             <th className="c-page">עמוד</th>
             {showFormulas && <th className="c-formula">נוסחה</th>}
             <th className="c-qty">כמות</th>
@@ -152,6 +164,11 @@ function DetailSheet({ project, section, rows, showFormulas }: { project: Projec
               <tr key={r.id} className={ded ? 'rp-ded' : ''}>
                 <td className="c-no">{i + 1}</td>
                 <td className="c-desc">{r.description}{ded && <span className="rp-ded-tag"> (הפחתה)</span>}</td>
+                {cropCol && (
+                  <td className="c-crop">
+                    {r.cropDataUrl ? <img className="rp-crop-img" src={r.cropDataUrl} alt="קטע מהתוכנית" /> : ''}
+                  </td>
+                )}
                 <td className="c-page">{r.page}</td>
                 {showFormulas && <td className="c-formula">{formula}</td>}
                 <td className="c-qty">{fmt(quantity)}</td>
@@ -163,7 +180,7 @@ function DetailSheet({ project, section, rows, showFormulas }: { project: Projec
         </tbody>
         <tfoot>
           <tr className="rp-total">
-            <td colSpan={showFormulas ? 4 : 3}>סה״כ סעיף {section.name}</td>
+            <td colSpan={3 + (cropCol ? 1 : 0) + (showFormulas ? 1 : 0)}>סה״כ סעיף {section.name}</td>
             <td className="c-qty">{fmt(subtotal)}</td>
             <td className="c-unit">{section.unit || rows[0]?.unit}</td>
             <td></td>

@@ -9,9 +9,10 @@ interface Props {
   activeFilter: string | null | 'all';
   onEdit: (row: CalcRow) => void;
   onAddManual: () => void;
+  onHoverRow?: (id: string | null) => void;
 }
 
-export function CalcTable({ project, activeFilter, onEdit, onAddManual }: Props) {
+export function CalcTable({ project, activeFilter, onEdit, onAddManual, onHoverRow }: Props) {
   const { deleteRow, duplicateRow } = useStore();
 
   const filtered = useMemo(() => {
@@ -58,6 +59,7 @@ export function CalcTable({ project, activeFilter, onEdit, onAddManual }: Props)
             <tr>
               <th>מס׳</th>
               <th>תיאור החישוב</th>
+              <th>תוכנית</th>
               <th>עמוד</th>
               <th>סוג</th>
               <th>אורך</th>
@@ -74,7 +76,7 @@ export function CalcTable({ project, activeFilter, onEdit, onAddManual }: Props)
           </thead>
           <tbody>
             {groups.length === 0 && (
-              <tr><td colSpan={14} className="empty-row">אין שורות חישוב. הוסף חישוב ידני או מדוד מהתוכנית.</td></tr>
+              <tr><td colSpan={15} className="empty-row">אין שורות חישוב. הוסף חישוב ידני או מדוד מהתוכנית.</td></tr>
             )}
             {groups.map((g) => {
               const info = sectionInfo(g.id);
@@ -89,6 +91,7 @@ export function CalcTable({ project, activeFilter, onEdit, onAddManual }: Props)
                   onEdit={onEdit}
                   onDelete={deleteRow}
                   onDuplicate={duplicateRow}
+                  onHoverRow={onHoverRow}
                 />
               );
             })}
@@ -100,7 +103,7 @@ export function CalcTable({ project, activeFilter, onEdit, onAddManual }: Props)
 }
 
 function GroupBlock({
-  info, rows, subtotal, rowIndex, onEdit, onDelete, onDuplicate,
+  info, rows, subtotal, rowIndex, onEdit, onDelete, onDuplicate, onHoverRow,
 }: {
   info: { code: string; name: string; unit: string };
   rows: CalcRow[];
@@ -109,11 +112,12 @@ function GroupBlock({
   onEdit: (r: CalcRow) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
+  onHoverRow?: (id: string | null) => void;
 }) {
   return (
     <>
       <tr className="group-head">
-        <td colSpan={14}>
+        <td colSpan={15}>
           {info.code && <span className="gh-code">{info.code}</span>}
           <span className="gh-name">{info.name}</span>
         </td>
@@ -123,9 +127,18 @@ function GroupBlock({
         const meta = calcTypeMeta(r.type);
         const isDed = r.kind === 'deduction';
         return (
-          <tr key={r.id} className={isDed ? 'row-deduction' : ''} onDoubleClick={() => onEdit(r)}>
+          <tr
+            key={r.id}
+            className={isDed ? 'row-deduction' : ''}
+            onDoubleClick={() => onEdit(r)}
+            onMouseEnter={() => onHoverRow?.(r.id)}
+            onMouseLeave={() => onHoverRow?.(null)}
+          >
             <td>{rowIndex.get(r.id)}</td>
             <td className="cell-desc">{r.description || <span className="muted">—</span>}</td>
+            <td className="cell-thumb">
+              {r.cropDataUrl ? <img className="row-thumb" src={r.cropDataUrl} alt="קטע מהתוכנית" /> : <span className="muted">—</span>}
+            </td>
             <td>{r.page}</td>
             <td className="cell-type">{meta.label}</td>
             <td>{r.length ?? ''}</td>
@@ -146,7 +159,7 @@ function GroupBlock({
         );
       })}
       <tr className="subtotal-row">
-        <td colSpan={10}>סיכום סעיף ({info.name})</td>
+        <td colSpan={11}>סיכום סעיף ({info.name})</td>
         <td className="cell-qty">{fmt(subtotal)}</td>
         <td>{info.unit}</td>
         <td colSpan={2}></td>

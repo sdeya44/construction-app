@@ -245,6 +245,8 @@ export const useStore = create<StoreState>((set, get) => {
           note: r.note ?? '',
           kind: r.kind ?? 'normal',
           measuredValue: r.measuredValue,
+          annotation: r.annotation,
+          cropDataUrl: r.cropDataUrl,
           createdAt: Date.now(),
         });
       });

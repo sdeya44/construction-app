@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CalcRow, PageScale, Project } from '../types';
+import type { AnnotationGeometry, AnnotationShape, CalcRow, PageScale, Project } from '../types';
 import { useStore } from '../store/projectStore';
 import { Point, dist, polygonArea, polylineLength, pixelAreaToM2, pixelsToMeters } from '../lib/geometry';
 import { fmt, round } from '../lib/calc';
+import { makeCrop, overlayColor } from '../lib/overlay';
 import { Modal } from './Modal';
 
 export type Tool = 'pan' | 'scale' | 'length' | 'area' | 'count';
@@ -12,6 +13,7 @@ interface Props {
   tool: Tool;
   setTool: (t: Tool) => void;
   onMeasured: (initial: Partial<CalcRow>) => void;
+  highlightRowId?: string | null;
 }
 
 interface ViewTransform {
@@ -23,7 +25,7 @@ interface ViewTransform {
 
 const FIT_MARGIN = 0.96;
 
-export function PlanViewer({ project, tool, setTool, onMeasured }: Props) {
+export function PlanViewer({ project, tool, setTool, onMeasured, highlightRowId }: Props) {
   const { ui, selectPage, setPageScale } = useStore();
   const page = project.pages.find((p) => p.id === ui.selectedPageId) ?? null;
 
@@ -113,20 +115,28 @@ export function PlanViewer({ project, tool, setTool, onMeasured }: Props) {
     setPoints((prev) => [...prev, p]);
   }
 
+  // בונה את גאומטריית הסימון + תצלום חתוך של אזור המדידה
+  function buildAnnotation(shape: AnnotationShape, pts: Point[]): { annotation: AnnotationGeometry; cropDataUrl?: string } {
+    const annotation: AnnotationGeometry = { pageId: page!.id, shape, points: pts.map((p) => ({ x: p.x, y: p.y })) };
+    const img = imgRef.current;
+    const cropDataUrl = img ? makeCrop(img, pts, shape, false) : undefined;
+    return { annotation, cropDataUrl };
+  }
+
   function finishMeasurement() {
     if (!page) return;
     if (tool === 'length' && points.length >= 2) {
       const px = polylineLength(points);
       const meters = round(pixelsToMeters(px, scale!.pixelsPerMeter));
-      onMeasured({ type: 'measured_length', measuredValue: meters, unit: 'מ׳', page: page.name, length: meters });
+      onMeasured({ type: 'measured_length', measuredValue: meters, unit: 'מ׳', page: page.name, length: meters, ...buildAnnotation('length', points) });
       setPoints([]);
     } else if (tool === 'area' && points.length >= 3) {
       const pxArea = polygonArea(points);
       const m2 = round(pixelAreaToM2(pxArea, scale!.pixelsPerMeter));
-      onMeasured({ type: 'measured_area', measuredValue: m2, unit: 'מ״ר', page: page.name });
+      onMeasured({ type: 'measured_area', measuredValue: m2, unit: 'מ״ר', page: page.name, ...buildAnnotation('area', points) });
       setPoints([]);
     } else if (tool === 'count' && points.length >= 1) {
-      onMeasured({ type: 'count', count: points.length, unit: 'יח׳', page: page.name });
+      onMeasured({ type: 'count', count: points.length, unit: 'יח׳', page: page.name, ...buildAnnotation('count', points) });
       setPoints([]);
     }
   }
@@ -283,6 +293,33 @@ export function PlanViewer({ project, tool, setTool, onMeasured }: Props) {
                 onClick={handleSvgClick}
                 onDoubleClick={() => { if (tool === 'length' || tool === 'area') finishMeasurement(); }}
               >
+                {/* שכבת מדידות קבועה - כל המדידות שבוצעו על עמוד זה */}
+                {project.rows
+                  .filter((r) => r.annotation && r.annotation.pageId === page.id)
+                  .map((r) => {
+                    const a = r.annotation!;
+                    const c = overlayColor(a.shape, r.kind === 'deduction');
+                    const hl = highlightRowId === r.id;
+                    const dim = highlightRowId && !hl;
+                    const pts = a.points.map((p) => `${p.x},${p.y}`).join(' ');
+                    return (
+                      <g key={'ann' + r.id} opacity={dim ? 0.4 : 1}>
+                        {a.shape === 'area' && a.points.length >= 3 && (
+                          <polygon points={pts} fill={c.fill} stroke={c.stroke} strokeWidth={sw(hl ? 4 : 2)} />
+                        )}
+                        {a.shape === 'length' && a.points.length >= 2 && (
+                          <polyline points={pts} fill="none" stroke={c.stroke} strokeWidth={sw(hl ? 4 : 2)} />
+                        )}
+                        {a.points.map((p, i) => (
+                          <circle key={i} cx={p.x} cy={p.y} r={sw(hl ? 5 : 3.5)} fill={c.dot} stroke="#fff" strokeWidth={sw(1)} />
+                        ))}
+                        {a.shape === 'count' && a.points.map((p, i) => (
+                          <text key={'n' + i} x={p.x} y={p.y - sw(7)} fontSize={sw(13)} textAnchor="middle" fill={c.dot} fontWeight="bold">{i + 1}</text>
+                        ))}
+                      </g>
+                    );
+                  })}
+
                 {/* פוליגון/קו בתהליך */}
                 {tool === 'area' && points.length >= 2 && (
                   <polygon
