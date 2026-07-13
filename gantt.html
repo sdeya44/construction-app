@@ -1651,6 +1651,14 @@ function cloneDate(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
+// Sanity ceilings — hard upper bounds that prevent runaway loops from
+// pathological input (e.g. a user typing "20260101" into a duration field
+// thinking it's a date). Every date-arithmetic loop respects these.
+var MAX_DURATION = 3650;   // ~10 years in work days
+var MAX_LAG      = 365;
+var MAX_ADVANCE_DAYS = 10000; // hard iteration ceiling for any workday walk
+var MAX_CHART_DAYS   = 5000;  // renderGantt refuses to lay out more than ~13 years
+
 // Work days: Sunday(0) - Thursday(4). Friday(5), Saturday(6) are weekend.
 function isWorkDay(date) {
   var day = date.getDay();
@@ -1659,7 +1667,8 @@ function isWorkDay(date) {
 
 function nextWorkDay(date) {
   var d = cloneDate(date);
-  while (!isWorkDay(d)) d.setDate(d.getDate() + 1);
+  var guard = 0;
+  while (!isWorkDay(d) && guard++ < 10) d.setDate(d.getDate() + 1);
   return d;
 }
 
@@ -1667,10 +1676,13 @@ function nextWorkDay(date) {
 // Example: addWorkDays(Sunday, 3) returns Tuesday (Sun, Mon, Tue).
 function addWorkDays(startDate, duration) {
   if (!startDate || !duration || duration < 1) return null;
+  if (duration > MAX_ADVANCE_DAYS) duration = MAX_ADVANCE_DAYS;
   var d = cloneDate(startDate);
-  while (!isWorkDay(d)) d.setDate(d.getDate() + 1);
+  var guard = 0;
+  while (!isWorkDay(d) && guard++ < 10) d.setDate(d.getDate() + 1);
   var count = 1;
-  while (count < duration) {
+  guard = 0;
+  while (count < duration && guard++ < MAX_ADVANCE_DAYS) {
     d.setDate(d.getDate() + 1);
     if (isWorkDay(d)) count++;
   }
@@ -1682,8 +1694,11 @@ function addWorkDays(startDate, duration) {
 // advanceWorkDays(Thursday, 1) returns Sunday.
 function advanceWorkDays(fromDate, n) {
   var d = cloneDate(fromDate);
+  if (!n || n <= 0) return d;
+  if (n > MAX_ADVANCE_DAYS) n = MAX_ADVANCE_DAYS;
   var moved = 0;
-  while (moved < n) {
+  var guard = 0;
+  while (moved < n && guard++ < MAX_ADVANCE_DAYS) {
     d.setDate(d.getDate() + 1);
     if (isWorkDay(d)) moved++;
   }
@@ -1694,10 +1709,13 @@ function advanceWorkDays(fromDate, n) {
 // Used when an end date is anchored (FF, SF dependencies) and we need to back-compute start.
 function subtractWorkDays(endDate, duration) {
   if (!endDate || !duration || duration < 1) return null;
+  if (duration > MAX_ADVANCE_DAYS) duration = MAX_ADVANCE_DAYS;
   var d = cloneDate(endDate);
-  while (!isWorkDay(d)) d.setDate(d.getDate() - 1);
+  var guard = 0;
+  while (!isWorkDay(d) && guard++ < 10) d.setDate(d.getDate() - 1);
   var count = 1;
-  while (count < duration) {
+  guard = 0;
+  while (count < duration && guard++ < MAX_ADVANCE_DAYS) {
     d.setDate(d.getDate() - 1);
     if (isWorkDay(d)) count++;
   }
@@ -1710,7 +1728,8 @@ function workDaysBetween(start, end) {
   var d = cloneDate(start);
   var e = cloneDate(end);
   var c = 0;
-  while (d <= e) {
+  var guard = 0;
+  while (d <= e && guard++ < MAX_ADVANCE_DAYS) {
     if (isWorkDay(d)) c++;
     d.setDate(d.getDate() + 1);
   }
@@ -2016,11 +2035,22 @@ function computeSchedule() {
 // ============================================================
 // CRITICAL PATH (CPM backward pass + slack)
 // ============================================================
+// Sign-aware shift — walks forward for n>0, backward for n<0, no-op for n=0.
+// Used by dependency logic so negative lag (Lead time) actually pulls the
+// anchor earlier instead of silently doing nothing.
+function shiftByWorkDays(fromDate, n) {
+  if (!n) return cloneDate(fromDate);
+  return (n > 0) ? advanceWorkDays(fromDate, n) : retreatWorkDays(fromDate, -n);
+}
+
 // Move backward N work days from a date (mirror of advanceWorkDays).
 function retreatWorkDays(fromDate, n) {
   var d = cloneDate(fromDate);
+  if (!n || n <= 0) return d;
+  if (n > MAX_ADVANCE_DAYS) n = MAX_ADVANCE_DAYS;
   var moved = 0;
-  while (moved < n) {
+  var guard = 0;
+  while (moved < n && guard++ < MAX_ADVANCE_DAYS) {
     d.setDate(d.getDate() - 1);
     if (isWorkDay(d)) moved++;
   }
@@ -2090,20 +2120,16 @@ function computeCriticalPath(idMap) {
           //                          = LF                          (for milestones)
           var sLS = (durs[sid] === 0) ? cloneDate(lf[sid]) : subtractWorkDays(lf[sid], durs[sid]);
           var constraint = null;
+          // Use shiftByWorkDays so negative lag (Lead time) walks forward, not no-op.
           if (dt === "FS") {
-            // succ.start = pred.end + lag + 1 wd  ⇒  pred.LF = succ.LS shifted back lag+1 wd
-            constraint = retreatWorkDays(sLS, lg + 1);
+            constraint = shiftByWorkDays(sLS, -(lg + 1));
           } else if (dt === "SS") {
-            // succ.start = pred.start + lag wd  ⇒  pred.LS = succ.LS - lag wd
-            // pred.LF = pred.LS + dur - 1 wd
-            var predLS_ss = (lg === 0) ? cloneDate(sLS) : retreatWorkDays(sLS, lg);
+            var predLS_ss = shiftByWorkDays(sLS, -lg);
             constraint = (durs[ap.id] === 0) ? cloneDate(predLS_ss) : addWorkDays(predLS_ss, durs[ap.id]);
           } else if (dt === "FF") {
-            // succ.end = pred.end + lag wd  ⇒  pred.LF = succ.LF - lag wd
-            constraint = (lg === 0) ? cloneDate(lf[sid]) : retreatWorkDays(lf[sid], lg);
+            constraint = shiftByWorkDays(lf[sid], -lg);
           } else if (dt === "SF") {
-            // succ.end = pred.start + lag wd  ⇒  pred.LS = succ.LF - lag wd
-            var predLS_sf = (lg === 0) ? cloneDate(lf[sid]) : retreatWorkDays(lf[sid], lg);
+            var predLS_sf = shiftByWorkDays(lf[sid], -lg);
             constraint = (durs[ap.id] === 0) ? cloneDate(predLS_sf) : addWorkDays(predLS_sf, durs[ap.id]);
           }
           if (constraint && (!newLF || constraint < newLF)) newLF = constraint;
@@ -2161,10 +2187,11 @@ function computeOne(act, idMap, byId, cycles, warnings, errors) {
   if (lock === "AUTO" && pred) {
     var anchor;
     var anchorIsStart = (depType === "FS" || depType === "SS");
-    if (depType === "FS")      anchor = advanceWorkDays(pred.end,   lag + 1);
-    else if (depType === "SS") anchor = (lag === 0) ? cloneDate(pred.start) : advanceWorkDays(pred.start, lag);
-    else if (depType === "FF") anchor = (lag === 0) ? cloneDate(pred.end)   : advanceWorkDays(pred.end,   lag);
-    else if (depType === "SF") anchor = (lag === 0) ? cloneDate(pred.start) : advanceWorkDays(pred.start, lag);
+    // shiftByWorkDays handles negative values (Lead time) by walking backward.
+    if (depType === "FS")      anchor = shiftByWorkDays(pred.end,   lag + 1);
+    else if (depType === "SS") anchor = shiftByWorkDays(pred.start, lag);
+    else if (depType === "FF") anchor = shiftByWorkDays(pred.end,   lag);
+    else if (depType === "SF") anchor = shiftByWorkDays(pred.start, lag);
     if (!isWorkDay(anchor)) anchor = (anchorIsStart ? nextWorkDay(anchor) : snapBackToWorkDay(anchor));
 
     result.fromPredecessor = true;
@@ -2386,11 +2413,11 @@ function renderTable() {
       '<td><input class="id-input" type="text" data-field="id" value="' + escapeHtml(a.id) + '"></td>' +
       '<td><div class="desc-wrap"><input type="text" data-field="description" placeholder="תיאור" value="' + escapeHtml(a.description) + '">' + msIcon + critChip + '</div></td>' +
       '<td><input class="' + startCls + '" type="date" data-field="startDate" value="' + escapeHtml(a.startDate) + '"></td>' +
-      '<td><input class="' + durCls   + '" type="number" data-field="duration" min="0" step="1" value="' + escapeHtml(a.duration === "" || a.duration === null || a.duration === undefined ? "" : a.duration) + '"></td>' +
+      '<td><input class="' + durCls   + '" type="number" data-field="duration" min="0" max="' + MAX_DURATION + '" step="1" value="' + escapeHtml(a.duration === "" || a.duration === null || a.duration === undefined ? "" : a.duration) + '"></td>' +
       '<td><input class="' + endCls   + '" type="date" data-field="endDate" value="' + escapeHtml(a.endDate) + '"></td>' +
       '<td><input class="pred-input" type="text" data-field="predecessorId" placeholder="—" value="' + escapeHtml(a.predecessorId) + '"></td>' +
       '<td><select class="dep-select" data-field="predecessorType">' + depOpts + '</select></td>' +
-      '<td><input type="number" data-field="lag" min="-99" step="1" value="' + (a.lag === "" || a.lag === null || a.lag === undefined ? 0 : a.lag) + '"></td>' +
+      '<td><input type="number" data-field="lag" min="-' + MAX_LAG + '" max="' + MAX_LAG + '" step="1" value="' + (a.lag === "" || a.lag === null || a.lag === undefined ? 0 : a.lag) + '"></td>' +
       '<td><select class="lm-select" data-field="lockMode">' + lmOpts + '</select></td>' +
       '<td><input type="text" data-field="status" placeholder="הערות" value="' + escapeHtml(a.status) + '"></td>' +
       '<td class="del no-print"><button class="del-btn" type="button" title="מחק">✕</button></td>';
@@ -2480,11 +2507,26 @@ function onCellInput(e) {
   var act = state.activities[idx];
   if (!act) return;
 
-  // Type coercion per field
+  // Type coercion per field — with sanity clamping so a stray keystroke can't
+  // hang the app (e.g. typing "20260101" into a duration field).
   if (field === "duration") {
-    act.duration = (val === "") ? "" : Number(val);
+    if (val === "") { act.duration = ""; }
+    else {
+      var n = Number(val);
+      if (!isFinite(n)) n = 0;
+      if (n < 0) n = 0;
+      if (n > MAX_DURATION) n = MAX_DURATION;
+      act.duration = n;
+    }
   } else if (field === "lag") {
-    act.lag = (val === "") ? 0 : Number(val);
+    if (val === "") { act.lag = 0; }
+    else {
+      var lg = Number(val);
+      if (!isFinite(lg)) lg = 0;
+      if (lg < -MAX_LAG) lg = -MAX_LAG;
+      if (lg >  MAX_LAG) lg =  MAX_LAG;
+      act.lag = lg;
+    }
   } else if (field === "predecessorId") {
     var hadPred = !!act.predecessorId;
     act.predecessorId = String(val).trim();
@@ -2589,6 +2631,27 @@ function renderGantt() {
   end.setDate(end.getDate() + 2); // padding
 
   var totalDays = Math.round((end - start) / 86400000) + 1;
+
+  // SANITY GUARD: if the date range is absurd (typo in a date field, giant duration
+  // that survived the clamp, etc), refuse to render millions of cells and tell the
+  // user which activity is at fault. This is the fix for the "app freezes after a
+  // few activities" bug — a stray '20260101' in duration used to spin the browser
+  // through 20-million-day loops here.
+  if (!isFinite(totalDays) || totalDays < 1 || totalDays > MAX_CHART_DAYS) {
+    var culprit = "";
+    for (var vv = 0; vv < validActs.length; vv++) {
+      var span = Math.round((validActs[vv].end - validActs[vv].start) / 86400000) + 1;
+      if (span > 3000) { culprit = " פעילות " + validActs[vv].act.id + " (טווח " + span + " ימים)"; break; }
+    }
+    container.innerHTML =
+      '<div class="empty-state" style="color:#fca5a5;line-height:1.7">' +
+      '<strong>טווח תאריכים לא סביר</strong><br>' +
+      'התרשים דורש ' + totalDays + ' ימים.' + culprit + '<br>' +
+      'בדוק שלא הוקלד תאריך שגוי או משך חריג בטבלה.' +
+      '</div>';
+    return;
+  }
+
   var totalWidth = totalDays * DAY_WIDTH;
 
   // Build header (weeks + days)
