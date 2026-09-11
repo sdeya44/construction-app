@@ -1,0 +1,2412 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>KAYAN — מערכת חשבונות ביצוע וכמויות</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#142B45; --navy2:#1E3A5C; --navy-dk:#0E1F33;
+  --gold:#B08D3E; --gold-dk:#957530; --gold-lt:#D9C48A;
+  --pos:#2C7A4B; --pos-bg:#EDF5EF;
+  --neg:#B4432F; --neg-bg:#F8EEEB;
+  --amber:#B07A1E; --amber-bg:#FBF4E4;
+  --blue:#2A5A96; --blue-bg:#EAF1FA;
+  --ink:#1A222E; --muted:#6E7A88; --line:#E6E9F0; --hair:#EDEFF4;
+  --bg:#F4F5F8; --card:#FFFFFF; --paper:#FCFCFA;
+  --shadow:0 1px 2px rgba(20,43,69,.05),0 8px 30px rgba(20,43,69,.06);
+  --r-sm:6px; --r:10px; --r-lg:14px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px}
+body{font-family:'Heebo',Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit;font-size:13px;color:inherit}
+.num{direction:ltr;font-variant-numeric:tabular-nums;unicode-bidi:isolate}
+a{color:inherit}
+::-webkit-scrollbar{height:9px;width:9px}
+::-webkit-scrollbar-thumb{background:#C7CEDA;border-radius:6px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ══════════ TOP BAR ══════════ */
+.topbar{background:var(--navy);color:#fff;padding:0 18px;height:58px;display:flex;align-items:center;
+  gap:14px;position:sticky;top:0;z-index:80;box-shadow:0 2px 12px rgba(19,42,70,.25)}
+.logo{display:flex;align-items:center;gap:10px;cursor:pointer;background:none;border:none}
+.logo svg{width:32px;height:32px;flex:none}
+.logo .name{font-weight:800;font-size:18px;letter-spacing:.02em;color:#fff}
+.logo .name b{color:var(--gold)}
+.logo .tag{font-size:8.5px;letter-spacing:.26em;color:#9FB2C9;margin-top:-2px}
+.topbar .proj-name{font-size:13px;color:#CBD6E4;padding-inline-start:14px;border-inline-start:1px solid rgba(255,255,255,.18);
+  display:flex;flex-direction:column;gap:1px;max-width:260px;overflow:hidden}
+.topbar .proj-name b{color:#fff;font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar .proj-name small{color:#8FA2B8;font-size:10.5px}
+.topbar .spacer{flex:1}
+.save-status{font-size:11px;color:#9FB2C9;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.save-status .dot{width:7px;height:7px;border-radius:50%;background:#5FB37A;flex:none}
+.save-status.saving .dot{background:var(--gold);animation:pulse 1s infinite}
+.save-status.err .dot{background:var(--neg)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.topbar .act{background:rgba(255,255,255,.1);color:#fff;padding:7px 13px;border-radius:7px;font-size:12.5px;
+  font-weight:500;display:inline-flex;align-items:center;gap:6px;transition:.15s;white-space:nowrap}
+.topbar .act:hover{background:rgba(255,255,255,.2)}
+.topbar .act.gold{background:var(--gold);color:var(--navy-dk);font-weight:700}
+.topbar .act.gold:hover{background:#d4b25c}
+
+/* ══════════ TABS ══════════ */
+.tabs{background:var(--navy2);display:flex;padding:0 12px;position:sticky;top:58px;z-index:79;
+  box-shadow:0 2px 8px rgba(19,42,70,.15);overflow-x:auto}
+.tab{color:#B9C7D9;padding:12px 18px;font-size:13px;font-weight:500;border-bottom:3px solid transparent;
+  display:flex;align-items:center;gap:7px;transition:.15s;background:none;white-space:nowrap}
+.tab:hover{color:#fff}
+.tab.on{color:#fff;border-bottom-color:var(--gold)}
+.tab .badge{background:var(--gold);color:var(--navy-dk);font-size:10px;font-weight:800;
+  min-width:17px;height:17px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px}
+.tab .badge.warn{background:var(--neg);color:#fff}
+
+/* ══════════ LAYOUT ══════════ */
+.wrap{max-width:1400px;margin:20px auto;padding:0 18px}
+.wrap.narrow{max-width:900px}
+.screen{display:none}
+.screen.on{display:block;animation:fade .18s}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);margin-bottom:16px}
+.card-hd{background:var(--navy);color:#fff;padding:11px 16px;border-radius:var(--r-lg) var(--r-lg) 0 0;font-weight:700;
+  font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card-hd .gold-i{color:var(--gold)}
+.card-hd .hd-sub{font-weight:400;font-size:11.5px;color:#B9C7D9;margin-inline-start:auto}
+.card-bd{padding:16px}
+.card-bd.flush{padding:0}
+h2.sect-ttl{font-size:15px;color:var(--navy);font-weight:800;margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+h2.sect-ttl:first-child{margin-top:0}
+
+/* ══════════ FORMS ══════════ */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px 18px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 18px}
+.fld label{display:block;font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.04em;margin-bottom:4px}
+.fld input,.fld select,.fld textarea{width:100%;padding:9px 11px;border:1.5px solid var(--line);border-radius:8px;
+  background:#fff;transition:.15s}
+.fld input:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--navy2);box-shadow:0 0 0 3px rgba(34,64,106,.1)}
+.fld textarea{resize:vertical;min-height:60px}
+.fld .hint{font-size:10.5px;color:var(--muted);margin-top:3px}
+
+/* ══════════ BUTTONS ══════════ */
+.btn{padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;
+  gap:6px;transition:.15s;white-space:nowrap}
+.btn-navy{background:var(--navy);color:#fff}.btn-navy:hover{background:var(--navy2)}
+.btn-gold{background:var(--gold);color:var(--navy-dk);font-weight:700}.btn-gold:hover{background:#d4b25c}
+.btn-ghost{background:#fff;color:var(--navy);border:1.5px solid var(--line)}.btn-ghost:hover{border-color:var(--navy2)}
+.btn-danger{background:var(--neg-bg);color:var(--neg);border:1.5px solid #EAD1CB}.btn-danger:hover{background:#f4ddd6}
+.btn-sm{padding:6px 11px;font-size:12px}
+.btn-lg{padding:13px 24px;font-size:14.5px;border-radius:10px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.icon-btn{width:30px;height:30px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;
+  background:#fff;border:1.5px solid var(--line);color:var(--muted);transition:.15s;font-size:15px;flex:none}
+.icon-btn:hover{border-color:var(--navy2);color:var(--navy)}
+.icon-btn.del:hover{border-color:var(--neg);color:var(--neg);background:var(--neg-bg)}
+
+/* ══════════ TABLES ══════════ */
+.tbl-wrap{overflow-x:auto;border-radius:var(--r)}
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--navy);color:#fff;font-size:11px;font-weight:600;letter-spacing:.03em;
+  padding:10px 8px;text-align:center;white-space:nowrap;position:sticky;top:0;z-index:2}
+thead th:first-child{border-radius:0 var(--r) 0 0}
+thead th:last-child{border-radius:var(--r) 0 0 0}
+tbody td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:center;vertical-align:middle;font-size:12.5px}
+tbody tr:hover{background:#F7FAFD}
+tbody tr.ded-row{background:var(--neg-bg)}
+tbody tr.ded-row:hover{background:#f9e3de}
+tbody tr.cancelled-row{opacity:.5;text-decoration:line-through}
+td input,td select{width:100%;padding:5px 6px;border:1px solid transparent;border-radius:5px;background:transparent;text-align:center}
+td input:hover,td select:hover{border-color:var(--line);background:#fff}
+td input:focus,td select:focus{outline:none;border-color:var(--navy2);background:#fff;box-shadow:0 0 0 2px rgba(34,64,106,.12)}
+td.res{font-weight:800;font-size:13.5px}
+td.res.p{color:var(--pos)}td.res.n{color:var(--neg)}
+td.formula{direction:ltr;font-size:11.5px;color:#3A4757;white-space:nowrap;font-weight:500}
+.sign-pill{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:15px;border:2px solid}
+.sign-pill.p{color:var(--pos);border-color:var(--pos);background:var(--pos-bg)}
+.sign-pill.n{color:var(--neg);border-color:var(--neg);background:var(--neg-bg)}
+.unit-chip{background:var(--navy);color:#fff;font-size:10px;font-weight:600;padding:2px 9px;border-radius:4px;white-space:nowrap}
+
+/* ══════════ STATUS CHIPS / PILLS ══════════ */
+.stat{font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;white-space:nowrap;display:inline-block}
+.stat.new{color:var(--navy);background:#E9EEF5}
+.stat.ok{color:var(--pos);background:var(--pos-bg)}
+.stat.grow{color:var(--gold-dk);background:var(--amber-bg)}
+.stat.chg{color:var(--neg);background:var(--neg-bg)}
+.stat.draft{color:var(--blue);background:var(--blue-bg)}
+.stat.locked{color:var(--muted);background:#EEF0F4}
+.stat.submitted{color:var(--gold-dk);background:var(--amber-bg)}
+.stat.approved{color:var(--pos);background:var(--pos-bg)}
+.stat.lg{font-size:12px;padding:5px 14px;font-weight:800}
+
+/* ══════════ EMPTY / TOAST ══════════ */
+.empty{text-align:center;padding:50px 20px;color:var(--muted)}
+.empty .ic{font-size:44px;opacity:.4;margin-bottom:10px}
+.empty .t{font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px}
+.empty .s{font-size:12px}
+#toast-host{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:400;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{background:var(--navy-dk);color:#fff;padding:12px 22px;border-radius:10px;font-size:13.5px;font-weight:500;
+  opacity:0;transform:translateY(16px);transition:.25s;box-shadow:0 8px 30px rgba(0,0,0,.3);max-width:90vw}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.err{background:var(--neg)}
+.toast.ok{background:var(--pos)}
+
+/* ══════════ MODAL / DRAWER ══════════ */
+.modal{position:fixed;inset:0;background:rgba(14,31,51,.5);display:none;align-items:center;justify-content:center;z-index:300;padding:16px}
+.modal.show{display:flex}
+.modal-card{background:#fff;border-radius:14px;padding:20px;width:min(480px,94vw);box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:88vh;overflow:auto}
+.modal-card.wide{width:min(760px,96vw)}
+.modal-hd{font-weight:800;font-size:15.5px;color:var(--navy);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.modal-hd .x{margin-inline-start:auto;cursor:pointer;color:var(--muted);font-size:18px}
+.modal-card select,.modal-card input{width:100%;padding:8px 10px;border:1.5px solid var(--line);border-radius:7px}
+.modal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.drawer-bd{position:fixed;inset:0;background:rgba(14,31,51,.4);display:none;z-index:280}
+.drawer-bd.show{display:block}
+.drawer{position:fixed;top:0;bottom:0;left:0;width:min(420px,92vw);background:#fff;z-index:290;box-shadow:8px 0 30px rgba(0,0,0,.2);
+  transform:translateX(-100%);transition:.22s;display:flex;flex-direction:column}
+.drawer.show{transform:translateX(0)}
+.drawer-hd{background:var(--navy);color:#fff;padding:16px;font-weight:700;display:flex;align-items:center;gap:8px}
+.drawer-hd .x{margin-inline-start:auto;cursor:pointer;opacity:.8}
+.drawer-bd-content{padding:16px;overflow:auto;flex:1}
+
+/* ══════════ DASHBOARD ══════════ */
+.dash-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.dash-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow)}
+.dash-card .k{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.03em;margin-bottom:6px}
+.dash-card .v{font-size:24px;font-weight:900;color:var(--navy);direction:ltr;display:flex;align-items:baseline;gap:4px;justify-content:flex-end}
+.dash-card .v .u{font-size:12px;font-weight:600;color:var(--muted)}
+.dash-card.accent{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff}
+.dash-card.accent .k{color:#B9C7D9}.dash-card.accent .v{color:var(--gold)}
+.dash-card.warn{border-color:var(--gold-lt);background:var(--amber-bg)}
+.dash-card.warn .v{color:var(--gold-dk)}
+.dash-hero{background:linear-gradient(120deg,var(--navy),var(--navy2) 60%,#24466e);border-radius:var(--r-lg);
+  padding:22px 26px;color:#fff;display:flex;align-items:center;gap:20px;margin-bottom:18px;box-shadow:0 10px 30px rgba(19,42,70,.25);flex-wrap:wrap}
+.dash-hero .info{flex:1;min-width:220px}
+.dash-hero .info .lbl{font-size:11.5px;color:#9FB2C9;letter-spacing:.04em;font-weight:600}
+.dash-hero .info .big{font-size:26px;font-weight:900;margin-top:2px}
+.dash-hero .info .big b{color:var(--gold)}
+.dash-hero .progress-ring{width:88px;height:88px;flex:none}
+.dash-hero .btn-gold{font-size:14px;padding:12px 22px}
+.completion-bar{height:9px;background:rgba(255,255,255,.15);border-radius:6px;overflow:hidden;margin-top:10px;width:100%;max-width:340px}
+.completion-bar i{display:block;height:100%;background:var(--gold);border-radius:6px}
+.dash-alerts{display:flex;flex-direction:column;gap:8px}
+.dash-alert{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:9px;font-size:12.5px;font-weight:500}
+.dash-alert.warn{background:var(--amber-bg);color:var(--gold-dk)}
+.dash-alert.err{background:var(--neg-bg);color:var(--neg)}
+.dash-alert.info{background:var(--blue-bg);color:var(--blue)}
+
+/* ══════════ PROJECT SELECTOR ══════════ */
+.home-shell{min-height:100vh;background:linear-gradient(160deg,var(--navy-dk),var(--navy) 55%,#1c3a5c);padding:40px 18px}
+.home-top{display:flex;align-items:center;justify-content:center;gap:12px;color:#fff;margin-bottom:30px}
+.home-top .name{font-weight:800;font-size:26px}.home-top .name b{color:var(--gold)}
+.home-wrap{max-width:1060px;margin:0 auto}
+.home-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.home-search{flex:1;min-width:200px;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.14);
+  border-radius:10px;padding:11px 14px;color:#fff}
+.home-search::placeholder{color:#8FA2B8}
+.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.proj-card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 14px 40px rgba(0,0,0,.25);display:flex;flex-direction:column;gap:10px;
+  cursor:pointer;transition:.15s;border:2px solid transparent}
+.proj-card:hover{transform:translateY(-3px);border-color:var(--gold)}
+.proj-card .pc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.proj-card .pc-name{font-weight:800;font-size:16px;color:var(--navy)}
+.proj-card .pc-loc{font-size:11.5px;color:var(--muted);margin-top:2px}
+.proj-card .pc-stats{display:flex;gap:14px;font-size:11px;color:var(--muted);border-top:1px solid var(--hair);padding-top:10px;margin-top:2px}
+.proj-card .pc-stats b{display:block;color:var(--navy);font-size:14px;font-weight:800}
+.proj-card .pc-actions{display:flex;gap:6px;justify-content:flex-end}
+.proj-card-new{border:2px dashed rgba(255,255,255,.3);background:rgba(255,255,255,.06);color:#fff;border-radius:16px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:150px;cursor:pointer;transition:.15s}
+.proj-card-new:hover{background:rgba(255,255,255,.1);border-color:var(--gold)}
+.proj-card-new .ic{font-size:30px}
+
+/* ══════════ BOQ TREE ══════════ */
+.boq-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.boq-search{flex:1;min-width:220px;position:relative}
+.boq-search input{width:100%;padding:10px 38px 10px 14px;border:1.5px solid var(--line);border-radius:9px;font-size:13.5px}
+.boq-search input:focus{outline:none;border-color:var(--navy2);box-shadow:0 0 0 3px rgba(34,64,106,.1)}
+.boq-search .ic{position:absolute;inset-inline-end:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.boq-search-results{position:absolute;top:calc(100% + 4px);inset-inline:0;background:#fff;border:1px solid var(--line);
+  border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.15);z-index:60;max-height:340px;overflow:auto;display:none}
+.boq-search-results.show{display:block}
+.boq-search-row{padding:9px 14px;display:flex;gap:10px;align-items:center;cursor:pointer;border-bottom:1px solid var(--hair);font-size:12.5px}
+.boq-search-row:hover{background:#F7FAFD}
+.boq-search-row .code{font-weight:700;color:var(--gold-dk);direction:ltr}
+.boq-search-row .path{color:var(--muted);font-size:10.5px}
+.btree{border-radius:var(--r);overflow:hidden;border:1px solid var(--line)}
+.b-node{border-bottom:1px solid var(--line)}
+.b-node:last-child{border-bottom:none}
+.b-hdr{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;background:var(--navy);color:#fff;transition:.15s}
+.b-hdr:hover{background:var(--navy2)}
+.b-hdr .code{font-weight:800;color:var(--gold);direction:ltr;font-size:12.5px}
+.b-hdr .name{flex:1;font-weight:700;font-size:13.5px}
+.b-body{display:block}
+.b-node.collapsed .b-body{display:none}
+.b-node.collapsed .b-toggle{transform:rotate(-90deg)}
+.b-toggle{font-size:10px;transition:.2s;flex:none}
+.b-count{background:rgba(255,255,255,.18);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px}
+.b-activity{width:8px;height:8px;border-radius:50%;background:var(--gold);flex:none}
+
+.c-hdr{display:flex;align-items:center;gap:10px;padding:9px 14px 9px 14px;padding-inline-start:30px;cursor:pointer;background:#F0F4F9;border-bottom:1px solid var(--line)}
+.c-hdr:hover{background:#E7EDF5}
+.c-hdr .code{font-weight:700;color:var(--gold-dk);font-size:11.5px;direction:ltr}
+.c-hdr .name{flex:1;font-size:12.5px;color:var(--navy)}
+.c-body.collapsed{display:none}
+.c-count{background:rgba(20,43,69,.08);color:var(--muted);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px}
+
+.s-hdr{display:flex;align-items:center;gap:10px;padding:8px 14px;padding-inline-start:46px;cursor:pointer;background:#F7F9FC;border-bottom:1px solid var(--hair);font-size:12px}
+.s-hdr:hover{background:#EFF3F8}
+.s-hdr .code{font-weight:700;color:var(--navy2);font-size:11px;direction:ltr}
+.s-hdr .name{flex:1;color:var(--ink)}
+.s-body.collapsed{display:none}
+
+.i-row{display:flex;align-items:center;gap:10px;padding:9px 14px;padding-inline-start:62px;border-bottom:1px solid var(--hair);font-size:12.5px;cursor:pointer}
+.i-row:hover{background:#F7FAFD}
+.i-row.hl{background:#FCF6E3;animation:hlpulse 1.6s ease 2}
+@keyframes hlpulse{0%,100%{background:#FCF6E3}50%{background:#FBEBB8}}
+.i-row .code{font-weight:700;color:var(--navy2);direction:ltr;min-width:118px}
+.i-row .desc{flex:1;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.i-row .unit{color:var(--muted);font-size:11px;min-width:34px}
+.i-row .qty{direction:ltr;font-weight:600;min-width:70px;text-align:left}
+.i-row .price{direction:ltr;color:var(--muted);min-width:70px;text-align:left;font-size:11.5px}
+.i-row .actions{display:flex;gap:4px}
+.boq-actions-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+
+/* ══════════ VALIDATION PANEL ══════════ */
+.val-panel{display:flex;flex-direction:column;gap:8px}
+.val-row{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:9px;font-size:12.5px}
+.val-row.ok{background:var(--pos-bg);color:var(--pos)}
+.val-row.warn{background:var(--amber-bg);color:var(--gold-dk)}
+.val-row.err{background:var(--neg-bg);color:var(--neg)}
+.val-row .ic{font-size:15px;flex:none}
+.val-row .txt b{cursor:pointer;text-decoration:underline dotted}
+.val-summary{display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap}
+.val-summary .vs{flex:1;min-width:120px;text-align:center;border-radius:10px;padding:12px;font-weight:800}
+.val-summary .vs .n{font-size:22px}
+.val-summary .vs.ok{background:var(--pos-bg);color:var(--pos)}
+.val-summary .vs.warn{background:var(--amber-bg);color:var(--gold-dk)}
+.val-summary .vs.err{background:var(--neg-bg);color:var(--neg)}
+
+/* ══════════ MEASUREMENT TOOLBAR / PREVIEW ══════════ */
+.meas-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.meas-tools .sel-sec{min-width:260px;flex:1}
+.formula-hint{background:linear-gradient(90deg,#FBF9F3,#F5F7FA);border:1px solid var(--hair);border-radius:8px;padding:8px 12px;
+  font-size:11.5px;color:var(--navy2);margin-bottom:12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.formula-hint b{color:var(--gold-dk)}
+.kbd{background:#fff;border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:10.5px;color:var(--muted);font-weight:600}
+.preview-panel{background:linear-gradient(180deg,#F7FAFD,#EEF3F9);border:1px solid var(--line);
+  border-radius:12px;padding:14px;text-align:center}
+.preview-panel .ttl{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px}
+.preview-panel .val{font-size:13px;color:var(--navy);font-weight:600;margin-top:8px;direction:ltr}
+.preview-panel .res{font-size:22px;font-weight:900;color:var(--pos);margin-top:4px}
+.shape-cell svg{background:#FAFCFE;border:1px solid var(--line);border-radius:6px}
+.shp .dim{stroke:#8A94A3;stroke-width:1}.shp .dimtext{font:600 10px Heebo;fill:#2B3A52;text-anchor:middle}
+.shp .face{fill:#DCE6F2;stroke:#2B3A52;stroke-width:1.3}.shp .faceTop{fill:#EDF3FA;stroke:#2B3A52;stroke-width:1.3}.shp .faceSide{fill:#C6D6E9;stroke:#2B3A52;stroke-width:1.3}
+.shp.ded .face,.shp.ded .faceTop,.shp.ded .faceSide{fill:#F7E4E0;stroke:#B4432F}.shp.ded .dimtext{fill:#B4432F}.shp.ded .dim{stroke:#C98A7C}
+.item-context{background:var(--navy);color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:14px;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.item-context .ic-code{color:var(--gold);font-weight:800;font-size:13px;direction:ltr}
+.item-context .ic-name{font-weight:700;font-size:14px;flex:1;min-width:160px}
+.item-context .ic-stats{display:flex;gap:16px;font-size:11px;color:#B9C7D9}
+.item-context .ic-stats b{color:#fff;font-size:13px;display:block}
+.sec-sum{background:linear-gradient(100deg,var(--navy),var(--navy2));color:#fff;border-radius:12px;padding:12px 18px;
+  display:flex;align-items:center;justify-content:space-between;margin-top:12px;box-shadow:0 6px 20px rgba(20,43,69,.18);flex-wrap:wrap;gap:8px}
+.sec-sum .l{font-weight:700;font-size:14px}
+.sec-sum .l .code{color:var(--gold)}
+.sec-sum .r{font-weight:900;font-size:20px}
+.sec-sum .r .u{font-size:12px;font-weight:500;color:#B9C7D9;margin-inline-end:4px}
+.astag{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;display:inline-block}
+.astag.ok{color:var(--pos);background:var(--pos-bg)}
+.astag.chg{color:var(--neg);background:var(--neg-bg)}
+.astag.new{color:var(--gold-dk);background:var(--amber-bg)}
+.thick-add{font-size:11px;font-weight:600;color:var(--gold-dk);background:var(--amber-bg);border:1px dashed var(--gold-lt);
+  border-radius:6px;padding:4px 8px;white-space:nowrap}
+.thick-add:hover{background:#F5EAD0}
+td.thick-on{background:#FBF7EC}
+#meas-table{min-width:1120px}
+#meas-table .col-dim{width:62px}
+#meas-table .col-dim .dim-in{width:100%;text-align:center;font-size:13px;padding:6px 4px}
+#meas-table .col-desc{width:170px;white-space:normal;vertical-align:middle}
+#meas-table textarea.desc-in{width:100%;border:1px solid transparent;border-radius:5px;background:transparent;
+  font-family:inherit;font-size:13px;text-align:right;resize:none;padding:6px;line-height:1.3;overflow:hidden;direction:rtl}
+#meas-table textarea.desc-in:hover{border-color:var(--line);background:#fff}
+#meas-table textarea.desc-in:focus{outline:none;border-color:var(--navy2);background:#fff;box-shadow:0 0 0 2px rgba(30,58,92,.12)}
+
+/* ══════════ ACCOUNTS SCREEN ══════════ */
+.acct-list{display:flex;flex-direction:column;gap:8px}
+.acct-row{display:flex;align-items:center;gap:16px;padding:14px 18px;border:1px solid var(--line);border-radius:12px;
+  background:#fff;cursor:pointer;transition:.15s}
+.acct-row:hover{border-color:var(--navy2);box-shadow:0 4px 14px rgba(20,43,69,.08)}
+.acct-row .a-no{font-weight:900;font-size:18px;color:var(--navy);min-width:56px}
+.acct-row .a-date{font-size:12px;color:var(--muted);min-width:90px}
+.acct-row .a-mid{flex:1;font-size:12px;color:var(--muted)}
+.acct-row .a-amt{font-weight:800;font-size:15px;color:var(--navy);direction:ltr;min-width:120px;text-align:left}
+td.per-pos{color:var(--pos);font-weight:700}
+td.per-neg{color:var(--neg);font-weight:700}
+.rres.over,.sumtbl .over{color:var(--neg)!important}
+.mode-toggle{display:flex;background:var(--hair);border-radius:9px;padding:3px;gap:3px}
+.mode-toggle button{flex:1;padding:8px 14px;border-radius:7px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.mode-toggle button.on{background:#fff;color:var(--navy);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+
+/* ══════════ SKN IMPORT ══════════ */
+.skn-drop{border:2px dashed var(--navy2);border-radius:12px;padding:30px;text-align:center;background:#F7FAFD;
+  cursor:pointer;transition:.15s}
+.skn-drop:hover{background:#EEF3F9;border-color:var(--gold)}
+.skn-building{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.skn-bld-hdr{background:var(--navy);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.skn-bld-title{flex:1;font-weight:700;font-size:13.5px}
+.skn-ch-hdr,.skn-sub-hdr{padding:8px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;border-bottom:1px solid var(--line)}
+.skn-ch-hdr{background:#F0F4F9}
+.skn-ch-code,.skn-sub-code{font-weight:700;color:var(--gold-dk);font-size:12px;direction:ltr}
+.skn-ch-name,.skn-sub-name{flex:1;font-size:12.5px}
+.skn-item{padding:6px 14px 6px 40px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #F0F2F5;font-size:12px;flex-wrap:wrap}
+.skn-item:hover{background:#F7FAFD}
+.skn-item-code{font-weight:600;color:var(--navy2);direction:ltr;min-width:100px;text-align:right}
+.skn-item-desc{flex:1;text-align:right;min-width:160px}
+.skn-item-unit{color:var(--muted)}
+.skn-item-qty{font-weight:600;direction:ltr;min-width:64px;color:var(--navy2)}
+.skn-item-price{font-weight:600;direction:ltr;min-width:70px}
+.skn-item-dup{color:var(--neg);font-size:10px;font-weight:700;background:var(--neg-bg);padding:1px 7px;border-radius:10px}
+.skn-count{background:rgba(0,0,0,.06);color:var(--muted);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px}
+.skn-toggle{font-size:10px;transition:.2s;color:inherit}
+.skn-collapsed .skn-toggle{transform:rotate(-90deg)}
+.skn-collapsed .skn-bld-body,.skn-collapsed .skn-ch-body,.skn-collapsed .skn-sub-body{display:none}
+input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:pointer}
+.skn-summary{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.skn-summary .sm{flex:1;min-width:110px;text-align:center;border-radius:10px;padding:10px;background:var(--hair)}
+.skn-summary .sm b{display:block;font-size:19px;color:var(--navy)}
+.skn-summary .sm.imp b{color:var(--pos)}.skn-summary .sm.skip b{color:var(--gold-dk)}.skn-summary .sm.err b{color:var(--neg)}
+
+/* ══════════ REPORT / PRINT ══════════ */
+.report{background:#fff;max-width:210mm;margin:0 auto;padding:14mm 12mm;box-shadow:var(--shadow);border-radius:10px;color:var(--ink)}
+.rhdr{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;border-bottom:3px solid var(--navy);padding-bottom:12px;position:relative}
+.rlogo{display:flex;align-items:center;gap:9px}.rlogo svg{width:38px;height:38px}
+.rlogo .ln{font-weight:800;font-size:19px;color:var(--navy)}.rlogo .ln b{color:var(--gold)}
+.rlogo .lt{font-size:8px;letter-spacing:.26em;color:var(--muted)}
+.rttl{text-align:center}.rttl h1{font-size:21px;color:var(--navy);font-weight:800}.rttl .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.rmeta{font-size:10.5px;text-align:left;color:var(--ink)}.rmeta div{margin:1px 0}.rmeta span{color:var(--muted);display:inline-block;min-width:42px}
+.scards{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:14px 0}
+.scard{border:1px solid var(--hair);border-radius:10px;padding:10px;text-align:center;background:var(--paper)}
+.sc-ic{font-size:20px}.sc-k{font-size:10.5px;color:var(--muted);font-weight:600;margin:2px 0}
+.sc-v{font-size:20px;font-weight:900;color:var(--navy)}.sc-u{font-size:10px;color:var(--muted)}
+.rsec{margin:16px 0;break-inside:avoid}
+.rsec-hd{background:var(--paper);color:var(--navy);border:1px solid var(--line);border-bottom:none;
+  border-radius:10px 10px 0 0;padding:9px 14px;position:relative;display:flex;align-items:center;gap:10px}
+.rsec-hd::before{content:"";position:absolute;top:0;bottom:0;right:0;width:4px;background:var(--gold);border-radius:0 10px 0 0}
+.rsec-hd .rcode{color:var(--gold-dk);font-weight:800;direction:ltr}
+.rsec-hd .rtitle{color:var(--navy);font-weight:700;flex:1}
+.rsec-hd .rfacts{color:var(--muted);font-size:10.5px}
+.rsec-hd .rchip{background:var(--navy);color:#fff;font-weight:600;font-size:10px;padding:2px 9px;border-radius:4px}
+.rtbl{width:100%;border-collapse:collapse;border:1px solid var(--line);border-top:none}
+.rtbl th{background:#F3F4F7;color:var(--navy);font-size:10px;font-weight:700;padding:6px 5px;border-bottom:1px solid var(--line);text-align:center}
+.rtbl td{padding:5px 5px;border-bottom:1px solid #EEF1F5;text-align:center;font-size:11px;vertical-align:middle}
+.rtbl .ri{color:var(--muted);font-size:10px}.rtbl .rname{text-align:right;font-weight:500}
+.rtbl .rf{direction:ltr;font-size:10.5px;color:#3A4757;white-space:nowrap}
+.rtbl .rres{font-weight:800}.rtbl .rres.p{color:var(--pos)}.rtbl .rres.n{color:var(--neg)}
+.rtbl tr.rded td{background:var(--neg-bg)}.rtbl tr.rded .rname,.rtbl tr.rded .rf{color:var(--neg)}
+.rbal{display:flex;align-items:stretch;border:1px solid var(--navy);border-top:none;border-radius:0 0 8px 8px;overflow:hidden}
+.rbal .bc{padding:7px 14px;display:flex;flex-direction:column;gap:1px;border-inline-start:1px solid var(--line);justify-content:center;flex:1;text-align:center}
+.rbal .bc .k{font-size:9px;color:var(--muted);letter-spacing:.05em}.rbal .bc .v{font-weight:800;font-size:13px;direction:ltr}
+.rbal .bc.net{background:var(--navy);color:#fff}
+.rbal .bc.net .k{color:#B9C7D9}.rbal .bc.net .v{color:var(--gold);font-size:15px}
+.rsigns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12mm;margin-top:9mm}
+.rsigns div{border-top:1px solid var(--navy);padding-top:5px;font-size:10.5px;color:var(--muted);text-align:center}
+.rsigns div span{display:block;color:var(--ink);font-weight:600;margin-top:2px;min-height:14px}
+.report-controls{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;
+  margin-bottom:16px;box-shadow:var(--shadow)}
+.rc-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--hair)}
+.rc-row .opt{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink);font-weight:500;cursor:pointer}
+@media print{
+  body{background:#fff}.topbar,.tabs,.no-print{display:none!important}
+  .wrap{margin:0;padding:0;max-width:none}.screen{display:none!important}#s-reports.on{display:block!important}
+  .report{box-shadow:none;border-radius:0;max-width:none;padding:8mm 6mm}
+  .rsec{break-inside:avoid}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{size:A4;margin:8mm}
+}
+
+@media(max-width:900px){
+  .wrap{padding:0 10px;margin:12px auto}
+  .grid2,.grid3,.grid4{grid-template-columns:1fr}
+  .tab{padding:11px 13px;font-size:12px}
+  .logo .tag{display:none}
+  .topbar .act span.txt{display:none}
+  .topbar .proj-name{display:none}
+  thead th,tbody td{font-size:11px;padding:6px 5px}
+  td.formula{font-size:10px}
+  .dash-grid{grid-template-columns:1fr 1fr}
+  .dash-hero{flex-direction:column;align-items:flex-start}
+  #meas-table{min-width:0}
+  .tbl-wrap.responsive-cards table thead{display:none}
+  .tbl-wrap.responsive-cards table,.tbl-wrap.responsive-cards tbody,.tbl-wrap.responsive-cards tr,.tbl-wrap.responsive-cards td{display:block;width:100%}
+  .tbl-wrap.responsive-cards tr{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;padding:8px;background:#fff}
+  .tbl-wrap.responsive-cards td{text-align:right;border-bottom:none;padding:5px 4px;display:flex;justify-content:space-between;gap:8px}
+  .tbl-wrap.responsive-cards td[data-lbl]::before{content:attr(data-lbl);color:var(--muted);font-size:10.5px;font-weight:600}
+}
+@media(max-width:600px){
+  .dash-grid{grid-template-columns:1fr}
+  .proj-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div id="toast-host"></div>
+
+<!-- ══════════ PROJECT SELECTOR (HOME) ══════════ -->
+<div id="home-screen" class="home-shell" style="display:none">
+  <div class="home-top">
+    <svg viewBox="0 0 40 40" width="34" height="34"><rect x="2" y="2" width="36" height="36" rx="8" fill="#B08D3E"/><path d="M11 28V12h4l6 9 6-9h4v16h-4V19l-6 9-6-9v9z" fill="#0E1F33"/></svg>
+    <span class="name">KAY<b>AN</b> Engineering</span>
+  </div>
+  <div class="home-wrap">
+    <div class="home-toolbar">
+      <input id="home-search" class="home-search" placeholder="חיפוש פרויקט…" oninput="Projects.renderList()">
+      <button class="btn btn-gold" onclick="Projects.openNewModal()">＋ פרויקט חדש</button>
+      <button class="btn btn-ghost" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.2)" onclick="Backup.importAllPrompt()">⇪ שחזור מגיבוי</button>
+      <button class="btn btn-ghost" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.2)" onclick="Backup.exportAll()">⇩ גיבוי כללי</button>
+    </div>
+    <div id="proj-grid" class="proj-grid"></div>
+  </div>
+</div>
+
+<!-- ══════════ APP SHELL ══════════ -->
+<div id="app-shell" style="display:none">
+  <div class="topbar">
+    <button class="logo" onclick="App.goHome()" title="לרשימת הפרויקטים">
+      <svg viewBox="0 0 40 40"><rect x="2" y="2" width="36" height="36" rx="8" fill="#B08D3E"/><path d="M11 28V12h4l6 9 6-9h4v16h-4V19l-6 9-6-9v9z" fill="#0E1F33"/></svg>
+      <div><div class="name">KAY<b>AN</b></div><div class="tag">ENGINEERING</div></div>
+    </button>
+    <div class="proj-name"><b id="tb-proj-name">—</b><small id="tb-proj-sub">—</small></div>
+    <div class="spacer"></div>
+    <div id="save-status" class="save-status"><span class="dot"></span><span id="save-status-txt">נשמר</span></div>
+    <button class="act" onclick="Backup.exportProject()">⇩ <span class="txt">גיבוי</span></button>
+    <label class="act" style="cursor:pointer">⇪ <span class="txt">שחזור</span><input type="file" accept=".json" style="display:none" onchange="Backup.importProjectFile(event)"></label>
+  </div>
+  <div class="tabs" id="main-tabs">
+    <button class="tab" data-tab="dashboard" onclick="App.showTab('dashboard')">📊 <span>דשבורד</span></button>
+    <button class="tab" data-tab="accounts" onclick="App.showTab('accounts')">📒 <span>חשבונות</span></button>
+    <button class="tab" data-tab="boq" onclick="App.showTab('boq')">📋 <span>כתב כמויות</span><span class="badge" id="bdg-boq">0</span></button>
+    <button class="tab" data-tab="measurements" onclick="App.showTab('measurements')">📐 <span>מדידות</span></button>
+    <button class="tab" data-tab="reports" onclick="App.showTab('reports')">🖨 <span>דוחות</span></button>
+    <button class="tab" data-tab="import" onclick="App.showTab('import')">📥 <span>ייבוא</span></button>
+    <button class="tab" data-tab="settings" onclick="App.showTab('settings')">⚙ <span>הגדרות</span></button>
+  </div>
+
+  <div class="wrap"><div id="screens-host"></div></div>
+</div>
+
+<div id="modal-host"></div>
+<div id="drawer-bd" class="drawer-bd" onclick="UI.closeDrawer()"></div>
+<div id="drawer-host"></div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: UTILITIES
+// ═══════════════════════════════════════════════════════════════════════
+const Util = (() => {
+  function uid(prefix){ return prefix+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+  function nz(v){ if(v===''||v==null) return 0; const n=parseFloat(String(v).replace(',','.').replace(/[^\d.\-]/g,'')); return isNaN(n)?0:n; }
+  function fn(v,dp=3){ const n=+v; if(isNaN(n))return'0'; return n.toLocaleString('he-IL',{minimumFractionDigits:0,maximumFractionDigits:dp}); }
+  function fq(v){ const n=+v; if(isNaN(n))return'0'; return n.toLocaleString('he-IL',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function fnum(v){ const n=parseFloat(v); return isNaN(n)?'':(n%1===0?String(n):parseFloat(n.toFixed(3))); }
+  function money(v){ const n=+v||0; return '₪'+n.toLocaleString('he-IL',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function pct(v){ const n=+v||0; return n.toLocaleString('he-IL',{minimumFractionDigits:1,maximumFractionDigits:1})+'%'; }
+  function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function clone(o){ return o==null?o:JSON.parse(JSON.stringify(o)); }
+  function todayISO(){ return new Date().toISOString().split('T')[0]; }
+  function nowISO(){ return new Date().toISOString(); }
+  function fdate(iso){ if(!iso) return '—'; const d=new Date(iso); if(isNaN(d)) return iso;
+    return d.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit',year:'numeric'}); }
+  function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
+  function byId(id){ return document.getElementById(id); }
+  function qs(sel,root){ return (root||document).querySelector(sel); }
+  function qsa(sel,root){ return Array.from((root||document).querySelectorAll(sel)); }
+  function normDigits(codeStr,len){ return String(codeStr||'').trim().padStart(len,'0'); }
+  return {uid,nz,fn,fq,fnum,money,pct,esc,clone,todayISO,nowISO,fdate,debounce,byId,qs,qsa,normDigits};
+})();
+const {uid,nz,fn,fq,fnum,money,pct,esc,clone:cloneObj,todayISO,nowISO,fdate,debounce,byId,qs,qsa}=Util;
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: DATA MODEL  (constants, unit→geometry registry, factories)
+// ═══════════════════════════════════════════════════════════════════════
+const APP_VERSION='3.0.0';
+
+// unit-driven measurement engine: every BOQ unit maps to exactly one geometry
+// "kind" and a whitelist of shapes valid for that kind — this is what prevents
+// e.g. entering a thickness on an m² item, or an area-only shape on an m³ item.
+const UNIT_KIND = {
+  'מ"ר':  {kind:'area',   label:'שטח'},
+  'מ"ק':  {kind:'volume', label:'נפח'},
+  'מ"א':  {kind:'length', label:'אורך'},
+  "יח'":  {kind:'count',  label:'כמות'},
+  'טון':  {kind:'count',  label:'כמות'},
+  'ק"ג':  {kind:'count',  label:'כמות'},
+  'שעות': {kind:'count',  label:'כמות'},
+};
+const UNIT_LIST = Object.keys(UNIT_KIND);
+
+// cross-section shapes usable for AREA and VOLUME (volume = cross-section area × extrusion length)
+const CROSS = {
+  'מלבן':  {d:['אורך','רוחב'],              area:(a,b)=>a*b,           forKinds:['area','volume'], lbl:'אורך × רוחב'},
+  'משולש': {d:['בסיס','גובה'],              area:(a,b)=>a*b/2,         forKinds:['area','volume'], lbl:'(בסיס × גובה) ÷ 2'},
+  'טרפז':  {d:['בסיס א׳','בסיס ב׳','גובה'], area:(a,b,c)=>(a+b)*c/2,   forKinds:['area','volume'], lbl:'(א׳+ב׳) × גובה ÷ 2'},
+  'עיגול': {d:['קוטר Ø'],                   area:(a)=>Math.PI*(a/2)**2,forKinds:['area','volume'], lbl:'π × (Ø÷2)²'},
+  'חצי-עיגול': {d:['קוטר Ø'],               area:(a)=>Math.PI*(a/2)**2/2, forKinds:['area','volume'], lbl:'π × (Ø÷2)² ÷ 2'},
+  'שטח מיוחד': {d:['שטח חתך'],              area:(a)=>a,               forKinds:['area','volume'], lbl:'שטח נתון', custom:true},
+};
+// non cross-section shapes, one per non-area/volume kind
+const LINE_SHAPE={d:['אורך'],lbl:'אורך',forKinds:['length']};
+const COUNT_SHAPE={d:[],lbl:'ספירה',forKinds:['count']};
+function shapesForKind(kind){
+  if(kind==='length') return ['קו'];
+  if(kind==='count') return ["יחידה"];
+  // area & volume both draw from CROSS, but "volume" requires extrusion length (t) in addition
+  return Object.keys(CROSS);
+}
+function shapeDims(shape){
+  if(shape==='קו') return LINE_SHAPE.d;
+  if(shape==='יחידה') return COUNT_SHAPE.d;
+  return CROSS[shape]?CROSS[shape].d:[];
+}
+
+const ROW_HIST_LABEL={created:'נוצר',corrected:'תוקן',cancelled:'בוטל'};
+const ROW_STATUS_LABEL={new:'חדש',approved:'מאושר',corrected:'תוקן',cancelled:'בוטל'};
+const ROW_STATUS_CLASS={new:'new',approved:'ok',corrected:'chg',cancelled:'chg'};
+const ACCOUNT_STATUS_LABEL={draft:'טיוטה',locked:'נעול'};
+
+// ── factory functions ──
+function makeProject(fields){
+  const now=nowISO();
+  return Object.assign({
+    id:uid('proj_'), name:'', location:'', contractNumber:'', contractor:'',
+    supervisor:'', manager:'', vat:18, logo:null, logoMode:'wide',
+    buildings:{}, chapters:{}, subchapters:{},   // meta lookup: code -> {name}
+    items:[],            // BOQ items (flat, with building/chapter/sub/item codes)
+    measurements:[],     // measurement rows, each linked to an item by itemId
+    accounts:[],          // Account[] — see makeAccount
+    useAreas:false,
+    createdAt:now, updatedAt:now,
+    _seq:{item:1,meas:1,acct:1,building:1,chapter:1,sub:1},
+  }, fields||{});
+}
+function makeAccount(number){
+  return {
+    id:uid('acct_'), number:String(number).padStart(3,'0'), date:todayISO(),
+    status:'draft',           // 'draft' | 'locked'
+    notes:'', createdAt:nowISO(), lockedAt:null,
+    snapshot:null,             // populated (immutable) at lock time — see Accounts.lock()
+  };
+}
+function makeBoqItem(fields){
+  return Object.assign({
+    id:uid('item_'), building:'01', chapter:'00', sub:'00', item:'0000',
+    description:'', unit:'מ"ק', contractQty:'', unitPrice:'', notes:'',
+    createdInAccount:null, cancelled:false,
+  }, fields||{});
+}
+function itemFullCode(it){ return `${it.building}.${it.chapter}.${it.sub}.${it.item}`; }
+function makeMeasurement(fields){
+  return Object.assign({
+    id:uid('meas_'), itemId:null, isGroup:false, groupLabel:'',
+    desc:'', area:'', shape:'מלבן', d1:'', d2:'', d3:'', t:'', qty:'', sign:1, notes:'',
+    createdInAccount:null, cancelled:false,
+    history:[],   // [{accountId,accountNumber,action,value,prevValue,date}] append-only audit trail
+  }, fields||{});
+}
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: STORAGE
+//  IndexedDB is the primary store (large capacity, async, survives reloads).
+//  A thin StorageProvider interface keeps the door open for a future
+//  DriveProvider (cloud sync) without touching call sites — see DriveProvider
+//  stub below. localStorage is read-only here, used solely as a migration
+//  source for data created by the previous (v2) single-file version.
+// ═══════════════════════════════════════════════════════════════════════
+const IDB_NAME='KayanDB', IDB_VER=1;
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    const rq=indexedDB.open(IDB_NAME,IDB_VER);
+    rq.onupgradeneeded=()=>{
+      const db=rq.result;
+      if(!db.objectStoreNames.contains('projects')) db.createObjectStore('projects',{keyPath:'id'});
+      if(!db.objectStoreNames.contains('meta')) db.createObjectStore('meta',{keyPath:'key'});
+    };
+    rq.onsuccess=()=>res(rq.result);
+    rq.onerror=()=>rej(rq.error);
+  });
+}
+function idbTx(db,store,mode){ return db.transaction(store,mode).objectStore(store); }
+function idbReq(req){ return new Promise((res,rej)=>{ req.onsuccess=()=>res(req.result); req.onerror=()=>rej(req.error); }); }
+
+class IndexedDBProvider {
+  async init(){ this.db=await idbOpen(); return this; }
+  async listProjects(){ return idbReq(idbTx(this.db,'projects','readonly').getAll()); }
+  async getProject(id){ return idbReq(idbTx(this.db,'projects','readonly').get(id)); }
+  async saveProject(p){ p.updatedAt=nowISO(); await idbReq(idbTx(this.db,'projects','readwrite').put(cloneObj(p))); return p; }
+  async deleteProject(id){ return idbReq(idbTx(this.db,'projects','readwrite').delete(id)); }
+  async getMeta(key,fallback){ const r=await idbReq(idbTx(this.db,'meta','readonly').get(key)); return r?r.value:fallback; }
+  async setMeta(key,value){ return idbReq(idbTx(this.db,'meta','readwrite').put({key,value})); }
+}
+// Cloud sync abstraction — intentionally NOT wired to a real OAuth flow here:
+// a static single HTML file cannot hold a client secret safely, and Google's
+// Drive API requires a configured OAuth client. The interface is real and
+// stable so a future build can drop in a working implementation (e.g. behind
+// a small companion auth endpoint) without touching Projects/Accounts code.
+// Suggested remote layout (see spec): KAYAN Projects/<project>/project-data.json,
+// /Accounts/<nnn>/snapshot.json, /Accounts/<nnn>/report.pdf|xls, /Backups/.
+class DriveProvider {
+  async init(){ throw new Error('DriveProvider אינו מוגדר בגרסה זו — יש לחבר קליינט OAuth תקין.'); }
+  isConfigured(){ return false; }
+  async pushProject(){ throw new Error('לא מחובר לגוגל דרייב'); }
+  async pullProject(){ throw new Error('לא מחובר לגוגל דרייב'); }
+}
+
+const Storage = {
+  provider:null,
+  async init(){ this.provider=await new IndexedDBProvider().init(); return this; },
+  listProjects(){ return this.provider.listProjects(); },
+  getProject(id){ return this.provider.getProject(id); },
+  saveProject(p){ return this.provider.saveProject(p); },
+  deleteProject(id){ return this.provider.deleteProject(id); },
+  getMeta(k,f){ return this.provider.getMeta(k,f); },
+  setMeta(k,v){ return this.provider.setMeta(k,v); },
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: MIGRATION  (legacy localStorage kayan_store_v2 / kayan_boq_v1)
+// ═══════════════════════════════════════════════════════════════════════
+const Migration = {
+  LEGACY_STORE_KEY:'kayan_store_v2', LEGACY_SINGLE_KEY:'kayan_boq_v1',
+  legacyExists(){
+    try{ return !!(localStorage.getItem(this.LEGACY_STORE_KEY)||localStorage.getItem(this.LEGACY_SINGLE_KEY)); }
+    catch(_){ return false; }
+  },
+  // shape-name migration carried over from the pre-v3 app (boxes/cylinders → cross-section + thickness)
+  migrateRowShape(m){
+    if(m.shape==='תיבה'){ m.shape='מלבן'; m.t=m.d3; m.d3=''; }
+    else if(m.shape==='גליל'){ m.shape='עיגול'; m.t=m.d2; m.d2=''; }
+    if(!('t' in m)) m.t='';
+    return m;
+  },
+  // find-or-create a building/chapter/subchapter code from a free-text name,
+  // used when legacy data has no real hierarchy (old "sections" were flat).
+  resolveHierarchy(project, legacySection, codeCache){
+    const rawCode=(legacySection.code||'').trim();
+    const parts=rawCode.split('.');
+    if(parts.length===4 && parts.every(p=>/^\d+$/.test(p))){
+      const [b,c,s,i]=parts;
+      project.buildings[b]=project.buildings[b]||{name:''};
+      project.chapters[b+'.'+c]=project.chapters[b+'.'+c]||{name:legacySection.chapter||''};
+      project.subchapters[b+'.'+c+'.'+s]=project.subchapters[b+'.'+c+'.'+s]||{name:legacySection.sub||''};
+      return {building:b,chapter:c,sub:s,item:i};
+    }
+    // no parseable hierarchy — bucket everything under a synthetic building "00",
+    // and derive chapter/sub codes from the free-text names (stable per name).
+    const bCode='00';
+    project.buildings[bCode]=project.buildings[bCode]||{name:'כללי (יובא מגרסה קודמת)'};
+    const chName=legacySection.chapter||'ללא פרק';
+    if(!codeCache.chapters.has(chName)){ codeCache.chapters.set(chName, String(codeCache.chapters.size+1).padStart(2,'0')); }
+    const cCode=codeCache.chapters.get(chName);
+    project.chapters[bCode+'.'+cCode]=project.chapters[bCode+'.'+cCode]||{name:chName};
+    const subName=legacySection.sub||'ללא תת-פרק';
+    const subKey=chName+'|'+subName;
+    if(!codeCache.subs.has(subKey)){ codeCache.subs.set(subKey, String(codeCache.subs.size+1).padStart(2,'0')); }
+    const sCode=codeCache.subs.get(subKey);
+    project.subchapters[bCode+'.'+cCode+'.'+sCode]=project.subchapters[bCode+'.'+cCode+'.'+sCode]||{name:subName};
+    if(!codeCache.items.has(rawCode||legacySection.id)){ codeCache.items.set(rawCode||legacySection.id, String(codeCache.items.size+1).padStart(4,'0')); }
+    const iCode=codeCache.items.get(rawCode||legacySection.id);
+    return {building:bCode,chapter:cCode,sub:sCode,item:iCode};
+  },
+  convertLegacyProject(legacy){
+    const p=makeProject({
+      name:(legacy.project&&legacy.project.name)||'פרויקט מיובא',
+      location:(legacy.project&&legacy.project.loc)||'',
+      contractNumber:(legacy.project&&legacy.project.contract)||'',
+      contractor:(legacy.project&&legacy.project.contractor)||'',
+      supervisor:(legacy.project&&legacy.project.inspector)||'',
+      manager:(legacy.project&&legacy.project.manager)||'',
+      vat:(legacy.project&&+legacy.project.vat)||18,
+      logo:(legacy.project&&legacy.project.logo)||null,
+      logoMode:(legacy.project&&legacy.project.logoMode)||'wide',
+      useAreas:!!(legacy.project&&legacy.project.useAreas),
+    });
+    const codeCache={chapters:new Map(),subs:new Map(),items:new Map()};
+    const secToItem={};
+    (legacy.sections||[]).forEach(s=>{
+      const h=this.resolveHierarchy(p,s,codeCache);
+      const it=makeBoqItem({building:h.building,chapter:h.chapter,sub:h.sub,item:h.item,
+        description:s.name||'', unit:s.unit||'מ"ק', contractQty:s.contract||'', unitPrice:s.price||''});
+      p.items.push(it); secToItem[s.id]=it.id;
+    });
+    // account list: legacy project.lockedAccounts=[{acc,date}] maps directly to locked Account records.
+    const lockedMeta=(legacy.project&&legacy.project.lockedAccounts)||[];
+    const accountsByNo={};
+    lockedMeta.forEach(l=>{ const a=makeAccount(l.acc); a.status='locked'; a.date=l.date||todayISO(); a.lockedAt=l.date||nowISO();
+      a.notes='מיובא מגרסה קודמת — תמונת המצב שוחזרה באופן מיטבי מנתוני האישור ההיסטוריים (רמת תיקון אחת בלבד נשמרה בגרסה הקודמת).';
+      accountsByNo[a.number]=a; p.accounts.push(a); });
+    const draftNo=(legacy.project&&legacy.project.acc)||String(lockedMeta.length+1).padStart(3,'0');
+    if(!accountsByNo[draftNo]) p.accounts.push(makeAccount(draftNo));
+    // measurements + best-effort history reconstruction from apAcc/apVal/apSig/corrAcc/corrFrom
+    (legacy.measurements||[]).forEach(m=>{
+      this.migrateRowShape(m);
+      const itemId=secToItem[m.secId]; if(!itemId && !m.isGroup) return;
+      const row=makeMeasurement({itemId, isGroup:!!m.isGroup, groupLabel:m.groupLabel||'',
+        desc:m.desc||'', area:m.area||'', shape:m.shape||'מלבן', d1:m.d1||'', d2:m.d2||'', d3:m.d3||'',
+        t:m.t||'', qty:m.qty||'', sign:m.sign||1, notes:m.notes||''});
+      if(!m.isGroup){
+        const cur=calcRow(row);
+        if('apAcc' in m){
+          const accDate=(accountsByNo[m.apAcc]&&accountsByNo[m.apAcc].date)||todayISO();
+          row.history.push({accountId:(accountsByNo[m.apAcc]&&accountsByNo[m.apAcc].id)||null,
+            accountNumber:m.apAcc, action:'created', value:nz(m.apVal), prevValue:0, date:accDate});
+          if(m.corrAcc){
+            const cDate=(accountsByNo[m.corrAcc]&&accountsByNo[m.corrAcc].date)||todayISO();
+            row.history.push({accountId:(accountsByNo[m.corrAcc]&&accountsByNo[m.corrAcc].id)||null,
+              accountNumber:m.corrAcc, action:'corrected', value:cur, prevValue:nz(m.apVal), date:cDate});
+          }
+        }
+      }
+      p.items.length; p.measurements.push(row);
+    });
+    // reconstruct each locked account's snapshot from the history we just synthesized
+    lockedMeta.forEach(l=>{ Accounts.buildSnapshotForNumber(p,l.acc); });
+    const lastLocked=p.accounts.filter(a=>a.status==='locked').sort((a,b)=>+a.number-+b.number).pop();
+    if(lastLocked) lastLocked.snapshot = Accounts.buildSnapshotForNumber(p,lastLocked.number,true);
+    return p;
+  },
+  async run(){
+    if(!this.legacyExists()) return [];
+    const migrated=[];
+    try{
+      const raw=localStorage.getItem(this.LEGACY_STORE_KEY);
+      if(raw){
+        const st=JSON.parse(raw);
+        for(const pid of Object.keys(st.projects||{})){
+          const p=this.convertLegacyProject(st.projects[pid]);
+          await Storage.saveProject(p); migrated.push(p);
+        }
+      } else {
+        const raw1=localStorage.getItem(this.LEGACY_SINGLE_KEY);
+        if(raw1){ const d=JSON.parse(raw1); const p=this.convertLegacyProject(d); await Storage.saveProject(p); migrated.push(p); }
+      }
+    }catch(e){ console.error('Migration failed', e); }
+    return migrated;
+  },
+};
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: CALCULATION ENGINE
+//  Every measurement row is calculated strictly against the geometry
+//  "kind" of the BOQ item it belongs to (area / volume / length / count).
+//  This is what makes an invalid combination (e.g. thickness on an m² item)
+//  structurally impossible rather than just warned-about — see Measurements
+//  module: the UI only renders the shape picker + fields valid for the
+//  item's own kind, and calcRow never receives out-of-kind inputs.
+// ═══════════════════════════════════════════════════════════════════════
+function itemUnitKind(item){ return (item && UNIT_KIND[item.unit] && UNIT_KIND[item.unit].kind) || 'volume'; }
+function inferKindFromShape(m){ // fallback used only by legacy migration (no item context yet)
+  if(m.shape==='קו') return 'length';
+  if(m.shape==='יחידה') return 'count';
+  return nz(m.t)>0 ? 'volume' : 'area';
+}
+function findItem(project,itemId){ return project.items.find(it=>it.id===itemId); }
+function rowKind(m,project){
+  const item = project ? findItem(project,m.itemId) : null;
+  return item ? itemUnitKind(item) : inferKindFromShape(m);
+}
+// raw geometric value before N and sign, plus its natural unit + completeness flag
+function baseVal(m,kind){
+  kind = kind || inferKindFromShape(m);
+  if(kind==='length') return {v:nz(m.d1), u:'מ"א', complete:nz(m.d1)>0};
+  if(kind==='count')  return {v:(m.d1===''||m.d1==null)?1:nz(m.d1), u:"יח'", complete:true};
+  const c=CROSS[m.shape];
+  if(!c) return {v:0,u:'',complete:false};
+  const area = c.custom ? nz(m.d1) : c.area(nz(m.d1),nz(m.d2),nz(m.d3));
+  if(kind==='area') return {v:area, u:'מ"ר', complete:area>0};
+  // volume: cross-section area × extrusion length (t) — both required
+  const t=nz(m.t);
+  return {v:area*t, u:'מ"ק', complete:area>0 && t>0};
+}
+function calcRow(m,item){
+  if(m.isGroup||m.cancelled) return 0;
+  const kind = item ? itemUnitKind(item) : inferKindFromShape(m);
+  const {v}=baseVal(m,kind);
+  const n=(m.qty===''||m.qty==null)?1:nz(m.qty);
+  return v*n*(m.sign||1);
+}
+function rowUnit(m,kind){ return baseVal(m,kind).u; }
+function rowComplete(m,kind){ return baseVal(m,kind||inferKindFromShape(m)).complete; }
+function rowFormulaLabel(m,kind){
+  kind=kind||inferKindFromShape(m);
+  if(kind==='length') return 'אורך';
+  if(kind==='count') return 'ספירה';
+  const c=CROSS[m.shape]; if(!c) return '';
+  return kind==='volume' ? `(${c.lbl}) × עובי` : c.lbl;
+}
+function rowSig(m){ return JSON.stringify([m.shape,m.d1,m.d2,m.d3,m.t,m.qty,m.sign]); }
+
+// ── SVG drawing engine (isometric extrusion for volumes, flat face for areas) ──
+function normSet(vals,maxPx,minPx){ const mx=Math.max(...vals.filter(v=>v>0),0.001);
+  return vals.map(v=>!v?0:Math.max(minPx,Math.min(maxPx,(v/mx)*maxPx))); }
+function dimH(x1,x2,y,l,below){ const ty=below?y+13:y-5;
+  return `<line class="dim" x1="${x1}" y1="${y}" x2="${x2}" y2="${y}"/><line class="dim" x1="${x1}" y1="${y-3}" x2="${x1}" y2="${y+3}"/><line class="dim" x1="${x2}" y1="${y-3}" x2="${x2}" y2="${y+3}"/><text class="dimtext" x="${(x1+x2)/2}" y="${ty}">${l}</text>`; }
+function dimV(y1,y2,x,l,left){ const tx=left?x-6:x+6,an=left?'end':'start';
+  return `<line class="dim" x1="${x}" y1="${y1}" x2="${x}" y2="${y2}"/><line class="dim" x1="${x-3}" y1="${y1}" x2="${x+3}" y2="${y1}"/><line class="dim" x1="${x-3}" y1="${y2}" x2="${x+3}" y2="${y2}"/><text class="dimtext" x="${tx}" y="${(y1+y2)/2+3}" style="text-anchor:${an}">${l}</text>`; }
+function isoPrism(pts,o){
+  const back=pts.map(p=>[p[0]+o,p[1]-o]);
+  let sides='';
+  for(let i=0;i<pts.length;i++){ const j=(i+1)%pts.length;
+    sides+=`<polygon class="faceSide" points="${pts[i][0]},${pts[i][1]} ${pts[j][0]},${pts[j][1]} ${back[j][0]},${back[j][1]} ${back[i][0]},${back[i][1]}"/>`; }
+  const bk=`<polygon class="faceTop" points="${back.map(p=>p.join(',')).join(' ')}"/>`;
+  const fr=`<polygon class="face" points="${pts.map(p=>p.join(',')).join(' ')}"/>`;
+  return bk+sides+fr;
+}
+function depthLabel(pts,o,l){
+  let idx=0,best=-1e9; pts.forEach((p,i)=>{const s=p[0]-p[1];if(s>best){best=s;idx=i;}});
+  const p=pts[idx];
+  return `<line class="dim" x1="${p[0]+1}" y1="${p[1]-1}" x2="${p[0]+o+1}" y2="${p[1]-o-1}"/><text class="dimtext" x="${p[0]+o+9}" y="${p[1]-o+2}">${l}</text>`;
+}
+function shapeSVG(shape,d1,d2,d3,ded,big,t,kind){
+  const W=big?175:122, H=big?118:80;
+  const cls=(ded?'ded ':'')+'shp';
+  d1=nz(d1);d2=nz(d2);d3=nz(d3);t=nz(t);
+  if(shape==='קו'){ const[w]=normSet([d1],big?128:82,30); const y=H/2,px=(W-w)/2;
+    const inner=`<line x1="${px}" y1="${y}" x2="${px+w}" y2="${y}" stroke="#2B3A52" stroke-width="3"/><line x1="${px}" y1="${y-6}" x2="${px}" y2="${y+6}" stroke="#2B3A52" stroke-width="2"/><line x1="${px+w}" y1="${y-6}" x2="${px+w}" y2="${y+6}" stroke="#2B3A52" stroke-width="2"/>${dimH(px,px+w,y-10,fnum(d1))}`;
+    return svgWrap(inner,W,H,cls,big);
+  }
+  if(shape==='יחידה'){ const inner=`<text x="${W/2}" y="${H/2+9}" style="font:800 26px Heebo;fill:#2B3A52;text-anchor:middle">×${fnum(d1)||1}</text>`; return svgWrap(inner,W,H,cls,big); }
+  if(shape==='שטח מיוחד'){
+    const inner=`<rect x="${W/2-40}" y="${H/2-24}" width="80" height="48" fill="#DCE6F2" stroke="#2B3A52" stroke-width="1.3" stroke-dasharray="4 3"/><text x="${W/2}" y="${H/2-2}" style="font:800 12px Heebo;fill:#2B3A52;text-anchor:middle">A = ${fnum(d1)}</text><text x="${W/2}" y="${H/2+14}" style="font:600 9px Heebo;fill:#6E7A88;text-anchor:middle">מ"ר (שטח נתון)</text>`;
+    return svgWrap(inner,W,H,cls,big);
+  }
+  const vol = kind==='volume';
+  const c=CROSS[shape]; if(!c) return '';
+  const o = vol ? Math.max(big?12:8, Math.min(big?30:20, normSet([t,Math.max(d1,d2,d3,0.001)],big?34:24,6)[0])) : 0;
+  let inner='';
+  const isHalf = shape==='חצי-עיגול';
+  if(shape==='עיגול'||isHalf){
+    const[dia]=normSet([d1],big?78:50,20); const r=dia/2,cx=W/2;
+    if(vol){ const h=Math.max(big?40:26, Math.min(big?70:48, o*3)); const ry=r/3.2,top=(H-h)/2-4;
+      const arc = isHalf?`M${cx-r},${top} A${r},${ry} 0 0 1 ${cx+r},${top}`:`M${cx-r},${top} L${cx-r},${top+h} A${r},${ry} 0 0 0 ${cx+r},${top+h} L${cx+r},${top} Z`;
+      inner=`<ellipse class="faceTop" cx="${cx}" cy="${top}" rx="${r}" ry="${ry}"/><path class="faceSide" d="${arc}"/><ellipse class="face" cx="${cx}" cy="${top+h}" rx="${r}" ry="${ry}"/>${dimV(top,top+h,cx+r+7,fnum(t),false)}<text class="dimtext" x="${cx}" y="${top+h+17}">Ø${fnum(d1)}</text>`;
+    } else { const cy=H/2;
+      if(isHalf) inner=`<path class="face" d="M${cx-r},${cy} A${r},${r} 0 0 1 ${cx+r},${cy} Z"/><line class="dim" x1="${cx-r}" y1="${cy}" x2="${cx+r}" y2="${cy}"/><text class="dimtext" x="${cx}" y="${cy-6}">Ø${fnum(d1)}</text>`;
+      else inner=`<circle class="face" cx="${cx}" cy="${cy}" r="${r}"/><line class="dim" x1="${cx-r}" y1="${cy}" x2="${cx+r}" y2="${cy}"/><text class="dimtext" x="${cx}" y="${cy-6}">Ø${fnum(d1)}</text>`;
+    }
+    return svgWrap(inner,W,H,cls,big);
+  }
+  let pts=[];
+  const availW=(big?118:80)-o;
+  if(shape==='מלבן'){ const[w,h]=normSet([d1,d2],Math.min(big?112:74,availW),16);
+    const px=(W-w)/2-o/2, py=(H-h)/2+o/2; pts=[[px,py],[px+w,py],[px+w,py+h],[px,py+h]];
+    var dims=vol?`${dimH(px,px+w,py+h+4,fnum(d1),true)}${dimV(py,py+h,px-4,fnum(d2),true)}`
+            :`${dimH(px,px+w,py-2,fnum(d1))}${dimV(py,py+h,px+w+3,fnum(d2),false)}`;
+  }
+  else if(shape==='משולש'){ const[b,h]=normSet([d1,d2],Math.min(big?104:66,availW),20);
+    const px=(W-b)/2-o/2, y=(H+h)/2+o/2; pts=[[px,y],[px+b,y],[px+b/2,y-h]];
+    var dims=`${dimH(px,px+b,y+4,fnum(d1),true)}${dimV(y-h,y,px+b+5,fnum(d2),false)}`;
+  }
+  else if(shape==='טרפז'){ const[a,b,h]=normSet([d1,d2,d3],Math.min(big?104:64,availW),16);
+    const cx=W/2-o/2, y=(H+h)/2+o/2;
+    pts=[[cx-a/2,y-h],[cx+a/2,y-h],[cx+b/2,y],[cx-b/2,y]];
+    var dims=`${dimH(cx-a/2,cx+a/2,y-h-2,fnum(d1))}${dimH(cx-b/2,cx+b/2,y+4,fnum(d2),true)}${dimV(y-h,y,cx+Math.max(a,b)/2+6,fnum(d3),false)}`;
+  }
+  if(!pts.length) return '';
+  if(vol) inner=isoPrism(pts,o)+dims+depthLabel(pts,o,fnum(t));
+  else inner=`<polygon class="face" points="${pts.map(p=>p.join(',')).join(' ')}"/>`+dims;
+  return svgWrap(inner,W,H,cls,big);
+}
+function svgWrap(inner,W,H,cls,big){
+  const PAD=big?22:18;
+  return `<svg viewBox="${-PAD} ${-PAD} ${W+2*PAD} ${H+2*PAD}" width="${W}" height="${H}" class="${cls}" preserveAspectRatio="xMidYMid meet">${inner}</svg>`;
+}
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: ACCOUNTS  (draft/locked lifecycle, immutable snapshots, history)
+//
+//  Design note (this is the key fix over the pre-v3 data model):
+//  the old app stamped each row with ONE approval account + at most one
+//  correction, so a second correction silently lost the first one. Here,
+//  every measurement row carries an append-only `history[]`, and every
+//  LOCKED account stores a full immutable `snapshot` reconstructed from
+//  that history as of its own account number. Snapshots are written once
+//  and never mutated again — viewing "what Account 002 looked like" is a
+//  plain read of account.snapshot, correct forever regardless of later
+//  corrections. See buildSnapshotForNumber(), the single function both
+//  Accounts.lock() and Migration use to freeze a point in time.
+// ═══════════════════════════════════════════════════════════════════════
+const Accounts = {
+  list(project){ return project.accounts.slice().sort((a,b)=>+a.number-+b.number); },
+  current(project){ // the single draft (open) account — auto-repairs if missing
+    let d=project.accounts.find(a=>a.status==='draft');
+    if(!d){ d=makeAccount(this.nextNumber(project)); project.accounts.push(d); }
+    return d;
+  },
+  byId(project,id){ return project.accounts.find(a=>a.id===id); },
+  byNumber(project,num){ return project.accounts.find(a=>a.number===String(num).padStart(3,'0')); },
+  nextNumber(project){
+    const nums=project.accounts.map(a=>+a.number).filter(n=>!isNaN(n));
+    return String((nums.length?Math.max(...nums):0)+1).padStart(3,'0');
+  },
+  lockedAccounts(project){ return this.list(project).filter(a=>a.status==='locked'); },
+  previousLocked(project,beforeNumber){
+    const n=+beforeNumber;
+    const locked=this.lockedAccounts(project).filter(a=>+a.number<n);
+    return locked.length ? locked[locked.length-1] : null;
+  },
+  previousSnapshot(project,account){ const p=this.previousLocked(project,account.number); return p?p.snapshot:null; },
+
+  // freeze the state of every measurement row AS OF `accountNumber`, using each
+  // row's history[] (latest entry with accountNumber <= target). Used both for
+  // live locking (target = the account being locked, whose history entries were
+  // just appended) and for legacy-migration reconstruction.
+  buildSnapshotForNumber(project,accountNumber){
+    const target=+accountNumber;
+    const rows=[];
+    project.measurements.forEach(m=>{
+      if(m.isGroup) return;
+      const entries=(m.history||[]).filter(h=>+h.accountNumber<=target).sort((a,b)=>+a.accountNumber-+b.accountNumber);
+      if(!entries.length) return; // row did not exist yet at this account
+      const last=entries[entries.length-1];
+      rows.push({id:m.id,itemId:m.itemId,value:last.action==='cancelled'?0:nz(last.value),
+        cancelled:last.action==='cancelled', desc:m.desc,area:m.area,shape:m.shape,
+        d1:m.d1,d2:m.d2,d3:m.d3,t:m.t,qty:m.qty,sign:m.sign,notes:m.notes});
+    });
+    const items=cloneObj(project.items);
+    const totals=this.computeTotals(project,rows,items);
+    return {accountNumber:String(accountNumber).padStart(3,'0'),lockedAt:null,items,measurements:rows,totals};
+  },
+  computeTotals(project,rows,items){
+    const byItem={}; let grandQty=0,grandAmount=0;
+    items.forEach(it=>{
+      const q=rows.filter(r=>r.itemId===it.id && !r.cancelled).reduce((a,r)=>a+nz(r.value),0);
+      const amt=q*nz(it.unitPrice);
+      byItem[it.id]={qty:q,amount:amt};
+      grandAmount+=amt;
+    });
+    const vat=nz(project.vat)/100;
+    return {byItem, grandAmount, vatAmount:grandAmount*vat, totalWithVat:grandAmount*(1+vat)};
+  },
+
+  // per-item movement for a given account (draft = live data, locked = its own snapshot)
+  itemMovement(project,item,account){
+    const isDraft=account.status==='draft';
+    const curRows = isDraft
+      ? project.measurements.filter(m=>!m.isGroup && m.itemId===item.id)
+      : (account.snapshot?account.snapshot.measurements.filter(r=>r.itemId===item.id):[]);
+    const prevSnap=this.previousSnapshot(project,account);
+    let previousCumulative=0,addition=0,correction=0;
+    const seen=new Set();
+    curRows.forEach(r=>{
+      seen.add(r.id);
+      const curVal = r.cancelled?0:(isDraft?calcRow(r,item):nz(r.value));
+      const prevRow = prevSnap ? prevSnap.measurements.find(x=>x.id===r.id) : null;
+      if(prevRow){ const pv=prevRow.cancelled?0:nz(prevRow.value); previousCumulative+=pv; correction+=(curVal-pv); }
+      else addition+=curVal;
+    });
+    if(prevSnap) prevSnap.measurements.filter(r=>r.itemId===item.id).forEach(pr=>{
+      if(!seen.has(pr.id)){ const pv=pr.cancelled?0:nz(pr.value); previousCumulative+=pv; correction-=pv; }
+    });
+    const currentCumulative=previousCumulative+addition+correction;
+    const contractQty=nz(item.contractQty);
+    const balance=contractQty-currentCumulative;
+    const completionPct=contractQty>0?(currentCumulative/contractQty*100):(Math.abs(currentCumulative)>1e-9?100:0);
+    return {previousCumulative,addition,correction,currentCumulative,contractQty,balance,completionPct,
+      overrun:contractQty>0 && currentCumulative>contractQty+1e-9,
+      amount:currentCumulative*nz(item.unitPrice), periodAmount:(addition+correction)*nz(item.unitPrice)};
+  },
+  // rows that actually moved in this account (for "רק תנועה בחשבון זה")
+  movementRows(project,item,account){
+    const isDraft=account.status==='draft';
+    const curRows = isDraft
+      ? project.measurements.filter(m=>!m.isGroup && m.itemId===item.id)
+      : (account.snapshot?account.snapshot.measurements.filter(r=>r.itemId===item.id):[]);
+    const prevSnap=this.previousSnapshot(project,account);
+    return curRows.filter(r=>{
+      const curVal=r.cancelled?0:(isDraft?calcRow(r,item):nz(r.value));
+      const prevRow=prevSnap?prevSnap.measurements.find(x=>x.id===r.id):null;
+      const prevVal=prevRow?(prevRow.cancelled?0:nz(prevRow.value)):0;
+      return Math.abs(curVal-prevVal)>1e-9 || (r.cancelled && prevRow && !prevRow.cancelled);
+    });
+  },
+  projectTotals(project,account){
+    let contractTotal=0,cumulativeAmount=0,previousAmount=0,periodAmount=0;
+    project.items.filter(it=>!it.cancelled).forEach(it=>{
+      contractTotal+=nz(it.contractQty)*nz(it.unitPrice);
+      const mv=this.itemMovement(project,it,account);
+      cumulativeAmount+=mv.amount; previousAmount+=mv.previousCumulative*nz(it.unitPrice); periodAmount+=mv.periodAmount;
+    });
+    const vat=nz(project.vat)/100;
+    return {contractTotal,cumulativeAmount,previousAmount,periodAmount,
+      cumulativeWithVat:cumulativeAmount*(1+vat),periodWithVat:periodAmount*(1+vat),
+      balance:contractTotal-cumulativeAmount, completionPct: contractTotal>0?(cumulativeAmount/contractTotal*100):0};
+  },
+  draftHasMovement(project){
+    const d=this.current(project);
+    return project.items.some(it=>{ const mv=this.itemMovement(project,it,d); return Math.abs(mv.addition)+Math.abs(mv.correction)>1e-9; });
+  },
+
+  // ── LOCK: validate → stamp history on every changed row → freeze snapshot → open next draft ──
+  lock(project){
+    const v=Validation.run(project);
+    if(v.critical.length) return {ok:false,critical:v.critical,warnings:v.warnings};
+    const draft=this.current(project);
+    if(draft.status!=='draft') return {ok:false,critical:[{msg:'אין חשבון טיוטה פתוח לנעילה'}],warnings:[]};
+    const today=todayISO();
+    project.measurements.forEach(m=>{
+      if(m.isGroup) return;
+      const item=findItem(project,m.itemId);
+      const lastEntry=m.history.length?m.history[m.history.length-1]:null;
+      if(m.cancelled){
+        if(lastEntry && lastEntry.action!=='cancelled'){
+          m.history.push({accountId:draft.id,accountNumber:draft.number,action:'cancelled',value:0,prevValue:nz(lastEntry.value),date:today});
+        }
+        return;
+      }
+      if(!item) return;
+      const cur=calcRow(m,item);
+      if(!lastEntry){
+        if(Math.abs(cur)>1e-9) m.history.push({accountId:draft.id,accountNumber:draft.number,action:'created',value:cur,prevValue:0,date:today});
+      } else if(Math.abs(cur-nz(lastEntry.value))>1e-9){
+        m.history.push({accountId:draft.id,accountNumber:draft.number,action:'corrected',value:cur,prevValue:nz(lastEntry.value),date:today});
+      }
+    });
+    // garbage-collect rows that were cancelled before ever being part of a locked account
+    project.measurements=project.measurements.filter(m=>m.isGroup || !m.cancelled || m.history.length);
+    const snapshot=this.buildSnapshotForNumber(project,draft.number);
+    snapshot.lockedAt=nowISO();
+    draft.status='locked'; draft.lockedAt=nowISO(); draft.snapshot=snapshot;
+    const next=makeAccount(this.nextNumber(project));
+    project.accounts.push(next);
+    return {ok:true,warnings:v.warnings,locked:draft,next};
+  },
+  // safety-gated undo of the most recent lock (not part of the core spec, but
+  // protects against a mis-click — refuses if the account after it already has work)
+  unlockLast(project){
+    const locked=this.lockedAccounts(project);
+    const last=locked[locked.length-1];
+    if(!last) return {ok:false,msg:'אין חשבון נעול לביטול'};
+    if(this.draftHasMovement(project)) return {ok:false,msg:'לא ניתן לבטל — כבר הוזנו נתונים בחשבון הפתוח. יש להסיר אותם קודם.'};
+    project.measurements.forEach(m=>{ m.history=(m.history||[]).filter(h=>h.accountNumber!==last.number); });
+    const draft=project.accounts.find(a=>a.status==='draft');
+    if(draft) project.accounts=project.accounts.filter(a=>a.id!==draft.id);
+    last.status='draft'; last.snapshot=null; last.lockedAt=null;
+    return {ok:true};
+  },
+};
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: VALIDATION ENGINE
+//  Critical findings BLOCK locking; warnings require an explicit confirm.
+// ═══════════════════════════════════════════════════════════════════════
+const NUM_RE=/^-?\d+([.,]\d+)?$/;
+const Validation = {
+  run(project){
+    const critical=[], warnings=[];
+    const draft=Accounts.current(project);
+    // duplicate item codes
+    const byCode={};
+    project.items.filter(it=>!it.cancelled).forEach(it=>{ const c=itemFullCode(it); (byCode[c]=byCode[c]||[]).push(it); });
+    Object.entries(byCode).forEach(([code,arr])=>{ if(arr.length>1) arr.forEach(it=>
+      critical.push({code:'dup',itemId:it.id,msg:`קוד סעיף כפול: ${code} (${arr.length} מופעים)`})); });
+    // orphan measurement rows
+    project.measurements.forEach(m=>{ if(m.isGroup||m.cancelled) return;
+      if(!findItem(project,m.itemId)) critical.push({code:'orphan',rowId:m.id,msg:'שורת מדידה מקושרת לסעיף שאינו קיים'}); });
+    project.items.filter(it=>!it.cancelled).forEach(it=>{
+      const kind=itemUnitKind(it);
+      if(!it.unit) critical.push({code:'nounit',itemId:it.id,msg:`סעיף ${itemFullCode(it)}: חסרה יחידת מידה`});
+      if(!it.description) warnings.push({code:'nodesc',itemId:it.id,msg:`סעיף ${itemFullCode(it)}: חסר תיאור`});
+      if(it.unitPrice===''||it.unitPrice==null) warnings.push({code:'noprice',itemId:it.id,msg:`סעיף ${itemFullCode(it)}: חסר מחיר יחידה`});
+      if(it.contractQty===''||it.contractQty==null) warnings.push({code:'noqty',itemId:it.id,msg:`סעיף ${itemFullCode(it)}: חסרה כמות חוזית`});
+      const rows=project.measurements.filter(m=>!m.isGroup && m.itemId===it.id && !m.cancelled);
+      if(!rows.length && nz(it.contractQty)>0) warnings.push({code:'nomeas',itemId:it.id,msg:`סעיף ${itemFullCode(it)}: יש כמות חוזית אך אין שורות מדידה`});
+      rows.forEach(m=>{
+        ['d1','d2','d3','t','qty'].forEach(k=>{ const v=m[k]; if(v!=='' && v!=null && !NUM_RE.test(String(v).trim()))
+          critical.push({code:'nan',rowId:m.id,itemId:it.id,msg:`סעיף ${itemFullCode(it)}: ערך לא מספרי בשדה ${k}`}); });
+        const touched = ['d1','d2','d3','t','qty'].some(k=>m[k]!=='' && m[k]!=null);
+        if(!touched) return;
+        const bv=baseVal(m,kind);
+        if(kind==='volume' && !bv.complete) critical.push({code:'incomplete-vol',rowId:m.id,itemId:it.id,
+          msg:`סעיף ${itemFullCode(it)} (מ"ק): שורת מדידה חסרה עובי/אורך — לא ניתן לחשב נפח`});
+        if(kind==='area' && nz(m.t)>0) critical.push({code:'area-thick',rowId:m.id,itemId:it.id,
+          msg:`סעיף ${itemFullCode(it)} (מ"ר): לא ניתן להזין עובי בסעיף שטח`});
+        if(bv.complete && Math.abs(calcRow(m,it))<1e-9) warnings.push({code:'zero',rowId:m.id,itemId:it.id,
+          msg:`סעיף ${itemFullCode(it)}: שורת מדידה מחושבת ל-0`});
+      });
+      const mv=Accounts.itemMovement(project,it,draft);
+      if(mv.overrun) warnings.push({code:'overrun',itemId:it.id,
+        msg:`סעיף ${itemFullCode(it)}: חריגה מהכמות החוזית (${pct(mv.completionPct)}, +${fn(mv.currentCumulative-mv.contractQty)} ${it.unit})`});
+      if(mv.previousCumulative>1e-9 && Math.abs(mv.addition+mv.correction) > mv.previousCumulative*2)
+        warnings.push({code:'deviation',itemId:it.id,
+          msg:`סעיף ${itemFullCode(it)}: סטייה גדולה מהחשבון הקודם (שינוי של ${fn(mv.addition+mv.correction)} ${it.unit} בתקופה זו)`});
+    });
+    return {critical,warnings};
+  },
+};
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: STATE  (current in-memory project + autosave)
+// ═══════════════════════════════════════════════════════════════════════
+const State = {
+  project:null,
+  saveTimer:null,
+  scheduleSave(){
+    UI.setSaveStatus('saving');
+    clearTimeout(this.saveTimer);
+    this.saveTimer=setTimeout(()=>this.save(),400);
+  },
+  async save(){
+    if(!this.project) return;
+    this.project.updatedAt=nowISO();
+    try{ await Storage.saveProject(this.project); UI.setSaveStatus('saved'); }
+    catch(e){ console.error(e); UI.setSaveStatus('err'); }
+  },
+};
+
+// screen render functions register themselves here: Screens.dashboard = fn, etc.
+const Screens = {};
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: APP  (boot, navigation, topbar)
+// ═══════════════════════════════════════════════════════════════════════
+const App = {
+  async boot(){
+    await Storage.init();
+    const migrated=await Migration.run();
+    if(migrated.length) toast(`יובאו ${migrated.length} פרויקטים מהגרסה הקודמת`,'ok');
+    const lastId=await Storage.getMeta('currentProjectId',null);
+    if(lastId){ const p=await Storage.getProject(lastId); if(p){ await this.openProject(lastId); return; } }
+    this.goHome();
+  },
+  async goHome(){
+    State.project=null;
+    byId('app-shell').style.display='none';
+    byId('home-screen').style.display='block';
+    await Storage.setMeta('currentProjectId',null);
+    await Projects.renderList();
+  },
+  async openProject(id){
+    const p=await Storage.getProject(id);
+    if(!p){ toast('פרויקט לא נמצא','err'); return this.goHome(); }
+    State.project=p;
+    await Storage.setMeta('currentProjectId',id);
+    byId('home-screen').style.display='none';
+    byId('app-shell').style.display='block';
+    this.paintTopbar();
+    this.showTab('dashboard');
+  },
+  paintTopbar(){
+    const p=State.project; if(!p) return;
+    byId('tb-proj-name').textContent=p.name||'פרויקט ללא שם';
+    const draft=Accounts.current(p);
+    byId('tb-proj-sub').textContent=`${p.location||''}${p.location?' · ':''}חשבון ${draft.number}`;
+    this.updateBadges();
+  },
+  updateBadges(){
+    const p=State.project; if(!p) return;
+    byId('bdg-boq').textContent=p.items.filter(it=>!it.cancelled).length;
+    const v=Validation.run(p);
+    const errBdg=byId('bdg-accounts-warn');
+  },
+  showTab(tab){
+    qsa('.tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
+    const host=byId('screens-host');
+    if(Screens[tab]) host.innerHTML=Screens[tab]();
+    else host.innerHTML='<div class="empty"><div class="ic">🚧</div><div class="t">בבנייה</div></div>';
+    this.paintTopbar();
+  },
+  refresh(){ // re-render whichever tab is active after a data change
+    const on=qs('.tab.on'); if(on) this.showTab(on.dataset.tab);
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: PROJECTS  (home screen — selector, CRUD)
+// ═══════════════════════════════════════════════════════════════════════
+const Projects = {
+  async all(){ return Storage.listProjects(); },
+  async renderList(){
+    const host=byId('proj-grid'); if(!host) return;
+    const list=await this.all();
+    const q=(byId('home-search').value||'').trim().toLowerCase();
+    const filtered=q?list.filter(p=>(p.name||'').toLowerCase().includes(q)||(p.location||'').toLowerCase().includes(q)):list;
+    filtered.sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt));
+    let h=`<div class="proj-card-new" onclick="Projects.openNewModal()"><div class="ic">＋</div><div>פרויקט חדש</div></div>`;
+    h+=filtered.map(p=>{
+      const draft=Accounts.current(p);
+      const totals=Accounts.projectTotals(p,draft);
+      return `<div class="proj-card" onclick="Projects.open('${p.id}')">
+        <div class="pc-top"><div><div class="pc-name">${esc(p.name||'ללא שם')}</div><div class="pc-loc">${esc(p.location||'—')}</div></div>
+          <span class="stat draft">חשבון ${esc(draft.number)}</span></div>
+        <div class="pc-stats">
+          <div>מצטבר נוכחי<b>${money(totals.cumulativeWithVat)}</b></div>
+          <div>ביצוע<b>${pct(totals.completionPct)}</b></div>
+          <div>עדכון אחרון<b style="font-size:11px">${fdate(p.updatedAt)}</b></div>
+        </div>
+        <div class="pc-actions" onclick="event.stopPropagation()">
+          <button class="icon-btn" title="שכפול" onclick="Projects.duplicate('${p.id}')">⧉</button>
+          <button class="icon-btn" title="ייצוא" onclick="Backup.exportProjectById('${p.id}')">⇩</button>
+          <button class="icon-btn del" title="מחיקה" onclick="Projects.remove('${p.id}')">🗑</button>
+        </div></div>`;
+    }).join('');
+    host.innerHTML=h;
+  },
+  openNewModal(){
+    UI.openModal(`<div class="modal-hd">פרויקט חדש<span class="x" onclick="UI.closeModal()">✕</span></div>
+      <div class="grid2">
+        <div class="fld"><label>שם הפרויקט *</label><input id="np-name" placeholder="לדוגמה: מגדל רוגוזין"></div>
+        <div class="fld"><label>מיקום</label><input id="np-loc"></div>
+        <div class="fld"><label>מס׳ חוזה</label><input id="np-contract"></div>
+        <div class="fld"><label>קבלן מבצע</label><input id="np-contractor"></div>
+        <div class="fld"><label>מפקח</label><input id="np-supervisor"></div>
+        <div class="fld"><label>מנהל פרויקט</label><input id="np-manager"></div>
+        <div class="fld"><label>מע"מ %</label><input id="np-vat" type="number" value="18"></div>
+      </div>
+      <div class="modal-foot"><button class="btn btn-ghost" onclick="UI.closeModal()">ביטול</button>
+        <button class="btn btn-gold" onclick="Projects.createFromModal()">צור פרויקט</button></div>`);
+    setTimeout(()=>byId('np-name').focus(),50);
+  },
+  async createFromModal(){
+    const name=byId('np-name').value.trim();
+    if(!name){ toast('יש להזין שם פרויקט','err'); return; }
+    const p=makeProject({name, location:byId('np-loc').value.trim(), contractNumber:byId('np-contract').value.trim(),
+      contractor:byId('np-contractor').value.trim(), supervisor:byId('np-supervisor').value.trim(),
+      manager:byId('np-manager').value.trim(), vat:+byId('np-vat').value||18});
+    p.accounts=[makeAccount('001')];
+    await Storage.saveProject(p);
+    UI.closeModal(); toast('הפרויקט נוצר');
+    await this.open(p.id);
+  },
+  async open(id){ await App.openProject(id); },
+  async duplicate(id){
+    const src=await Storage.getProject(id); if(!src) return;
+    // duplication is a BOQ/settings template copy: items & pricing carry over,
+    // but execution history (measurements/accounts) starts fresh — duplicating
+    // a project is normally "same building type, new site", not "same job twice".
+    const p=makeProject({name:src.name+' (עותק)', location:src.location, contractNumber:src.contractNumber,
+      contractor:src.contractor, supervisor:src.supervisor, manager:src.manager, vat:src.vat,
+      logo:src.logo, logoMode:src.logoMode, useAreas:src.useAreas});
+    p.buildings=cloneObj(src.buildings); p.chapters=cloneObj(src.chapters); p.subchapters=cloneObj(src.subchapters);
+    p.items=cloneObj(src.items).map(it=>({...it,id:uid('item_'),createdInAccount:null}));
+    p.accounts=[makeAccount('001')];
+    await Storage.saveProject(p);
+    toast('הפרויקט שוכפל (כתב הכמויות בלבד — ללא היסטוריית חשבונות)');
+    this.renderList();
+  },
+  async remove(id){
+    const p=await Storage.getProject(id); if(!p) return false;
+    if(!confirm(`למחוק לצמיתות את הפרויקט "${p.name}"?\nפעולה זו אינה הפיכה. מומלץ לייצא גיבוי קודם.`)) return false;
+    await Storage.deleteProject(id);
+    toast('הפרויקט נמחק');
+    if(!State.project||State.project.id!==id) this.renderList();
+    return true;
+  },
+};
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: BOQ  (Building → Chapter → Subchapter → Item tree)
+// ═══════════════════════════════════════════════════════════════════════
+const BOQ = {
+  _expanded:new Set(),
+  _lastHighlight:null,
+  key(b,c,s){ return [b,c,s].filter(x=>x!=null).join('.'); },
+  isExpanded(key){ return this._expanded.has(key); },
+  toggleNode(key){ this._expanded.has(key)?this._expanded.delete(key):this._expanded.add(key); App.refresh(); },
+  expandAll(){
+    const p=State.project;
+    this._expanded.clear();
+    p.items.filter(it=>!it.cancelled).forEach(it=>{
+      this._expanded.add(this.key(it.building)); this._expanded.add(this.key(it.building,it.chapter)); this._expanded.add(this.key(it.building,it.chapter,it.sub));
+    });
+    App.refresh();
+  },
+  collapseAll(){ this._expanded.clear(); App.refresh(); },
+  duplicateExists(project,building,chapter,sub,item,excludeId){
+    const code=`${building}.${chapter}.${sub}.${item}`;
+    return project.items.some(it=>!it.cancelled && it.id!==excludeId && itemFullCode(it)===code);
+  },
+  ensureMeta(project,building,chapter,sub,names){
+    if(building!=null){ project.buildings[building]=project.buildings[building]||{name:names&&names.building||''};
+      if(names&&names.building) project.buildings[building].name=names.building; }
+    if(building!=null&&chapter!=null){ const k=building+'.'+chapter; project.chapters[k]=project.chapters[k]||{name:names&&names.chapter||''};
+      if(names&&names.chapter) project.chapters[k].name=names.chapter; }
+    if(building!=null&&chapter!=null&&sub!=null){ const k=building+'.'+chapter+'.'+sub; project.subchapters[k]=project.subchapters[k]||{name:names&&names.sub||''};
+      if(names&&names.sub) project.subchapters[k].name=names.sub; }
+  },
+  addOrUpdateItem(project,fields,editId){
+    const building=Util.normDigits(fields.building,2), chapter=Util.normDigits(fields.chapter,2),
+      sub=Util.normDigits(fields.sub,2), item=Util.normDigits(fields.item,4);
+    if(this.duplicateExists(project,building,chapter,sub,item,editId))
+      return {ok:false,msg:`קוד סעיף ${building}.${chapter}.${sub}.${item} כבר קיים בפרויקט זה`};
+    this.ensureMeta(project,building,chapter,sub,{building:fields.buildingName,chapter:fields.chapterName,sub:fields.subName});
+    let it=editId?findItem(project,editId):null;
+    if(it){ Object.assign(it,{building,chapter,sub,item,description:fields.description,unit:fields.unit,
+      contractQty:fields.contractQty,unitPrice:fields.unitPrice,notes:fields.notes}); }
+    else{ it=makeBoqItem({building,chapter,sub,item,description:fields.description,unit:fields.unit,
+      contractQty:fields.contractQty,unitPrice:fields.unitPrice,notes:fields.notes,createdInAccount:Accounts.current(project).number});
+      project.items.push(it); }
+    return {ok:true,item:it};
+  },
+  itemHasHistory(project,itemId){ return project.measurements.some(m=>!m.isGroup && m.itemId===itemId && m.history && m.history.length); },
+  removeItem(project,itemId){
+    if(this.itemHasHistory(project,itemId)){
+      const it=findItem(project,itemId); it.cancelled=true;
+      return {ok:true,soft:true};
+    }
+    project.items=project.items.filter(it=>it.id!==itemId);
+    project.measurements=project.measurements.filter(m=>m.itemId!==itemId);
+    return {ok:true,soft:false};
+  },
+  tree(project){
+    const items=project.items.filter(it=>!it.cancelled);
+    const bMap={};
+    items.forEach(it=>{
+      bMap[it.building]=bMap[it.building]||{chapters:{},items:[]};
+      const B=bMap[it.building];
+      B.chapters[it.chapter]=B.chapters[it.chapter]||{subs:{}};
+      const C=B.chapters[it.chapter];
+      C.subs[it.sub]=C.subs[it.sub]||{items:[]};
+      C.subs[it.sub].items.push(it);
+    });
+    return bMap;
+  },
+  draftHasActivity(project,itemIds){
+    const draft=Accounts.current(project);
+    return itemIds.some(id=>{ const it=findItem(project,id); if(!it) return false;
+      const mv=Accounts.itemMovement(project,it,draft); return Math.abs(mv.addition)+Math.abs(mv.correction)>1e-9; });
+  },
+  render(){
+    const p=State.project, tree=this.tree(p);
+    const bKeys=Object.keys(tree).sort((a,b)=>a.localeCompare(b));
+    let h=`<div class="card"><div class="card-hd">📋 כתב כמויות<span class="hd-sub">${p.items.filter(i=>!i.cancelled).length} סעיפים</span></div>
+      <div class="card-bd">
+      <div class="boq-toolbar">
+        <div class="boq-search"><input id="boq-search-in" placeholder="חיפוש לפי קוד, תיאור, פרק…" oninput="BOQSearch.onInput(this.value)" onkeydown="BOQSearch.onKey(event)">
+          <span class="ic">🔍</span><div id="boq-search-results" class="boq-search-results"></div></div>
+        <button class="btn btn-ghost btn-sm" onclick="BOQ.expandAll()">⤢ הרחב הכל</button>
+        <button class="btn btn-ghost btn-sm" onclick="BOQ.collapseAll()">⤡ כווץ הכל</button>
+        <button class="btn btn-gold btn-sm" onclick="BOQ.openItemModal()">＋ סעיף חדש</button>
+      </div>`;
+    if(!bKeys.length){
+      h+=`<div class="empty"><div class="ic">📋</div><div class="t">אין עדיין סעיפים בכתב הכמויות</div>
+        <div class="s">הוסף סעיף ידנית או ייבא מקובץ SKN בלשונית ״ייבוא״</div></div>`;
+    } else {
+      h+=`<div class="btree">`+bKeys.map(b=>this.renderBuilding(p,b,tree[b])).join('')+`</div>`;
+    }
+    h+=`</div></div>`;
+    return h;
+  },
+  renderBuilding(p,b,B){
+    const key=this.key(b), exp=this.isExpanded(key);
+    const allIds=Object.values(B.chapters).flatMap(c=>Object.values(c.subs).flatMap(s=>s.items.map(i=>i.id)));
+    const count=allIds.length;
+    const active=this.draftHasActivity(p,allIds);
+    const name=(p.buildings[b]&&p.buildings[b].name)||'';
+    const chKeys=Object.keys(B.chapters).sort((a,b2)=>a.localeCompare(b2));
+    return `<div class="b-node${exp?'':' collapsed'}" data-node="${key}">
+      <div class="b-hdr" onclick="BOQ.toggleNode('${key}')"><span class="b-toggle">▼</span>
+        <span class="code">מבנה ${esc(b)}</span><span class="name">${esc(name)}</span>
+        ${active?'<span class="b-activity" title="פעילות בחשבון הנוכחי"></span>':''}<span class="b-count">${count} סעיפים</span></div>
+      <div class="b-body">${chKeys.map(c=>this.renderChapter(p,b,c,B.chapters[c])).join('')}</div></div>`;
+  },
+  renderChapter(p,b,c,C){
+    const key=this.key(b,c), exp=this.isExpanded(key);
+    const allIds=Object.values(C.subs).flatMap(s=>s.items.map(i=>i.id));
+    const name=(p.chapters[b+'.'+c]&&p.chapters[b+'.'+c].name)||'';
+    const subKeys=Object.keys(C.subs).sort((a,b2)=>a.localeCompare(b2));
+    return `<div class="c-node" data-node="${key}">
+      <div class="c-hdr" onclick="BOQ.toggleNode('${key}')"><span class="b-toggle" style="color:var(--navy2)">▼</span>
+        <span class="code">${esc(b)}.${esc(c)}</span><span class="name">${esc(name)}</span><span class="c-count">${allIds.length}</span></div>
+      <div class="c-body${exp?'':' collapsed'}">${subKeys.map(s=>this.renderSub(p,b,c,s,C.subs[s])).join('')}</div></div>`;
+  },
+  renderSub(p,b,c,s,S){
+    const key=this.key(b,c,s), exp=this.isExpanded(key);
+    const name=(p.subchapters[b+'.'+c+'.'+s]&&p.subchapters[b+'.'+c+'.'+s].name)||'';
+    return `<div class="s-node" data-node="${key}">
+      <div class="s-hdr" onclick="BOQ.toggleNode('${key}')"><span class="b-toggle" style="font-size:9px">▼</span>
+        <span class="code">${esc(b)}.${esc(c)}.${esc(s)}</span><span class="name">${esc(name)}</span><span class="c-count">${S.items.length}</span></div>
+      <div class="s-body${exp?'':' collapsed'}">${S.items.sort((x,y)=>x.item.localeCompare(y.item)).map(it=>this.renderItem(p,it)).join('')}</div></div>`;
+  },
+  renderItem(p,it){
+    const draft=Accounts.current(p);
+    const mv=Accounts.itemMovement(p,it,draft);
+    const activity=Math.abs(mv.addition)+Math.abs(mv.correction)>1e-9;
+    return `<div class="i-row" data-item-id="${it.id}" onclick="Measurements.openItem('${it.id}')">
+      <span class="code">${esc(itemFullCode(it))}</span>
+      <span class="desc">${esc(it.description||'(ללא תיאור)')}</span>
+      <span class="unit-chip">${esc(it.unit)}</span>
+      <span class="qty num">${it.contractQty!==''?fn(it.contractQty):'—'}</span>
+      <span class="price num">${it.unitPrice!==''?money(it.unitPrice):'—'}</span>
+      ${activity?'<span class="stat grow">פעיל בחשבון</span>':''}
+      <span class="actions" onclick="event.stopPropagation()">
+        <button class="icon-btn" title="עריכה" onclick="BOQ.openItemModal('${it.id}')">✎</button>
+        <button class="icon-btn del" title="מחיקה" onclick="BOQ.confirmRemoveItem('${it.id}')">🗑</button>
+      </span></div>`;
+  },
+  openItemModal(editId){
+    const p=State.project;
+    const it=editId?findItem(p,editId):null;
+    const bList=Object.keys(p.buildings), cList=Object.keys(p.chapters), sList=Object.keys(p.subchapters);
+    UI.openModal(`<div class="modal-hd">${it?'עריכת סעיף':'סעיף חדש'}<span class="x" onclick="UI.closeModal()">✕</span></div>
+      <div class="grid4">
+        <div class="fld"><label>מבנה (קוד)</label><input id="im-b" value="${it?esc(it.building):'01'}" list="dl-b"></div>
+        <div class="fld"><label>פרק (קוד)</label><input id="im-c" value="${it?esc(it.chapter):'01'}" list="dl-c"></div>
+        <div class="fld"><label>תת-פרק (קוד)</label><input id="im-s" value="${it?esc(it.sub):'01'}" list="dl-s"></div>
+        <div class="fld"><label>סעיף (קוד)</label><input id="im-i" value="${it?esc(it.item):''}" placeholder="0010"></div>
+      </div>
+      <div class="grid3" style="margin-top:10px">
+        <div class="fld"><label>שם מבנה</label><input id="im-bn" value="${it?esc((p.buildings[it.building]||{}).name||''):''}"></div>
+        <div class="fld"><label>שם פרק</label><input id="im-cn" value="${it?esc((p.chapters[it.building+'.'+it.chapter]||{}).name||''):''}"></div>
+        <div class="fld"><label>שם תת-פרק</label><input id="im-sn" value="${it?esc((p.subchapters[it.building+'.'+it.chapter+'.'+it.sub]||{}).name||''):''}"></div>
+      </div>
+      <div class="fld" style="margin-top:10px"><label>תיאור הסעיף</label><textarea id="im-desc">${it?esc(it.description):''}</textarea></div>
+      <div class="grid3" style="margin-top:10px">
+        <div class="fld"><label>יחידה</label><select id="im-unit">${UNIT_LIST.map(u=>`<option ${it&&it.unit===u?'selected':''}>${u}</option>`).join('')}</select></div>
+        <div class="fld"><label>כמות חוזית</label><input id="im-qty" type="text" inputmode="decimal" value="${it?esc(it.contractQty):''}"></div>
+        <div class="fld"><label>מחיר יחידה</label><input id="im-price" type="text" inputmode="decimal" value="${it?esc(it.unitPrice):''}"></div>
+      </div>
+      <div class="fld" style="margin-top:10px"><label>הערות</label><input id="im-notes" value="${it?esc(it.notes):''}"></div>
+      <datalist id="dl-b">${bList.map(b=>`<option value="${esc(b)}">`).join('')}</datalist>
+      <datalist id="dl-c">${cList.map(c=>`<option value="${esc(c.split('.')[1])}">`).join('')}</datalist>
+      <datalist id="dl-s">${sList.map(s=>`<option value="${esc(s.split('.')[2])}">`).join('')}</datalist>
+      <div class="modal-foot"><button class="btn btn-ghost" onclick="UI.closeModal()">ביטול</button>
+        <button class="btn btn-gold" onclick="BOQ.saveItemModal(${it?`'${it.id}'`:'null'})">שמירה</button></div>`,'wide');
+  },
+  saveItemModal(editId){
+    const fields={building:byId('im-b').value,chapter:byId('im-c').value,sub:byId('im-s').value,item:byId('im-i').value,
+      buildingName:byId('im-bn').value.trim(),chapterName:byId('im-cn').value.trim(),subName:byId('im-sn').value.trim(),
+      description:byId('im-desc').value.trim(),unit:byId('im-unit').value,contractQty:byId('im-qty').value.trim(),
+      unitPrice:byId('im-price').value.trim(),notes:byId('im-notes').value.trim()};
+    if(!fields.item){ toast('יש להזין קוד סעיף','err'); return; }
+    const r=this.addOrUpdateItem(State.project,fields,editId);
+    if(!r.ok){ toast('⛔ '+r.msg,'err'); return; }
+    this._expanded.add(this.key(r.item.building)); this._expanded.add(this.key(r.item.building,r.item.chapter)); this._expanded.add(this.key(r.item.building,r.item.chapter,r.item.sub));
+    UI.closeModal(); State.scheduleSave(); toast('הסעיף נשמר'); App.refresh();
+  },
+  confirmRemoveItem(id){
+    const p=State.project, it=findItem(p,id); if(!it) return;
+    const hasHist=this.itemHasHistory(p,id);
+    if(!confirm(hasHist
+      ? `לסעיף ${itemFullCode(it)} יש היסטוריית מדידות מאושרת. לא ניתן למחוק לצמיתות — הסעיף יסומן כמבוטל וימשיך להופיע בדוחות היסטוריים. להמשיך?`
+      : `למחוק את הסעיף ${itemFullCode(it)}?`)) return;
+    this.removeItem(p,id); State.scheduleSave(); toast('הסעיף הוסר'); App.refresh();
+  },
+};
+Screens.boq=()=>BOQ.render();
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: SMART SEARCH
+// ═══════════════════════════════════════════════════════════════════════
+const BOQSearch = {
+  results(project,q){
+    q=(q||'').trim().toLowerCase(); if(!q) return [];
+    return project.items.filter(it=>!it.cancelled).filter(it=>{
+      const bn=(project.buildings[it.building]||{}).name||'';
+      const cn=(project.chapters[it.building+'.'+it.chapter]||{}).name||'';
+      const sn=(project.subchapters[it.building+'.'+it.chapter+'.'+it.sub]||{}).name||'';
+      const hay=[itemFullCode(it),it.description,bn,cn,sn].join(' ').toLowerCase();
+      return hay.includes(q);
+    }).slice(0,30);
+  },
+  onInput(v){
+    const host=byId('boq-search-results');
+    const res=this.results(State.project,v);
+    if(!v.trim()||!res.length){ host.classList.remove('show'); host.innerHTML=''; return; }
+    host.innerHTML=res.map(it=>{
+      const bn=(State.project.buildings[it.building]||{}).name||'';
+      return `<div class="boq-search-row" onclick="BOQSearch.goTo('${it.id}')">
+        <span class="code">${esc(itemFullCode(it))}</span>
+        <span style="flex:1">${esc(it.description||'(ללא תיאור)')}</span>
+        <span class="path">מבנה ${esc(it.building)} ${esc(bn)}</span></div>`;
+    }).join('');
+    host.classList.add('show');
+  },
+  onKey(e){ if(e.key==='Enter'){ const first=qs('#boq-search-results .boq-search-row'); if(first) first.click(); } },
+  goTo(itemId){
+    const p=State.project, it=findItem(p,itemId); if(!it) return;
+    byId('boq-search-results').classList.remove('show');
+    BOQ._expanded.add(BOQ.key(it.building)); BOQ._expanded.add(BOQ.key(it.building,it.chapter)); BOQ._expanded.add(BOQ.key(it.building,it.chapter,it.sub));
+    App.showTab('boq');
+    setTimeout(()=>{
+      const row=qs(`.i-row[data-item-id="${itemId}"]`);
+      if(row){ row.scrollIntoView({behavior:'smooth',block:'center'}); row.classList.add('hl'); setTimeout(()=>row.classList.remove('hl'),3200); }
+    },60);
+  },
+};
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: MEASUREMENTS  (unit-driven entry table, scoped to one BOQ item)
+// ═══════════════════════════════════════════════════════════════════════
+const Measurements = {
+  _activeItemId:null,
+  _periodOnly:false,
+  openItem(itemId){ this._activeItemId=itemId; App.showTab('measurements'); },
+  liveRowStatus(m){
+    if(m.cancelled) return 'cancelled';
+    if(!m.history||!m.history.length) return 'new';
+    const item=findItem(State.project,m.itemId);
+    const last=m.history[m.history.length-1];
+    const cur=calcRow(m,item);
+    return Math.abs(cur-nz(last.value))>1e-9 ? 'corrected' : 'approved';
+  },
+  addRow(itemId){
+    const p=State.project;
+    p.measurements.push(makeMeasurement({itemId}));
+    State.scheduleSave(); App.refresh();
+    setTimeout(()=>{ const rows=qsa(`#meas-table tbody tr[data-row-id]`); const last=rows[rows.length-1];
+      if(last){ const inp=last.querySelector('input,select,textarea'); inp&&inp.focus(); } },50);
+  },
+  addGroup(itemId){
+    const p=State.project;
+    p.measurements.push(makeMeasurement({itemId,isGroup:true,groupLabel:'קבוצה חדשה'}));
+    State.scheduleSave(); App.refresh();
+  },
+  duplicateRow(rowId){
+    const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
+    const c=makeMeasurement({...cloneObj(m),id:uid('meas_'),history:[],cancelled:false});
+    const idx=p.measurements.findIndex(x=>x.id===rowId);
+    p.measurements.splice(idx+1,0,c);
+    State.scheduleSave(); App.refresh();
+  },
+  toggleSign(rowId){
+    const m=State.project.measurements.find(x=>x.id===rowId); if(!m) return;
+    m.sign=(m.sign===-1?1:-1); State.scheduleSave(); App.refresh();
+  },
+  setShape(rowId,shape){
+    const m=State.project.measurements.find(x=>x.id===rowId); if(!m) return;
+    m.shape=shape; m.d1=m.d2=m.d3=''; if(itemUnitKind(findItem(State.project,m.itemId))!=='volume') m.t='';
+    State.scheduleSave(); App.refresh();
+  },
+  removeRow(rowId){
+    const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
+    if(m.history && m.history.length){
+      if(!confirm('לשורה זו יש היסטוריית אישור בחשבון נעול — לא ניתן למחוק לצמיתות. לסמן כמבוטלת?')) return;
+      m.cancelled=true;
+    } else {
+      if(!confirm('למחוק את שורת המדידה?')) return;
+      p.measurements=p.measurements.filter(x=>x.id!==rowId);
+    }
+    State.scheduleSave(); App.refresh();
+  },
+  restoreRow(rowId){
+    const m=State.project.measurements.find(x=>x.id===rowId); if(!m) return;
+    m.cancelled=false; State.scheduleSave(); App.refresh();
+  },
+  removeGroup(rowId){ if(!confirm('למחוק את הקבוצה?')) return;
+    State.project.measurements=State.project.measurements.filter(x=>x.id!==rowId); State.scheduleSave(); App.refresh(); },
+  liveUpdate(rowId,key,val){
+    const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
+    m[key]=val; State.scheduleSave();
+    const item=findItem(p,m.itemId); const kind=itemUnitKind(item);
+    const fEl=byId('f-'+rowId), rEl=byId('r-'+rowId), stEl=byId('st-'+rowId);
+    if(fEl) fEl.innerHTML=this.formulaHTML(m,kind);
+    if(rEl){ const v=calcRow(m,item); rEl.textContent=fn(v,3); rEl.className='res '+(v<0?'n':'p'); }
+    if(stEl){ const s=this.liveRowStatus(m); stEl.outerHTML=`<span id="st-${rowId}" class="stat ${ROW_STATUS_CLASS[s]}">${ROW_STATUS_LABEL[s]}</span>`; }
+    this.patchItemContext();
+  },
+  formulaHTML(m,kind){
+    const bv=baseVal(m,kind);
+    const lbl=rowFormulaLabel(m,kind);
+    const warn = kind==='volume' && !bv.complete ? '<span class="ru warn">חסר עובי/אורך</span>' : '';
+    return `${esc(lbl)}${warn}`;
+  },
+  patchItemContext(){
+    const p=State.project, it=findItem(p,this._activeItemId); if(!it) return;
+    const draft=Accounts.current(p); const mv=Accounts.itemMovement(p,it,draft);
+    const host=byId('item-ctx-stats'); if(host) host.innerHTML=this.ctxStatsHTML(mv,it);
+    const sumEl=byId('meas-sec-sum'); if(sumEl) sumEl.innerHTML=fn(mv.currentCumulative)+' <span class="u">'+esc(it.unit)+'</span>';
+  },
+  ctxStatsHTML(mv,it){
+    return `<div>חוזי<b>${fn(mv.contractQty)}</b></div><div>מצטבר קודם<b>${fn(mv.previousCumulative)}</b></div>
+      <div>בתקופה<b>${fn(mv.addition)}</b></div><div>תיקון<b>${fn(mv.correction)}</b></div>
+      <div>מצטבר נוכחי<b>${fn(mv.currentCumulative)}</b></div><div>יתרה<b>${fn(mv.balance)}</b></div>
+      <div>% ביצוע<b>${pct(mv.completionPct)}</b></div>`;
+  },
+  openHistory(rowId){
+    const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
+    const item=findItem(p,m.itemId);
+    let rows='';
+    if(!m.history.length) rows='<div class="empty"><div class="ic">🕓</div><div class="t">טרם אושרה בחשבון כלשהו</div></div>';
+    else rows=m.history.map(h=>`<div class="val-row ${h.action==='cancelled'?'err':(h.action==='created'?'ok':'warn')}">
+      <span class="ic">${h.action==='created'?'✚':h.action==='cancelled'?'✕':'✎'}</span>
+      <div class="txt"><b>חשבון ${esc(h.accountNumber)}</b> — ${esc(ROW_HIST_LABEL[h.action])} · ${fdate(h.date)}<br>
+      ${h.action==='created'?`ערך: <b>${fn(h.value)}</b>`:`${fn(h.prevValue)} ← ${fn(h.value)}`} ${item?esc(item.unit):''}</div></div>`).join('');
+    UI.openDrawer(`<div class="drawer-hd">🕓 היסטוריית שורה<span class="x" onclick="UI.closeDrawer()">✕</span></div>
+      <div class="drawer-bd-content"><div style="font-size:12px;color:var(--muted);margin-bottom:10px">${esc(item?itemFullCode(item):'')} — ${esc(m.desc||'')}</div>
+      <div class="val-panel">${rows}</div></div>`);
+  },
+  openCopyModal(rowIds,fromItemId){
+    const p=State.project;
+    const opts=p.items.filter(it=>!it.cancelled).map(it=>`<option value="${it.id}">${esc(itemFullCode(it))} — ${esc(it.description||'')}</option>`).join('');
+    UI.openModal(`<div class="modal-hd">העתקה לסעיף אחר<span class="x" onclick="UI.closeModal()">✕</span></div>
+      <div class="fld"><label>סעיף יעד</label><select id="cp-target">${opts}</select></div>
+      <div class="modal-foot"><button class="btn btn-ghost" onclick="UI.closeModal()">ביטול</button>
+        <button class="btn btn-gold" onclick="Measurements.doCopy(${JSON.stringify(rowIds)})">העתק</button></div>`);
+  },
+  doCopy(rowIds){
+    const p=State.project, target=byId('cp-target').value;
+    rowIds.forEach(id=>{ const m=p.measurements.find(x=>x.id===id); if(!m) return;
+      p.measurements.push(makeMeasurement({...cloneObj(m),id:uid('meas_'),itemId:target,history:[],cancelled:false})); });
+    UI.closeModal(); State.scheduleSave(); toast(`${rowIds.length} שורות הועתקו`); App.refresh();
+  },
+  attachKeyNav(){
+    const table=byId('meas-table'); if(!table) return;
+    const els=qsa('input,select,textarea',table);
+    els.forEach((el,i)=>{
+      el.addEventListener('focus',()=>{ if(el.select) el.select(); });
+      el.addEventListener('keydown',e=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          if(i===els.length-1){ this.addRow(this._activeItemId); }
+          else { els[i+1].focus(); }
+        } else if(e.key==='ArrowDown'&&el.tagName!=='SELECT'){ e.preventDefault(); els[Math.min(i+1,els.length-1)].focus(); }
+        else if(e.key==='ArrowUp'&&el.tagName!=='SELECT'){ e.preventDefault(); els[Math.max(i-1,0)].focus(); }
+      });
+    });
+  },
+  tableHeaders(kind,useAreas){
+    let h=['#','תיאור'];
+    if(useAreas) h.push('אזור');
+    if(kind==='area'||kind==='volume') h.push('צורה');
+    if(kind==='length') h.push('אורך'); else if(kind==='count') h.push('כמות'); else h.push('מידה 1','מידה 2','מידה 3');
+    if(kind==='volume') h.push('עובי / אורך');
+    h.push('N','נוסחה','±','תוצאה','סטטוס','הערות','');
+    return h;
+  },
+  dimCells(m,kind,shape){
+    if(kind==='length') return `<td class="col-dim"><input class="dim-in" placeholder="אורך" value="${esc(m.d1)}" oninput="Measurements.liveUpdate('${m.id}','d1',this.value)"></td>`;
+    if(kind==='count') return `<td class="col-dim"><input class="dim-in" placeholder="כמות" value="${esc(m.d1)}" oninput="Measurements.liveUpdate('${m.id}','d1',this.value)"></td>`;
+    const dims=shapeDims(shape); let out='';
+    for(let i=0;i<3;i++){ const key='d'+(i+1); const lbl=dims[i];
+      out+= lbl ? `<td class="col-dim"><input class="dim-in" placeholder="${esc(lbl)}" value="${esc(m[key])}" oninput="Measurements.liveUpdate('${m.id}','${key}',this.value)"></td>` : `<td class="col-dim"></td>`; }
+    return out;
+  },
+  renderRow(m,item,kind,useAreas,n){
+    if(m.isGroup){
+      const span=5+(useAreas?1:0)+(kind==='volume'?1:0);
+      return `<tr class="grp-row" data-row-id="${m.id}" style="background:#F0F4F9"><td colspan="2"><input value="${esc(m.groupLabel)}" style="font-weight:700;color:var(--navy)" oninput="Measurements.liveUpdate('${m.id}','groupLabel',this.value)"></td>
+        <td colspan="${span}"></td><td><button class="icon-btn del" onclick="Measurements.removeGroup('${m.id}')">🗑</button></td></tr>`;
+    }
+    const status=this.liveRowStatus(m);
+    const v=calcRow(m,item);
+    const shapeSelectable = kind==='area'||kind==='volume';
+    let cells=`<td>${n}</td>`;
+    cells+=`<td class="col-desc"><textarea class="desc-in" rows="1" oninput="Measurements.liveUpdate('${m.id}','desc',this.value)">${esc(m.desc)}</textarea></td>`;
+    if(useAreas) cells+=`<td><input value="${esc(m.area)}" style="min-width:70px" oninput="Measurements.liveUpdate('${m.id}','area',this.value)"></td>`;
+    if(shapeSelectable) cells+=`<td><select onchange="Measurements.setShape('${m.id}',this.value)">${Object.keys(CROSS).map(s=>`<option ${m.shape===s?'selected':''}>${s}</option>`).join('')}</select></td>`;
+    cells+=this.dimCells(m,kind,m.shape);
+    if(kind==='volume'){ const lbl=m.shape==='שטח מיוחד'?'אורך':'עובי';
+      cells+=`<td class="col-dim thick-on"><input class="dim-in" placeholder="${lbl}" value="${esc(m.t)}" oninput="Measurements.liveUpdate('${m.id}','t',this.value)"></td>`; }
+    cells+=`<td style="max-width:52px"><input value="${esc(m.qty)}" placeholder="1" oninput="Measurements.liveUpdate('${m.id}','qty',this.value)"></td>`;
+    cells+=`<td class="formula" id="f-${m.id}">${this.formulaHTML(m,kind)}</td>`;
+    cells+=`<td><span class="sign-pill ${m.sign===-1?'n':'p'}" onclick="Measurements.toggleSign('${m.id}')">${m.sign===-1?'－':'＋'}</span></td>`;
+    cells+=`<td class="res ${v<0?'n':'p'}" id="r-${m.id}">${fn(v,3)}</td>`;
+    cells+=`<td id="st-${m.id}"><span class="stat ${ROW_STATUS_CLASS[status]}">${ROW_STATUS_LABEL[status]}</span></td>`;
+    cells+=`<td><input value="${esc(m.notes)}" style="min-width:80px" oninput="Measurements.liveUpdate('${m.id}','notes',this.value)"></td>`;
+    cells+=`<td><span class="actions" style="display:flex;gap:3px;justify-content:center">
+      ${m.cancelled?`<button class="icon-btn" title="שחזור" onclick="Measurements.restoreRow('${m.id}')">↺</button>`:`
+      <button class="icon-btn" title="שכפול" onclick="Measurements.duplicateRow('${m.id}')">⧉</button>
+      <button class="icon-btn" title="היסטוריה" onclick="Measurements.openHistory('${m.id}')">🕓</button>
+      <button class="icon-btn" title="העתק לסעיף אחר" onclick="Measurements.openCopyModal(['${m.id}'])">⇥</button>
+      <button class="icon-btn del" title="מחיקה" onclick="Measurements.removeRow('${m.id}')">🗑</button>`}
+      </span></td>`;
+    return `<tr data-row-id="${m.id}" class="${m.cancelled?'cancelled-row':''} ${m.sign===-1?'ded-row':''}">${cells}</tr>`;
+  },
+  render(){
+    const p=State.project;
+    let itemSel=`<select class="sel-sec" onchange="Measurements.openItem(this.value)">
+      <option value="">— בחר סעיף —</option>
+      ${p.items.filter(it=>!it.cancelled).sort((a,b)=>itemFullCode(a).localeCompare(itemFullCode(b))).map(it=>
+        `<option value="${it.id}" ${this._activeItemId===it.id?'selected':''}>${esc(itemFullCode(it))} — ${esc(it.description||'ללא תיאור')}</option>`).join('')}
+      </select>`;
+    let h=`<div class="card"><div class="card-hd">📐 מדידות</div><div class="card-bd">
+      <div class="meas-tools">${itemSel}
+        <label class="opt" style="display:flex;align-items:center;gap:6px;font-size:12.5px"><input type="checkbox" ${this._periodOnly?'checked':''} onchange="Measurements._periodOnly=this.checked;App.refresh()">רק שינויים בתקופה הנוכחית</label>
+      </div>`;
+    const it=this._activeItemId?findItem(p,this._activeItemId):null;
+    if(!it){ h+=`<div class="empty"><div class="ic">📐</div><div class="t">בחר סעיף מכתב הכמויות כדי להזין מדידות</div></div></div></div>`; return h; }
+    const kind=itemUnitKind(it);
+    const draft=Accounts.current(p);
+    const mv=Accounts.itemMovement(p,it,draft);
+    h+=`<div class="item-context"><div><div class="ic-code">${esc(itemFullCode(it))}</div><div class="ic-name">${esc(it.description||'')}</div></div>
+      <div class="ic-stats" id="item-ctx-stats">${this.ctxStatsHTML(mv,it)}</div></div>`;
+    h+=`<div class="formula-hint">⌨ <span class="kbd">Enter</span> שדה הבא / שורה חדשה בסוף &nbsp; <span class="kbd">↑↓</span> ניווט &nbsp;
+      <b>יחידת הסעיף: ${esc(it.unit)} (${UNIT_KIND[it.unit].label})</b> — רק צורות וחישובים תואמים ליחידה זו זמינים</div>`;
+    let rows=p.measurements.filter(m=>m.itemId===it.id);
+    if(this._periodOnly){
+      const moved=new Set(Accounts.movementRows(p,it,draft).map(r=>r.id));
+      rows=rows.filter(m=>m.isGroup||moved.has(m.id));
+    }
+    rows=rows.filter(m=>!m.cancelled || true); // keep cancelled visible (dimmed) for traceability
+    h+=`<div class="tbl-wrap responsive-cards"><table id="meas-table"><thead><tr>${this.tableHeaders(kind,p.useAreas).map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>`;
+    if(!rows.length) h+=`<tr><td colspan="14" style="padding:24px"><div class="empty"><div class="ic">📐</div><div class="t">אין שורות מדידה</div></div></td></tr>`;
+    else h+=rows.map((m,i)=>this.renderRow(m,it,kind,p.useAreas,i+1)).join('');
+    h+=`</tbody></table></div>
+      <div class="boq-actions-row" style="margin-top:10px">
+        <button class="btn btn-navy btn-sm" onclick="Measurements.addRow('${it.id}')">＋ שורת מדידה</button>
+        <button class="btn btn-ghost btn-sm" onclick="Measurements.addGroup('${it.id}')">＋ קבוצה</button>
+      </div>
+      <div class="sec-sum"><div class="l"><span class="code">${esc(itemFullCode(it))}</span> — ${esc(it.description||'')}</div>
+        <div class="r" id="meas-sec-sum">${fn(mv.currentCumulative)} <span class="u">${esc(it.unit)}</span></div></div>
+      </div></div>`;
+    setTimeout(()=>this.attachKeyNav(),30);
+    return h;
+  },
+};
+Screens.measurements=()=>Measurements.render();
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════
+const Dashboard = {
+  render(){
+    const p=State.project;
+    const draft=Accounts.current(p);
+    const totals=Accounts.projectTotals(p,draft);
+    const v=Validation.run(p);
+    const activeItems=p.items.filter(it=>!it.cancelled).filter(it=>{ const mv=Accounts.itemMovement(p,it,draft); return Math.abs(mv.addition)+Math.abs(mv.correction)>1e-9; });
+    let h=`<div class="dash-hero">
+      <div class="info"><div class="lbl">חשבון פעיל</div><div class="big">חשבון <b>${esc(draft.number)}</b> · טיוטה</div>
+        <div class="completion-bar"><i style="width:${Math.min(100,totals.completionPct)}%"></i></div>
+        <div style="font-size:11.5px;color:#B9C7D9;margin-top:6px">${pct(totals.completionPct)} מהיקף החוזה בוצע</div></div>
+      <button class="btn btn-gold btn-lg" onclick="App.showTab('boq')">המשך עבודה בחשבון ${esc(draft.number)} ←</button>
+    </div>`;
+    h+=`<div class="dash-grid">
+      <div class="dash-card accent"><div class="k">סה"כ חוזה (כולל מע"מ)</div><div class="v num">${money(totals.contractTotal*(1+nz(p.vat)/100))}</div></div>
+      <div class="dash-card"><div class="k">מצטבר קודם</div><div class="v num">${money(totals.previousAmount)}</div></div>
+      <div class="dash-card"><div class="k">בתקופה הנוכחית</div><div class="v num">${money(totals.periodWithVat)}</div></div>
+      <div class="dash-card accent"><div class="k">מצטבר נוכחי (כולל מע"מ)</div><div class="v num">${money(totals.cumulativeWithVat)}</div></div>
+      <div class="dash-card"><div class="k">יתרת חוזה</div><div class="v num">${money(totals.balance)}</div></div>
+      <div class="dash-card"><div class="k">% ביצוע</div><div class="v">${pct(totals.completionPct)}</div></div>
+      <div class="dash-card"><div class="k">סעיפים בכתב הכמויות</div><div class="v">${p.items.filter(it=>!it.cancelled).length}</div></div>
+      <div class="dash-card"><div class="k">סעיפים פעילים בחשבון</div><div class="v">${activeItems.length}</div></div>
+      <div class="dash-card ${v.warnings.length?'warn':''}"><div class="k">אזהרות בדיקה</div><div class="v">${v.warnings.length}</div></div>
+      <div class="dash-card ${v.critical.length?'warn':''}"><div class="k">שגיאות קריטיות</div><div class="v">${v.critical.length}</div></div>
+      <div class="dash-card"><div class="k">גיבוי אחרון</div><div class="v" style="font-size:15px">${p.lastBackupAt?fdate(p.lastBackupAt):'—'}</div></div>
+      <div class="dash-card"><div class="k">חשבונות נעולים</div><div class="v">${Accounts.lockedAccounts(p).length}</div></div>
+    </div>`;
+    const alerts=[];
+    if(v.critical.length) alerts.push({t:'err',msg:`${v.critical.length} שגיאות קריטיות חוסמות נעילת חשבון — יש לתקן בלשונית הבדיקה`});
+    if(v.warnings.length) alerts.push({t:'warn',msg:`${v.warnings.length} אזהרות פתוחות לבדיקה לפני נעילה`});
+    if(!p.lastBackupAt) alerts.push({t:'info',msg:'טרם בוצע גיבוי לפרויקט זה — מומלץ לייצא גיבוי JSON'});
+    const overruns=p.items.filter(it=>!it.cancelled).filter(it=>Accounts.itemMovement(p,it,draft).overrun);
+    if(overruns.length) alerts.push({t:'warn',msg:`${overruns.length} סעיפים חורגים מהכמות החוזית`});
+    if(alerts.length) h+=`<div class="card"><div class="card-hd">התראות</div><div class="card-bd"><div class="dash-alerts">
+      ${alerts.map(a=>`<div class="dash-alert ${a.t}">${a.t==='err'?'⛔':a.t==='warn'?'⚠':'ℹ'} ${esc(a.msg)}</div>`).join('')}
+      </div></div></div>`;
+    return h;
+  },
+};
+Screens.dashboard=()=>Dashboard.render();
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: ACCOUNTS UI  (list screen, lock flow, per-account detail views)
+// ═══════════════════════════════════════════════════════════════════════
+const AccountsUI = {
+  _detailId:null, _mode:'cumulative',
+  openDetail(id){ this._detailId=id; this._mode='cumulative'; App.refresh(); },
+  back(){ this._detailId=null; App.refresh(); },
+  render(){
+    const p=State.project;
+    if(this._detailId) return this.renderDetail(p,Accounts.byId(p,this._detailId));
+    return this.renderList(p);
+  },
+  renderList(p){
+    const draft=Accounts.current(p);
+    const v=Validation.run(p);
+    let h=`<div class="card"><div class="card-hd">📒 חשבונות</div><div class="card-bd"><div class="acct-list">`+
+      Accounts.list(p).slice().reverse().map(a=>{
+        const totals=Accounts.projectTotals(p,a);
+        return `<div class="acct-row" onclick="AccountsUI.openDetail('${a.id}')">
+          <div class="a-no">${esc(a.number)}</div>
+          <div class="a-date">${fdate(a.date)}</div>
+          <div class="a-mid"><span class="stat ${a.status}">${ACCOUNT_STATUS_LABEL[a.status]}</span></div>
+          <div class="a-amt">${money(totals.cumulativeWithVat)}</div></div>`;
+      }).join('')+`</div></div></div>`;
+    h+=`<div class="card"><div class="card-hd">בדיקת תקינות — חשבון ${esc(draft.number)} (טיוטה)<span class="hd-sub">יש לתקן שגיאות קריטיות לפני נעילה</span></div>
+      <div class="card-bd">${this.validationPanelHTML(v)}
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-gold btn-lg" ${v.critical.length?'disabled':''} onclick="AccountsUI.lock()">🔒 נעילת חשבון ${esc(draft.number)}</button>
+        ${Accounts.lockedAccounts(p).length?`<button class="btn btn-ghost" onclick="AccountsUI.unlock()">↺ ביטול נעילה אחרונה</button>`:''}
+      </div></div></div>`;
+    return h;
+  },
+  validationPanelHTML(v){
+    const okCount=State.project.items.filter(it=>!it.cancelled).length - new Set(v.critical.map(x=>x.itemId)).size;
+    let h=`<div class="val-summary">
+      <div class="vs ok"><div class="n">${Math.max(0,okCount)}</div>סעיפים תקינים</div>
+      <div class="vs warn"><div class="n">${v.warnings.length}</div>אזהרות</div>
+      <div class="vs err"><div class="n">${v.critical.length}</div>שגיאות קריטיות</div></div><div class="val-panel">`;
+    v.critical.forEach(c=>h+=`<div class="val-row err"><span class="ic">✕</span><div class="txt">${esc(c.msg)}</div></div>`);
+    v.warnings.forEach(w=>h+=`<div class="val-row warn"><span class="ic">⚠</span><div class="txt">${esc(w.msg)}</div></div>`);
+    if(!v.critical.length&&!v.warnings.length) h+=`<div class="val-row ok"><span class="ic">✓</span><div class="txt">כל הסעיפים תקינים — ניתן לנעול את החשבון</div></div>`;
+    return h+'</div>';
+  },
+  lock(){
+    const p=State.project, v=Validation.run(p);
+    if(v.critical.length){ toast('⛔ יש לתקן שגיאות קריטיות לפני נעילה','err'); return; }
+    if(v.warnings.length && !confirm(`יש ${v.warnings.length} אזהרות פתוחות (למשל חריגה מכמות חוזית). להמשיך ולנעול בכל זאת?`)) return;
+    const draft=Accounts.current(p);
+    if(!confirm(`לנעול את חשבון ${draft.number}? לאחר הנעילה לא ניתן יהיה לערוך את נתוניו — כל שינוי עתידי יירשם כתיקון בחשבון הבא.`)) return;
+    const r=Accounts.lock(p);
+    if(!r.ok){ toast('⛔ '+(r.critical[0]&&r.critical[0].msg||'שגיאה בנעילה'),'err'); return; }
+    State.scheduleSave(); toast(`חשבון ${r.locked.number} ננעל — נפתח חשבון ${r.next.number}`,'ok'); App.refresh();
+  },
+  unlock(){
+    const r=Accounts.unlockLast(State.project);
+    if(!r.ok){ toast('⛔ '+r.msg,'err'); return; }
+    State.scheduleSave(); toast('הנעילה בוטלה'); App.refresh();
+  },
+  renderDetail(p,a){
+    if(!a) return this.renderList(p);
+    const totals=Accounts.projectTotals(p,a);
+    const items=p.items.filter(it=>!it.cancelled||(a.snapshot&&a.snapshot.items.some(x=>x.id===it.id)));
+    let h=`<div class="card"><div class="card-hd"><button class="icon-btn" style="background:rgba(255,255,255,.15);color:#fff;border:none" onclick="AccountsUI.back()">→</button>
+      חשבון ${esc(a.number)}<span class="stat ${a.status}" style="margin-inline-start:6px">${ACCOUNT_STATUS_LABEL[a.status]}</span>
+      <span class="hd-sub">${fdate(a.date)}${a.lockedAt?' · ננעל '+fdate(a.lockedAt):''}</span></div>
+      <div class="card-bd">
+      <div class="mode-toggle" style="max-width:420px;margin-bottom:14px">
+        <button class="${this._mode==='cumulative'?'on':''}" onclick="AccountsUI.setMode('cumulative')">מצטבר עד חשבון זה</button>
+        <button class="${this._mode==='movement'?'on':''}" onclick="AccountsUI.setMode('movement')">רק תנועה בחשבון זה</button></div>
+      <div class="scards">
+        <div class="scard"><div class="sc-k">מצטבר קודם</div><div class="sc-v">${money(totals.previousAmount)}</div></div>
+        <div class="scard"><div class="sc-k">בתקופה</div><div class="sc-v">${money(totals.periodAmount)}</div></div>
+        <div class="scard"><div class="sc-k">מצטבר נוכחי</div><div class="sc-v">${money(totals.cumulativeAmount)}</div></div>
+        <div class="scard"><div class="sc-k">כולל מע"מ</div><div class="sc-v">${money(totals.cumulativeWithVat)}</div></div>
+        <div class="scard"><div class="sc-k">% ביצוע</div><div class="sc-v">${pct(totals.completionPct)}</div></div></div>
+      <div class="tbl-wrap responsive-cards"><table><thead><tr><th>קוד</th><th>תיאור</th><th>יח'</th><th>חוזי</th>
+        <th>מצטבר קודם</th><th>בתקופה</th><th>תיקון</th><th>מצטבר נוכחי</th><th>יתרה</th><th>% ביצוע</th></tr></thead><tbody>`;
+    let rowsOut=0;
+    items.forEach(it=>{
+      const mv=Accounts.itemMovement(p,it,a);
+      if(this._mode==='movement' && Math.abs(mv.addition)+Math.abs(mv.correction)<1e-9) return;
+      rowsOut++;
+      h+=`<tr onclick="Measurements.openItem('${it.id}');App.showTab('measurements')" style="cursor:pointer">
+        <td data-lbl="קוד" class="num">${esc(itemFullCode(it))}</td><td data-lbl="תיאור" style="text-align:right">${esc(it.description||'')}</td>
+        <td data-lbl="יח'">${esc(it.unit)}</td><td data-lbl="חוזי" class="num">${fn(mv.contractQty)}</td>
+        <td data-lbl="מצטבר קודם" class="num">${fn(mv.previousCumulative)}</td>
+        <td data-lbl="בתקופה" class="num ${mv.addition?'per-pos':''}">${fn(mv.addition)}</td>
+        <td data-lbl="תיקון" class="num ${mv.correction?'per-neg':''}">${fn(mv.correction)}</td>
+        <td data-lbl="מצטבר נוכחי" class="num" style="font-weight:700">${fn(mv.currentCumulative)}</td>
+        <td data-lbl="יתרה" class="num">${fn(mv.balance)}</td>
+        <td data-lbl="% ביצוע" class="num ${mv.overrun?'per-neg':''}">${pct(mv.completionPct)}</td></tr>`;
+    });
+    if(!rowsOut) h+=`<tr><td colspan="10"><div class="empty"><div class="t">אין תנועה להצגה במצב זה</div></div></td></tr>`;
+    h+=`</tbody></table></div>
+      <div style="margin-top:14px"><button class="btn btn-ghost" onclick="Reports.openAccountReport('${a.id}')">🖨 דוח חשבון זה</button></div>
+      </div></div>`;
+    return h;
+  },
+  setMode(m){ this._mode=m; App.refresh(); },
+};
+Screens.accounts=()=>AccountsUI.render();
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: SKN IMPORT
+//  Fixed-width SKN line layout (positions confirmed from the reference file):
+//    0-2 building, 2-4 chapter, 4-6 subchapter, 6-10 item, 10-12 unit code.
+//  Positions 12-21 are unused by the previous version's parser; that gap is
+//  exactly where a per-line contract-quantity field would sit in this layout
+//  (immediately after the unit code, before the price column at 21-33). We
+//  parse it as the contract quantity, but — per spec — do NOT trust that
+//  guess blindly: every parsed quantity is shown in the preview below for
+//  the user to verify (and correct inline) before anything is imported.
+// ═══════════════════════════════════════════════════════════════════════
+const SKN_UNIT_MAP={'01':"יחידה",'02':'מ"א','03':'מ"ר','04':'מ"ק','05':'טון','06':'ק"ג','07':'שעות','08':'שעות','09':"יחידה"};
+const SKNImport = {
+  parsed:null,
+  parse(text){
+    const lines=text.split(/\r?\n/); const buildings={};
+    for(const line of lines){
+      if(!line||line.length<10) continue;
+      if(line[0]===' '||line[0]==='\t') continue; // continuation lines (wrapped desc) — ignored for structure
+      const bld=line.substring(0,2),ch=line.substring(2,4),sub=line.substring(4,6),itm=line.substring(6,10),unit=line.substring(10,12);
+      const qtyRaw=line.length>=21?line.substring(12,21).trim():'';
+      const price=line.length>=33?line.substring(21,33).trim():'';
+      const desc=line.length>33?line.substring(33).trim():'';
+      if(!/^\d{2}$/.test(bld)||bld==='00') continue;
+      if(!buildings[bld]) buildings[bld]={name:'',chapters:{}}; const B=buildings[bld];
+      if(ch==='00'){ if(!B.name&&desc) B.name=desc; continue; }
+      if(!B.chapters[ch]) B.chapters[ch]={name:'',subs:{}}; const C=B.chapters[ch];
+      if(sub==='00'&&itm==='0000'){ if(!C.name&&desc) C.name=desc; continue; }
+      if(!C.subs[sub]) C.subs[sub]={name:'',items:[]}; const S=C.subs[sub];
+      if(itm==='0000'){ if(!S.name&&desc) S.name=desc; continue; }
+      const ut=unit.trim();
+      if(ut&&ut!=='00'){
+        const qty=parseFloat(qtyRaw.replace(/[^\d.]/g,''))||'';
+        const pv=parseFloat(price.replace(/[^\d.]/g,''))||0;
+        S.items.push({item:itm,unit:ut,qty,price:pv,desc});
+      }
+    }
+    return buildings;
+  },
+  countItems(b){ let n=0; for(const bl of Object.values(b)) for(const c of Object.values(bl.chapters)) for(const s of Object.values(c.subs)) n+=s.items.length; return n; },
+  handleFile(e){
+    const file=e.target.files[0]; if(!file) return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const bytes=new Uint8Array(ev.target.result); let text=null;
+        for(const enc of ['windows-1255','iso-8859-8','utf-8']){ try{ text=new TextDecoder(enc).decode(bytes); break; }catch(_){} }
+        if(!text) throw new Error('לא ניתן לפענח את קידוד הקובץ');
+        this.parsed=this.parse(text);
+        const n=this.countItems(this.parsed);
+        if(!n) throw new Error('לא נמצאו סעיפים בקובץ');
+        toast(`✅ נטענו ${n} סעיפים מהקובץ — יש לאמת ולבחור מה לייבא`,'ok');
+      }catch(err){ toast('❌ שגיאה בקריאת הקובץ: '+err.message,'err'); this.parsed=null; }
+      App.refresh();
+    };
+    reader.readAsArrayBuffer(file); e.target.value='';
+  },
+  itemDuplicate(bld,ch,sub,itm){
+    const code=`${bld}.${ch}.${sub}.${itm}`;
+    return State.project.items.some(it=>!it.cancelled && itemFullCode(it)===code);
+  },
+  renderTree(){
+    if(!this.parsed) return '';
+    let h='';
+    Object.keys(this.parsed).sort((a,b)=>+a-+b).forEach(bld=>{
+      const B=this.parsed[bld];
+      let bTotal=0; Object.values(B.chapters).forEach(c=>Object.values(c.subs).forEach(s=>bTotal+=s.items.length));
+      if(!bTotal) return;
+      h+=`<div class="skn-building"><div class="skn-bld-hdr" onclick="SKNImport.toggleNode(this)">
+        <span class="skn-toggle">▼</span><label onclick="event.stopPropagation()"><input type="checkbox" class="skn-cb" checked onchange="SKNImport.cascade(this)"></label>
+        <span class="skn-bld-title">🏗 מבנה ${esc(bld)} — ${esc(B.name||'')}</span>
+        <span class="skn-count" style="background:rgba(255,255,255,.2);color:#fff">${bTotal} סעיפים</span></div><div class="skn-bld-body">`;
+      Object.keys(B.chapters).sort((a,b)=>+a-+b).forEach(ch=>{
+        const C=B.chapters[ch]; let cTotal=0; Object.values(C.subs).forEach(s=>cTotal+=s.items.length);
+        if(!cTotal) return;
+        h+=`<div class="skn-chapter"><div class="skn-ch-hdr" onclick="SKNImport.toggleNode(this)">
+          <span class="skn-toggle">▼</span><label onclick="event.stopPropagation()"><input type="checkbox" class="skn-cb" checked onchange="SKNImport.cascade(this)"></label>
+          <span class="skn-ch-code">${esc(bld)}.${esc(ch)}</span><span class="skn-ch-name">${esc(C.name||'')}</span>
+          <span class="skn-count">${cTotal}</span></div><div class="skn-ch-body">`;
+        Object.keys(C.subs).sort((a,b)=>+a-+b).forEach(sub=>{
+          const S=C.subs[sub]; if(!S.items.length) return;
+          h+=`<div class="skn-sub"><div class="skn-sub-hdr" onclick="SKNImport.toggleNode(this)">
+            <span class="skn-toggle">▼</span><label onclick="event.stopPropagation()"><input type="checkbox" class="skn-cb" checked onchange="SKNImport.cascade(this)"></label>
+            <span class="skn-sub-code">${esc(bld)}.${esc(ch)}.${esc(sub)}</span><span class="skn-sub-name">${esc(S.name||'')}</span>
+            <span class="skn-count">${S.items.length}</span></div><div class="skn-sub-body">`;
+          S.items.forEach(it=>{
+            const dup=this.itemDuplicate(bld,ch,sub,it.item);
+            h+=`<div class="skn-item"><label onclick="event.stopPropagation()"><input type="checkbox" class="skn-cb skn-item-cb" ${dup?'':'checked'}
+              data-bld="${esc(bld)}" data-ch="${esc(ch)}" data-sub="${esc(sub)}" data-itm="${esc(it.item)}"></label>
+              <span class="skn-item-code">${esc(bld)}.${esc(ch)}.${esc(sub)}.${esc(it.item)}</span>
+              <span class="skn-item-desc">${esc(it.desc)}</span><span class="skn-item-unit">${esc(SKN_UNIT_MAP[it.unit]||it.unit)}</span>
+              <span class="skn-item-qty" title="כמות חוזית (יש לאמת)">${it.qty!==''?fn(it.qty):'—'}</span>
+              <span class="skn-item-price">${it.price?money(it.price):'—'}</span>
+              ${dup?'<span class="skn-item-dup">קיים כבר בפרויקט</span>':''}</div>`;
+          });
+          h+='</div></div>';
+        });
+        h+='</div></div>';
+      });
+      h+='</div></div>';
+    });
+    return h;
+  },
+  toggleNode(el){ el.parentElement.classList.toggle('skn-collapsed'); },
+  cascade(cb){ const scope=cb.closest('.skn-building,.skn-chapter,.skn-sub'); if(scope) qsa('.skn-cb',scope).forEach(c=>c.checked=cb.checked); },
+  doImport(){
+    if(!this.parsed){ toast('⚠ לא נטען קובץ SKN','err'); return; }
+    const checked=qsa('#skn-tree .skn-item-cb:checked');
+    if(!checked.length){ toast('⚠ לא נבחרו סעיפים','err'); return; }
+    const p=State.project;
+    let imported=0,skipped=0,errors=0;
+    checked.forEach(cb=>{
+      const {bld,ch,sub,itm}=cb.dataset;
+      const item=this.parsed[bld]&&this.parsed[bld].chapters[ch]&&this.parsed[bld].chapters[ch].subs[sub]&&
+        this.parsed[bld].chapters[ch].subs[sub].items.find(it=>it.item===itm);
+      if(!item){ errors++; return; }
+      if(this.itemDuplicate(bld,ch,sub,itm)){ skipped++; return; }
+      const r=BOQ.addOrUpdateItem(p,{building:bld,chapter:ch,sub,item:itm,
+        buildingName:this.parsed[bld].name,chapterName:this.parsed[bld].chapters[ch].name,subName:this.parsed[bld].chapters[ch].subs[sub].name,
+        description:item.desc,unit:SKN_UNIT_MAP[item.unit]||"יחידה",contractQty:item.qty,unitPrice:item.price,notes:''});
+      if(r.ok) imported++; else skipped++;
+    });
+    State.scheduleSave();
+    UI.openModal(`<div class="modal-hd">תוצאות ייבוא<span class="x" onclick="UI.closeModal()">✕</span></div>
+      <div class="skn-summary"><div class="sm imp"><b>${imported}</b>יובאו</div><div class="sm skip"><b>${skipped}</b>דולגו</div><div class="sm err"><b>${errors}</b>שגיאות</div></div>
+      <div class="modal-foot"><button class="btn btn-gold" onclick="UI.closeModal();App.showTab('boq')">אל כתב הכמויות</button></div>`);
+    this.parsed=null;
+  },
+  render(){
+    let h=`<div class="card"><div class="card-hd">📥 ייבוא מקובץ SKN</div><div class="card-bd">
+      <label class="skn-drop" for="skn-file-in">
+        <div style="font-size:30px;margin-bottom:8px">📄</div>
+        <div style="font-weight:700;color:var(--navy)">גרור קובץ SKN לכאן או לחץ לבחירה</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:4px">קובץ טקסט בפורמט תקן חשבונות (SKN) — מבנה, פרק, תת-פרק, סעיף, יחידה, כמות, מחיר</div>
+      </label>
+      <input id="skn-file-in" type="file" accept=".txt,.skn,.dat" style="display:none" onchange="SKNImport.handleFile(event)">`;
+    if(this.parsed){
+      const n=this.countItems(this.parsed);
+      h+=`<div style="margin:14px 0"><b>${n}</b> סעיפים נטענו מהקובץ. אמת/י את הכמויות המסומנות ובחר/י אילו סעיפים לייבא (סעיפים קיימים כבר סומנו אוטומטית כלא-מיובאים).</div>
+        <div id="skn-tree">${this.renderTree()}</div>
+        <div style="margin-top:14px;display:flex;gap:10px"><button class="btn btn-gold btn-lg" onclick="SKNImport.doImport()">ייבוא סעיפים מסומנים</button></div>`;
+    }
+    h+='</div></div>';
+    return h;
+  },
+};
+Screens.import=()=>SKNImport.render();
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: REPORTS  (screen report, A4 print, per-item calculation sheet)
+// ═══════════════════════════════════════════════════════════════════════
+const Reports = {
+  _accountId:null, _mode:'cumulative', _selected:null, _sheetItemId:null,
+  openAccountReport(accountId){ this._accountId=accountId; this._sheetItemId=null; App.showTab('reports'); },
+  openItemSheet(itemId){ this._sheetItemId=itemId; this._accountId=this._accountId||Accounts.current(State.project).id; App.showTab('reports'); },
+  account(p){ return Accounts.byId(p,this._accountId)||Accounts.current(p); },
+  logoHTML(p){
+    if(p.logo){
+      if(p.logoMode==='wide') return `<div class="rlogo-band"><img src="${p.logo}" class="logo-wide" alt="לוגו"></div>`;
+      return `<div class="rlogo"><img src="${p.logo}" class="logo-corner" alt="לוגו"><div class="rbrand">${esc(p.contractor||'')}</div></div>`;
+    }
+    return `<div class="rlogo-mark"><svg viewBox="0 0 40 40" width="34" height="34"><rect x="2" y="2" width="36" height="36" rx="8" fill="#B08D3E"/><path d="M11 28V12h4l6 9 6-9h4v16h-4V19l-6 9-6-9v9z" fill="#0E1F33"/></svg>
+      <div><div class="ln">KAY<b>AN</b></div><div class="lt">ENGINEERING</div></div></div>`;
+  },
+  headerHTML(p,account,title,sub){
+    const wide=p.logo&&p.logoMode==='wide';
+    return `<div class="rhdr ${wide?'rhdr-wide':''}">${wide?this.logoHTML(p):''}
+      ${wide?'':this.logoHTML(p)}
+      <div class="rttl"><h1>${esc(title)}</h1><div class="goldline"></div><div class="sub">${esc(sub||'')}</div></div>
+      <div class="rmeta">
+        <div><span>פרויקט:</span>${esc(p.name||'—')}</div>
+        <div><span>מיקום:</span>${esc(p.location||'—')}</div>
+        <div><span>חוזה:</span>${esc(p.contractNumber||'—')}</div>
+        <div><span>קבלן:</span>${esc(p.contractor||'—')}</div>
+        <div><span>תאריך:</span>${fdate(account.date)}</div>
+      </div></div>`;
+  },
+  itemSectionHTML(p,it,account,mode){
+    const mv=Accounts.itemMovement(p,it,account);
+    const isLive=account.status==='draft';
+    const rows = mode==='period'
+      ? Accounts.movementRows(p,it,account)
+      : (isLive ? p.measurements.filter(m=>!m.isGroup&&m.itemId===it.id&&!m.cancelled)
+                : (account.snapshot?account.snapshot.measurements.filter(r=>r.itemId===it.id&&!r.cancelled):[]));
+    if(mode==='period' && !rows.length) return '';
+    const kind=itemUnitKind(it);
+    const rowsHTML=rows.map((r,i)=>{
+      const val = isLive ? calcRow(r,it) : nz(r.value);
+      const svg=shapeSVG(r.shape,r.d1,r.d2,r.d3,r.sign===-1,false,r.t,kind);
+      return `<tr class="${r.sign===-1?'rded':''}"><td class="ri">${i+1}</td><td class="rname">${esc(r.desc||'')}</td>
+        <td>${svg}</td><td class="rf">${esc(rowFormulaLabel(r,kind))}</td>
+        <td class="rres ${val<0?'n':'p'}">${fn(val,3)}</td></tr>`;
+    }).join('');
+    return `<div class="rsec"><div class="rsec-hd"><span class="rcode">${esc(itemFullCode(it))}</span>
+      <span class="rtitle">${esc(it.description||'')}</span><span class="rfacts">${esc(it.unit)} · ${money(it.unitPrice)}/${esc(it.unit)}</span></div>
+      <table class="rtbl"><thead><tr><th style="width:24px">#</th><th>תיאור</th><th style="width:90px">שרטוט</th><th>נוסחה</th><th style="width:70px">תוצאה</th></tr></thead>
+      <tbody>${rowsHTML||`<tr><td colspan="5" style="padding:10px;color:var(--muted)">אין שורות מדידה</td></tr>`}</tbody></table>
+      <div class="rbal">
+        <div class="bc"><div class="k">חוזי</div><div class="v">${fn(mv.contractQty)}</div></div>
+        <div class="bc"><div class="k">מצטבר קודם</div><div class="v">${fn(mv.previousCumulative)}</div></div>
+        <div class="bc"><div class="k">בתקופה</div><div class="v">${fn(mv.addition)}</div></div>
+        <div class="bc"><div class="k">תיקון</div><div class="v">${fn(mv.correction)}</div></div>
+        <div class="bc net"><div class="k">מצטבר נוכחי</div><div class="v">${fn(mv.currentCumulative)} ${esc(it.unit)}</div></div>
+      </div></div>`;
+  },
+  auditSidebarHTML(p,it){
+    const rows=p.measurements.filter(m=>!m.isGroup&&m.itemId===it.id);
+    const entries=rows.flatMap(r=>(r.history||[]).map(h=>({...h,rowDesc:r.desc})));
+    entries.sort((a,b)=>a.date<b.date?-1:1);
+    if(!entries.length) return '';
+    return `<div class="rsec"><div class="rsec-hd"><span class="rtitle">היסטוריית ביקורת (Audit Trail)</span></div>
+      <table class="rtbl"><thead><tr><th>חשבון</th><th>פעולה</th><th>שורה</th><th>מ → אל</th><th>תאריך</th></tr></thead><tbody>
+      ${entries.map(h=>`<tr><td>${esc(h.accountNumber)}</td><td>${esc(ROW_HIST_LABEL[h.action])}</td><td class="rname">${esc(h.rowDesc||'')}</td>
+        <td class="num">${h.action==='created'?fn(h.value):fn(h.prevValue)+' ← '+fn(h.value)}</td><td>${fdate(h.date)}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  },
+  summaryHTML(p,account){
+    const t=Accounts.projectTotals(p,account);
+    return `<div class="rsum"><div class="rsec-hd sumhd"><span class="rtitle">ריכוז חשבון ${esc(account.number)}</span></div>
+      <table class="rtbl sumtbl"><tbody>
+      <tr><td class="rname">סה"כ חוזה</td><td class="rres">${money(t.contractTotal)}</td></tr>
+      <tr><td class="rname">מצטבר קודם</td><td class="rres">${money(t.previousAmount)}</td></tr>
+      <tr><td class="rname">בתקופה נוכחית</td><td class="rres">${money(t.periodAmount)}</td></tr>
+      <tr class="t1"><td class="rname">מצטבר נוכחי (לפני מע"מ)</td><td class="rres">${money(t.cumulativeAmount)}</td></tr>
+      <tr><td class="rname">מע"מ (${esc(p.vat)}%)</td><td class="rres">${money(t.cumulativeAmount*nz(p.vat)/100)}</td></tr>
+      <tr class="t3"><td class="rname">סה"כ מצטבר כולל מע"מ</td><td class="rres num">${money(t.cumulativeWithVat)}</td></tr>
+      <tr><td class="rname">יתרת חוזה</td><td class="rres ${t.balance<0?'over':''}">${money(t.balance)}</td></tr>
+      <tr><td class="rname">% ביצוע</td><td class="rres">${pct(t.completionPct)}</td></tr>
+      </tbody></table></div>`;
+  },
+  signaturesHTML(p){
+    return `<div class="rsigns"><div>קבלן מבצע<span>${esc(p.contractor||'')}</span></div>
+      <div>מפקח<span>${esc(p.supervisor||'')}</span></div><div>מנהל פרויקט<span>${esc(p.manager||'')}</span></div></div>`;
+  },
+  reportItems(p){
+    let items=p.items.filter(it=>!it.cancelled);
+    if(this._selected) items=items.filter(it=>this._selected.has(it.id));
+    return items.sort((a,b)=>itemFullCode(a).localeCompare(itemFullCode(b)));
+  },
+  buildHTML(){
+    const p=State.project, account=this.account(p);
+    if(this._sheetItemId){
+      const it=findItem(p,this._sheetItemId); if(!it) return '<div class="empty">סעיף לא נמצא</div>';
+      return `<div class="report">${this.headerHTML(p,account,'דף חישוב לסעיף',itemFullCode(it)+' — '+(it.description||''))}
+        ${this.itemSectionHTML(p,it,account,'cumulative')}
+        ${this.auditSidebarHTML(p,it)}
+        ${this.signaturesHTML(p)}</div>`;
+    }
+    const items=this.reportItems(p);
+    const totals=Accounts.projectTotals(p,account);
+    const title = this._mode==='period' ? 'דוח תנועה בחשבון' : 'דוח חשבון מצטבר';
+    let h=`<div class="report">${this.headerHTML(p,account,title,`חשבון ${account.number} — ${ACCOUNT_STATUS_LABEL[account.status]}`)}
+      <div class="scards">
+        <div class="scard"><div class="sc-ic">📐</div><div class="sc-k">סה"כ חוזה</div><div class="sc-v">${money(totals.contractTotal)}</div></div>
+        <div class="scard"><div class="sc-ic">📒</div><div class="sc-k">מצטבר קודם</div><div class="sc-v">${money(totals.previousAmount)}</div></div>
+        <div class="scard"><div class="sc-ic">➕</div><div class="sc-k">בתקופה</div><div class="sc-v">${money(totals.periodAmount)}</div></div>
+        <div class="scard"><div class="sc-ic">✅</div><div class="sc-k">מצטבר נוכחי</div><div class="sc-v">${money(totals.cumulativeAmount)}</div></div>
+        <div class="scard"><div class="sc-ic">📊</div><div class="sc-k">% ביצוע</div><div class="sc-v">${pct(totals.completionPct)}</div></div>
+      </div>`;
+    h+=items.map(it=>this.itemSectionHTML(p,it,account,this._mode)).join('');
+    h+=this.summaryHTML(p,account)+this.signaturesHTML(p)+'</div>';
+    return h;
+  },
+  render(){
+    const p=State.project;
+    const account=this.account(p);
+    let h=`<div class="report-controls no-print"><div class="rc-row">
+      <label class="opt">חשבון<select onchange="Reports._accountId=this.value;Reports._sheetItemId=null;App.refresh()">
+        ${Accounts.list(p).map(a=>`<option value="${a.id}" ${account.id===a.id?'selected':''}>${esc(a.number)} — ${ACCOUNT_STATUS_LABEL[a.status]}</option>`).join('')}
+      </select></label>
+      <label class="opt"><input type="radio" name="rmode" ${this._mode==='cumulative'?'checked':''} onchange="Reports._mode='cumulative';App.refresh()">מצטבר עד חשבון זה</label>
+      <label class="opt"><input type="radio" name="rmode" ${this._mode==='period'?'checked':''} onchange="Reports._mode='period';App.refresh()">רק תנועה בחשבון זה</label>
+      ${this._sheetItemId?`<button class="btn btn-ghost btn-sm" onclick="Reports._sheetItemId=null;App.refresh()">← חזרה לדוח מלא</button>`:''}
+      </div>
+      <div class="rc-row" style="border-bottom:none;padding-top:12px">
+        <button class="btn btn-navy" onclick="window.print()">🖨 הדפסה</button>
+        <button class="btn btn-gold" onclick="ExcelExport.export()">⇩ ייצוא לאקסל</button>
+      </div></div>`;
+    h+=this.buildHTML();
+    return h;
+  },
+};
+Screens.reports=()=>Reports.render();
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: EXCEL EXPORT  (SpreadsheetML — opens natively in Excel, RTL, styled)
+// ═══════════════════════════════════════════════════════════════════════
+const ExcelExport = {
+  xesc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); },
+  cS(v,style){ return `<Cell${style?` ss:StyleID="${style}"`:''}><Data ss:Type="String">${this.xesc(v)}</Data></Cell>`; },
+  cN(v,style){ return `<Cell${style?` ss:StyleID="${style}"`:''}><Data ss:Type="Number">${(+v||0)}</Data></Cell>`; },
+  row(cells){ return `<Row>${cells.join('')}</Row>`; },
+  sheet(name,rows,colWidths){
+    const cols=(colWidths||[]).map(w=>`<Column ss:Width="${w}"/>`).join('');
+    return `<Worksheet ss:Name="${this.xesc(name)}"><Table>${cols}${rows.join('')}</Table>
+      <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><RightToLeft/></WorksheetOptions></Worksheet>`;
+  },
+  buildSummarySheet(p,account){
+    const rows=[];
+    rows.push(this.row([this.cS('KAYAN — ריכוז חשבון ביצוע','title')]));
+    rows.push(this.row([this.cS('פרויקט:'),this.cS(p.name||'')]));
+    rows.push(this.row([this.cS('מיקום:'),this.cS(p.location||'')]));
+    rows.push(this.row([this.cS('חוזה:'),this.cS(p.contractNumber||'')]));
+    rows.push(this.row([this.cS('קבלן:'),this.cS(p.contractor||'')]));
+    rows.push(this.row([this.cS('חשבון:'),this.cS(account.number+' — '+ACCOUNT_STATUS_LABEL[account.status])]));
+    rows.push(this.row([this.cS('תאריך:'),this.cS(fdate(account.date))]));
+    rows.push(this.row([]));
+    const heads=['קוד סעיף','תיאור','יח׳','חוזי','מצטבר קודם','בתקופה','תיקון','מצטבר נוכחי','יתרה','% ביצוע','מחיר יחידה','סכום נוכחי'];
+    rows.push(this.row(heads.map(h=>this.cS(h,'hdr'))));
+    let tContract=0,tPrev=0,tAdd=0,tCorr=0,tCur=0,tAmt=0;
+    this.items(p).forEach(it=>{
+      const mv=Accounts.itemMovement(p,it,account);
+      tContract+=mv.contractQty; tPrev+=mv.previousCumulative; tAdd+=mv.addition; tCorr+=mv.correction; tCur+=mv.currentCumulative; tAmt+=mv.amount;
+      rows.push(this.row([this.cS(itemFullCode(it)),this.cS(it.description||''),this.cS(it.unit),
+        this.cN(mv.contractQty,'num'),this.cN(mv.previousCumulative,'num'),this.cN(mv.addition,'num'),this.cN(mv.correction,'num'),
+        this.cN(mv.currentCumulative,'num'),this.cN(mv.balance,'num'),this.cN(mv.completionPct,'num'),this.cN(it.unitPrice,'num'),this.cN(mv.amount,'num')]));
+    });
+    rows.push(this.row([this.cS('סה"כ','total'),this.cS('','total'),this.cS('','total'),this.cN(tContract,'total'),this.cN(tPrev,'total'),
+      this.cN(tAdd,'total'),this.cN(tCorr,'total'),this.cN(tCur,'total'),this.cS('','total'),this.cS('','total'),this.cS('','total'),this.cN(tAmt,'total')]));
+    const vat=nz(p.vat)/100;
+    rows.push(this.row([this.cS(`מע"מ (${p.vat}%)`),this.cN(tAmt*vat,'num')]));
+    rows.push(this.row([this.cS('סה"כ כולל מע"מ','total'),this.cN(tAmt*(1+vat),'total')]));
+    return this.sheet('ריכוז חשבון',rows,[90,220,50,70,80,70,70,80,70,60,70,90]);
+  },
+  buildDetailSheet(p,account){
+    const rows=[this.row(['קוד סעיף','תיאור סעיף','#','תיאור שורה','צורה','מידה 1','מידה 2','מידה 3','עובי/אורך','N','תוצאה','יחידה'].map(h=>this.cS(h,'hdr')))];
+    const isLive=account.status==='draft';
+    this.items(p).forEach(it=>{
+      const kind=itemUnitKind(it);
+      const src=isLive? p.measurements.filter(m=>!m.isGroup&&m.itemId===it.id&&!m.cancelled)
+                       : (account.snapshot?account.snapshot.measurements.filter(r=>r.itemId===it.id&&!r.cancelled):[]);
+      src.forEach((r,i)=>{
+        const val=isLive?calcRow(r,it):nz(r.value);
+        rows.push(this.row([this.cS(itemFullCode(it)),this.cS(it.description||''),this.cN(i+1),this.cS(r.desc||''),this.cS(r.shape||''),
+          this.cN(r.d1,'num'),this.cN(r.d2,'num'),this.cN(r.d3,'num'),this.cN(r.t,'num'),this.cN(r.qty||1,'num'),this.cN(val,'num'),this.cS(it.unit)]));
+      });
+    });
+    return this.sheet('דפי חישוב',rows,[90,200,30,180,70,60,60,60,60,40,70,50]);
+  },
+  buildHistorySheet(p){
+    const rows=[this.row(['קוד סעיף','תיאור שורה','חשבון','פעולה','מערך','לערך','תאריך'].map(h=>this.cS(h,'hdr')))];
+    p.measurements.filter(m=>!m.isGroup).forEach(m=>{
+      const it=findItem(p,m.itemId); if(!it) return;
+      (m.history||[]).forEach(h=>{
+        rows.push(this.row([this.cS(itemFullCode(it)),this.cS(m.desc||''),this.cS(h.accountNumber),this.cS(ROW_HIST_LABEL[h.action]),
+          this.cN(h.prevValue,'num'),this.cN(h.value,'num'),this.cS(fdate(h.date))]));
+      });
+    });
+    return this.sheet('היסטוריית תיקונים',rows,[90,200,60,70,70,70,80]);
+  },
+  items(p){ let items=p.items.filter(it=>!it.cancelled); if(Reports._selected) items=items.filter(it=>Reports._selected.has(it.id));
+    return items.sort((a,b)=>itemFullCode(a).localeCompare(itemFullCode(b))); },
+  export(){
+    const p=State.project, account=Reports.account(p);
+    const xml=`<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+<Styles>
+<Style ss:ID="title"><Font ss:Bold="1" ss:Size="14" ss:Color="#142B45"/></Style>
+<Style ss:ID="hdr"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#142B45" ss:Pattern="Solid"/>
+  <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  <Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
+<Style ss:ID="num"><NumberFormat ss:Format="#,##0.00"/><Alignment ss:Horizontal="Center"/></Style>
+<Style ss:ID="total"><Font ss:Bold="1"/><Interior ss:Color="#F0F4F9" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00"/></Style>
+</Styles>
+${this.buildSummarySheet(p,account)}
+${this.buildDetailSheet(p,account)}
+${this.buildHistorySheet(p)}
+</Workbook>`;
+    const blob=new Blob(['﻿'+xml],{type:'application/vnd.ms-excel'});
+    Backup.downloadBlob(blob,`KAYAN_${(p.name||'project').replace(/\s/g,'_')}_חשבון_${account.number}.xls`);
+    toast('הקובץ יוצא ל-Excel');
+  },
+};
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: BACKUP  (JSON export/import — the real cross-device path; see
+//  DriveProvider stub in the Storage module for why cloud sync isn't live)
+// ═══════════════════════════════════════════════════════════════════════
+const Backup = {
+  downloadBlob(blob,filename){
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  },
+  async exportProjectById(id){
+    const p=(State.project&&State.project.id===id)?State.project:await Storage.getProject(id);
+    if(!p){ toast('פרויקט לא נמצא','err'); return; }
+    const blob=new Blob([JSON.stringify({kayan:'project',v:3,exported:nowISO(),project:p},null,2)],{type:'application/json'});
+    this.downloadBlob(blob,`kayan_${(p.name||'project').replace(/\s+/g,'_')}_${todayISO()}.json`);
+    if(State.project&&State.project.id===id){ State.project.lastBackupAt=nowISO(); State.scheduleSave(); }
+    toast('גיבוי הורד בהצלחה','ok');
+  },
+  exportProject(){ if(State.project) this.exportProjectById(State.project.id); },
+  async exportAll(){
+    const list=await Storage.listProjects();
+    const blob=new Blob([JSON.stringify({kayan:'backup',v:3,exported:nowISO(),projects:list},null,2)],{type:'application/json'});
+    this.downloadBlob(blob,`kayan_backup_all_${todayISO()}.json`);
+    toast(`גובו ${list.length} פרויקטים לקובץ אחד`,'ok');
+  },
+  importAllPrompt(){
+    const inp=document.createElement('input'); inp.type='file'; inp.accept='.json';
+    inp.onchange=e=>this.importFile(e); inp.click();
+  },
+  async importFile(e){
+    const f=e.target.files[0]; if(!f) return;
+    try{
+      const text=await f.text();
+      const d=JSON.parse(text);
+      if(d.kayan==='backup'&&Array.isArray(d.projects)){
+        let n=0; for(const pr of d.projects){ const np={...cloneObj(pr),id:uid('proj_')}; await Storage.saveProject(np); n++; }
+        toast(`שוחזרו ${n} פרויקטים מהגיבוי`,'ok');
+        if(!State.project) Projects.renderList();
+      } else if(d.kayan==='project'&&d.project){
+        const np={...cloneObj(d.project),id:uid('proj_')};
+        await Storage.saveProject(np); toast('הפרויקט יובא בהצלחה','ok'); await App.openProject(np.id);
+      } else if(d.sections&&d.project!==undefined){ // legacy single-project shape safety net
+        const np=Migration.convertLegacyProject(d); await Storage.saveProject(np);
+        toast('פרויקט מהגרסה הקודמת יובא','ok'); await App.openProject(np.id);
+      } else throw new Error('פורמט קובץ לא מוכר');
+    }catch(err){ console.error(err); toast('❌ קובץ לא תקין: '+err.message,'err'); }
+    e.target.value='';
+  },
+  importProjectFile(e){ this.importFile(e); },
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: SETTINGS SCREEN
+// ═══════════════════════════════════════════════════════════════════════
+const Settings = {
+  setField(key,val){ State.project[key]=val; State.scheduleSave(); App.paintTopbar(); },
+  loadLogo(e){
+    const f=e.target.files[0]; if(!f) return;
+    if(f.size>400000){ toast('⚠ קובץ גדול מדי (מקס׳ 400KB)','err'); return; }
+    const r=new FileReader();
+    r.onload=ev=>{ State.project.logo=ev.target.result; if(!State.project.logoMode) State.project.logoMode='wide';
+      State.scheduleSave(); toast('הלוגו הוטמע'); App.refresh(); };
+    r.readAsDataURL(f); e.target.value='';
+  },
+  setLogoMode(m){ State.project.logoMode=m; State.scheduleSave(); App.refresh(); },
+  clearLogo(){ delete State.project.logo; delete State.project.logoMode; State.scheduleSave(); toast('חזרה ללוגו ברירת מחדל'); App.refresh(); },
+  toggleAreas(on){ State.project.useAreas=on; State.scheduleSave(); App.refresh(); },
+  render(){
+    const p=State.project;
+    const f=(k,label,type)=>`<div class="fld"><label>${label}</label><input type="${type||'text'}" value="${esc(p[k]??'')}" onchange="Settings.setField('${k}',this.value)"></div>`;
+    let h=`<div class="card"><div class="card-hd">⚙ פרטי פרויקט</div><div class="card-bd">
+      <div class="grid2">
+        ${f('name','שם הפרויקט')}${f('location','מיקום')}
+        ${f('contractNumber','מס׳ חוזה')}${f('contractor','קבלן מבצע')}
+        ${f('supervisor','מפקח')}${f('manager','מנהל פרויקט')}
+        ${f('vat','מע"מ %','number')}
+      </div>
+      <div class="logo-slot">
+        <div class="ls-preview">${p.logo?`<img src="${p.logo}" style="max-height:48px;max-width:160px;object-fit:contain">`:'לוגו ברירת מחדל KAYAN'}</div>
+        <div>
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer">העלאת לוגו<input type="file" accept="image/*" style="display:none" onchange="Settings.loadLogo(event)"></label>
+          ${p.logo?`<button class="btn btn-ghost btn-sm" onclick="Settings.clearLogo()">איפוס ללוגו ברירת מחדל</button>`:''}
+          <div class="logo-mode">
+            <label class="lm-opt"><input type="radio" name="logomode" value="wide" ${p.logoMode!=='corner'?'checked':''} onchange="Settings.setLogoMode('wide')">לוגו רחב <small>(פס עליון מלא)</small></label>
+            <label class="lm-opt"><input type="radio" name="logomode" value="corner" ${p.logoMode==='corner'?'checked':''} onchange="Settings.setLogoMode('corner')">לוגו בפינה <small>(עם שם קבלן)</small></label>
+          </div>
+        </div>
+      </div>
+      <h2 class="sect-ttl" style="margin-top:20px">אפשרויות</h2>
+      <label class="opt" style="display:flex;gap:8px;align-items:center"><input type="checkbox" ${p.useAreas?'checked':''} onchange="Settings.toggleAreas(this.checked)">ניהול מדידות לפי אזורים/מגרשים</label>
+      </div></div>
+      <div class="card"><div class="card-hd">גיבוי ושחזור</div><div class="card-bd" style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-navy" onclick="Backup.exportProject()">⇩ ייצוא גיבוי JSON</button>
+        <label class="btn btn-ghost" style="cursor:pointer">⇪ שחזור מקובץ<input type="file" accept=".json" style="display:none" onchange="Backup.importFile(event)"></label>
+        <div class="hint" style="align-self:center;color:var(--muted);font-size:11.5px">גיבוי אחרון: ${p.lastBackupAt?fdate(p.lastBackupAt):'טרם בוצע'}</div>
+      </div></div>
+      <div class="card"><div class="card-hd" style="background:var(--neg)">אזור מסוכן</div><div class="card-bd">
+        <button class="btn btn-danger" onclick="Projects.remove('${p.id}').then(ok=>{if(ok)App.goHome();})">🗑 מחיקת הפרויקט לצמיתות</button>
+      </div></div>`;
+    return h;
+  },
+};
+Screens.settings=()=>Settings.render();
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: UI  (toast, modal, drawer, save-status indicator)
+// ═══════════════════════════════════════════════════════════════════════
+function toast(msg,type){
+  const host=byId('toast-host'); if(!host) return;
+  const el=document.createElement('div');
+  el.className='toast'+(type==='err'?' err':type==='ok'?' ok':'');
+  el.textContent=msg;
+  host.appendChild(el);
+  requestAnimationFrame(()=>el.classList.add('show'));
+  setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>el.remove(),300); },2800);
+}
+const UI = {
+  toast,
+  openModal(html,size){
+    byId('modal-host').innerHTML=`<div class="modal show" onmousedown="if(event.target===this)UI.closeModal()">
+      <div class="modal-card ${size==='wide'?'wide':''}">${html}</div></div>`;
+  },
+  closeModal(){ byId('modal-host').innerHTML=''; },
+  openDrawer(html){ byId('drawer-host').innerHTML=`<div class="drawer show">${html}</div>`; byId('drawer-bd').classList.add('show'); },
+  closeDrawer(){ byId('drawer-host').innerHTML=''; byId('drawer-bd').classList.remove('show'); },
+  setSaveStatus(state){
+    const el=byId('save-status'); if(!el) return;
+    const txt=byId('save-status-txt');
+    el.classList.remove('saving','err');
+    if(state==='saving'){ el.classList.add('saving'); txt.textContent='שומר…'; }
+    else if(state==='err'){ el.classList.add('err'); txt.textContent='שגיאת שמירה'; }
+    else txt.textContent='נשמר';
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded',()=>{ App.boot().catch(e=>{ console.error(e); toast('שגיאה באתחול האפליקציה: '+e.message,'err'); }); });
+window.addEventListener('beforeprint',()=>{ if(State.project) App.refresh(); });
+</script>
+</body>
+</html>
