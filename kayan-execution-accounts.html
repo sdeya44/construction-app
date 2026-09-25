@@ -422,7 +422,7 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:poin
 .rc-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--hair)}
 .rc-row .opt{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink);font-weight:500;cursor:pointer}
 @media print{
-  body{background:#fff}.topbar,.tabs,.no-print{display:none!important}
+  body{background:#fff}.topbar,.tabs,.no-print,#toast-host,#modal-host,#drawer-host,#drawer-bd{display:none!important}
   .wrap{margin:0;padding:0;max-width:none}.screen{display:none!important}#s-reports.on{display:block!important}
   .report{box-shadow:none;border-radius:0;max-width:none;padding:8mm 6mm}
   .rsec{break-inside:avoid}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -537,16 +537,22 @@ const Util = (() => {
   function clone(o){ return o==null?o:JSON.parse(JSON.stringify(o)); }
   function todayISO(){ return new Date().toISOString().split('T')[0]; }
   function nowISO(){ return new Date().toISOString(); }
-  function fdate(iso){ if(!iso) return '—'; const d=new Date(iso); if(isNaN(d)) return iso;
+  function fdate(iso){ if(!iso) return '—'; const d=new Date(iso); if(isNaN(d)) return esc(iso); // unparseable value can come from an imported backup file — never trust it raw in HTML
     return d.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit',year:'numeric'}); }
+  // a logo can arrive from an imported backup file or legacy-migrated localStorage, not just
+  // the trusted file-upload path (FileReader.readAsDataURL) — only ever accept a genuine
+  // base64 image data URI as an <img src>; anything else (e.g. a crafted `" onerror=...`
+  // breakout attempt) is rejected outright rather than escaped, since it's never legitimate.
+  const LOGO_SRC_RE=/^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[a-zA-Z0-9+/]+=*$/;
+  function safeLogoSrc(logo){ return (typeof logo==='string' && LOGO_SRC_RE.test(logo)) ? logo : null; }
   function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
   function byId(id){ return document.getElementById(id); }
   function qs(sel,root){ return (root||document).querySelector(sel); }
   function qsa(sel,root){ return Array.from((root||document).querySelectorAll(sel)); }
   function normDigits(codeStr,len){ return String(codeStr||'').trim().padStart(len,'0'); }
-  return {uid,nz,fn,fq,fnum,money,pct,esc,clone,todayISO,nowISO,fdate,debounce,byId,qs,qsa,normDigits};
+  return {uid,nz,fn,fq,fnum,money,pct,esc,clone,todayISO,nowISO,fdate,debounce,byId,qs,qsa,normDigits,safeLogoSrc};
 })();
-const {uid,nz,fn,fq,fnum,money,pct,esc,clone:cloneObj,todayISO,nowISO,fdate,debounce,byId,qs,qsa}=Util;
+const {uid,nz,fn,fq,fnum,money,pct,esc,clone:cloneObj,todayISO,nowISO,fdate,debounce,byId,qs,qsa,safeLogoSrc}=Util;
 
 // ═══════════════════════════════════════════════════════════════════════
 //  MODULE: DATA MODEL  (constants, unit→geometry registry, factories)
@@ -734,8 +740,10 @@ const Migration = {
     if(!codeCache.subs.has(subKey)){ codeCache.subs.set(subKey, String(codeCache.subs.size+1).padStart(2,'0')); }
     const sCode=codeCache.subs.get(subKey);
     project.subchapters[bCode+'.'+cCode+'.'+sCode]=project.subchapters[bCode+'.'+cCode+'.'+sCode]||{name:subName};
-    if(!codeCache.items.has(rawCode||legacySection.id)){ codeCache.items.set(rawCode||legacySection.id, String(codeCache.items.size+1).padStart(4,'0')); }
-    const iCode=codeCache.items.get(rawCode||legacySection.id);
+    // keyed on the legacy section's own id (always unique, unlike its free-text code field,
+    // which two different sections could coincidentally share and collapse together)
+    if(!codeCache.items.has(legacySection.id)){ codeCache.items.set(legacySection.id, String(codeCache.items.size+1).padStart(4,'0')); }
+    const iCode=codeCache.items.get(legacySection.id);
     return {building:bCode,chapter:cCode,sub:sCode,item:iCode};
   },
   convertLegacyProject(legacy){
@@ -806,12 +814,21 @@ const Migration = {
           const p=this.convertLegacyProject(st.projects[pid]);
           await Storage.saveProject(p); migrated.push(p);
         }
+        this.archiveLegacyKey(this.LEGACY_STORE_KEY,raw);
       } else {
         const raw1=localStorage.getItem(this.LEGACY_SINGLE_KEY);
-        if(raw1){ const d=JSON.parse(raw1); const p=this.convertLegacyProject(d); await Storage.saveProject(p); migrated.push(p); }
+        if(raw1){ const d=JSON.parse(raw1); const p=this.convertLegacyProject(d); await Storage.saveProject(p); migrated.push(p);
+          this.archiveLegacyKey(this.LEGACY_SINGLE_KEY,raw1); }
       }
     }catch(e){ console.error('Migration failed', e); }
     return migrated;
+  },
+  // migration must run only once — leaving the legacy key in place would re-import the
+  // same projects as fresh duplicates on every future boot. Archive rather than delete,
+  // in keeping with "never destroy existing user data": the raw payload survives under a
+  // clearly-marked key, just out of legacyExists()'s way.
+  archiveLegacyKey(key,raw){
+    try{ localStorage.setItem(key+'__migrated_'+Date.now(), raw); localStorage.removeItem(key); }catch(_){}
   },
 };
 // ═══════════════════════════════════════════════════════════════════════
@@ -1030,9 +1047,21 @@ const Accounts = {
     const contractQty=nz(item.contractQty);
     const balance=contractQty-currentCumulative;
     const completionPct=contractQty>0?(currentCumulative/contractQty*100):(Math.abs(currentCumulative)>1e-9?100:0);
+    // a LOCKED account must be priced at whatever was in effect when it was locked — never
+    // the item's current live price, or editing a price later would silently rewrite the ₪
+    // figures on an already-approved historical account (progress-payment certificate).
+    const unitPrice = isDraft ? nz(item.unitPrice) : nz(this.frozenPrice(account,item));
     return {previousCumulative,addition,correction,currentCumulative,contractQty,balance,completionPct,
-      overrun:contractQty>0 && currentCumulative>contractQty+1e-9,
-      amount:currentCumulative*nz(item.unitPrice), periodAmount:(addition+correction)*nz(item.unitPrice)};
+      overrun:contractQty>0 && currentCumulative>contractQty+1e-9, unitPrice,
+      amount:currentCumulative*unitPrice, periodAmount:(addition+correction)*unitPrice, previousAmount:previousCumulative*unitPrice};
+  },
+  // the unit price as frozen in a locked account's own snapshot (snapshot.items is a full
+  // clone of every BOQ item taken at lock time) — falls back to the live price only for an
+  // item that didn't exist yet at that lock, which can't have any priced quantity anyway.
+  frozenPrice(account,item){
+    if(!account.snapshot) return item.unitPrice;
+    const frozen=account.snapshot.items.find(x=>x.id===item.id);
+    return frozen ? frozen.unitPrice : item.unitPrice;
   },
   // rows that actually moved in this account (for "רק תנועה בחשבון זה")
   movementRows(project,item,account){
@@ -1053,7 +1082,7 @@ const Accounts = {
     project.items.filter(it=>!it.cancelled).forEach(it=>{
       contractTotal+=nz(it.contractQty)*nz(it.unitPrice);
       const mv=this.itemMovement(project,it,account);
-      cumulativeAmount+=mv.amount; previousAmount+=mv.previousCumulative*nz(it.unitPrice); periodAmount+=mv.periodAmount;
+      cumulativeAmount+=mv.amount; previousAmount+=mv.previousAmount; periodAmount+=mv.periodAmount;
     });
     const vat=nz(project.vat)/100;
     return {contractTotal,cumulativeAmount,previousAmount,periodAmount,
@@ -1153,7 +1182,7 @@ const Validation = {
       });
       const mv=Accounts.itemMovement(project,it,draft);
       if(mv.overrun) warnings.push({code:'overrun',itemId:it.id,
-        msg:`סעיף ${itemFullCode(it)}: חריגה מהכמות החוזית (${pct(mv.completionPct)}, +${fn(mv.currentCumulative-mv.contractQty)} ${it.unit})`});
+        msg:`סעיף ${itemFullCode(it)}: חריגה מהכמות החוזית (${pct(mv.completionPct)}, +${fn(mv.currentCumulative-mv.contractQty)} ${it.unit} · השפעה כספית ${money((mv.currentCumulative-mv.contractQty)*mv.unitPrice)})`});
       if(mv.previousCumulative>1e-9 && Math.abs(mv.addition+mv.correction) > mv.previousCumulative*2)
         warnings.push({code:'deviation',itemId:it.id,
           msg:`סעיף ${itemFullCode(it)}: סטייה גדולה מהחשבון הקודם (שינוי של ${fn(mv.addition+mv.correction)} ${it.unit} בתקופה זו)`});
@@ -1259,6 +1288,7 @@ const Projects = {
           <div>מצטבר נוכחי<b>${money(totals.cumulativeWithVat)}</b></div>
           <div>ביצוע<b>${pct(totals.completionPct)}</b></div>
           <div>עדכון אחרון<b style="font-size:11px">${fdate(p.updatedAt)}</b></div>
+          <div>גיבוי<b style="font-size:11px;color:${p.lastBackupAt?'inherit':'var(--neg)'}">${p.lastBackupAt?fdate(p.lastBackupAt):'טרם בוצע'}</b></div>
         </div>
         <div class="pc-actions" onclick="event.stopPropagation()">
           <button class="icon-btn" title="שכפול" onclick="Projects.duplicate('${p.id}')">⧉</button>
@@ -1446,19 +1476,24 @@ const BOQ = {
   renderChapter(p,b,c,C){
     const key=this.key(b,c), exp=this.isExpanded(key);
     const allIds=Object.values(C.subs).flatMap(s=>s.items.map(i=>i.id));
+    const active=this.draftHasActivity(p,allIds);
     const name=(p.chapters[b+'.'+c]&&p.chapters[b+'.'+c].name)||'';
     const subKeys=Object.keys(C.subs).sort((a,b2)=>a.localeCompare(b2));
     return `<div class="c-node" data-node="${key}">
       <div class="c-hdr" onclick="BOQ.toggleNode('${key}')"><span class="b-toggle" style="color:var(--navy2)">▼</span>
-        <span class="code">${esc(b)}.${esc(c)}</span><span class="name">${esc(name)}</span><span class="c-count">${allIds.length}</span></div>
+        <span class="code">${esc(b)}.${esc(c)}</span><span class="name">${esc(name)}</span>
+        ${active?'<span class="b-activity" style="background:var(--gold-dk)" title="פעילות בחשבון הנוכחי"></span>':''}<span class="c-count">${allIds.length}</span></div>
       <div class="c-body${exp?'':' collapsed'}">${subKeys.map(s=>this.renderSub(p,b,c,s,C.subs[s])).join('')}</div></div>`;
   },
   renderSub(p,b,c,s,S){
     const key=this.key(b,c,s), exp=this.isExpanded(key);
+    const ids=S.items.map(i=>i.id);
+    const active=this.draftHasActivity(p,ids);
     const name=(p.subchapters[b+'.'+c+'.'+s]&&p.subchapters[b+'.'+c+'.'+s].name)||'';
     return `<div class="s-node" data-node="${key}">
       <div class="s-hdr" onclick="BOQ.toggleNode('${key}')"><span class="b-toggle" style="font-size:9px">▼</span>
-        <span class="code">${esc(b)}.${esc(c)}.${esc(s)}</span><span class="name">${esc(name)}</span><span class="c-count">${S.items.length}</span></div>
+        <span class="code">${esc(b)}.${esc(c)}.${esc(s)}</span><span class="name">${esc(name)}</span>
+        ${active?'<span class="b-activity" style="background:var(--gold-dk)" title="פעילות בחשבון הנוכחי"></span>':''}<span class="c-count">${S.items.length}</span></div>
       <div class="s-body${exp?'':' collapsed'}">${S.items.sort((x,y)=>x.item.localeCompare(y.item)).map(it=>this.renderItem(p,it)).join('')}</div></div>`;
   },
   renderItem(p,it){
@@ -1483,6 +1518,7 @@ const BOQ = {
       <span class="price num">${it.unitPrice!==''?money(it.unitPrice):'—'}</span>
       ${activity?'<span class="stat grow">פעיל בחשבון</span>':''}
       <span class="actions" onclick="event.stopPropagation()">
+        <button class="icon-btn" title="דף חישוב להדפסה" onclick="Reports.openItemSheet('${it.id}')">🖨</button>
         <button class="icon-btn" title="עריכה" onclick="BOQ.openItemModal('${it.id}')">✎</button>
         <button class="icon-btn del" title="מחיקה" onclick="BOQ.confirmRemoveItem('${it.id}')">🗑</button>
       </span></div>`;
@@ -1824,7 +1860,8 @@ const Measurements = {
     const draft=Accounts.current(p);
     const mv=Accounts.itemMovement(p,it,draft);
     h+=`<div class="item-context"><div><div class="ic-code">${esc(itemFullCode(it))}</div><div class="ic-name">${esc(it.description||'')}</div></div>
-      <div class="ic-stats" id="item-ctx-stats">${this.ctxStatsHTML(mv,it)}</div></div>`;
+      <div class="ic-stats" id="item-ctx-stats">${this.ctxStatsHTML(mv,it)}</div>
+      <button class="icon-btn" style="background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);color:#fff" title="דף חישוב להדפסה (A4)" onclick="Reports.openItemSheet('${it.id}')">🖨</button></div>`;
     h+=`<div class="formula-hint">⌨ <span class="kbd">Enter</span> שדה הבא / שורה חדשה בסוף &nbsp; <span class="kbd">↑↓</span> ניווט &nbsp;
       <b>יחידת הסעיף: ${esc(it.unit)} (${UNIT_KIND[it.unit].label})</b> — רק צורות וחישובים תואמים ליחידה זו זמינים</div>`;
     let rows=p.measurements.filter(m=>m.itemId===it.id);
@@ -2052,7 +2089,7 @@ const SKNImport = {
       }catch(err){ toast('❌ שגיאה בקריאת הקובץ: '+err.message,'err'); this.parsed=null; }
       App.refresh();
     };
-    reader.readAsArrayBuffer(file); e.target.value='';
+    reader.readAsArrayBuffer(file); if(e.target) e.target.value='';
   },
   itemDuplicate(bld,ch,sub,itm){
     const code=`${bld}.${ch}.${sub}.${itm}`;
@@ -2156,15 +2193,16 @@ const Reports = {
   openItemSheet(itemId){ this._sheetItemId=itemId; this._accountId=this._accountId||Accounts.current(State.project).id; App.showTab('reports'); },
   account(p){ return Accounts.byId(p,this._accountId)||Accounts.current(p); },
   logoHTML(p){
-    if(p.logo){
-      if(p.logoMode==='wide') return `<div class="rlogo-band"><img src="${p.logo}" class="logo-wide" alt="לוגו"></div>`;
-      return `<div class="rlogo"><img src="${p.logo}" class="logo-corner" alt="לוגו"><div class="rbrand">${esc(p.contractor||'')}</div></div>`;
+    const src=safeLogoSrc(p.logo);
+    if(src){
+      if(p.logoMode==='wide') return `<div class="rlogo-band"><img src="${src}" class="logo-wide" alt="לוגו"></div>`;
+      return `<div class="rlogo"><img src="${src}" class="logo-corner" alt="לוגו"><div class="rbrand">${esc(p.contractor||'')}</div></div>`;
     }
     return `<div class="rlogo-mark"><svg viewBox="0 0 40 40" width="34" height="34"><rect x="2" y="2" width="36" height="36" rx="8" fill="#B08D3E"/><path d="M11 28V12h4l6 9 6-9h4v16h-4V19l-6 9-6-9v9z" fill="#0E1F33"/></svg>
       <div><div class="ln">KAY<b>AN</b></div><div class="lt">ENGINEERING</div></div></div>`;
   },
   headerHTML(p,account,title,sub){
-    const wide=p.logo&&p.logoMode==='wide';
+    const wide=safeLogoSrc(p.logo)&&p.logoMode==='wide';
     return `<div class="rhdr ${wide?'rhdr-wide':''}">${wide?this.logoHTML(p):''}
       ${wide?'':this.logoHTML(p)}
       <div class="rttl"><h1>${esc(title)}</h1><div class="goldline"></div><div class="sub">${esc(sub||'')}</div></div>
@@ -2193,7 +2231,7 @@ const Reports = {
         <td class="rres ${val<0?'n':'p'}">${fn(val,3)}</td></tr>`;
     }).join('');
     return `<div class="rsec"><div class="rsec-hd"><span class="rcode">${esc(itemFullCode(it))}</span>
-      <span class="rtitle">${esc(it.description||'')}</span><span class="rfacts">${esc(it.unit)} · ${money(it.unitPrice)}/${esc(it.unit)}</span></div>
+      <span class="rtitle">${esc(it.description||'')}</span><span class="rfacts">${esc(it.unit)} · ${money(mv.unitPrice)}/${esc(it.unit)}</span></div>
       <table class="rtbl"><thead><tr><th style="width:24px">#</th><th>תיאור</th><th style="width:90px">שרטוט</th><th>נוסחה</th><th style="width:70px">תוצאה</th></tr></thead>
       <tbody>${rowsHTML||`<tr><td colspan="5" style="padding:10px;color:var(--muted)">אין שורות מדידה</td></tr>`}</tbody></table>
       <div class="rbal">
@@ -2288,7 +2326,7 @@ Screens.reports=()=>Reports.render();
 //  MODULE: EXCEL EXPORT  (SpreadsheetML — opens natively in Excel, RTL, styled)
 // ═══════════════════════════════════════════════════════════════════════
 const ExcelExport = {
-  xesc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); },
+  xesc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); },
   cS(v,style){ return `<Cell${style?` ss:StyleID="${style}"`:''}><Data ss:Type="String">${this.xesc(v)}</Data></Cell>`; },
   cN(v,style){ return `<Cell${style?` ss:StyleID="${style}"`:''}><Data ss:Type="Number">${(+v||0)}</Data></Cell>`; },
   row(cells){ return `<Row>${cells.join('')}</Row>`; },
@@ -2315,7 +2353,7 @@ const ExcelExport = {
       tContract+=mv.contractQty; tPrev+=mv.previousCumulative; tAdd+=mv.addition; tCorr+=mv.correction; tCur+=mv.currentCumulative; tAmt+=mv.amount;
       rows.push(this.row([this.cS(itemFullCode(it)),this.cS(it.description||''),this.cS(it.unit),
         this.cN(mv.contractQty,'num'),this.cN(mv.previousCumulative,'num'),this.cN(mv.addition,'num'),this.cN(mv.correction,'num'),
-        this.cN(mv.currentCumulative,'num'),this.cN(mv.balance,'num'),this.cN(mv.completionPct,'num'),this.cN(it.unitPrice,'num'),this.cN(mv.amount,'num')]));
+        this.cN(mv.currentCumulative,'num'),this.cN(mv.balance,'num'),this.cN(mv.completionPct,'num'),this.cN(mv.unitPrice,'num'),this.cN(mv.amount,'num')]));
     });
     rows.push(this.row([this.cS('סה"כ','total'),this.cS('','total'),this.cS('','total'),this.cN(tContract,'total'),this.cN(tPrev,'total'),
       this.cN(tAdd,'total'),this.cN(tCorr,'total'),this.cN(tCur,'total'),this.cS('','total'),this.cS('','total'),this.cS('','total'),this.cN(tAmt,'total')]));
@@ -2404,24 +2442,44 @@ const Backup = {
     const inp=document.createElement('input'); inp.type='file'; inp.accept='.json';
     inp.onchange=e=>this.importFile(e); inp.click();
   },
+  // an imported backup is an untrusted external file — never spread it straight into a
+  // "project" and save/open it. Missing or wrong-shaped fields (a stripped-down or
+  // hand-edited JSON) must default safely instead of leaving the app in a state where
+  // e.g. `project.accounts.find(...)` throws on `undefined` the moment the project opens.
+  normalizeImportedProject(raw){
+    const base=makeProject({});
+    const p=Object.assign(base,(raw&&typeof raw==='object')?raw:{});
+    p.id=uid('proj_');
+    p.name=typeof p.name==='string'?p.name:'';
+    p.buildings=(p.buildings&&typeof p.buildings==='object'&&!Array.isArray(p.buildings))?p.buildings:{};
+    p.chapters=(p.chapters&&typeof p.chapters==='object'&&!Array.isArray(p.chapters))?p.chapters:{};
+    p.subchapters=(p.subchapters&&typeof p.subchapters==='object'&&!Array.isArray(p.subchapters))?p.subchapters:{};
+    p._seq=(p._seq&&typeof p._seq==='object')?p._seq:base._seq;
+    p.items=(Array.isArray(p.items)?p.items:[]).filter(it=>it&&typeof it==='object').map(it=>({...makeBoqItem({}),...it}));
+    p.measurements=(Array.isArray(p.measurements)?p.measurements:[]).filter(m=>m&&typeof m==='object')
+      .map(m=>({...makeMeasurement({}),...m,history:Array.isArray(m.history)?m.history:[]}));
+    p.accounts=(Array.isArray(p.accounts)?p.accounts:[]).filter(a=>a&&typeof a==='object');
+    Accounts.current(p); // auto-repairs: guarantees at least one draft account exists
+    return p;
+  },
   async importFile(e){
     const f=e.target.files[0]; if(!f) return;
     try{
       const text=await f.text();
       const d=JSON.parse(text);
       if(d.kayan==='backup'&&Array.isArray(d.projects)){
-        let n=0; for(const pr of d.projects){ const np={...cloneObj(pr),id:uid('proj_')}; await Storage.saveProject(np); n++; }
+        let n=0; for(const pr of d.projects){ const np=this.normalizeImportedProject(cloneObj(pr)); await Storage.saveProject(np); n++; }
         toast(`שוחזרו ${n} פרויקטים מהגיבוי`,'ok');
         if(!State.project) Projects.renderList();
       } else if(d.kayan==='project'&&d.project){
-        const np={...cloneObj(d.project),id:uid('proj_')};
+        const np=this.normalizeImportedProject(cloneObj(d.project));
         await Storage.saveProject(np); toast('הפרויקט יובא בהצלחה','ok'); await App.openProject(np.id);
       } else if(d.sections&&d.project!==undefined){ // legacy single-project shape safety net
         const np=Migration.convertLegacyProject(d); await Storage.saveProject(np);
         toast('פרויקט מהגרסה הקודמת יובא','ok'); await App.openProject(np.id);
       } else throw new Error('פורמט קובץ לא מוכר');
     }catch(err){ console.error(err); toast('❌ קובץ לא תקין: '+err.message,'err'); }
-    e.target.value='';
+    if(e.target) e.target.value='';
   },
   importProjectFile(e){ this.importFile(e); },
 };
@@ -2437,7 +2495,7 @@ const Settings = {
     const r=new FileReader();
     r.onload=ev=>{ State.project.logo=ev.target.result; if(!State.project.logoMode) State.project.logoMode='wide';
       State.scheduleSave(); toast('הלוגו הוטמע'); App.refresh(); };
-    r.readAsDataURL(f); e.target.value='';
+    r.readAsDataURL(f); if(e.target) e.target.value='';
   },
   setLogoMode(m){ State.project.logoMode=m; State.scheduleSave(); App.refresh(); },
   clearLogo(){ delete State.project.logo; delete State.project.logoMode; State.scheduleSave(); toast('חזרה ללוגו ברירת מחדל'); App.refresh(); },
@@ -2453,7 +2511,7 @@ const Settings = {
         ${f('vat','מע"מ %','number')}
       </div>
       <div class="logo-slot">
-        <div class="ls-preview">${p.logo?`<img src="${p.logo}" style="max-height:48px;max-width:160px;object-fit:contain">`:'לוגו ברירת מחדל KAYAN'}</div>
+        <div class="ls-preview">${safeLogoSrc(p.logo)?`<img src="${safeLogoSrc(p.logo)}" style="max-height:48px;max-width:160px;object-fit:contain">`:'לוגו ברירת מחדל KAYAN'}</div>
         <div>
           <label class="btn btn-ghost btn-sm" style="cursor:pointer">העלאת לוגו<input type="file" accept="image/*" style="display:none" onchange="Settings.loadLogo(event)"></label>
           ${p.logo?`<button class="btn btn-ghost btn-sm" onclick="Settings.clearLogo()">איפוס ללוגו ברירת מחדל</button>`:''}
