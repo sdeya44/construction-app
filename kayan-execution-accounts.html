@@ -368,7 +368,8 @@ td.per-neg{color:var(--neg);font-weight:700}
 .skn-item-code{font-weight:600;color:var(--navy2);direction:ltr;min-width:100px;text-align:right}
 .skn-item-desc{flex:1;text-align:right;min-width:160px}
 .skn-item-unit{color:var(--muted)}
-.skn-item-qty{font-weight:600;direction:ltr;min-width:64px;color:var(--navy2)}
+.skn-item-qty{font-weight:600;direction:ltr;width:70px;color:var(--navy2);border:1.5px solid var(--line);border-radius:6px;padding:4px 6px;text-align:center;background:#fff}
+.skn-item-qty:focus{outline:none;border-color:var(--navy2);box-shadow:0 0 0 2px rgba(34,64,106,.12)}
 .skn-item-price{font-weight:600;direction:ltr;min-width:70px}
 .skn-item-dup{color:var(--neg);font-size:10px;font-weight:700;background:var(--neg-bg);padding:1px 7px;border-radius:10px}
 .skn-count{background:rgba(0,0,0,.06);color:var(--muted);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px}
@@ -445,6 +446,23 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:poin
   .tbl-wrap.responsive-cards tr{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;padding:8px;background:#fff}
   .tbl-wrap.responsive-cards td{text-align:right;border-bottom:none;padding:5px 4px;display:flex;justify-content:space-between;gap:8px}
   .tbl-wrap.responsive-cards td[data-lbl]::before{content:attr(data-lbl);color:var(--muted);font-size:10.5px;font-weight:600}
+  .acct-row{flex-wrap:wrap;gap:4px 12px;padding:12px 14px}
+  .acct-row .a-mid{flex:1 1 100%;order:4;min-width:0}
+  .acct-row .a-amt{min-width:0}
+  .dash-hero .btn-gold{width:100%;justify-content:center}
+  /* BOQ tree rows: fixed min-widths (code/qty/price) plus deep indentation don't
+     fit a narrow screen — without this the description silently shrinks to zero
+     width instead of wrapping, so it just vanishes. Wrap onto stacked lines instead. */
+  .b-hdr,.c-hdr,.s-hdr{padding-inline-start:14px}
+  .c-hdr{padding-inline-start:20px}
+  .s-hdr{padding-inline-start:26px}
+  .i-row{flex-wrap:wrap;padding:10px 14px;padding-inline-start:30px;row-gap:4px}
+  .i-row .code{min-width:0;order:1;font-size:11px}
+  .i-row .unit-chip{order:2}
+  .i-row .desc{flex:1 1 100%;order:3;white-space:normal;overflow:visible;text-overflow:clip;font-size:12.5px;min-width:0}
+  .i-row .qty,.i-row .price{order:4;min-width:0}
+  .i-row .actions{order:5;margin-inline-start:auto}
+  .i-row .stat{order:2}
 }
 @media(max-width:600px){
   .dash-grid{grid-template-columns:1fr}
@@ -1307,21 +1325,31 @@ const Projects = {
 const BOQ = {
   _expanded:new Set(),
   _lastHighlight:null,
+  _showCancelled:false,
   key(b,c,s){ return [b,c,s].filter(x=>x!=null).join('.'); },
   isExpanded(key){ return this._expanded.has(key); },
   toggleNode(key){ this._expanded.has(key)?this._expanded.delete(key):this._expanded.add(key); App.refresh(); },
   expandAll(){
     const p=State.project;
     this._expanded.clear();
-    p.items.filter(it=>!it.cancelled).forEach(it=>{
+    this.visibleItems(p).forEach(it=>{
       this._expanded.add(this.key(it.building)); this._expanded.add(this.key(it.building,it.chapter)); this._expanded.add(this.key(it.building,it.chapter,it.sub));
     });
     App.refresh();
   },
   collapseAll(){ this._expanded.clear(); App.refresh(); },
+  toggleShowCancelled(){ this._showCancelled=!this._showCancelled; App.refresh(); },
+  // a cancelled item's code is intentionally still "taken" — reusing it would make an
+  // active item and its cancelled predecessor show the same code in reports/history.
+  // The user must explicitly restore the old item instead of creating a lookalike.
   duplicateExists(project,building,chapter,sub,item,excludeId){
     const code=`${building}.${chapter}.${sub}.${item}`;
-    return project.items.some(it=>!it.cancelled && it.id!==excludeId && itemFullCode(it)===code);
+    return project.items.some(it=>it.id!==excludeId && itemFullCode(it)===code);
+  },
+  restoreItem(id){
+    const it=findItem(State.project,id); if(!it) return;
+    it.cancelled=false;
+    State.scheduleSave(); toast('הסעיף שוחזר'); App.refresh();
   },
   ensureMeta(project,building,chapter,sub,names){
     if(building!=null){ project.buildings[building]=project.buildings[building]||{name:names&&names.building||''};
@@ -1334,8 +1362,13 @@ const BOQ = {
   addOrUpdateItem(project,fields,editId){
     const building=Util.normDigits(fields.building,2), chapter=Util.normDigits(fields.chapter,2),
       sub=Util.normDigits(fields.sub,2), item=Util.normDigits(fields.item,4);
-    if(this.duplicateExists(project,building,chapter,sub,item,editId))
-      return {ok:false,msg:`קוד סעיף ${building}.${chapter}.${sub}.${item} כבר קיים בפרויקט זה`};
+    if(this.duplicateExists(project,building,chapter,sub,item,editId)){
+      const code=`${building}.${chapter}.${sub}.${item}`;
+      const clash=project.items.find(it=>it.id!==editId&&itemFullCode(it)===code);
+      return {ok:false,msg: clash&&clash.cancelled
+        ? `קוד סעיף ${code} שייך לסעיף מבוטל — יש לשחזר אותו (☑ הצג סעיפים מבוטלים) במקום ליצור סעיף חדש עם אותו קוד`
+        : `קוד סעיף ${code} כבר קיים בפרויקט זה`};
+    }
     this.ensureMeta(project,building,chapter,sub,{building:fields.buildingName,chapter:fields.chapterName,sub:fields.subName});
     let it=editId?findItem(project,editId):null;
     if(it){ Object.assign(it,{building,chapter,sub,item,description:fields.description,unit:fields.unit,
@@ -1355,8 +1388,9 @@ const BOQ = {
     project.measurements=project.measurements.filter(m=>m.itemId!==itemId);
     return {ok:true,soft:false};
   },
+  visibleItems(project){ return this._showCancelled ? project.items : project.items.filter(it=>!it.cancelled); },
   tree(project){
-    const items=project.items.filter(it=>!it.cancelled);
+    const items=this.visibleItems(project);
     const bMap={};
     items.forEach(it=>{
       bMap[it.building]=bMap[it.building]||{chapters:{},items:[]};
@@ -1376,13 +1410,15 @@ const BOQ = {
   render(){
     const p=State.project, tree=this.tree(p);
     const bKeys=Object.keys(tree).sort((a,b)=>a.localeCompare(b));
-    let h=`<div class="card"><div class="card-hd">📋 כתב כמויות<span class="hd-sub">${p.items.filter(i=>!i.cancelled).length} סעיפים</span></div>
+    const cancelledCount=p.items.filter(i=>i.cancelled).length;
+    let h=`<div class="card"><div class="card-hd">📋 כתב כמויות<span class="hd-sub">${p.items.filter(i=>!i.cancelled).length} סעיפים${cancelledCount?` · ${cancelledCount} מבוטלים`:''}</span></div>
       <div class="card-bd">
       <div class="boq-toolbar">
         <div class="boq-search"><input id="boq-search-in" placeholder="חיפוש לפי קוד, תיאור, פרק…" oninput="BOQSearch.onInput(this.value)" onkeydown="BOQSearch.onKey(event)">
           <span class="ic">🔍</span><div id="boq-search-results" class="boq-search-results"></div></div>
         <button class="btn btn-ghost btn-sm" onclick="BOQ.expandAll()">⤢ הרחב הכל</button>
         <button class="btn btn-ghost btn-sm" onclick="BOQ.collapseAll()">⤡ כווץ הכל</button>
+        ${cancelledCount?`<label class="opt" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)"><input type="checkbox" ${this._showCancelled?'checked':''} onchange="BOQ.toggleShowCancelled()">הצג ${cancelledCount} סעיפים מבוטלים</label>`:''}
         <button class="btn btn-gold btn-sm" onclick="BOQ.openItemModal()">＋ סעיף חדש</button>
       </div>`;
     if(!bKeys.length){
@@ -1426,6 +1462,16 @@ const BOQ = {
       <div class="s-body${exp?'':' collapsed'}">${S.items.sort((x,y)=>x.item.localeCompare(y.item)).map(it=>this.renderItem(p,it)).join('')}</div></div>`;
   },
   renderItem(p,it){
+    if(it.cancelled){
+      return `<div class="i-row" data-item-id="${it.id}" style="opacity:.55" title="סעיף מבוטל — נשאר לצורך היסטוריה, לא פעיל בחשבון הנוכחי">
+        <span class="code">${esc(itemFullCode(it))}</span>
+        <span class="desc" style="text-decoration:line-through">${esc(it.description||'(ללא תיאור)')}</span>
+        <span class="unit-chip">${esc(it.unit)}</span>
+        <span class="stat chg">מבוטל</span>
+        <span class="actions" onclick="event.stopPropagation()">
+          <button class="icon-btn" title="שחזור הסעיף" onclick="BOQ.restoreItem('${it.id}')">↺</button>
+        </span></div>`;
+    }
     const draft=Accounts.current(p);
     const mv=Accounts.itemMovement(p,it,draft);
     const activity=Math.abs(mv.addition)+Math.abs(mv.correction)>1e-9;
@@ -1498,7 +1544,9 @@ Screens.boq=()=>BOQ.render();
 const BOQSearch = {
   results(project,q){
     q=(q||'').trim().toLowerCase(); if(!q) return [];
-    return project.items.filter(it=>!it.cancelled).filter(it=>{
+    // cancelled items are included on purpose — search is the recovery path for a
+    // wrongly-cancelled item (see BOQ.restoreItem); they're just marked as such.
+    return project.items.filter(it=>{
       const bn=(project.buildings[it.building]||{}).name||'';
       const cn=(project.chapters[it.building+'.'+it.chapter]||{}).name||'';
       const sn=(project.subchapters[it.building+'.'+it.chapter+'.'+it.sub]||{}).name||'';
@@ -1514,7 +1562,7 @@ const BOQSearch = {
       const bn=(State.project.buildings[it.building]||{}).name||'';
       return `<div class="boq-search-row" onclick="BOQSearch.goTo('${it.id}')">
         <span class="code">${esc(itemFullCode(it))}</span>
-        <span style="flex:1">${esc(it.description||'(ללא תיאור)')}</span>
+        <span style="flex:1">${esc(it.description||'(ללא תיאור)')}${it.cancelled?' <span class=\"stat chg\">מבוטל</span>':''}</span>
         <span class="path">מבנה ${esc(it.building)} ${esc(bn)}</span></div>`;
     }).join('');
     host.classList.add('show');
@@ -1523,6 +1571,7 @@ const BOQSearch = {
   goTo(itemId){
     const p=State.project, it=findItem(p,itemId); if(!it) return;
     byId('boq-search-results').classList.remove('show');
+    if(it.cancelled) BOQ._showCancelled=true;
     BOQ._expanded.add(BOQ.key(it.building)); BOQ._expanded.add(BOQ.key(it.building,it.chapter)); BOQ._expanded.add(BOQ.key(it.building,it.chapter,it.sub));
     App.showTab('boq');
     setTimeout(()=>{
@@ -1570,9 +1619,23 @@ const Measurements = {
     m.sign=(m.sign===-1?1:-1); State.scheduleSave(); App.refresh();
   },
   setShape(rowId,shape){
-    const m=State.project.measurements.find(x=>x.id===rowId); if(!m) return;
-    m.shape=shape; m.d1=m.d2=m.d3=''; if(itemUnitKind(findItem(State.project,m.itemId))!=='volume') m.t='';
-    State.scheduleSave(); App.refresh();
+    const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
+    const item=findItem(p,m.itemId), kind=itemUnitKind(item);
+    m.shape=shape; m.d1=m.d2=m.d3=''; if(kind!=='volume') m.t='';
+    State.scheduleSave();
+    // area-grouped view has per-area subtotals that a shape change can invalidate
+    // (the row's value changes) — those need a real recompute, so fall through
+    // to a full refresh there. Otherwise, patch just this <tr> so the rest of
+    // the table (scroll position, other rows' in-progress typing) is undisturbed.
+    const tr=qs(`tr[data-row-id="${rowId}"]`);
+    if(!p.useAreas && tr){
+      const n=tr.querySelector('td')?tr.querySelector('td').textContent:'';
+      tr.outerHTML=this.renderRow(m,item,kind,p.useAreas,n);
+      this.attachKeyNav();
+      this.patchItemContext();
+    } else {
+      App.refresh();
+    }
   },
   removeRow(rowId){
     const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
@@ -1600,6 +1663,15 @@ const Measurements = {
     if(rEl){ const v=calcRow(m,item); rEl.textContent=fn(v,3); rEl.className='res '+(v<0?'n':'p'); }
     if(stEl){ const s=this.liveRowStatus(m); stEl.outerHTML=`<span id="st-${rowId}" class="stat ${ROW_STATUS_CLASS[s]}">${ROW_STATUS_LABEL[s]}</span>`; }
     this.patchItemContext();
+    // area-grouped view shows per-area subtotals and buckets rows by their area
+    // value — a dimension or area-name edit can invalidate both (wrong subtotal,
+    // row in the wrong bucket). The per-row patch above already gives instant
+    // feedback, so debounce a full re-render to fix subtotals/placement shortly
+    // after the user pauses, rather than re-rendering the whole table every keystroke.
+    if(p.useAreas && ['d1','d2','d3','t','qty','area'].includes(key)){
+      clearTimeout(this._areaRefreshTimer);
+      this._areaRefreshTimer=setTimeout(()=>App.refresh(),700);
+    }
   },
   formulaHTML(m,kind){
     const bv=baseVal(m,kind);
@@ -1709,6 +1781,32 @@ const Measurements = {
       </span></td>`;
     return `<tr data-row-id="${m.id}" class="${m.cancelled?'cancelled-row':''} ${m.sign===-1?'ded-row':''}">${cells}</tr>`;
   },
+  // groups rows by their free-text "area" field (in original order within each
+  // area), with a subtotal after each area — turns the column from a label
+  // into an actual quantity-by-zone breakdown. Rows without an area sort last
+  // under "ללא אזור". Manual isGroup label rows fall into whichever area
+  // bucket their own (usually empty) area value puts them in.
+  renderAreaGrouped(rows,item,kind,useAreas,colspan){
+    const idx=new Map(rows.map((m,i)=>[m,i]));
+    const key=m=>{ const a=(m.area||'').trim(); return a||'￿'; };
+    const sorted=rows.slice().sort((a,b)=>{ const ka=key(a),kb=key(b); if(ka!==kb) return ka.localeCompare(kb,'he'); return idx.get(a)-idx.get(b); });
+    let out='', curArea=undefined, bucket=[], n=0;
+    const flush=()=>{
+      if(!bucket.length) return;
+      const total=bucket.filter(m=>!m.isGroup&&!m.cancelled).reduce((s,m)=>s+calcRow(m,item),0);
+      out+=`<tr class="grp-row"><td colspan="${colspan}" style="text-align:right;background:#F0EAD8;color:var(--gold-dk);font-weight:700">📍 ${esc(curArea||'ללא אזור')}</td></tr>`;
+      bucket.forEach(m=>{ n++; out+=this.renderRow(m,item,kind,useAreas,n); });
+      out+=`<tr class="grp-row"><td colspan="${colspan}" style="text-align:left;direction:ltr;font-weight:800;color:var(--navy)">סה"כ ${esc(curArea||'ללא אזור')}: ${fn(total)} ${esc(item.unit)}</td></tr>`;
+      bucket=[];
+    };
+    sorted.forEach(m=>{
+      const a=key(m)==='￿'?'':key(m);
+      if(a!==curArea){ flush(); curArea=a; }
+      bucket.push(m);
+    });
+    flush();
+    return out;
+  },
   render(){
     const p=State.project;
     let itemSel=`<select class="sel-sec" onchange="Measurements.openItem(this.value)">
@@ -1735,10 +1833,14 @@ const Measurements = {
       rows=rows.filter(m=>m.isGroup||moved.has(m.id));
     }
     rows=rows.filter(m=>!m.cancelled || true); // keep cancelled visible (dimmed) for traceability
-    h+=`<div class="tbl-wrap responsive-cards"><table id="meas-table"><thead><tr>${this.tableHeaders(kind,p.useAreas).map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>`;
-    if(!rows.length) h+=`<tr><td colspan="14" style="padding:24px"><div class="empty"><div class="ic">📐</div><div class="t">אין שורות מדידה</div></div></td></tr>`;
+    const headers=this.tableHeaders(kind,p.useAreas);
+    h+=`<div class="tbl-wrap responsive-cards"><table id="meas-table"><thead><tr>${headers.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>`;
+    if(!rows.length) h+=`<tr><td colspan="${headers.length}" style="padding:24px"><div class="empty"><div class="ic">📐</div><div class="t">אין שורות מדידה</div></div></td></tr>`;
+    else if(p.useAreas) h+=this.renderAreaGrouped(rows,it,kind,p.useAreas,headers.length);
     else h+=rows.map((m,i)=>this.renderRow(m,it,kind,p.useAreas,i+1)).join('');
-    h+=`</tbody></table></div>
+    h+=`</tbody></table></div>`;
+    if(p.useAreas) h+=`<div class="hint" style="margin:8px 0 -4px;color:var(--muted)">שורות מקובצות וסוכמות לפי עמודת ״אזור״ — השאירו אזור ריק כדי לשייך שורה ל״ללא אזור״</div>`;
+    h+=`
       <div class="boq-actions-row" style="margin-top:10px">
         <button class="btn btn-navy btn-sm" onclick="Measurements.addRow('${it.id}')">＋ שורת מדידה</button>
         <button class="btn btn-ghost btn-sm" onclick="Measurements.addGroup('${it.id}')">＋ קבוצה</button>
@@ -1986,7 +2088,8 @@ const SKNImport = {
               data-bld="${esc(bld)}" data-ch="${esc(ch)}" data-sub="${esc(sub)}" data-itm="${esc(it.item)}"></label>
               <span class="skn-item-code">${esc(bld)}.${esc(ch)}.${esc(sub)}.${esc(it.item)}</span>
               <span class="skn-item-desc">${esc(it.desc)}</span><span class="skn-item-unit">${esc(SKN_UNIT_MAP[it.unit]||it.unit)}</span>
-              <span class="skn-item-qty" title="כמות חוזית (יש לאמת)">${it.qty!==''?fn(it.qty):'—'}</span>
+              <input class="skn-item-qty" id="sknqty-${esc(bld)}-${esc(ch)}-${esc(sub)}-${esc(it.item)}" value="${it.qty!==''?esc(it.qty):''}"
+                placeholder="כמות" title="כמות חוזית — פוענחה אוטומטית מהקובץ; יש לאמת ולתקן במידת הצורך">
               <span class="skn-item-price">${it.price?money(it.price):'—'}</span>
               ${dup?'<span class="skn-item-dup">קיים כבר בפרויקט</span>':''}</div>`;
           });
@@ -2012,9 +2115,11 @@ const SKNImport = {
         this.parsed[bld].chapters[ch].subs[sub].items.find(it=>it.item===itm);
       if(!item){ errors++; return; }
       if(this.itemDuplicate(bld,ch,sub,itm)){ skipped++; return; }
+      const qtyInput=byId(`sknqty-${bld}-${ch}-${sub}-${itm}`);
+      const qty=qtyInput?qtyInput.value.trim():item.qty; // user may have corrected the auto-parsed quantity in the preview
       const r=BOQ.addOrUpdateItem(p,{building:bld,chapter:ch,sub,item:itm,
         buildingName:this.parsed[bld].name,chapterName:this.parsed[bld].chapters[ch].name,subName:this.parsed[bld].chapters[ch].subs[sub].name,
-        description:item.desc,unit:SKN_UNIT_MAP[item.unit]||"יחידה",contractQty:item.qty,unitPrice:item.price,notes:''});
+        description:item.desc,unit:SKN_UNIT_MAP[item.unit]||"יחידה",contractQty:qty,unitPrice:item.price,notes:''});
       if(r.ok) imported++; else skipped++;
     });
     State.scheduleSave();
@@ -2169,9 +2274,11 @@ const Reports = {
       ${this._sheetItemId?`<button class="btn btn-ghost btn-sm" onclick="Reports._sheetItemId=null;App.refresh()">← חזרה לדוח מלא</button>`:''}
       </div>
       <div class="rc-row" style="border-bottom:none;padding-top:12px">
-        <button class="btn btn-navy" onclick="window.print()">🖨 הדפסה</button>
+        <button class="btn btn-navy" onclick="window.print()">🖨 הדפסה / שמירה כ-PDF</button>
         <button class="btn btn-gold" onclick="ExcelExport.export()">⇩ ייצוא לאקסל</button>
-      </div></div>`;
+      </div>
+      <div class="hint" style="padding:0 2px 2px;color:var(--muted)">ליצירת PDF: בחלון ההדפסה בחרו יעד ״שמירה כ-PDF״ — כך פועל ייצוא PDF בכל דפדפן, ללא תלות בשירות חיצוני</div>
+      </div>`;
     h+=this.buildHTML();
     return h;
   },
