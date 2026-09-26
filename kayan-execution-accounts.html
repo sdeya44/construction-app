@@ -638,7 +638,8 @@ function makeMeasurement(fields){
     id:uid('meas_'), itemId:null, isGroup:false, groupLabel:'',
     desc:'', area:'', shape:'מלבן', d1:'', d2:'', d3:'', t:'', qty:'', sign:1, notes:'',
     createdInAccount:null, cancelled:false,
-    history:[],   // [{accountId,accountNumber,action,value,prevValue,date}] append-only audit trail
+    history:[],   // [{accountId,accountNumber,action,value,prevValue,date,claimedValue,approvalStatus,approvalNote}] append-only audit trail
+    approval:null, // null = approved-as-claimed (default); else {status:'reduced'|'rejected'|'pending',value,note,claimedAtDecision}
   }, fields||{});
 }
 // ═══════════════════════════════════════════════════════════════════════
@@ -871,6 +872,40 @@ function calcRow(m,item){
   const n=(m.qty===''||m.qty==null)?1:nz(m.qty);
   return v*n*(m.sign||1);
 }
+// ── submission vs. approval ──
+// calcRow() above is what the field/contractor CLAIMS from the raw geometry.
+// A row is approved-as-claimed by default (m.approval absent) — zero extra
+// clicks for the common case. A reviewer only has to act to REDUCE, REJECT,
+// or hold a claim PENDING; that decision is what actually gets frozen into
+// history/snapshots at lock time (see Accounts.lock), not the raw claim —
+// so the official cumulative is always "what was approved," while the
+// claimed figure stays available alongside it for audit/comparison.
+function approvedRowValue(m,item){
+  if(m.isGroup||m.cancelled) return 0;
+  const claimed=calcRow(m,item);
+  if(!m.approval) return claimed;
+  if(m.approval.status==='reduced') return nz(m.approval.value);
+  return 0; // 'rejected' or 'pending'
+}
+const APPROVAL_STATUS_LABEL={reduced:'הופחת',rejected:'נדחה',pending:'ממתין לאישור'};
+const APPROVAL_STATUS_CLASS={reduced:'grow',rejected:'chg',pending:'new'};
+function approvalBadge(m){
+  if(!m.approval) return {label:'מאושר כמוגש',cls:'ok'};
+  return {label:APPROVAL_STATUS_LABEL[m.approval.status]||'מאושר כמוגש',cls:APPROVAL_STATUS_CLASS[m.approval.status]||'ok'};
+}
+// if the underlying claim changed since a reduce/reject/pending decision was made on it
+// (dims edited, sign flipped, etc.), that decision no longer refers to the same number —
+// it must not silently keep applying to a different claim. Re-open it for review instead
+// of leaving a stale ₪ figure standing against a claim nobody actually looked at.
+function approvalIsStale(m,item){
+  return !!(m.approval && Math.abs(calcRow(m,item)-nz(m.approval.claimedAtDecision))>1e-9);
+}
+// called after any edit that can change calcRow() — silently reopens a stale decision as
+// "pending" rather than leaving a reduce/reject figure attached to a claim that no longer exists
+function revalidateApproval(m,item){
+  if(approvalIsStale(m,item)) m.approval={status:'pending',value:0,
+    note:'התביעה שונתה לאחר ההחלטה הקודמת — ממתינה לבדיקה מחדש',claimedAtDecision:calcRow(m,item)};
+}
 function rowUnit(m,kind){ return baseVal(m,kind).u; }
 function rowComplete(m,kind){ return baseVal(m,kind||inferKindFromShape(m)).complete; }
 function rowFormulaLabel(m,kind){
@@ -1006,7 +1041,9 @@ const Accounts = {
       const last=entries[entries.length-1];
       rows.push({id:m.id,itemId:m.itemId,value:last.action==='cancelled'?0:nz(last.value),
         cancelled:last.action==='cancelled', desc:m.desc,area:m.area,shape:m.shape,
-        d1:m.d1,d2:m.d2,d3:m.d3,t:m.t,qty:m.qty,sign:m.sign,notes:m.notes});
+        d1:m.d1,d2:m.d2,d3:m.d3,t:m.t,qty:m.qty,sign:m.sign,notes:m.notes,
+        claimedValue: last.claimedValue!=null?nz(last.claimedValue):nz(last.value),
+        approvalStatus: last.approvalStatus||null, approvalNote: last.approvalNote||''});
     });
     const items=cloneObj(project.items);
     const totals=this.computeTotals(project,rows,items);
@@ -1032,18 +1069,29 @@ const Accounts = {
       : (account.snapshot?account.snapshot.measurements.filter(r=>r.itemId===item.id):[]);
     const prevSnap=this.previousSnapshot(project,account);
     let previousCumulative=0,addition=0,correction=0;
+    let claimedPrevious=0,claimedAddition=0,claimedCorrection=0,pendingCount=0;
+    const rowClaimed=r=>r.cancelled?0:(isDraft?calcRow(r,item):nz(r.claimedValue!=null?r.claimedValue:r.value));
     const seen=new Set();
     curRows.forEach(r=>{
       seen.add(r.id);
-      const curVal = r.cancelled?0:(isDraft?calcRow(r,item):nz(r.value));
+      const curVal = r.cancelled?0:(isDraft?approvedRowValue(r,item):nz(r.value));
+      const claimedVal = rowClaimed(r);
+      if(isDraft && !r.cancelled && r.approval && r.approval.status==='pending') pendingCount++;
       const prevRow = prevSnap ? prevSnap.measurements.find(x=>x.id===r.id) : null;
-      if(prevRow){ const pv=prevRow.cancelled?0:nz(prevRow.value); previousCumulative+=pv; correction+=(curVal-pv); }
-      else addition+=curVal;
+      if(prevRow){
+        const pv=prevRow.cancelled?0:nz(prevRow.value); previousCumulative+=pv; correction+=(curVal-pv);
+        const cpv=prevRow.cancelled?0:nz(prevRow.claimedValue!=null?prevRow.claimedValue:prevRow.value);
+        claimedPrevious+=cpv; claimedCorrection+=(claimedVal-cpv);
+      } else { addition+=curVal; claimedAddition+=claimedVal; }
     });
     if(prevSnap) prevSnap.measurements.filter(r=>r.itemId===item.id).forEach(pr=>{
-      if(!seen.has(pr.id)){ const pv=pr.cancelled?0:nz(pr.value); previousCumulative+=pv; correction-=pv; }
+      if(!seen.has(pr.id)){
+        const pv=pr.cancelled?0:nz(pr.value); previousCumulative+=pv; correction-=pv;
+        const cpv=pr.cancelled?0:nz(pr.claimedValue!=null?pr.claimedValue:pr.value); claimedPrevious+=cpv; claimedCorrection-=cpv;
+      }
     });
     const currentCumulative=previousCumulative+addition+correction;
+    const claimedCurrentCumulative=claimedPrevious+claimedAddition+claimedCorrection;
     const contractQty=nz(item.contractQty);
     const balance=contractQty-currentCumulative;
     const completionPct=contractQty>0?(currentCumulative/contractQty*100):(Math.abs(currentCumulative)>1e-9?100:0);
@@ -1053,7 +1101,8 @@ const Accounts = {
     const unitPrice = isDraft ? nz(item.unitPrice) : nz(this.frozenPrice(account,item));
     return {previousCumulative,addition,correction,currentCumulative,contractQty,balance,completionPct,
       overrun:contractQty>0 && currentCumulative>contractQty+1e-9, unitPrice,
-      amount:currentCumulative*unitPrice, periodAmount:(addition+correction)*unitPrice, previousAmount:previousCumulative*unitPrice};
+      amount:currentCumulative*unitPrice, periodAmount:(addition+correction)*unitPrice, previousAmount:previousCumulative*unitPrice,
+      claimedCurrentCumulative,claimedAddition,claimedCorrection,pendingCount};
   },
   // the unit price as frozen in a locked account's own snapshot (snapshot.items is a full
   // clone of every BOQ item taken at lock time) — falls back to the live price only for an
@@ -1071,7 +1120,7 @@ const Accounts = {
       : (account.snapshot?account.snapshot.measurements.filter(r=>r.itemId===item.id):[]);
     const prevSnap=this.previousSnapshot(project,account);
     return curRows.filter(r=>{
-      const curVal=r.cancelled?0:(isDraft?calcRow(r,item):nz(r.value));
+      const curVal=r.cancelled?0:(isDraft?approvedRowValue(r,item):nz(r.value));
       const prevRow=prevSnap?prevSnap.measurements.find(x=>x.id===r.id):null;
       const prevVal=prevRow?(prevRow.cancelled?0:nz(prevRow.value)):0;
       return Math.abs(curVal-prevVal)>1e-9 || (r.cancelled && prevRow && !prevRow.cancelled);
@@ -1107,16 +1156,21 @@ const Accounts = {
       const lastEntry=m.history.length?m.history[m.history.length-1]:null;
       if(m.cancelled){
         if(lastEntry && lastEntry.action!=='cancelled'){
-          m.history.push({accountId:draft.id,accountNumber:draft.number,action:'cancelled',value:0,prevValue:nz(lastEntry.value),date:today});
+          m.history.push({accountId:draft.id,accountNumber:draft.number,action:'cancelled',value:0,prevValue:nz(lastEntry.value),date:today,claimedValue:0});
         }
         return;
       }
       if(!item) return;
-      const cur=calcRow(m,item);
+      // the OFFICIAL figure that gets frozen is the approved value, never the raw claim —
+      // the claim is stamped alongside it (claimedValue) purely for audit/comparison
+      const cur=approvedRowValue(m,item);
+      const claimed=calcRow(m,item);
+      const approvalStatus=m.approval?m.approval.status:null;
+      const approvalNote=m.approval?(m.approval.note||''):'';
       if(!lastEntry){
-        if(Math.abs(cur)>1e-9) m.history.push({accountId:draft.id,accountNumber:draft.number,action:'created',value:cur,prevValue:0,date:today});
+        if(Math.abs(cur)>1e-9) m.history.push({accountId:draft.id,accountNumber:draft.number,action:'created',value:cur,prevValue:0,date:today,claimedValue:claimed,approvalStatus,approvalNote});
       } else if(Math.abs(cur-nz(lastEntry.value))>1e-9){
-        m.history.push({accountId:draft.id,accountNumber:draft.number,action:'corrected',value:cur,prevValue:nz(lastEntry.value),date:today});
+        m.history.push({accountId:draft.id,accountNumber:draft.number,action:'corrected',value:cur,prevValue:nz(lastEntry.value),date:today,claimedValue:claimed,approvalStatus,approvalNote});
       }
     });
     // garbage-collect rows that were cancelled before ever being part of a locked account
@@ -1186,6 +1240,8 @@ const Validation = {
       if(mv.previousCumulative>1e-9 && Math.abs(mv.addition+mv.correction) > mv.previousCumulative*2)
         warnings.push({code:'deviation',itemId:it.id,
           msg:`סעיף ${itemFullCode(it)}: סטייה גדולה מהחשבון הקודם (שינוי של ${fn(mv.addition+mv.correction)} ${it.unit} בתקופה זו)`});
+      if(mv.pendingCount>0) warnings.push({code:'pending',itemId:it.id,
+        msg:`סעיף ${itemFullCode(it)}: ${mv.pendingCount} שור${mv.pendingCount===1?'ה ממתינה':'ות ממתינות'} לאישור — לא ייכללו במצטבר עד שיוכרעו`});
     });
     return {critical,warnings};
   },
@@ -1628,7 +1684,7 @@ const Measurements = {
     if(!m.history||!m.history.length) return 'new';
     const item=findItem(State.project,m.itemId);
     const last=m.history[m.history.length-1];
-    const cur=calcRow(m,item);
+    const cur=approvedRowValue(m,item); // relative to the approved trajectory, not the raw claim
     return Math.abs(cur-nz(last.value))>1e-9 ? 'corrected' : 'approved';
   },
   addRow(itemId){
@@ -1645,19 +1701,20 @@ const Measurements = {
   },
   duplicateRow(rowId){
     const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
-    const c=makeMeasurement({...cloneObj(m),id:uid('meas_'),history:[],cancelled:false});
+    const c=makeMeasurement({...cloneObj(m),id:uid('meas_'),history:[],cancelled:false,approval:null});
     const idx=p.measurements.findIndex(x=>x.id===rowId);
     p.measurements.splice(idx+1,0,c);
     State.scheduleSave(); App.refresh();
   },
   toggleSign(rowId){
-    const m=State.project.measurements.find(x=>x.id===rowId); if(!m) return;
-    m.sign=(m.sign===-1?1:-1); State.scheduleSave(); App.refresh();
+    const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
+    m.sign=(m.sign===-1?1:-1); revalidateApproval(m,findItem(p,m.itemId)); State.scheduleSave(); App.refresh();
   },
   setShape(rowId,shape){
     const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
     const item=findItem(p,m.itemId), kind=itemUnitKind(item);
     m.shape=shape; m.d1=m.d2=m.d3=''; if(kind!=='volume') m.t='';
+    revalidateApproval(m,item);
     State.scheduleSave();
     // area-grouped view has per-area subtotals that a shape change can invalidate
     // (the row's value changes) — those need a real recompute, so fall through
@@ -1692,12 +1749,15 @@ const Measurements = {
     State.project.measurements=State.project.measurements.filter(x=>x.id!==rowId); State.scheduleSave(); App.refresh(); },
   liveUpdate(rowId,key,val){
     const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
-    m[key]=val; State.scheduleSave();
+    m[key]=val;
     const item=findItem(p,m.itemId); const kind=itemUnitKind(item);
-    const fEl=byId('f-'+rowId), rEl=byId('r-'+rowId), stEl=byId('st-'+rowId);
+    if(['d1','d2','d3','t','qty'].includes(key)) revalidateApproval(m,item);
+    State.scheduleSave();
+    const fEl=byId('f-'+rowId), rEl=byId('r-'+rowId), stEl=byId('st-'+rowId), apEl=byId('ap-'+rowId);
     if(fEl) fEl.innerHTML=this.formulaHTML(m,kind);
     if(rEl){ const v=calcRow(m,item); rEl.textContent=fn(v,3); rEl.className='res '+(v<0?'n':'p'); }
     if(stEl){ const s=this.liveRowStatus(m); stEl.outerHTML=`<span id="st-${rowId}" class="stat ${ROW_STATUS_CLASS[s]}">${ROW_STATUS_LABEL[s]}</span>`; }
+    if(apEl) apEl.outerHTML=this.approvalCellHTML(m);
     this.patchItemContext();
     // area-grouped view shows per-area subtotals and buckets rows by their area
     // value — a dimension or area-name edit can invalidate both (wrong subtotal,
@@ -1722,20 +1782,29 @@ const Measurements = {
     const sumEl=byId('meas-sec-sum'); if(sumEl) sumEl.innerHTML=fn(mv.currentCumulative)+' <span class="u">'+esc(it.unit)+'</span>';
   },
   ctxStatsHTML(mv,it){
+    const claimedDiffers=Math.abs(mv.claimedCurrentCumulative-mv.currentCumulative)>1e-9;
     return `<div>חוזי<b>${fn(mv.contractQty)}</b></div><div>מצטבר קודם<b>${fn(mv.previousCumulative)}</b></div>
       <div>בתקופה<b>${fn(mv.addition)}</b></div><div>תיקון<b>${fn(mv.correction)}</b></div>
-      <div>מצטבר נוכחי<b>${fn(mv.currentCumulative)}</b></div><div>יתרה<b>${fn(mv.balance)}</b></div>
-      <div>% ביצוע<b>${pct(mv.completionPct)}</b></div>`;
+      <div>מצטבר נוכחי (מאושר)<b>${fn(mv.currentCumulative)}</b></div><div>יתרה<b>${fn(mv.balance)}</b></div>
+      <div>% ביצוע<b>${pct(mv.completionPct)}</b></div>
+      ${claimedDiffers?`<div>מצטבר נתבע<b style="color:var(--gold)">${fn(mv.claimedCurrentCumulative)}</b></div>`:''}
+      ${mv.pendingCount>0?`<div>ממתין לאישור<b style="color:var(--gold)">${mv.pendingCount}</b></div>`:''}`;
   },
   openHistory(rowId){
     const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
     const item=findItem(p,m.itemId);
     let rows='';
     if(!m.history.length) rows='<div class="empty"><div class="ic">🕓</div><div class="t">טרם אושרה בחשבון כלשהו</div></div>';
-    else rows=m.history.map(h=>`<div class="val-row ${h.action==='cancelled'?'err':(h.action==='created'?'ok':'warn')}">
+    else rows=m.history.map(h=>{
+      const claimDiffers=h.claimedValue!=null && Math.abs(nz(h.claimedValue)-nz(h.value))>1e-9;
+      return `<div class="val-row ${h.action==='cancelled'?'err':(h.action==='created'?'ok':'warn')}">
       <span class="ic">${h.action==='created'?'✚':h.action==='cancelled'?'✕':'✎'}</span>
       <div class="txt"><b>חשבון ${esc(h.accountNumber)}</b> — ${esc(ROW_HIST_LABEL[h.action])} · ${fdate(h.date)}<br>
-      ${h.action==='created'?`ערך: <b>${fn(h.value)}</b>`:`${fn(h.prevValue)} ← ${fn(h.value)}`} ${item?esc(item.unit):''}</div></div>`).join('');
+      ${h.action==='created'?`אושר: <b>${fn(h.value)}</b>`:`${fn(h.prevValue)} ← אושר: <b>${fn(h.value)}</b>`} ${item?esc(item.unit):''}
+      ${claimDiffers?`<br><span style="color:var(--gold-dk)">נתבע: ${fn(h.claimedValue)} ${item?esc(item.unit):''} (${esc(APPROVAL_STATUS_LABEL[h.approvalStatus]||'הופחת')})</span>`:''}
+      ${h.approvalNote?`<br><span style="color:var(--muted);font-size:11px">הערה: ${esc(h.approvalNote)}</span>`:''}
+      </div></div>`;
+    }).join('');
     UI.openDrawer(`<div class="drawer-hd">🕓 היסטוריית שורה<span class="x" onclick="UI.closeDrawer()">✕</span></div>
       <div class="drawer-bd-content"><div style="font-size:12px;color:var(--muted);margin-bottom:10px">${esc(item?itemFullCode(item):'')} — ${esc(m.desc||'')}</div>
       <div class="val-panel">${rows}</div></div>`);
@@ -1751,8 +1820,41 @@ const Measurements = {
   doCopy(rowIds){
     const p=State.project, target=byId('cp-target').value;
     rowIds.forEach(id=>{ const m=p.measurements.find(x=>x.id===id); if(!m) return;
-      p.measurements.push(makeMeasurement({...cloneObj(m),id:uid('meas_'),itemId:target,history:[],cancelled:false})); });
+      p.measurements.push(makeMeasurement({...cloneObj(m),id:uid('meas_'),itemId:target,history:[],cancelled:false,approval:null})); });
     UI.closeModal(); State.scheduleSave(); toast(`${rowIds.length} שורות הועתקו`); App.refresh();
+  },
+  // ── submission vs. approval: the reviewer's decision on one row's current claim ──
+  openApproval(rowId){
+    const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
+    const item=findItem(p,m.itemId);
+    const claimed=calcRow(m,item);
+    const status=m.approval?m.approval.status:'approved';
+    const value=(m.approval&&m.approval.status==='reduced')?nz(m.approval.value):claimed;
+    const note=m.approval?(m.approval.note||''):'';
+    UI.openModal(`<div class="modal-hd">קביעת סטטוס אישור<span class="x" onclick="UI.closeModal()">✕</span></div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">${esc(m.desc||'שורת מדידה')} — נתבע: <b class="num">${fn(claimed)} ${item?esc(item.unit):''}</b></div>
+      <div class="fld"><label>סטטוס</label>
+        <select id="ap-status" onchange="Measurements.toggleApprovalValueField(this.value)">
+          <option value="approved" ${status==='approved'?'selected':''}>מאושר כמוגש</option>
+          <option value="reduced" ${status==='reduced'?'selected':''}>הפחתה</option>
+          <option value="rejected" ${status==='rejected'?'selected':''}>דחייה</option>
+          <option value="pending" ${status==='pending'?'selected':''}>ממתין לאישור (טרם הוכרע)</option>
+        </select></div>
+      <div class="fld" id="ap-value-fld" style="margin-top:10px;${status==='reduced'?'':'display:none'}"><label>כמות מאושרת</label>
+        <input id="ap-value" type="text" inputmode="decimal" value="${esc(value)}"></div>
+      <div class="fld" style="margin-top:10px"><label>הערת מפקח</label><textarea id="ap-note">${esc(note)}</textarea></div>
+      <div class="modal-foot"><button class="btn btn-ghost" onclick="UI.closeModal()">ביטול</button>
+        <button class="btn btn-gold" onclick="Measurements.saveApproval('${m.id}')">שמירה</button></div>`);
+  },
+  toggleApprovalValueField(status){ const f=byId('ap-value-fld'); if(f) f.style.display = status==='reduced'?'block':'none'; },
+  saveApproval(rowId){
+    const p=State.project, m=p.measurements.find(x=>x.id===rowId); if(!m) return;
+    const item=findItem(p,m.itemId);
+    const status=byId('ap-status').value;
+    const note=byId('ap-note').value.trim();
+    if(status==='approved') m.approval=null;
+    else m.approval={status, value: status==='reduced'?nz(byId('ap-value').value):0, note, claimedAtDecision:calcRow(m,item)};
+    UI.closeModal(); State.scheduleSave(); toast('סטטוס האישור נשמר'); App.refresh();
   },
   attachKeyNav(){
     const table=byId('meas-table'); if(!table) return;
@@ -1775,8 +1877,12 @@ const Measurements = {
     if(kind==='area'||kind==='volume') h.push('צורה');
     if(kind==='length') h.push('אורך'); else if(kind==='count') h.push('כמות'); else h.push('מידה 1','מידה 2','מידה 3');
     if(kind==='volume') h.push('עובי / אורך');
-    h.push('N','נוסחה','±','תוצאה','סטטוס','הערות','');
+    h.push('N','נוסחה','±','נתבע','אישור','סטטוס','הערות','');
     return h;
+  },
+  approvalCellHTML(m){
+    const b=approvalBadge(m);
+    return `<button id="ap-${m.id}" class="stat ${b.cls}" style="border:none;cursor:pointer" onclick="Measurements.openApproval('${m.id}')" title="לחיצה לקביעת סטטוס אישור">${esc(b.label)}</button>`;
   },
   dimCells(m,kind,shape){
     if(kind==='length') return `<td class="col-dim"><input class="dim-in" placeholder="אורך" value="${esc(m.d1)}" oninput="Measurements.liveUpdate('${m.id}','d1',this.value)"></td>`;
@@ -1788,7 +1894,7 @@ const Measurements = {
   },
   renderRow(m,item,kind,useAreas,n){
     if(m.isGroup){
-      const span=5+(useAreas?1:0)+(kind==='volume'?1:0);
+      const span=this.tableHeaders(kind,useAreas).length-3; // total headers minus (#, תיאור) minus the trailing actions column
       return `<tr class="grp-row" data-row-id="${m.id}" style="background:#F0F4F9"><td colspan="2"><input value="${esc(m.groupLabel)}" style="font-weight:700;color:var(--navy)" oninput="Measurements.liveUpdate('${m.id}','groupLabel',this.value)"></td>
         <td colspan="${span}"></td><td><button class="icon-btn del" onclick="Measurements.removeGroup('${m.id}')">🗑</button></td></tr>`;
     }
@@ -1806,6 +1912,7 @@ const Measurements = {
     cells+=`<td class="formula" id="f-${m.id}">${this.formulaHTML(m,kind)}</td>`;
     cells+=`<td><span class="sign-pill ${m.sign===-1?'n':'p'}" onclick="Measurements.toggleSign('${m.id}')">${m.sign===-1?'－':'＋'}</span></td>`;
     cells+=`<td class="res ${v<0?'n':'p'}" id="r-${m.id}">${fn(v,3)}</td>`;
+    cells+=`<td>${this.approvalCellHTML(m)}</td>`;
     cells+=`<td id="st-${m.id}"><span class="stat ${ROW_STATUS_CLASS[status]}">${ROW_STATUS_LABEL[status]}</span></td>`;
     cells+=`<td><input value="${esc(m.notes)}" style="min-width:80px" oninput="Measurements.liveUpdate('${m.id}','notes',this.value)"></td>`;
     cells+=`<td><span class="actions" style="display:flex;gap:3px;justify-content:center">
@@ -2009,23 +2116,25 @@ const AccountsUI = {
         <div class="scard"><div class="sc-k">כולל מע"מ</div><div class="sc-v">${money(totals.cumulativeWithVat)}</div></div>
         <div class="scard"><div class="sc-k">% ביצוע</div><div class="sc-v">${pct(totals.completionPct)}</div></div></div>
       <div class="tbl-wrap responsive-cards"><table><thead><tr><th>קוד</th><th>תיאור</th><th>יח'</th><th>חוזי</th>
-        <th>מצטבר קודם</th><th>בתקופה</th><th>תיקון</th><th>מצטבר נוכחי</th><th>יתרה</th><th>% ביצוע</th></tr></thead><tbody>`;
+        <th>מצטבר קודם</th><th>בתקופה</th><th>תיקון</th><th>מצטבר נתבע</th><th>מצטבר מאושר</th><th>יתרה</th><th>% ביצוע</th></tr></thead><tbody>`;
     let rowsOut=0;
     items.forEach(it=>{
       const mv=Accounts.itemMovement(p,it,a);
       if(this._mode==='movement' && Math.abs(mv.addition)+Math.abs(mv.correction)<1e-9) return;
       rowsOut++;
+      const claimDiffers=Math.abs(mv.claimedCurrentCumulative-mv.currentCumulative)>1e-9;
       h+=`<tr onclick="Measurements.openItem('${it.id}');App.showTab('measurements')" style="cursor:pointer">
         <td data-lbl="קוד" class="num">${esc(itemFullCode(it))}</td><td data-lbl="תיאור" style="text-align:right">${esc(it.description||'')}</td>
         <td data-lbl="יח'">${esc(it.unit)}</td><td data-lbl="חוזי" class="num">${fn(mv.contractQty)}</td>
         <td data-lbl="מצטבר קודם" class="num">${fn(mv.previousCumulative)}</td>
         <td data-lbl="בתקופה" class="num ${mv.addition?'per-pos':''}">${fn(mv.addition)}</td>
         <td data-lbl="תיקון" class="num ${mv.correction?'per-neg':''}">${fn(mv.correction)}</td>
-        <td data-lbl="מצטבר נוכחי" class="num" style="font-weight:700">${fn(mv.currentCumulative)}</td>
+        <td data-lbl="מצטבר נתבע" class="num" style="${claimDiffers?'color:var(--gold-dk)':''}">${fn(mv.claimedCurrentCumulative)}</td>
+        <td data-lbl="מצטבר מאושר" class="num" style="font-weight:700">${fn(mv.currentCumulative)}</td>
         <td data-lbl="יתרה" class="num">${fn(mv.balance)}</td>
         <td data-lbl="% ביצוע" class="num ${mv.overrun?'per-neg':''}">${pct(mv.completionPct)}</td></tr>`;
     });
-    if(!rowsOut) h+=`<tr><td colspan="10"><div class="empty"><div class="t">אין תנועה להצגה במצב זה</div></div></td></tr>`;
+    if(!rowsOut) h+=`<tr><td colspan="11"><div class="empty"><div class="t">אין תנועה להצגה במצב זה</div></div></td></tr>`;
     h+=`</tbody></table></div>
       <div style="margin-top:14px"><button class="btn btn-ghost" onclick="Reports.openAccountReport('${a.id}')">🖨 דוח חשבון זה</button></div>
       </div></div>`;
@@ -2223,23 +2332,28 @@ const Reports = {
                 : (account.snapshot?account.snapshot.measurements.filter(r=>r.itemId===it.id&&!r.cancelled):[]));
     if(mode==='period' && !rows.length) return '';
     const kind=itemUnitKind(it);
+    const claimedDiffers=Math.abs(mv.claimedCurrentCumulative-mv.currentCumulative)>1e-9;
     const rowsHTML=rows.map((r,i)=>{
-      const val = isLive ? calcRow(r,it) : nz(r.value);
+      const claimedVal = isLive ? calcRow(r,it) : nz(r.claimedValue!=null?r.claimedValue:r.value);
+      const approvedVal = isLive ? approvedRowValue(r,it) : nz(r.value);
       const svg=shapeSVG(r.shape,r.d1,r.d2,r.d3,r.sign===-1,false,r.t,kind);
+      const differs=Math.abs(claimedVal-approvedVal)>1e-9;
       return `<tr class="${r.sign===-1?'rded':''}"><td class="ri">${i+1}</td><td class="rname">${esc(r.desc||'')}</td>
         <td>${svg}</td><td class="rf">${esc(rowFormulaLabel(r,kind))}</td>
-        <td class="rres ${val<0?'n':'p'}">${fn(val,3)}</td></tr>`;
+        <td class="rres ${claimedVal<0?'n':'p'}">${fn(claimedVal,3)}</td>
+        <td class="rres ${approvedVal<0?'n':'p'}" style="${differs?'color:var(--neg);font-weight:800':''}">${fn(approvedVal,3)}</td></tr>`;
     }).join('');
     return `<div class="rsec"><div class="rsec-hd"><span class="rcode">${esc(itemFullCode(it))}</span>
       <span class="rtitle">${esc(it.description||'')}</span><span class="rfacts">${esc(it.unit)} · ${money(mv.unitPrice)}/${esc(it.unit)}</span></div>
-      <table class="rtbl"><thead><tr><th style="width:24px">#</th><th>תיאור</th><th style="width:90px">שרטוט</th><th>נוסחה</th><th style="width:70px">תוצאה</th></tr></thead>
-      <tbody>${rowsHTML||`<tr><td colspan="5" style="padding:10px;color:var(--muted)">אין שורות מדידה</td></tr>`}</tbody></table>
+      <table class="rtbl"><thead><tr><th style="width:24px">#</th><th>תיאור</th><th style="width:90px">שרטוט</th><th>נוסחה</th><th style="width:60px">נתבע</th><th style="width:60px">אושר</th></tr></thead>
+      <tbody>${rowsHTML||`<tr><td colspan="6" style="padding:10px;color:var(--muted)">אין שורות מדידה</td></tr>`}</tbody></table>
       <div class="rbal">
         <div class="bc"><div class="k">חוזי</div><div class="v">${fn(mv.contractQty)}</div></div>
         <div class="bc"><div class="k">מצטבר קודם</div><div class="v">${fn(mv.previousCumulative)}</div></div>
         <div class="bc"><div class="k">בתקופה</div><div class="v">${fn(mv.addition)}</div></div>
         <div class="bc"><div class="k">תיקון</div><div class="v">${fn(mv.correction)}</div></div>
-        <div class="bc net"><div class="k">מצטבר נוכחי</div><div class="v">${fn(mv.currentCumulative)} ${esc(it.unit)}</div></div>
+        ${claimedDiffers?`<div class="bc"><div class="k">מצטבר נתבע</div><div class="v">${fn(mv.claimedCurrentCumulative)}</div></div>`:''}
+        <div class="bc net"><div class="k">מצטבר נוכחי (מאושר)</div><div class="v">${fn(mv.currentCumulative)} ${esc(it.unit)}</div></div>
       </div></div>`;
   },
   auditSidebarHTML(p,it){
@@ -2248,9 +2362,15 @@ const Reports = {
     entries.sort((a,b)=>a.date<b.date?-1:1);
     if(!entries.length) return '';
     return `<div class="rsec"><div class="rsec-hd"><span class="rtitle">היסטוריית ביקורת (Audit Trail)</span></div>
-      <table class="rtbl"><thead><tr><th>חשבון</th><th>פעולה</th><th>שורה</th><th>מ → אל</th><th>תאריך</th></tr></thead><tbody>
-      ${entries.map(h=>`<tr><td>${esc(h.accountNumber)}</td><td>${esc(ROW_HIST_LABEL[h.action])}</td><td class="rname">${esc(h.rowDesc||'')}</td>
-        <td class="num">${h.action==='created'?fn(h.value):fn(h.prevValue)+' ← '+fn(h.value)}</td><td>${fdate(h.date)}</td></tr>`).join('')}
+      <table class="rtbl"><thead><tr><th>חשבון</th><th>פעולה</th><th>שורה</th><th>מ → אל (מאושר)</th><th>נתבע</th><th>הערה</th><th>תאריך</th></tr></thead><tbody>
+      ${entries.map(h=>{
+        const claimDiffers=h.claimedValue!=null && Math.abs(nz(h.claimedValue)-nz(h.value))>1e-9;
+        return `<tr><td>${esc(h.accountNumber)}</td><td>${esc(ROW_HIST_LABEL[h.action])}</td><td class="rname">${esc(h.rowDesc||'')}</td>
+        <td class="num">${h.action==='created'?fn(h.value):fn(h.prevValue)+' ← '+fn(h.value)}</td>
+        <td class="num" style="${claimDiffers?'color:var(--gold-dk);font-weight:700':''}">${h.claimedValue!=null?fn(h.claimedValue):'—'}</td>
+        <td class="rname" style="font-size:10px">${esc(h.approvalNote||'')}</td>
+        <td>${fdate(h.date)}</td></tr>`;
+      }).join('')}
       </tbody></table></div>`;
   },
   summaryHTML(p,account){
@@ -2345,48 +2465,54 @@ const ExcelExport = {
     rows.push(this.row([this.cS('חשבון:'),this.cS(account.number+' — '+ACCOUNT_STATUS_LABEL[account.status])]));
     rows.push(this.row([this.cS('תאריך:'),this.cS(fdate(account.date))]));
     rows.push(this.row([]));
-    const heads=['קוד סעיף','תיאור','יח׳','חוזי','מצטבר קודם','בתקופה','תיקון','מצטבר נוכחי','יתרה','% ביצוע','מחיר יחידה','סכום נוכחי'];
+    const heads=['קוד סעיף','תיאור','יח׳','חוזי','מצטבר קודם','בתקופה','תיקון','מצטבר נתבע','מצטבר מאושר','יתרה','% ביצוע','מחיר יחידה','סכום מאושר'];
     rows.push(this.row(heads.map(h=>this.cS(h,'hdr'))));
-    let tContract=0,tPrev=0,tAdd=0,tCorr=0,tCur=0,tAmt=0;
+    let tContract=0,tPrev=0,tAdd=0,tCorr=0,tClaimed=0,tCur=0,tAmt=0;
     this.items(p).forEach(it=>{
       const mv=Accounts.itemMovement(p,it,account);
-      tContract+=mv.contractQty; tPrev+=mv.previousCumulative; tAdd+=mv.addition; tCorr+=mv.correction; tCur+=mv.currentCumulative; tAmt+=mv.amount;
+      tContract+=mv.contractQty; tPrev+=mv.previousCumulative; tAdd+=mv.addition; tCorr+=mv.correction;
+      tClaimed+=mv.claimedCurrentCumulative; tCur+=mv.currentCumulative; tAmt+=mv.amount;
       rows.push(this.row([this.cS(itemFullCode(it)),this.cS(it.description||''),this.cS(it.unit),
         this.cN(mv.contractQty,'num'),this.cN(mv.previousCumulative,'num'),this.cN(mv.addition,'num'),this.cN(mv.correction,'num'),
-        this.cN(mv.currentCumulative,'num'),this.cN(mv.balance,'num'),this.cN(mv.completionPct,'num'),this.cN(mv.unitPrice,'num'),this.cN(mv.amount,'num')]));
+        this.cN(mv.claimedCurrentCumulative,'num'),this.cN(mv.currentCumulative,'num'),this.cN(mv.balance,'num'),this.cN(mv.completionPct,'num'),this.cN(mv.unitPrice,'num'),this.cN(mv.amount,'num')]));
     });
     rows.push(this.row([this.cS('סה"כ','total'),this.cS('','total'),this.cS('','total'),this.cN(tContract,'total'),this.cN(tPrev,'total'),
-      this.cN(tAdd,'total'),this.cN(tCorr,'total'),this.cN(tCur,'total'),this.cS('','total'),this.cS('','total'),this.cS('','total'),this.cN(tAmt,'total')]));
+      this.cN(tAdd,'total'),this.cN(tCorr,'total'),this.cN(tClaimed,'total'),this.cN(tCur,'total'),this.cS('','total'),this.cS('','total'),this.cS('','total'),this.cN(tAmt,'total')]));
     const vat=nz(p.vat)/100;
     rows.push(this.row([this.cS(`מע"מ (${p.vat}%)`),this.cN(tAmt*vat,'num')]));
     rows.push(this.row([this.cS('סה"כ כולל מע"מ','total'),this.cN(tAmt*(1+vat),'total')]));
-    return this.sheet('ריכוז חשבון',rows,[90,220,50,70,80,70,70,80,70,60,70,90]);
+    return this.sheet('ריכוז חשבון',rows,[90,220,50,70,80,70,70,80,80,70,60,70,90]);
   },
   buildDetailSheet(p,account){
-    const rows=[this.row(['קוד סעיף','תיאור סעיף','#','תיאור שורה','צורה','מידה 1','מידה 2','מידה 3','עובי/אורך','N','תוצאה','יחידה'].map(h=>this.cS(h,'hdr')))];
+    const rows=[this.row(['קוד סעיף','תיאור סעיף','#','תיאור שורה','צורה','מידה 1','מידה 2','מידה 3','עובי/אורך','N','נתבע','אושר','יחידה','סטטוס אישור','הערת מפקח'].map(h=>this.cS(h,'hdr')))];
     const isLive=account.status==='draft';
     this.items(p).forEach(it=>{
       const kind=itemUnitKind(it);
       const src=isLive? p.measurements.filter(m=>!m.isGroup&&m.itemId===it.id&&!m.cancelled)
                        : (account.snapshot?account.snapshot.measurements.filter(r=>r.itemId===it.id&&!r.cancelled):[]);
       src.forEach((r,i)=>{
-        const val=isLive?calcRow(r,it):nz(r.value);
+        const claimedVal=isLive?calcRow(r,it):nz(r.claimedValue!=null?r.claimedValue:r.value);
+        const approvedVal=isLive?approvedRowValue(r,it):nz(r.value);
+        const status=isLive?(r.approval?APPROVAL_STATUS_LABEL[r.approval.status]:'מאושר כמוגש'):(r.approvalStatus?APPROVAL_STATUS_LABEL[r.approvalStatus]:'מאושר כמוגש');
+        const note=isLive?(r.approval?r.approval.note||'':''):(r.approvalNote||'');
         rows.push(this.row([this.cS(itemFullCode(it)),this.cS(it.description||''),this.cN(i+1),this.cS(r.desc||''),this.cS(r.shape||''),
-          this.cN(r.d1,'num'),this.cN(r.d2,'num'),this.cN(r.d3,'num'),this.cN(r.t,'num'),this.cN(r.qty||1,'num'),this.cN(val,'num'),this.cS(it.unit)]));
+          this.cN(r.d1,'num'),this.cN(r.d2,'num'),this.cN(r.d3,'num'),this.cN(r.t,'num'),this.cN(r.qty||1,'num'),
+          this.cN(claimedVal,'num'),this.cN(approvedVal,'num'),this.cS(it.unit),this.cS(status),this.cS(note)]));
       });
     });
-    return this.sheet('דפי חישוב',rows,[90,200,30,180,70,60,60,60,60,40,70,50]);
+    return this.sheet('דפי חישוב',rows,[90,200,30,180,70,60,60,60,60,40,70,70,50,100,160]);
   },
   buildHistorySheet(p){
-    const rows=[this.row(['קוד סעיף','תיאור שורה','חשבון','פעולה','מערך','לערך','תאריך'].map(h=>this.cS(h,'hdr')))];
+    const rows=[this.row(['קוד סעיף','תיאור שורה','חשבון','פעולה','מערך','לערך (מאושר)','נתבע','הערת מפקח','תאריך'].map(h=>this.cS(h,'hdr')))];
     p.measurements.filter(m=>!m.isGroup).forEach(m=>{
       const it=findItem(p,m.itemId); if(!it) return;
       (m.history||[]).forEach(h=>{
         rows.push(this.row([this.cS(itemFullCode(it)),this.cS(m.desc||''),this.cS(h.accountNumber),this.cS(ROW_HIST_LABEL[h.action]),
-          this.cN(h.prevValue,'num'),this.cN(h.value,'num'),this.cS(fdate(h.date))]));
+          this.cN(h.prevValue,'num'),this.cN(h.value,'num'),this.cN(h.claimedValue!=null?h.claimedValue:h.value,'num'),
+          this.cS(h.approvalNote||''),this.cS(fdate(h.date))]));
       });
     });
-    return this.sheet('היסטוריית תיקונים',rows,[90,200,60,70,70,70,80]);
+    return this.sheet('היסטוריית תיקונים',rows,[90,200,60,70,70,70,70,160,80]);
   },
   items(p){ let items=p.items.filter(it=>!it.cancelled); if(Reports._selected) items=items.filter(it=>Reports._selected.has(it.id));
     return items.sort((a,b)=>itemFullCode(a).localeCompare(itemFullCode(b))); },
