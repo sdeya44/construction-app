@@ -915,6 +915,27 @@ function rowFormulaLabel(m,kind){
   const c=CROSS[m.shape]; if(!c) return '';
   return kind==='volume' ? `(${c.lbl}) × עובי` : c.lbl;
 }
+// the abstract pattern above ("אורך × רוחב") doesn't show HOW a result was reached —
+// this substitutes the row's actual entered numbers into it, e.g. "5 × 2 = 10.000",
+// so a calculation sheet (on screen or printed) can be checked/audited by eye.
+function rowFormulaText(m,kind){
+  kind=kind||inferKindFromShape(m);
+  const bv=baseVal(m,kind);
+  const d1=fnum(m.d1)||0, d2=fnum(m.d2)||0, d3=fnum(m.d3)||0, t=fnum(m.t)||0;
+  if(kind==='length') return `${d1} = ${fn(bv.v,3)}`;
+  if(kind==='count') return `${fnum(m.d1)||1} = ${fn(bv.v,3)}`;
+  const c=CROSS[m.shape]; if(!c) return '';
+  let areaExpr;
+  if(c.custom) areaExpr=`${d1}`;
+  else if(m.shape==='מלבן') areaExpr=`${d1} × ${d2}`;
+  else if(m.shape==='משולש') areaExpr=`(${d1} × ${d2}) ÷ 2`;
+  else if(m.shape==='טרפז') areaExpr=`(${d1}+${d2}) × ${d3} ÷ 2`;
+  else if(m.shape==='עיגול') areaExpr=`π×(${d1}÷2)²`;
+  else if(m.shape==='חצי-עיגול') areaExpr=`π×(${d1}÷2)²÷2`;
+  else areaExpr=c.lbl;
+  if(kind==='area') return `${areaExpr} = ${fn(bv.v,3)}`;
+  return `(${areaExpr}) × ${t} = ${fn(bv.v,3)}`; // volume: cross-section area × extrusion length
+}
 function rowSig(m){ return JSON.stringify([m.shape,m.d1,m.d2,m.d3,m.t,m.qty,m.sign]); }
 
 // ── SVG drawing engine (isometric extrusion for volumes, flat face for areas) ──
@@ -1200,7 +1221,11 @@ const Accounts = {
 //  MODULE: VALIDATION ENGINE
 //  Critical findings BLOCK locking; warnings require an explicit confirm.
 // ═══════════════════════════════════════════════════════════════════════
-const NUM_RE=/^-?\d+([.,]\d+)?$/;
+// accepts "5", "5.2", ".5", "5.", "-.5" etc. — anything nz() can actually parse.
+// (the old stricter pattern rejected ".5"/"5." even though they're common, valid
+// input and calculated correctly — it just blocked locking with a false "invalid
+// number" error on a number that was never actually invalid)
+const NUM_RE=/^-?(\d+([.,]\d*)?|[.,]\d+)$/;
 const Validation = {
   run(project){
     const critical=[], warnings=[];
@@ -1753,11 +1778,12 @@ const Measurements = {
     const item=findItem(p,m.itemId); const kind=itemUnitKind(item);
     if(['d1','d2','d3','t','qty'].includes(key)) revalidateApproval(m,item);
     State.scheduleSave();
-    const fEl=byId('f-'+rowId), rEl=byId('r-'+rowId), stEl=byId('st-'+rowId), apEl=byId('ap-'+rowId);
+    const fEl=byId('f-'+rowId), rEl=byId('r-'+rowId), stEl=byId('st-'+rowId), apEl=byId('ap-'+rowId), shapeEl=byId('shape-'+rowId);
     if(fEl) fEl.innerHTML=this.formulaHTML(m,kind);
     if(rEl){ const v=calcRow(m,item); rEl.textContent=fn(v,3); rEl.className='res '+(v<0?'n':'p'); }
     if(stEl){ const s=this.liveRowStatus(m); stEl.outerHTML=`<span id="st-${rowId}" class="stat ${ROW_STATUS_CLASS[s]}">${ROW_STATUS_LABEL[s]}</span>`; }
     if(apEl) apEl.outerHTML=this.approvalCellHTML(m);
+    if(shapeEl) shapeEl.innerHTML=shapeSVG(m.shape,m.d1,m.d2,m.d3,m.sign===-1,false,m.t,kind);
     this.patchItemContext();
     // area-grouped view shows per-area subtotals and buckets rows by their area
     // value — a dimension or area-name edit can invalidate both (wrong subtotal,
@@ -1771,9 +1797,9 @@ const Measurements = {
   },
   formulaHTML(m,kind){
     const bv=baseVal(m,kind);
-    const lbl=rowFormulaLabel(m,kind);
+    const txt=rowFormulaText(m,kind);
     const warn = kind==='volume' && !bv.complete ? '<span class="ru warn">חסר עובי/אורך</span>' : '';
-    return `${esc(lbl)}${warn}`;
+    return `${esc(txt)}${warn}`;
   },
   patchItemContext(){
     const p=State.project, it=findItem(p,this._activeItemId); if(!it) return;
@@ -1875,6 +1901,7 @@ const Measurements = {
     let h=['#','תיאור'];
     if(useAreas) h.push('אזור');
     if(kind==='area'||kind==='volume') h.push('צורה');
+    h.push('שרטוט');
     if(kind==='length') h.push('אורך'); else if(kind==='count') h.push('כמות'); else h.push('מידה 1','מידה 2','מידה 3');
     if(kind==='volume') h.push('עובי / אורך');
     h.push('N','נוסחה','±','נתבע','אישור','סטטוס','הערות','');
@@ -1905,6 +1932,7 @@ const Measurements = {
     cells+=`<td class="col-desc"><textarea class="desc-in" rows="1" oninput="Measurements.liveUpdate('${m.id}','desc',this.value)">${esc(m.desc)}</textarea></td>`;
     if(useAreas) cells+=`<td><input value="${esc(m.area)}" style="min-width:70px" oninput="Measurements.liveUpdate('${m.id}','area',this.value)"></td>`;
     if(shapeSelectable) cells+=`<td><select onchange="Measurements.setShape('${m.id}',this.value)">${Object.keys(CROSS).map(s=>`<option ${m.shape===s?'selected':''}>${s}</option>`).join('')}</select></td>`;
+    cells+=`<td class="shape-cell" id="shape-${m.id}">${shapeSVG(m.shape,m.d1,m.d2,m.d3,m.sign===-1,false,m.t,kind)}</td>`;
     cells+=this.dimCells(m,kind,m.shape);
     if(kind==='volume'){ const lbl=m.shape==='שטח מיוחד'?'אורך':'עובי';
       cells+=`<td class="col-dim thick-on"><input class="dim-in" placeholder="${lbl}" value="${esc(m.t)}" oninput="Measurements.liveUpdate('${m.id}','t',this.value)"></td>`; }
@@ -2067,9 +2095,11 @@ const AccountsUI = {
     h+=`<div class="card"><div class="card-hd">בדיקת תקינות — חשבון ${esc(draft.number)} (טיוטה)<span class="hd-sub">יש לתקן שגיאות קריטיות לפני נעילה</span></div>
       <div class="card-bd">${this.validationPanelHTML(v)}
       <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-gold btn-lg" ${v.critical.length?'disabled':''} onclick="AccountsUI.lock()">🔒 נעילת חשבון ${esc(draft.number)}</button>
+        <button class="btn btn-gold btn-lg" ${v.critical.length?'disabled':''} onclick="AccountsUI.lock()">🔒 אישור ונעילת חשבון ${esc(draft.number)}</button>
         ${Accounts.lockedAccounts(p).length?`<button class="btn btn-ghost" onclick="AccountsUI.unlock()">↺ ביטול נעילה אחרונה</button>`:''}
-      </div></div></div>`;
+      </div>
+      <div class="hint" style="margin-top:8px;color:var(--muted)">לחיצה זו מאשרת ונועלת את חשבון ${esc(draft.number)} לצמיתות (מצב "נעול", לקריאה בלבד) ופותחת אוטומטית חשבון ${esc(Accounts.nextNumber(p))} כטיוטה חדשה להמשך עבודה.</div>
+      </div></div>`;
     return h;
   },
   validationPanelHTML(v){
@@ -2339,7 +2369,7 @@ const Reports = {
       const svg=shapeSVG(r.shape,r.d1,r.d2,r.d3,r.sign===-1,false,r.t,kind);
       const differs=Math.abs(claimedVal-approvedVal)>1e-9;
       return `<tr class="${r.sign===-1?'rded':''}"><td class="ri">${i+1}</td><td class="rname">${esc(r.desc||'')}</td>
-        <td>${svg}</td><td class="rf">${esc(rowFormulaLabel(r,kind))}</td>
+        <td>${svg}</td><td class="rf">${esc(rowFormulaText(r,kind))}</td>
         <td class="rres ${claimedVal<0?'n':'p'}">${fn(claimedVal,3)}</td>
         <td class="rres ${approvedVal<0?'n':'p'}" style="${differs?'color:var(--neg);font-weight:800':''}">${fn(approvedVal,3)}</td></tr>`;
     }).join('');
