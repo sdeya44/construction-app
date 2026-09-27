@@ -330,6 +330,10 @@ td.formula{direction:ltr;font-size:11.5px;color:#3A4757;white-space:nowrap;font-
 .thick-add:hover{background:#F5EAD0}
 td.thick-on{background:#FBF7EC}
 #meas-table{min-width:1120px}
+.ws-qty-cell{display:flex;align-items:center;gap:4px;justify-content:center}
+.ws-qty-in{width:80px;text-align:center;font-size:13px;padding:6px 4px;border:1px solid var(--line);border-radius:6px;font-weight:700}
+.ws-qty-in:focus{outline:none;border-color:var(--navy2);box-shadow:0 0 0 2px rgba(30,58,92,.12)}
+.ws-locked{color:var(--muted);font-weight:700;white-space:nowrap}
 #meas-table .col-dim{width:62px}
 #meas-table .col-dim .dim-in{width:100%;text-align:center;font-size:13px;padding:6px 4px}
 #meas-table .col-desc{width:170px;white-space:normal;vertical-align:middle}
@@ -519,6 +523,7 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:poin
     <button class="tab" data-tab="accounts" onclick="App.showTab('accounts')">📒 <span>חשבונות</span></button>
     <button class="tab" data-tab="boq" onclick="App.showTab('boq')">📋 <span>כתב כמויות</span><span class="badge" id="bdg-boq">0</span></button>
     <button class="tab" data-tab="measurements" onclick="App.showTab('measurements')">📐 <span>מדידות</span></button>
+    <button class="tab" data-tab="worksheet" onclick="App.showTab('worksheet')">🧮 <span>גיליון עבודה</span></button>
     <button class="tab" data-tab="reports" onclick="App.showTab('reports')">🖨 <span>דוחות</span></button>
     <button class="tab" data-tab="import" onclick="App.showTab('import')">📥 <span>ייבוא</span></button>
     <button class="tab" data-tab="settings" onclick="App.showTab('settings')">⚙ <span>הגדרות</span></button>
@@ -2060,6 +2065,142 @@ const Measurements = {
   },
 };
 Screens.measurements=()=>Measurements.render();
+// ═══════════════════════════════════════════════════════════════════════
+//  MODULE: WORK WORKSHEET  (fast flat per-account entry grid, Banarit-style —
+//  one row per BOQ item with a directly-editable "quantity this period" cell.
+//  A quick number still creates a real measurement row under the hood (same
+//  approval/history/snapshot machinery as the full geometry calculator), it
+//  just uses a trivial pass-through shape so no dimensions are required.
+//  Once an item carries a real, detailed calc row, the quick cell locks —
+//  otherwise two entry paths could silently disagree about the same figure.
+// ═══════════════════════════════════════════════════════════════════════
+const WorksheetUI = {
+  _building:null,_chapter:null,_sub:null,
+  buildings(p){ return [...new Set(p.items.filter(it=>!it.cancelled).map(it=>it.building))].sort(); },
+  chapters(p,b){ return [...new Set(p.items.filter(it=>!it.cancelled&&it.building===b).map(it=>it.chapter))].sort(); },
+  subs(p,b,c){ return [...new Set(p.items.filter(it=>!it.cancelled&&it.building===b&&it.chapter===c).map(it=>it.sub))].sort(); },
+  scopedItems(p){
+    return p.items.filter(it=>!it.cancelled&&it.building===this._building&&it.chapter===this._chapter&&it.sub===this._sub)
+      .sort((a,b)=>itemFullCode(a).localeCompare(itemFullCode(b)));
+  },
+  // rows added since the last lock (this period's own additions) for one item —
+  // mirrors exactly what Accounts.itemMovement() counts as "addition"
+  newRowsForItem(p,it,account){
+    const prevSnap=Accounts.previousSnapshot(p,account);
+    const prevIds=prevSnap?new Set(prevSnap.measurements.map(x=>x.id)):new Set();
+    return p.measurements.filter(m=>!m.isGroup&&!m.cancelled&&m.itemId===it.id&&!prevIds.has(m.id));
+  },
+  quickInfo(p,it,account){
+    const rows=this.newRowsForItem(p,it,account);
+    if(!rows.length) return {locked:false,row:null,value:0};
+    if(rows.length===1 && rows[0].quickEntry) return {locked:false,row:rows[0],value:calcRow(rows[0],it)};
+    return {locked:true,row:null,value:rows.reduce((a,r)=>a+calcRow(r,it),0)};
+  },
+  quickShapeFor(kind){
+    if(kind==='length') return {shape:'קו'};
+    if(kind==='count') return {shape:'יחידה'};
+    if(kind==='area') return {shape:'שטח מיוחד'};
+    return {shape:'שטח מיוחד',t:1}; // volume: direct total — area=d1, ×extrusion 1 = d1
+  },
+  setScope(level,val){
+    if(level==='building'){ this._building=val; this._chapter=null; this._sub=null; }
+    else if(level==='chapter'){ this._chapter=val; this._sub=null; }
+    else this._sub=val;
+    App.refresh();
+  },
+  setQty(itemId,rowId,val,inputEl){
+    const p=State.project, it=findItem(p,itemId); if(!it) return;
+    let m;
+    if(rowId){
+      m=p.measurements.find(x=>x.id===rowId); if(!m) return;
+      m.d1=val;
+    } else {
+      const kind=itemUnitKind(it);
+      m=makeMeasurement(Object.assign({itemId,quickEntry:true,d1:val},this.quickShapeFor(kind)));
+      p.measurements.push(m);
+      if(inputEl) inputEl.dataset.rowId=m.id;
+    }
+    revalidateApproval(m,it);
+    State.scheduleSave();
+    this.patchRow(itemId);
+  },
+  patchRow(itemId){
+    const p=State.project, it=findItem(p,itemId); if(!it) return;
+    const draft=Accounts.current(p), mv=Accounts.itemMovement(p,it,draft);
+    const cumEl=byId('ws-cum-'+itemId); if(cumEl) cumEl.textContent=fn(mv.currentCumulative);
+    const pctEl=byId('ws-pct-'+itemId); if(pctEl) pctEl.textContent=pct(mv.completionPct);
+    const amtEl=byId('ws-amt-'+itemId); if(amtEl) amtEl.textContent=money(mv.amount);
+    const totalEl=byId('ws-sum-total');
+    if(totalEl){
+      const sum=this.scopedItems(p).reduce((a,x)=>a+Accounts.itemMovement(p,x,draft).amount,0);
+      totalEl.textContent=money(sum);
+    }
+  },
+  render(){
+    const p=State.project, draft=Accounts.current(p);
+    const buildings=this.buildings(p);
+    if(!buildings.length) return `<div class="card"><div class="card-hd">🧮 גיליון עבודה מהיר</div><div class="card-bd">
+      <div class="empty"><div class="ic">📋</div><div class="t">אין סעיפים בכתב הכמויות עדיין</div></div></div></div>`;
+    if(this._building===null||!buildings.includes(this._building)) this._building=buildings[0];
+    const chapters=this.chapters(p,this._building);
+    if(this._chapter===null||!chapters.includes(this._chapter)) this._chapter=chapters[0];
+    const subs=this.subs(p,this._building,this._chapter);
+    if(this._sub===null||!subs.includes(this._sub)) this._sub=subs[0];
+    let h=`<div class="card"><div class="card-hd">🧮 גיליון עבודה מהיר<span class="hd-sub">חשבון ${esc(draft.number)} (טיוטה) — הזנת כמות בתקופה ישירות בטבלה</span></div>
+      <div class="card-bd">
+      <div class="rc-row" style="border-bottom:1px solid var(--hair);padding-bottom:12px;margin-bottom:12px;flex-wrap:wrap;display:flex;gap:16px;align-items:center">
+        <label class="opt">מבנה<select onchange="WorksheetUI.setScope('building',this.value)">
+          ${buildings.map(b=>`<option value="${esc(b)}" ${this._building===b?'selected':''}>${esc(b)}</option>`).join('')}
+        </select></label>
+        <label class="opt">פרק<select onchange="WorksheetUI.setScope('chapter',this.value)">
+          ${chapters.map(c=>`<option value="${esc(c)}" ${this._chapter===c?'selected':''}>${esc(c)}</option>`).join('')}
+        </select></label>
+        <label class="opt">תת פרק<select onchange="WorksheetUI.setScope('sub',this.value)">
+          ${subs.map(s=>`<option value="${esc(s)}" ${this._sub===s?'selected':''}>${esc(s)}</option>`).join('')}
+        </select></label>
+      </div>`;
+    const items=this.scopedItems(p);
+    if(!items.length){
+      h+=`<div class="empty"><div class="ic">🔍</div><div class="t">אין סעיפים בתת-הפרק הזה</div></div></div></div>`;
+      return h;
+    }
+    h+=`<div class="tbl-wrap responsive-cards"><table class="rtbl ws-table"><thead><tr>
+        <th style="width:90px">סעיף</th><th>תיאור</th><th style="width:50px">יחידה</th>
+        <th style="width:75px">כמות חוזה</th><th style="width:75px">מצטבר קודם</th>
+        <th style="width:120px">כמות בתקופה</th><th style="width:80px">מצטברת</th>
+        <th style="width:60px">% ביצוע</th><th style="width:80px">מחיר יחידה</th><th style="width:90px">סה"כ מצטבר</th>
+      </tr></thead><tbody>`;
+    let sumAmount=0;
+    items.forEach(it=>{
+      const mv=Accounts.itemMovement(p,it,draft);
+      sumAmount+=mv.amount;
+      const info=this.quickInfo(p,it,draft);
+      const qtyCell = info.locked
+        ? `<span class="ws-locked" title="לסעיף זה יש שורות מדידה מפורטות — עריכה דרך המחשבון בלבד">${fn(info.value,3)} 🔒</span>
+           <button class="icon-btn" title="פתיחת חישוב כמויות מפורט" onclick="Measurements.openItem('${it.id}');App.showTab('measurements')">🧮</button>`
+        : `<input class="ws-qty-in" id="ws-in-${it.id}" data-row-id="${info.row?info.row.id:''}" value="${info.row?esc(info.row.d1):''}" placeholder="0"
+             oninput="WorksheetUI.setQty('${it.id}', this.dataset.rowId||null, this.value, this)">
+           <button class="icon-btn" title="חישוב כמויות מפורט (שרטוט/נוסחה)" onclick="Measurements.openItem('${it.id}');App.showTab('measurements')">🧮</button>`;
+      h+=`<tr>
+        <td class="rcode" data-lbl="סעיף">${esc(itemFullCode(it))}</td>
+        <td class="rname" data-lbl="תיאור">${esc(it.description||'')}</td>
+        <td data-lbl="יחידה">${esc(it.unit)}</td>
+        <td class="num" data-lbl="כמות חוזה">${fn(mv.contractQty)}</td>
+        <td class="num" data-lbl="מצטבר קודם">${fn(mv.previousCumulative)}</td>
+        <td class="ws-qty-cell" data-lbl="כמות בתקופה">${qtyCell}</td>
+        <td class="num" id="ws-cum-${it.id}" data-lbl="מצטברת">${fn(mv.currentCumulative)}</td>
+        <td class="num" id="ws-pct-${it.id}" data-lbl="% ביצוע">${pct(mv.completionPct)}</td>
+        <td class="num" data-lbl="מחיר יחידה">${money(mv.unitPrice)}</td>
+        <td class="num" id="ws-amt-${it.id}" data-lbl="סה&quot;כ מצטבר">${money(mv.amount)}</td>
+      </tr>`;
+    });
+    h+=`</tbody><tfoot><tr class="t1"><td colspan="9" style="text-align:left;font-weight:800">סה"כ תת-פרק</td>
+        <td class="num" id="ws-sum-total" style="font-weight:800">${money(sumAmount)}</td></tr></tfoot></table></div>
+      </div></div>`;
+    return h;
+  },
+};
+Screens.worksheet=()=>WorksheetUI.render();
 // ═══════════════════════════════════════════════════════════════════════
 //  MODULE: DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════
