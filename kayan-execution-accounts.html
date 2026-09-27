@@ -401,14 +401,17 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:poin
 .logo-wide{max-height:70px;max-width:100%;object-fit:contain}
 .rttl{text-align:center}.rttl h1{font-size:21px;color:var(--navy);font-weight:800}.rttl .sub{font-size:12px;color:var(--muted);margin-top:2px}
 .rclient{font-size:25px;font-weight:800;color:var(--navy);margin-bottom:2px}
-.rgrouped th{white-space:nowrap;font-size:9.5px}
+.rgrouped{border-collapse:collapse;font-size:10.5px}
+.rgrouped th,.rgrouped td{border:1px solid #333}
+.rgrouped th{white-space:nowrap;font-size:9.5px;padding:6px 5px;background:#F3F4F7}
+.rgrouped td{padding:4px 6px}
 .rgrouped td.num{direction:ltr;font-weight:600}
 tr.rgrp-b td{background:var(--navy);color:#fff;font-weight:800;padding:8px 10px;font-size:13px}
 tr.rgrp-c td{background:var(--paper);color:var(--navy);font-weight:800;padding:6px 10px;text-decoration:underline;font-size:12px}
 tr.rgrp-s td{color:var(--navy);font-weight:700;text-decoration:underline;padding:5px 10px;font-size:11.5px}
-tr.rgrp-tot td{font-weight:800;border-top:1px solid var(--navy);background:#F7F8FA}
+tr.rgrp-tot td{font-weight:800;background:#F7F8FA}
 tr.rgrp-grand td{font-weight:900;font-size:13px;background:var(--navy);color:#fff}
-.rmeta{font-size:10.5px;text-align:left;color:var(--ink)}.rmeta div{margin:1px 0}.rmeta span{color:var(--muted);display:inline-block;min-width:42px}
+.rmeta{font-size:11.5px;text-align:left;color:var(--ink);font-weight:700}.rmeta div{margin:2px 0}.rmeta span{display:none}
 .rhdr-wide{grid-template-columns:1fr}
 .rhdr-wide .rmeta{text-align:center;display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:6px}
 .rhdr-wide .rmeta div{margin:0}
@@ -2538,11 +2541,10 @@ const Reports = {
       ${wide?'':this.logoHTML(p)}
       <div class="rttl">${clientLine}<h1>${esc(title)}</h1><div class="goldline"></div><div class="sub">${esc(sub||'')}</div></div>
       <div class="rmeta">
-        <div><span>פרויקט:</span>${esc(p.name||'—')}</div>
-        <div><span>מיקום:</span>${esc(p.location||'—')}</div>
-        <div><span>חוזה:</span>${esc(p.contractNumber||'—')}</div>
-        <div><span>קבלן:</span>${esc(p.contractor||'—')}</div>
-        <div><span>תאריך:</span>${fdate(account.date)}</div>
+        <div style="font-size:13px">${esc([p.name,p.location].filter(Boolean).join(' — ')||'—')}</div>
+        ${p.contractNumber?`<div>חוזה ${esc(p.contractNumber)}</div>`:''}
+        ${p.contractor?`<div>${esc(p.contractor)}</div>`:''}
+        <div style="margin-top:6px;font-weight:500">${fdate(account.date)}</div>
       </div></div>`;
   },
   buildingName(p,b){ return (p.buildings[b]&&p.buildings[b].name)||''; },
