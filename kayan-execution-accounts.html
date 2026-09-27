@@ -400,6 +400,14 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:poin
 .rlogo-band{grid-column:1/-1;display:flex;justify-content:center;padding-bottom:8px}
 .logo-wide{max-height:70px;max-width:100%;object-fit:contain}
 .rttl{text-align:center}.rttl h1{font-size:21px;color:var(--navy);font-weight:800}.rttl .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.rclient{font-size:25px;font-weight:800;color:var(--navy);margin-bottom:2px}
+.rgrouped th{white-space:nowrap;font-size:9.5px}
+.rgrouped td.num{direction:ltr;font-weight:600}
+tr.rgrp-b td{background:var(--navy);color:#fff;font-weight:800;padding:8px 10px;font-size:13px}
+tr.rgrp-c td{background:var(--paper);color:var(--navy);font-weight:800;padding:6px 10px;text-decoration:underline;font-size:12px}
+tr.rgrp-s td{color:var(--navy);font-weight:700;text-decoration:underline;padding:5px 10px;font-size:11.5px}
+tr.rgrp-tot td{font-weight:800;border-top:1px solid var(--navy);background:#F7F8FA}
+tr.rgrp-grand td{font-weight:900;font-size:13px;background:var(--navy);color:#fff}
 .rmeta{font-size:10.5px;text-align:left;color:var(--ink)}.rmeta div{margin:1px 0}.rmeta span{color:var(--muted);display:inline-block;min-width:42px}
 .rhdr-wide{grid-template-columns:1fr}
 .rhdr-wide .rmeta{text-align:center;display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:6px}
@@ -635,7 +643,7 @@ const ACCOUNT_STATUS_LABEL={draft:'טיוטה',locked:'נעול'};
 function makeProject(fields){
   const now=nowISO();
   return Object.assign({
-    id:uid('proj_'), name:'', location:'', contractNumber:'', contractor:'',
+    id:uid('proj_'), name:'', location:'', contractNumber:'', contractor:'', clientContractor:'',
     supervisor:'', manager:'', vat:18, logo:null, logoMode:'wide',
     buildings:{}, chapters:{}, subchapters:{},   // meta lookup: code -> {name}
     items:[],            // BOQ items (flat, with building/chapter/sub/item codes)
@@ -2503,7 +2511,7 @@ Screens.import=()=>SKNImport.render();
 //  MODULE: REPORTS  (screen report, A4 print, per-item calculation sheet)
 // ═══════════════════════════════════════════════════════════════════════
 const Reports = {
-  _accountId:null, _mode:'cumulative', _sheetItemId:null,
+  _accountId:null, _mode:'cumulative', _sheetItemId:null, _layout:'concise',
   _printPerPage:false, _showCards:true, _showContract:true, _itemFilter:'all',
   openAccountReport(accountId){ this._accountId=accountId; this._sheetItemId=null; App.showTab('reports'); },
   openItemSheet(itemId){ this._sheetItemId=itemId; this._accountId=this._accountId||Accounts.current(State.project).id; App.showTab('reports'); },
@@ -2525,9 +2533,10 @@ const Reports = {
   },
   headerHTML(p,account,title,sub){
     const L=this.effLogo(p); const wide=!!(L.src&&L.mode==='wide');
+    const clientLine = p.clientContractor ? `<div class="rclient">${esc(p.clientContractor)}</div>` : '';
     return `<div class="rhdr ${wide?'rhdr-wide':''}">${wide?this.logoHTML(p):''}
       ${wide?'':this.logoHTML(p)}
-      <div class="rttl"><h1>${esc(title)}</h1><div class="goldline"></div><div class="sub">${esc(sub||'')}</div></div>
+      <div class="rttl">${clientLine}<h1>${esc(title)}</h1><div class="goldline"></div><div class="sub">${esc(sub||'')}</div></div>
       <div class="rmeta">
         <div><span>פרויקט:</span>${esc(p.name||'—')}</div>
         <div><span>מיקום:</span>${esc(p.location||'—')}</div>
@@ -2535,6 +2544,104 @@ const Reports = {
         <div><span>קבלן:</span>${esc(p.contractor||'—')}</div>
         <div><span>תאריך:</span>${fdate(account.date)}</div>
       </div></div>`;
+  },
+  buildingName(p,b){ return (p.buildings[b]&&p.buildings[b].name)||''; },
+  chapterName(p,b,c){ return (p.chapters[b+'.'+c]&&p.chapters[b+'.'+c].name)||''; },
+  subName(p,b,c,s){ return (p.subchapters[b+'.'+c+'.'+s]&&p.subchapters[b+'.'+c+'.'+s].name)||''; },
+  subtotalRow(amount,captionHTML){
+    return `<tr class="rgrp-tot"><td colspan="9">סה"כ ${captionHTML}</td><td class="num">${money(amount)}</td></tr>`;
+  },
+  // the concise, Banarit-style printout: one row per BOQ item, grouped under
+  // building/chapter/subchapter caption rows with running subtotals — this is
+  // what actually gets handed to a client, as opposed to the row-level
+  // shape/formula/claimed-vs-approved detail (kept available under "מפורט").
+  groupedTableHTML(p,account,items){
+    if(!items.length) return `<div class="empty"><div class="t">אין סעיפים להצגה</div></div>`;
+    let curB=null,curC=null,curS=null,bCap='',cCap='',sCap='';
+    let bTotal=0,cTotal=0,sTotal=0,grand=0,rows='';
+    const closeSub=()=>{ if(curS!==null) rows+=this.subtotalRow(sTotal,sCap); };
+    const closeChapter=()=>{ if(curC!==null) rows+=this.subtotalRow(cTotal,cCap); };
+    const closeBuilding=()=>{ if(curB!==null) rows+=this.subtotalRow(bTotal,bCap); };
+    items.forEach(it=>{
+      if(it.building!==curB){
+        closeSub();closeChapter();closeBuilding();
+        curB=it.building;curC=null;curS=null;bTotal=0;
+        const bn=this.buildingName(p,curB);
+        bCap=`${esc(curB)}${bn?' '+esc(bn):''}`;
+        rows+=`<tr class="rgrp-b"><td colspan="10">מבנה ${bCap}</td></tr>`;
+      }
+      if(it.chapter!==curC){
+        closeSub();closeChapter();
+        curC=it.chapter;curS=null;cTotal=0;
+        const cn=this.chapterName(p,curB,curC);
+        cCap=`${esc(curB)}.${esc(curC)}${cn?' '+esc(cn):''}`;
+        rows+=`<tr class="rgrp-c"><td colspan="10">פרק ${cCap}</td></tr>`;
+      }
+      if(it.sub!==curS){
+        closeSub();
+        curS=it.sub;sTotal=0;
+        const sn=this.subName(p,curB,curC,curS);
+        sCap=`${esc(curB)}.${esc(curC)}.${esc(curS)}${sn?' '+esc(sn):''}`;
+        rows+=`<tr class="rgrp-s"><td colspan="10">תת פרק ${sCap}</td></tr>`;
+      }
+      const mv=Accounts.itemMovement(p,it,account);
+      sTotal+=mv.amount; cTotal+=mv.amount; bTotal+=mv.amount; grand+=mv.amount;
+      rows+=`<tr>
+        <td class="rcode">${esc(itemFullCode(it))}</td>
+        <td class="rname">${esc(it.description||'')}</td>
+        <td>${esc(it.unit)}</td>
+        <td class="num">${fn(mv.contractQty)}</td>
+        <td class="num">${pct(mv.completionPct)}</td>
+        <td class="num">${fn(mv.previousCumulative)}</td>
+        <td class="num">${fn(mv.addition+mv.correction)}</td>
+        <td class="num" style="font-weight:700">${fn(mv.currentCumulative)}</td>
+        <td class="num">${money(mv.unitPrice)}</td>
+        <td class="num">${money(mv.amount)}</td>
+      </tr>`;
+    });
+    closeSub();closeChapter();closeBuilding();
+    rows+=`<tr class="rgrp-grand"><td colspan="9">סה"כ כללי</td><td class="num">${money(grand)}</td></tr>`;
+    return `<table class="rtbl rgrouped"><thead><tr>
+      <th style="width:80px">סעיף</th><th>תיאור</th><th style="width:45px">יחידה</th>
+      <th style="width:65px">כמות חוזה</th><th style="width:55px">% ביצוע</th><th style="width:70px">מצטבר קודם</th>
+      <th style="width:70px">כמות נוכחית</th><th style="width:75px">כמות מצטברת</th>
+      <th style="width:75px">מחיר יחידה</th><th style="width:85px">סה"כ מצטבר</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+  },
+  // simplified "ריכוז" rollup — subchapter/chapter/building totals only, indented by level
+  rollupHTML(p,account,items){
+    if(!items.length) return '';
+    let curB=null,curC=null,curS=null,bCap='',cCap='',sCap='';
+    let bTotal=0,cTotal=0,sTotal=0,grand=0,rows='';
+    const line=(lvl,cap,amount)=>`<tr><td class="rname" style="padding-inline-start:${8+lvl*16}px">${cap}</td><td class="num">${money(amount)}</td></tr>`;
+    const closeSub=()=>{ if(curS!==null) rows+=line(2,'תת פרק '+sCap,sTotal); };
+    const closeChapter=()=>{ if(curC!==null) rows+=line(1,'סה"כ פרק '+cCap,cTotal); };
+    const closeBuilding=()=>{ if(curB!==null) rows+=line(0,'סה"כ מבנה '+bCap,bTotal); };
+    items.forEach(it=>{
+      if(it.building!==curB){
+        closeSub();closeChapter();closeBuilding();
+        curB=it.building;curC=null;curS=null;bTotal=0;
+        const bn=this.buildingName(p,curB); bCap=`${esc(curB)}${bn?' '+esc(bn):''}`;
+        rows+=`<tr><td class="rname" style="font-weight:800">מבנה ${bCap}</td><td></td></tr>`;
+      }
+      if(it.chapter!==curC){
+        closeSub();closeChapter();
+        curC=it.chapter;curS=null;cTotal=0;
+        const cn=this.chapterName(p,curB,curC); cCap=`${esc(curB)}.${esc(curC)}${cn?' '+esc(cn):''}`;
+      }
+      if(it.sub!==curS){
+        closeSub();
+        curS=it.sub;sTotal=0;
+        const sn=this.subName(p,curB,curC,curS); sCap=`${esc(curB)}.${esc(curC)}.${esc(curS)}${sn?' '+esc(sn):''}`;
+      }
+      const mv=Accounts.itemMovement(p,it,account);
+      sTotal+=mv.amount; cTotal+=mv.amount; bTotal+=mv.amount; grand+=mv.amount;
+    });
+    closeSub();closeChapter();closeBuilding();
+    return `<div class="rsec rsec-pagebreak"><div class="rsec-hd"><span class="rtitle">ריכוז</span></div>
+      <table class="rtbl sumtbl"><tbody>${rows}
+      <tr class="t3"><td class="rname">סה"כ כללי</td><td class="num">${money(grand)}</td></tr>
+      </tbody></table></div>`;
   },
   itemSectionHTML(p,it,account,mode,pageBreak,showContract){
     const mv=Accounts.itemMovement(p,it,account);
@@ -2625,18 +2732,23 @@ const Reports = {
     }
     const items=this.reportItems(p);
     const totals=Accounts.projectTotals(p,account);
-    const title = this._mode==='period' ? 'דוח תנועה בחשבון' : 'דוח חשבון מצטבר';
-    let h=`<div class="report">${this.headerHTML(p,account,title,`חשבון ${account.number} — ${ACCOUNT_STATUS_LABEL[account.status]}`)}`;
-    if(this._showCards){
-      h+=`<div class="scards">
-        <div class="scard"><div class="sc-ic">📐</div><div class="sc-k">סה"כ חוזה</div><div class="sc-v">${money(totals.contractTotal)}</div></div>
-        <div class="scard"><div class="sc-ic">📒</div><div class="sc-k">מצטבר קודם</div><div class="sc-v">${money(totals.previousAmount)}</div></div>
-        <div class="scard"><div class="sc-ic">➕</div><div class="sc-k">בתקופה</div><div class="sc-v">${money(totals.periodAmount)}</div></div>
-        <div class="scard"><div class="sc-ic">✅</div><div class="sc-k">מצטבר נוכחי</div><div class="sc-v">${money(totals.cumulativeAmount)}</div></div>
-        <div class="scard"><div class="sc-ic">📊</div><div class="sc-k">% ביצוע</div><div class="sc-v">${pct(totals.completionPct)}</div></div>
-      </div>`;
+    const title = this._mode==='period' ? `תנועה בחשבון ${account.number}` : `חשבון חלקי מס' ${account.number}`;
+    let h=`<div class="report">${this.headerHTML(p,account,title,ACCOUNT_STATUS_LABEL[account.status])}`;
+    if(this._layout==='detailed'){
+      if(this._showCards){
+        h+=`<div class="scards">
+          <div class="scard"><div class="sc-ic">📐</div><div class="sc-k">סה"כ חוזה</div><div class="sc-v">${money(totals.contractTotal)}</div></div>
+          <div class="scard"><div class="sc-ic">📒</div><div class="sc-k">מצטבר קודם</div><div class="sc-v">${money(totals.previousAmount)}</div></div>
+          <div class="scard"><div class="sc-ic">➕</div><div class="sc-k">בתקופה</div><div class="sc-v">${money(totals.periodAmount)}</div></div>
+          <div class="scard"><div class="sc-ic">✅</div><div class="sc-k">מצטבר נוכחי</div><div class="sc-v">${money(totals.cumulativeAmount)}</div></div>
+          <div class="scard"><div class="sc-ic">📊</div><div class="sc-k">% ביצוע</div><div class="sc-v">${pct(totals.completionPct)}</div></div>
+        </div>`;
+      }
+      h+=items.map((it,idx)=>this.itemSectionHTML(p,it,account,this._mode,this._printPerPage&&idx>0,this._showContract)).join('');
+    } else {
+      h+=this.groupedTableHTML(p,account,items);
+      h+=this.rollupHTML(p,account,items);
     }
-    h+=items.map((it,idx)=>this.itemSectionHTML(p,it,account,this._mode,this._printPerPage&&idx>0,this._showContract)).join('');
     h+=this.summaryHTML(p,account)+this.signaturesHTML(p)+'</div>';
     return h;
   },
@@ -2652,9 +2764,8 @@ const Reports = {
       ${this._sheetItemId?`<button class="btn btn-ghost btn-sm" onclick="Reports._sheetItemId=null;App.refresh()">← חזרה לדוח מלא</button>`:''}
       </div>
       <div class="rc-row" style="padding-top:12px;flex-wrap:wrap">
-        <label class="opt"><input type="checkbox" ${this._printPerPage?'checked':''} onchange="Reports._printPerPage=this.checked;App.refresh()">כל סעיף בדף נפרד בהדפסה</label>
-        <label class="opt"><input type="checkbox" ${this._showCards?'checked':''} onchange="Reports._showCards=this.checked;App.refresh()">הצגת כרטיסי סיכום</label>
-        <label class="opt"><input type="checkbox" ${this._showContract?'checked':''} onchange="Reports._showContract=this.checked;App.refresh()">הצגת חוזי מול מדידה</label>
+        <label class="opt"><input type="radio" name="rlayout" ${this._layout!=='detailed'?'checked':''} onchange="Reports._layout='concise';App.refresh()">תמציתי (סעיף לשורה, כמו הדפסה רגילה)</label>
+        <label class="opt"><input type="radio" name="rlayout" ${this._layout==='detailed'?'checked':''} onchange="Reports._layout='detailed';App.refresh()">מפורט (שורות מדידה, שרטוט ונוסחה)</label>
         <label class="opt">סעיפים להצגה
           <select onchange="Reports._itemFilter=this.value;App.refresh()">
             <option value="all" ${this._itemFilter==='all'?'selected':''}>הכל</option>
@@ -2663,6 +2774,11 @@ const Reports = {
           </select>
         </label>
       </div>
+      ${this._layout==='detailed'?`<div class="rc-row" style="padding-top:12px;flex-wrap:wrap">
+        <label class="opt"><input type="checkbox" ${this._printPerPage?'checked':''} onchange="Reports._printPerPage=this.checked;App.refresh()">כל סעיף בדף נפרד בהדפסה</label>
+        <label class="opt"><input type="checkbox" ${this._showCards?'checked':''} onchange="Reports._showCards=this.checked;App.refresh()">הצגת כרטיסי סיכום</label>
+        <label class="opt"><input type="checkbox" ${this._showContract?'checked':''} onchange="Reports._showContract=this.checked;App.refresh()">הצגת חוזי מול מדידה</label>
+      </div>`:''}
       <div class="rc-row" style="border-bottom:none;padding-top:12px">
         <button class="btn btn-navy" onclick="window.print()">🖨 הדפסה / שמירה כ-PDF</button>
         <button class="btn btn-gold" onclick="ExcelExport.export()">⇩ ייצוא לאקסל</button>
@@ -2897,6 +3013,7 @@ const Settings = {
       <div class="grid2">
         ${f('name','שם הפרויקט')}${f('location','מיקום')}
         ${f('contractNumber','מס׳ חוזה')}${f('contractor','קבלן מבצע')}
+        ${f('clientContractor','קבלן מזמין (מופיע ככותרת הדוח)')}
         ${f('supervisor','מפקח')}${f('manager','מנהל פרויקט')}
         ${f('vat','מע"מ %','number')}
       </div>
