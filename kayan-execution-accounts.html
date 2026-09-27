@@ -390,6 +390,7 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:poin
 
 /* ══════════ REPORT / PRINT ══════════ */
 .report{background:#fff;max-width:210mm;margin:0 auto;padding:14mm 12mm;box-shadow:var(--shadow);border-radius:10px;color:var(--ink)}
+.report.report-wide{max-width:297mm}
 .rhdr{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;border-bottom:3px solid var(--navy);padding-bottom:12px;position:relative}
 .rlogo{display:flex;align-items:center;gap:9px}.rlogo svg{width:38px;height:38px}
 .rlogo .ln{font-weight:800;font-size:19px;color:var(--navy)}.rlogo .ln b{color:var(--gold)}
@@ -405,12 +406,14 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:poin
 .rgrouped th,.rgrouped td{border:1px solid #333}
 .rgrouped th{white-space:nowrap;font-size:9.5px;padding:6px 5px;background:#F3F4F7}
 .rgrouped td{padding:4px 6px}
-.rgrouped td.num{direction:ltr;font-weight:600}
-tr.rgrp-b td{background:var(--navy);color:#fff;font-weight:800;padding:8px 10px;font-size:13px}
-tr.rgrp-c td{background:var(--paper);color:var(--navy);font-weight:800;padding:6px 10px;text-decoration:underline;font-size:12px}
-tr.rgrp-s td{color:var(--navy);font-weight:700;text-decoration:underline;padding:5px 10px;font-size:11.5px}
-tr.rgrp-tot td{font-weight:800;background:#F7F8FA}
-tr.rgrp-grand td{font-weight:900;font-size:13px;background:var(--navy);color:#fff}
+.rgrouped td.num{direction:ltr;font-weight:600;text-align:right}
+tr.rgrp-b td{background:var(--navy);color:#fff;font-weight:800;padding:8px 10px;font-size:13px;text-align:right}
+tr.rgrp-c td{background:var(--paper);color:var(--navy);font-weight:800;padding:6px 10px;text-decoration:underline;font-size:12px;text-align:right}
+tr.rgrp-s td{color:var(--navy);font-weight:700;text-decoration:underline;padding:5px 10px;font-size:11.5px;text-align:right}
+tr.rgrp-tot td{font-weight:800;background:#F7F8FA;text-align:right}
+tr.rgrp-tot td.num{text-align:left}
+tr.rgrp-grand td{font-weight:900;font-size:13px;background:var(--navy);color:#fff;text-align:right}
+tr.rgrp-grand td.num{text-align:left}
 .rmeta{font-size:11.5px;text-align:left;color:var(--ink);font-weight:700}.rmeta div{margin:2px 0}.rmeta span{display:none}
 .rhdr-wide{grid-template-columns:1fr}
 .rhdr-wide .rmeta{text-align:center;display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:6px}
@@ -452,7 +455,7 @@ tr.rgrp-grand td{font-weight:900;font-size:13px;background:var(--navy);color:#ff
   .report{box-shadow:none;border-radius:0;max-width:none;padding:8mm 6mm}
   .rsec{break-inside:avoid}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .rsec-pagebreak{break-before:page;page-break-before:always}
-  @page{size:A4;margin:8mm}
+  @page{size:A4 landscape;margin:10mm}
 }
 
 @media(max-width:900px){
@@ -2735,7 +2738,7 @@ const Reports = {
     const items=this.reportItems(p);
     const totals=Accounts.projectTotals(p,account);
     const title = this._mode==='period' ? `תנועה בחשבון ${account.number}` : `חשבון חלקי מס' ${account.number}`;
-    let h=`<div class="report">${this.headerHTML(p,account,title,ACCOUNT_STATUS_LABEL[account.status])}`;
+    let h=`<div class="report${this._layout==='detailed'?'':' report-wide'}">${this.headerHTML(p,account,title,ACCOUNT_STATUS_LABEL[account.status])}`;
     if(this._layout==='detailed'){
       if(this._showCards){
         h+=`<div class="scards">
