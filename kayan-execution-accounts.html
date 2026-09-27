@@ -36,6 +36,7 @@ a{color:inherit}
   gap:14px;position:sticky;top:0;z-index:80;box-shadow:0 2px 12px rgba(19,42,70,.25)}
 .logo{display:flex;align-items:center;gap:10px;cursor:pointer;background:none;border:none}
 .logo svg{width:32px;height:32px;flex:none}
+.brand-img{height:34px;max-width:220px;object-fit:contain}
 .logo .name{font-weight:800;font-size:18px;letter-spacing:.02em;color:#fff}
 .logo .name b{color:var(--gold)}
 .logo .tag{font-size:8.5px;letter-spacing:.26em;color:#9FB2C9;margin-top:-2px}
@@ -204,6 +205,7 @@ td.formula{direction:ltr;font-size:11.5px;color:#3A4757;white-space:nowrap;font-
 .home-shell{min-height:100vh;background:linear-gradient(160deg,var(--navy-dk),var(--navy) 55%,#1c3a5c);padding:40px 18px}
 .home-top{display:flex;align-items:center;justify-content:center;gap:12px;color:#fff;margin-bottom:30px}
 .home-top .name{font-weight:800;font-size:26px}.home-top .name b{color:var(--gold)}
+.home-top .brand-img{height:52px;max-width:340px}
 .home-wrap{max-width:1060px;margin:0 auto}
 .home-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
 .home-search{flex:1;min-width:200px;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.14);
@@ -484,7 +486,7 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:poin
 
 <!-- ══════════ PROJECT SELECTOR (HOME) ══════════ -->
 <div id="home-screen" class="home-shell" style="display:none">
-  <div class="home-top">
+  <div class="home-top" id="home-brand">
     <svg viewBox="0 0 40 40" width="34" height="34"><rect x="2" y="2" width="36" height="36" rx="8" fill="#B08D3E"/><path d="M11 28V12h4l6 9 6-9h4v16h-4V19l-6 9-6-9v9z" fill="#0E1F33"/></svg>
     <span class="name">KAY<b>AN</b> Engineering</span>
   </div>
@@ -502,7 +504,7 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:poin
 <!-- ══════════ APP SHELL ══════════ -->
 <div id="app-shell" style="display:none">
   <div class="topbar">
-    <button class="logo" onclick="App.goHome()" title="לרשימת הפרויקטים">
+    <button class="logo" id="topbar-brand" onclick="App.goHome()" title="לרשימת הפרויקטים">
       <svg viewBox="0 0 40 40"><rect x="2" y="2" width="36" height="36" rx="8" fill="#B08D3E"/><path d="M11 28V12h4l6 9 6-9h4v16h-4V19l-6 9-6-9v9z" fill="#0E1F33"/></svg>
       <div><div class="name">KAY<b>AN</b></div><div class="tag">ENGINEERING</div></div>
     </button>
@@ -1319,6 +1321,7 @@ const App = {
     await Storage.init();
     const savedProfile=await Storage.getMeta('companyProfile',null);
     if(savedProfile) CompanyProfile=Object.assign({},DEFAULT_COMPANY_PROFILE,savedProfile);
+    this.paintBrand();
     const migrated=await Migration.run();
     if(migrated.length) toast(`יובאו ${migrated.length} פרויקטים מהגרסה הקודמת`,'ok');
     const lastId=await Storage.getMeta('currentProjectId',null);
@@ -1341,6 +1344,18 @@ const App = {
     byId('app-shell').style.display='block';
     this.paintTopbar();
     this.showTab('dashboard');
+  },
+  paintBrand(){
+    const src=safeLogoSrc(CompanyProfile.logo);
+    const fallbackMark='<svg viewBox="0 0 40 40" width="34" height="34"><rect x="2" y="2" width="36" height="36" rx="8" fill="#B08D3E"/><path d="M11 28V12h4l6 9 6-9h4v16h-4V19l-6 9-6-9v9z" fill="#0E1F33"/></svg>';
+    const homeEl=byId('home-brand'), tbEl=byId('topbar-brand');
+    if(src){
+      if(homeEl) homeEl.innerHTML=`<img src="${src}" class="brand-img" alt="לוגו">`;
+      if(tbEl) tbEl.innerHTML=`<img src="${src}" class="brand-img" alt="לוגו">`;
+    } else {
+      if(homeEl) homeEl.innerHTML=`${fallbackMark}<span class="name">KAY<b>AN</b> Engineering</span>`;
+      if(tbEl) tbEl.innerHTML=`${fallbackMark}<div><div class="name">KAY<b>AN</b></div><div class="tag">ENGINEERING</div></div>`;
+    }
   },
   paintTopbar(){
     const p=State.project; if(!p) return;
@@ -2695,11 +2710,11 @@ const CompanyProfileUI = {
     if(f.size>400000){ toast('⚠ קובץ גדול מדי (מקס׳ 400KB)','err'); if(e.target) e.target.value=''; return; }
     const r=new FileReader();
     r.onload=ev=>{ CompanyProfile.logo=ev.target.result; if(!CompanyProfile.logoMode) CompanyProfile.logoMode='wide';
-      Storage.setMeta('companyProfile',CompanyProfile); toast('לוגו החברה הוטמע'); App.refresh(); };
+      Storage.setMeta('companyProfile',CompanyProfile); toast('לוגו החברה הוטמע'); App.paintBrand(); App.refresh(); };
     r.readAsDataURL(f); if(e.target) e.target.value='';
   },
   setLogoMode(m){ CompanyProfile.logoMode=m; Storage.setMeta('companyProfile',CompanyProfile); App.refresh(); },
-  resetLogo(){ CompanyProfile=Object.assign({},DEFAULT_COMPANY_PROFILE); Storage.setMeta('companyProfile',CompanyProfile); toast('שוחזרו פרטי ברירת המחדל של החברה'); App.refresh(); },
+  resetLogo(){ CompanyProfile=Object.assign({},DEFAULT_COMPANY_PROFILE); Storage.setMeta('companyProfile',CompanyProfile); toast('שוחזרו פרטי ברירת המחדל של החברה'); App.paintBrand(); App.refresh(); },
   render(){
     const c=CompanyProfile;
     const f=(k,label)=>`<div class="fld"><label>${label}</label><input type="text" value="${esc(c[k]??'')}" onchange="CompanyProfileUI.setField('${k}',this.value)"></div>`;
