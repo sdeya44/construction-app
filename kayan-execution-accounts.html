@@ -1267,7 +1267,6 @@ const Validation = {
       if(it.unitPrice===''||it.unitPrice==null) warnings.push({code:'noprice',itemId:it.id,msg:`סעיף ${itemFullCode(it)}: חסר מחיר יחידה`});
       if(it.contractQty===''||it.contractQty==null) warnings.push({code:'noqty',itemId:it.id,msg:`סעיף ${itemFullCode(it)}: חסרה כמות חוזית`});
       const rows=project.measurements.filter(m=>!m.isGroup && m.itemId===it.id && !m.cancelled);
-      if(!rows.length && nz(it.contractQty)>0) warnings.push({code:'nomeas',itemId:it.id,msg:`סעיף ${itemFullCode(it)}: יש כמות חוזית אך אין שורות מדידה`});
       rows.forEach(m=>{
         ['d1','d2','d3','t','qty'].forEach(k=>{ const v=m[k]; if(v!=='' && v!=null && !NUM_RE.test(String(v).trim()))
           critical.push({code:'nan',rowId:m.id,itemId:it.id,msg:`סעיף ${itemFullCode(it)}: ערך לא מספרי בשדה ${k}`}); });
@@ -1284,9 +1283,6 @@ const Validation = {
       const mv=Accounts.itemMovement(project,it,draft);
       if(mv.overrun) warnings.push({code:'overrun',itemId:it.id,
         msg:`סעיף ${itemFullCode(it)}: חריגה מהכמות החוזית (${pct(mv.completionPct)}, +${fn(mv.currentCumulative-mv.contractQty)} ${it.unit} · השפעה כספית ${money((mv.currentCumulative-mv.contractQty)*mv.unitPrice)})`});
-      if(mv.previousCumulative>1e-9 && Math.abs(mv.addition+mv.correction) > mv.previousCumulative*2)
-        warnings.push({code:'deviation',itemId:it.id,
-          msg:`סעיף ${itemFullCode(it)}: סטייה גדולה מהחשבון הקודם (שינוי של ${fn(mv.addition+mv.correction)} ${it.unit} בתקופה זו)`});
       if(mv.pendingCount>0) warnings.push({code:'pending',itemId:it.id,
         msg:`סעיף ${itemFullCode(it)}: ${mv.pendingCount} שור${mv.pendingCount===1?'ה ממתינה':'ות ממתינות'} לאישור — לא ייכללו במצטבר עד שיוכרעו`});
     });
