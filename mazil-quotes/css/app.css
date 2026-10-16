@@ -78,6 +78,8 @@ textarea.inp{resize:none;min-height:48px;line-height:1.4;overflow:hidden}
 .it-total{margin-top:8px;font-size:13.5px;color:var(--mute);display:flex;justify-content:space-between}
 .it-total b{color:var(--ink);direction:ltr}
 .it.text-only .it-total{display:none}
+.chk{display:flex;align-items:center;gap:10px;font-size:14.5px;margin:2px 0 12px}
+.chk input{width:20px;height:20px;accent-color:var(--red)}
 .tot{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:15px}
 .tot b{direction:ltr;text-align:left}
 .tot .grand{font-size:18px;color:var(--red);border-top:1px solid var(--line);padding-top:8px;margin-top:2px}

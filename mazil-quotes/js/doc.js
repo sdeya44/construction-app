@@ -4,7 +4,8 @@ const PAGE_W = 794, PAGE_H = 1123;
 const ROWS_MAX = 878;      // rows may extend to here on pages without totals
 const TOTALS_MAX = 880;    // totals block must end above the footer (top 888)
 
-export const r2 = n => Math.round((Number(n) || 0) * 100 + Number.EPSILON) / 100;
+// Round half away from zero to agorot; toPrecision strips float noise (8745.255 stored as 8745.25499…).
+export const r2 = n => { const x = Number(n) || 0; return Math.sign(x) * Math.round(Number((Math.abs(x) * 100).toPrecision(15))) / 100; };
 export const fmt = n => r2(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const num = v => { const n = parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : 0; };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -25,11 +26,30 @@ export function calc(q) {
   let sub = 0, qtySum = 0;
   for (const it of q.items) if (isPriced(it)) { const l = lineCalc(it); sub += l.total; qtySum += l.qty; }
   sub = r2(sub);
-  const discPct = num(q.discount), vatPct = num(q.vat);
-  const discAmt = r2(sub * discPct / 100);
-  const after = r2(sub - discAmt);
-  const vat = r2(after * vatPct / 100);
-  return { sub, qtySum: r2(qtySum), discPct, discAmt, after, vatPct, vat, grand: r2(after + vat) };
+  const userPct = num(q.discount), vatPct = num(q.vat);
+  const vatOf = a => r2(a * vatPct / 100);
+  let after = r2(sub - r2(sub * userPct / 100));
+  const userAfter = after;
+  if (q.roundTotal && sub > 0) after = roundedAfter(after, vatPct, vatOf);
+  const discAmt = r2(sub - after);
+  const vat = vatOf(after);
+  // The document shows one discount line, so the rounding is folded into it and the % is the effective one.
+  const discPct = discAmt ? r2(discAmt / sub * 100) : 0;
+  return { sub, qtySum: r2(qtySum), discPct, discAmt, after, vatPct, vat, grand: r2(after + vat), roundAdj: r2(userAfter - after) };
+}
+
+// Largest pre-VAT amount ≤ `after` whose total incl. VAT is a whole shekel (rounds down only — never raises the price).
+// Not every integer is reachable (VAT rounding steps by 0.02 at times), so it falls back to the next shekel down.
+function roundedAfter(after, vatPct, vatOf) {
+  let target = Math.floor(r2(after + vatOf(after)) + 1e-9);
+  for (let k = 0; k < 5 && target > 0; k++, target--) {
+    const a0 = Math.round(target / (1 + vatPct / 100) * 100);
+    for (let d = 3; d >= -3; d--) {
+      const a = (a0 + d) / 100;
+      if (a <= after && r2(a + vatOf(a)) === target) return a;
+    }
+  }
+  return after;
 }
 
 // One item = one or more description lines. Each line is a row (as in the source system);

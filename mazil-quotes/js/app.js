@@ -86,6 +86,7 @@ function showEdit(q) {
         <label class="field"><span>הנחה כללית %</span><input class="inp ltr" id="q-disc" inputmode="decimal" value="${esc(q.discount)}"></label>
         <label class="field"><span>מע"מ %</span><input class="inp ltr" id="q-vat" inputmode="decimal" value="${esc(q.vat)}"></label>
       </div>
+      <label class="chk"><input type="checkbox" id="q-round" ${q.roundTotal ? 'checked' : ''}> עגל סה"כ לתשלום לשקל שלם (דרך ההנחה)</label>
       <div class="tot" id="tot"></div>
     </div>
     <div class="card"><h3>פרטים נוספים</h3>
@@ -116,13 +117,14 @@ function showEdit(q) {
     const d = new Date(q.createdAt), [y, m, dd] = v.split('-').map(Number);
     d.setFullYear(y, m - 1, dd); q.createdAt = d.toISOString();
   });
+  $('#q-round').onchange = e => { q.roundTotal = e.target.checked; dirty = true; refresh(); };
   autoGrow($('#q-notes'));
 
   function refresh() {
     const t = calc(q);
     $('#tot').innerHTML = `
       <span>סה"כ ללא מע"מ</span><b>${fmt(t.sub)}</b>
-      ${t.discAmt ? `<span>הנחה ${fmt(t.discPct)}%</span><b>-${fmt(t.discAmt)}</b><span>לאחר הנחה</span><b>${fmt(t.after)}</b>` : ''}
+      ${t.discAmt ? `<span>הנחה ${fmt(t.discPct)}%${t.roundAdj ? ` <small class="mute">(כולל עיגול ${fmt(t.roundAdj)})</small>` : ''}</span><b>-${fmt(t.discAmt)}</b><span>לאחר הנחה</span><b>${fmt(t.after)}</b>` : ''}
       <span>מע"מ ${fmt(t.vatPct)}%</span><b>${fmt(t.vat)}</b>
       <span class="grand">סה"כ לתשלום</span><b class="grand">${money(t.grand)}</b>`;
     $('#sb-total').textContent = money(t.grand);

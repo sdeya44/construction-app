@@ -44,7 +44,7 @@ export function newQuote() {
     id: uid(), no: null, prefix: s.prefix, createdAt: new Date().toISOString(), copyType: 'מקור',
     ref: '', producer: s.producer, customer: { name: '', phone: '', fax: '', taxId: '' },
     items: [{ code: '0', desc: '', qty: '1', price: '', disc: '0' }],
-    discount: 0, vat: s.vat, notes: '',
+    discount: 0, vat: s.vat, notes: '', roundTotal: true,
   };
 }
 
