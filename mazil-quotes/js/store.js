@@ -6,8 +6,8 @@ const DEFAULTS = {
     company: 'מציל חיים בע״מ',
     osek: '514701044',
     producer: '',
-    prefix: '06',
-    nextNo: 408,
+    prefix: '07',
+    nextNo: 7000,
     vat: 18,
     vatIncluded: false,     // default for new quotes: unit prices include VAT
     headerImg: '',          // data URL of a replacement header image; '' = built-in
@@ -24,7 +24,11 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      return { ...structuredClone(DEFAULTS), ...d, settings: { ...DEFAULTS.settings, ...(d.settings || {}) } };
+      const st = { ...DEFAULTS.settings, ...(d.settings || {}) };
+      // v1 defaulted to 06/408. Devices still on that untouched series (at most a few test quotes) move to the 07/7000 series.
+      if (st.prefix === '06' && st.nextNo >= 408 && st.nextNo < 420 && !st.seriesMigrated) { st.prefix = '07'; st.nextNo = 7000; }
+      st.seriesMigrated = true;
+      return { ...structuredClone(DEFAULTS), ...d, settings: st };
     }
   } catch (e) { console.error('load failed', e); }
   return structuredClone(DEFAULTS);
