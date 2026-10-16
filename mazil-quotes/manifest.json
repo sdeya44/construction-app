@@ -1,0 +1,17 @@
+{
+  "name": "מציל חיים — הצעות מחיר",
+  "short_name": "הצעות מחיר",
+  "description": "הפקת הצעות מחיר מהטלפון — מציל חיים בע״מ",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F3F4F6",
+  "theme_color": "#B5121B",
+  "orientation": "portrait",
+  "lang": "he",
+  "dir": "rtl",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
