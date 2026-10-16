@@ -1,5 +1,5 @@
 // Offline cache for the app shell. Bump VERSION on every release so phones pick up the update.
-const VERSION = 'mazil-quotes-v2';
+const VERSION = 'mazil-quotes-v3';
 const ASSETS = [
   './', './index.html', './manifest.json',
   './css/app.css', './css/doc.css',

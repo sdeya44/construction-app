@@ -86,6 +86,7 @@ function showEdit(q) {
         <label class="field"><span>הנחה כללית %</span><input class="inp ltr" id="q-disc" inputmode="decimal" value="${esc(q.discount)}"></label>
         <label class="field"><span>מע"מ %</span><input class="inp ltr" id="q-vat" inputmode="decimal" value="${esc(q.vat)}"></label>
       </div>
+      <label class="chk"><input type="checkbox" id="q-inc" ${q.vatIncluded ? 'checked' : ''}> המחירים כוללים מע"מ</label>
       <label class="chk"><input type="checkbox" id="q-round" ${q.roundTotal ? 'checked' : ''}> עגל סה"כ לתשלום לשקל שלם (דרך ההנחה)</label>
       <div class="tot" id="tot"></div>
     </div>
@@ -117,12 +118,18 @@ function showEdit(q) {
     const d = new Date(q.createdAt), [y, m, dd] = v.split('-').map(Number);
     d.setFullYear(y, m - 1, dd); q.createdAt = d.toISOString();
   });
+  $('#q-inc').onchange = e => { q.vatIncluded = e.target.checked; dirty = true; drawItems(); };
   $('#q-round').onchange = e => { q.roundTotal = e.target.checked; dirty = true; refresh(); };
   autoGrow($('#q-notes'));
 
   function refresh() {
     const t = calc(q);
-    $('#tot').innerHTML = `
+    $('#tot').innerHTML = t.inc ? `
+      <span>סה"כ כולל מע"מ</span><b>${fmt(t.sub)}</b>
+      ${t.discAmt ? `<span>הנחה ${fmt(t.discPct)}%${t.roundAdj ? ` <small class="mute">(כולל עיגול ${fmt(t.roundAdj)})</small>` : ''}</span><b>-${fmt(t.discAmt)}</b>` : ''}
+      <span class="grand">סה"כ לתשלום</span><b class="grand">${money(t.grand)}</b>
+      <span class="small mute">מתוכו: ללא מע"מ</span><b class="small mute">${fmt(t.after)}</b>
+      <span class="small mute">מע"מ ${fmt(t.vatPct)}%</span><b class="small mute">${fmt(t.vat)}</b>` : `
       <span>סה"כ ללא מע"מ</span><b>${fmt(t.sub)}</b>
       ${t.discAmt ? `<span>הנחה ${fmt(t.discPct)}%${t.roundAdj ? ` <small class="mute">(כולל עיגול ${fmt(t.roundAdj)})</small>` : ''}</span><b>-${fmt(t.discAmt)}</b><span>לאחר הנחה</span><b>${fmt(t.after)}</b>` : ''}
       <span>מע"מ ${fmt(t.vatPct)}%</span><b>${fmt(t.vat)}</b>
@@ -145,11 +152,11 @@ function showEdit(q) {
         <textarea class="inp" data-f="desc" rows="2" placeholder="תאור פריט">${esc(it.desc)}</textarea>
         <div class="grid4" style="margin-top:8px">
           <label class="field"><span>כמות</span><input class="inp ltr" data-f="qty" inputmode="decimal" value="${esc(it.qty)}"></label>
-          <label class="field"><span>מחיר ליחידה</span><input class="inp ltr" data-f="price" inputmode="decimal" value="${esc(it.price)}"></label>
+          <label class="field"><span>${q.vatIncluded ? 'מחיר כולל מע"מ' : 'מחיר ליחידה'}</span><input class="inp ltr" data-f="price" inputmode="decimal" value="${esc(it.price)}"></label>
           <label class="field"><span>הנחה %</span><input class="inp ltr" data-f="disc" inputmode="decimal" value="${esc(it.disc)}"></label>
           <label class="field"><span>מק"ט</span><input class="inp ltr" data-f="code" value="${esc(it.code)}"></label>
         </div>
-        <div class="it-total"><span>סה"כ נטו</span><b></b></div>
+        <div class="it-total"><span>${q.vatIncluded ? 'סה"כ כולל מע"מ' : 'סה"כ נטו'}</span><b></b></div>
       </div>`).join('') || '<p class="mute small">אין פריטים</p>';
     $$('#items textarea').forEach(autoGrow);
     refresh();
@@ -317,6 +324,7 @@ function showSettings() {
         <label class="field"><span>עוסק מורשה</span><input class="inp ltr" id="s-osek" inputmode="numeric" value="${esc(s.osek)}"></label>
         <label class="field"><span>מע"מ ברירת מחדל %</span><input class="inp ltr" id="s-vat" inputmode="decimal" value="${esc(s.vat)}"></label>
       </div>
+      <label class="chk"><input type="checkbox" id="s-inc" ${s.vatIncluded ? 'checked' : ''}> הצעות חדשות: מחירים כוללים מע"מ</label>
       <label class="field"><span>מפיק המסמך (ברירת מחדל)</span><input class="inp" id="s-producer" value="${esc(s.producer)}"></label>
     </div>
     <div class="card"><h3>לוגו / כותרת המסמך</h3>
@@ -335,6 +343,7 @@ function showSettings() {
   const map = { 's-prefix': 'prefix', 's-company': 'company', 's-osek': 'osek', 's-producer': 'producer' };
   for (const [id, k] of Object.entries(map)) $('#' + id).oninput = e => { s[k] = e.target.value; S.save(); sample(); };
   $('#s-next').oninput = e => { const n = parseInt(e.target.value, 10); if (n > 0) { s.nextNo = n; S.save(); sample(); } };
+  $('#s-inc').onchange = e => { s.vatIncluded = e.target.checked; S.save(); };
   $('#s-vat').oninput = e => { s.vat = num(e.target.value); S.save(); };
   sample();
   $('#s-hdr-file').onchange = async e => {

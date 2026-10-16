@@ -27,6 +27,7 @@ export function calc(q) {
   for (const it of q.items) if (isPriced(it)) { const l = lineCalc(it); sub += l.total; qtySum += l.qty; }
   sub = r2(sub);
   const userPct = num(q.discount), vatPct = num(q.vat);
+  if (q.vatIncluded) return calcInclusive(q, sub, r2(qtySum), userPct, vatPct);
   const vatOf = a => r2(a * vatPct / 100);
   let after = r2(sub - r2(sub * userPct / 100));
   const userAfter = after;
@@ -36,6 +37,17 @@ export function calc(q) {
   // The document shows one discount line, so the rounding is folded into it and the % is the effective one.
   const discPct = discAmt ? r2(discAmt / sub * 100) : 0;
   return { sub, qtySum: r2(qtySum), discPct, discAmt, after, vatPct, vat, grand: r2(after + vat), roundAdj: r2(userAfter - after) };
+}
+
+// Prices include VAT: discount and rounding apply to the gross total; VAT is then extracted for "פרוט התשלום".
+function calcInclusive(q, sub, qtySum, userPct, vatPct) {
+  let discAmt = r2(sub * userPct / 100), grand = r2(sub - discAmt), roundAdj = 0;
+  if (q.roundTotal && sub > 0) { const g = Math.floor(grand + 1e-9); roundAdj = r2(grand - g); grand = g; discAmt = r2(sub - grand); }
+  const k = 1 + vatPct / 100;
+  const after = r2(grand / k), vat = r2(grand - after);
+  const exSub = r2(sub / k), exDisc = r2(exSub - after);
+  const discPct = discAmt ? r2(discAmt / sub * 100) : 0;
+  return { inc: true, sub, qtySum, discPct, discAmt, grand, roundAdj, exSub, exDisc, after, vat, vatPct };
 }
 
 // Largest pre-VAT amount ≤ `after` whose total incl. VAT is a whole shekel (rounds down only — never raises the price).
@@ -108,23 +120,31 @@ function pageHtml(q, s) {
       <th class="c-code"><div>מס' פריט</div></th>
       <th class="c-desc"><div>תאור פריט</div></th>
       <th class="c-qty"><div>כמות</div></th>
-      <th class="c-gross"><div>ברוטו/לצרכן<br>ליחידה</div></th>
+      <th class="c-gross"><div>ברוטו/לצרכן<br>${q.vatIncluded ? 'כולל מע"מ' : 'ליחידה'}</div></th>
       <th class="c-disc"><div>%הנחה</div></th>
-      <th class="c-net"><div>נטו&nbsp; ליחידה</div></th>
-      <th class="c-tot"><div>סה''כ נטו</div></th>
+      <th class="c-net"><div>${q.vatIncluded ? "נטו<br>כולל מע''מ" : 'נטו&nbsp; ליחידה'}</div></th>
+      <th class="c-tot"><div>${q.vatIncluded ? 'סה"כ<br>כולל מע"מ' : "סה''כ נטו"}</div></th>
     </tr></thead><tbody></tbody></table>
   </div>`;
 }
 
 function totalsHtml(q, s, t) {
   const row = (val, lab) => `<div class="qd-trow"><div class="qd-tval">${val}</div><div class="qd-tlab">${lab}</div></div>`;
+  const prow = (val, lab) => `<div class="qd-prow"><div class="qd-tval">${val}</div><div class="qd-tlab">${lab}</div></div>`;
   return `<div class="qd-totals">
     <div class="qd-qsum" style="right:309px">${fmt(t.qtySum)}</div>
-    <div class="qd-tgrid">
+    ${t.inc ? `<div class="qd-tgrid">
+      <div class="qd-grp g1">${row(fmt(t.sub), 'סה"כ כולל מע"מ:')}${row(fmt(t.discAmt), `הנחה:&nbsp; %&nbsp; ${fmt(t.discPct)}`)}</div>
+      <div class="qd-grp">${row('', '')}${row('', '')}</div>
+      <div class="qd-grp">${row(fmt(t.grand), 'סה"כ לתשלום:')}</div>
+    </div>
+    <div class="qd-pay"><div class="qd-pay-t">פרוט התשלום</div>
+      ${prow(fmt(t.exSub), 'סה"כ ללא מע"מ:')}${prow(fmt(t.exDisc), 'הנחה:')}${prow(fmt(t.vat), `מע"מ:&nbsp;&nbsp;&nbsp;&nbsp; ${fmt(t.vatPct)}%`)}
+    </div>` : `<div class="qd-tgrid">
       <div class="qd-grp g1">${row(fmt(t.sub), 'סה"כ ללא מע"מ:')}${row(fmt(t.discAmt), `הנחה:&nbsp; %&nbsp; ${fmt(t.discPct)}`)}</div>
       <div class="qd-grp">${row(fmt(t.after), 'סה"כ לאחר הנחה:')}${row(fmt(t.vat), `מע"מ&nbsp;&nbsp; ${fmt(t.vatPct)}%`)}</div>
       <div class="qd-grp">${row(fmt(t.grand), 'סה"כ לתשלום:')}</div>
-    </div>
+    </div>`}
     ${q.notes ? `<div class="qd-notes"><b>הערות:</b> ${esc(q.notes)}</div>` : ''}
   </div>`;
 }
