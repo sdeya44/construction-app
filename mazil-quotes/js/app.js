@@ -1,5 +1,5 @@
 import * as S from './store.js';
-import { calc, lineCalc, fmt, num, isPriced, quoteNo, fmtDate, renderDoc, makePdf, pdfName, pdfFileName, fontsReady, PAGE_W, PAGE_H } from './doc.js';
+import { calc, lineCalc, fmt, num, isPriced, quoteNo, fmtDate, fmtTime, renderDoc, makePdf, pdfName, pdfFileName, fontsReady, PAGE_W, PAGE_H } from './doc.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -66,6 +66,13 @@ function showEdit(q) {
 
   const db = S.getDb();
   view.innerHTML = `
+    <div class="card"><h3>תאריך המסמך</h3>
+      <div class="grid2">
+        <label class="field"><span>תאריך</span><input class="inp ltr" id="q-date" type="date" value="${localDate(q.createdAt)}"></label>
+        <label class="field"><span>שעה</span><input class="inp ltr" id="q-time" type="time" value="${fmtTime(q.createdAt)}"></label>
+      </div>
+      <div class="row"><button class="btn ghost" id="q-now" style="padding:9px">עדכן להיום ולשעה הנוכחית</button></div>
+    </div>
     <div class="card"><h3>לקוח</h3>
       <label class="field"><span>לכבוד</span><input class="inp" id="c-name" list="cust-list" autocomplete="off" value="${esc(q.customer.name)}"></label>
       <datalist id="cust-list">${db.customers.map(c => `<option value="${esc(c.name)}">`).join('')}</datalist>
@@ -92,10 +99,7 @@ function showEdit(q) {
     </div>
     <div class="card"><h3>פרטים נוספים</h3>
       <label class="field"><span>הערות (יודפסו מתחת לסיכום — אופציונלי)</span><textarea class="inp" id="q-notes" rows="2">${esc(q.notes)}</textarea></label>
-      <div class="grid2">
-        <label class="field"><span>מפיק המסמך</span><input class="inp" id="q-prod" value="${esc(q.producer)}"></label>
-        <label class="field"><span>תאריך</span><input class="inp ltr" id="q-date" type="date" value="${localDate(q.createdAt)}"></label>
-      </div>
+      <label class="field"><span>מפיק המסמך</span><input class="inp" id="q-prod" value="${esc(q.producer)}"></label>
     </div>
     <div class="savebar"><div class="total"><small>סה"כ לתשלום</small><b id="sb-total"></b></div><button class="btn primary" id="save">שמור והפק</button></div>`;
 
@@ -118,6 +122,15 @@ function showEdit(q) {
     const d = new Date(q.createdAt), [y, m, dd] = v.split('-').map(Number);
     d.setFullYear(y, m - 1, dd); q.createdAt = d.toISOString();
   });
+  bind('q-time', v => {
+    if (!v) return;
+    const d = new Date(q.createdAt), [h, mi] = v.split(':').map(Number);
+    d.setHours(h, mi, 0, 0); q.createdAt = d.toISOString();
+  });
+  $('#q-now').onclick = () => {
+    const d = new Date(); d.setSeconds(0, 0); q.createdAt = d.toISOString(); dirty = true;
+    $('#q-date').value = localDate(q.createdAt); $('#q-time').value = fmtTime(q.createdAt);
+  };
   $('#q-inc').onchange = e => { q.vatIncluded = e.target.checked; dirty = true; drawItems(); };
   $('#q-round').onchange = e => { q.roundTotal = e.target.checked; dirty = true; refresh(); };
   autoGrow($('#q-notes'));
