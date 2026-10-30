@@ -106,8 +106,9 @@ label.fld input.bad{border-color:var(--bad)}
  body>*:not(#preview){display:none!important}
  #preview{position:static;display:block!important;background:none;overflow:visible!important;height:auto!important;inset:auto}
  #preview .bar{display:none}
- .pagewrap{zoom:1!important;margin:0;box-shadow:none;break-after:page;break-inside:avoid;overflow:hidden}
- .pagewrap:last-child{break-after:auto}
+ .pagewrap{zoom:1!important;margin:0;box-shadow:none;break-inside:avoid;page-break-inside:avoid;break-after:auto;page-break-after:auto}
+ .pagewrap+.pagewrap{break-before:page;page-break-before:always}
+ .page{height:auto!important;min-height:0!important;padding-bottom:0!important}
 }
 </style>
 </head>
