@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f2a37">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>אישורי הדרכה – עבודה בגובה</title>
+<style>
+:root{--ink:#1f2a37;--mut:#6b7280;--line:#e6e3dd;--bg:#f6f5f2;--card:#fff;--gold:#9a7b3f;--ok:#2f7d4f;--warn:#b7791f;--bad:#b42318;--r:12px}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Arial,sans-serif;-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+header{background:var(--ink);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 16px 12px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+header b{font-size:17px;letter-spacing:.2px}
+header small{opacity:.7;font-size:12px}
+main{max-width:860px;margin:0 auto;padding:14px 14px 96px}
+nav{position:fixed;inset:auto 0 0 0;background:#fff;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav button{flex:1;border:0;background:none;padding:12px 4px;font-size:13px;color:var(--mut)}
+nav button.on{color:var(--ink);font-weight:700;box-shadow:inset 0 3px 0 var(--gold)}
+h2{font-size:15px;margin:20px 0 8px;color:var(--mut);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:8px 0}
+.row{display:flex;gap:10px;align-items:center}
+.grow{flex:1;min-width:0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px;text-align:center}
+.stat b{display:block;font-size:24px}
+.stat.ok b{color:var(--ok)}.stat.soon b{color:var(--warn)}.stat.expired b{color:var(--bad)}
+.chip{display:inline-block;border-radius:99px;padding:1px 9px;font-size:12px;white-space:nowrap;border:1px solid}
+.chip.ok{color:var(--ok);border-color:#bfe0cd;background:#f0f9f4}
+.chip.soon{color:var(--warn);border-color:#f0d9a8;background:#fff8e8}
+.chip.expired{color:var(--bad);border-color:#f3c1bb;background:#fff1ef}
+.chip.none{color:var(--mut);border-color:var(--line)}
+.mut{color:var(--mut);font-size:13px}
+.btn{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:10px;padding:9px 14px;cursor:pointer;text-decoration:none;display:inline-block;font-size:14px}
+.btn.sec{background:#fff;color:var(--ink)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.btn.danger{background:#fff;color:var(--bad);border-color:#f3c1bb}
+.btn:disabled{opacity:.45}
+.banner{border-radius:var(--r);padding:10px 12px;margin:8px 0;font-size:14px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.banner.bad{background:#fff1ef;border:1px solid #f3c1bb;color:#7a1c12}
+.banner.warn{background:#fff8e8;border:1px solid #f0d9a8;color:#6b4a0c}
+label.fld{display:block;margin:8px 0;font-size:13px;color:var(--mut)}
+label.fld input,label.fld select,label.fld textarea{display:block;width:100%;margin-top:3px;padding:9px 10px;border:1px solid #d6d3cc;border-radius:9px;background:#fff;font-size:16px}
+label.fld input.bad{border-color:var(--bad)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 10px}
+.search{width:100%;padding:11px 12px;border:1px solid #d6d3cc;border-radius:10px;background:#fff;font-size:16px;margin:4px 0 6px}
+.modal{position:fixed;inset:0;background:rgba(20,24,30,.5);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom))}
+@media(min-width:700px){.modal{align-items:center}.sheet{border-radius:18px}}
+.sheet h3{margin:0 0 6px;font-size:18px}
+.topics label{display:flex;gap:8px;align-items:flex-start;padding:6px 0;font-size:14px;border-bottom:1px solid var(--line)}
+.topics input{margin-top:3px;width:18px;height:18px}
+.cb{width:20px;height:20px}
+.sigimg{max-height:70px;max-width:100%;border:1px dashed #cfcac0;border-radius:8px;background:#fff;padding:4px}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:99px;z-index:50;font-size:14px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.empty{text-align:center;color:var(--mut);padding:22px 8px}
+.sticky{position:sticky;bottom:64px;z-index:4}
+/* ---------- preview + print ---------- */
+#preview{position:fixed;inset:0;background:#525659;z-index:30;overflow:auto;display:none}
+#preview.on{display:block}
+#preview .bar{position:sticky;top:0;z-index:2;background:#2b2f33;color:#fff;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#preview .bar label{font-size:13px;display:flex;gap:5px;align-items:center}
+#preview .bar .btn{border-color:#fff}
+.pagewrap{margin:14px auto;width:210mm;zoom:var(--z,1);box-shadow:0 2px 12px rgba(0,0,0,.4)}
+.page{width:210mm;height:296.5mm;overflow:hidden;box-sizing:border-box;padding:15mm 18mm 12mm;background:#fff;color:#000;font:11pt/1.4 Arial,"Helvetica Neue",Tahoma,sans-serif;direction:rtl;position:relative}
+.page h1{margin:0;text-align:center;font-size:11pt;font-weight:400}
+.page .sub{text-align:center}
+.page h2{text-align:center;text-decoration:underline;font-size:12pt;font-weight:700;margin:4mm 0 3mm;color:#000}
+.page h3{font-size:10.5pt;margin:4.2mm 0 1mm;font-weight:700;color:#000}
+.page h3 u{text-underline-offset:1px}
+.page .fr{display:flex;gap:5mm;margin:2.3mm 0;align-items:flex-end}
+.page .f{display:flex;align-items:flex-end;gap:1.5mm;min-width:0}
+.page .f span{white-space:nowrap}
+.page .f i{font-style:normal;font-weight:600;flex:1;border-bottom:.25mm solid #000;min-height:5mm;padding:0 1.5mm;text-align:center;overflow:hidden;white-space:nowrap;min-width:12mm}
+.page .st{text-decoration:line-through;text-decoration-thickness:.35mm}
+.page .big{font-size:13pt;margin:4mm 0 1mm}
+.page .p{text-align:justify;margin:1mm 0}
+.page .p1{font-size:12pt;line-height:1.5;font-weight:700}
+.page .p1 .st{font-weight:400}
+.page .sig{display:flex;gap:9mm;margin:3mm 8mm 0}
+.page .sig>div{flex:1;text-align:center}
+.page .sig.big2 .v{height:20mm}
+.page .sig .v{height:14mm;display:flex;align-items:flex-end;justify-content:center;border-bottom:.25mm solid #000;font-weight:600;gap:2mm;position:relative}
+.page .sig img{max-height:14mm;max-width:100%}
+.page .sig img.stamp{max-height:19mm;max-width:62mm;position:absolute;left:50%;transform:translateX(-50%);bottom:.5mm}
+.page .sig img.stamp.beside{left:auto;transform:none;right:-8mm;max-height:19mm}
+.page .foot{position:absolute;bottom:6mm;left:18mm;font-size:7pt;color:#777;direction:ltr}
+@page{size:A4;margin:0}
+@media screen{#printonly{display:none}}
+@media print{
+ html,body{background:#fff}
+ body>*:not(#preview){display:none!important}
+ #preview{position:static;display:block!important;background:none;overflow:visible}
+ #preview .bar{display:none}
+ .pagewrap{zoom:1!important;margin:0;box-shadow:none;break-after:page}
+ .pagewrap:last-child{break-after:auto}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="preview"></div>
+<script>
+'use strict';
+/* =====================================================================
+   נתונים
+   ===================================================================== */
+const KEY='hw_cert_app_v1';
+const TOPICS=[null,'על סולמות','מתוך סלים להרמת אדם','מתוך בימות הרמה מתרוממות ופיגומים ממוכנים','בתוך מקום מוקף','מעל לפיגומים נייחים','מעל גגות','מעל מבנה קונסטרוקציה','בטיפול בעצים וגיזומם','בהקמת בימות והתקנת מערכות תאורה והגברה'];
+const ETYPES=['תופש המפעל','מבצע הבניה','בעל מכונת הרמה','אחר'];
+const REMIND_DAYS=60;
+const defaults=()=>({instructor:{name:'',id:'',address:'',phone:'',certNo:'',certExpiry:'',years:'',signature:'',stamp:''},
+  employers:[],workers:[],certs:[],nextSerial:1,lastTopics:[],opts:{sig:true,stamp:true,serial:false},lastBackup:''});
+let S=load();
+function load(){try{const j=JSON.parse(localStorage.getItem(KEY)||'null');if(j){const d=defaults();return {...d,...j,instructor:{...d.instructor,...(j.instructor||{})},opts:{...d.opts,...(j.opts||{})}}}}catch(e){}return defaults()}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){toast('השמירה נכשלה – המקום במכשיר מלא. ייצא גיבוי.');return false}}
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+
+/* =====================================================================
+   כלים
+   ===================================================================== */
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const p2=n=>String(n).padStart(2,'0');
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())};
+const fmt=iso=>{if(!iso)return '';const[a,b,c]=iso.split('-');return c+'/'+b+'/'+a};
+function addYears(iso,n){let[y,m,d]=iso.split('-').map(Number);y+=n;if(m===2&&d===29&&!(y%4===0&&(y%100!==0||y%400===0)))d=28;return y+'-'+p2(m)+'-'+p2(d)}
+function daysUntil(iso){const[y,m,d]=iso.split('-').map(Number);const t=today().split('-').map(Number);return Math.round((Date.UTC(y,m-1,d)-Date.UTC(t[0],t[1]-1,t[2]))/864e5)}
+const st=until=>{const d=daysUntil(until);return d<0?'expired':d<=REMIND_DAYS?'soon':'ok'};
+function stText(until){const d=daysUntil(until);if(d<0)return 'פג לפני '+(-d)+' ימים';if(d===0)return 'פג היום';if(d<=REMIND_DAYS)return 'פג בעוד '+d+' ימים';return 'בתוקף'}
+function validId(s){s=String(s||'').replace(/\D/g,'');if(s.length<5||s.length>9)return false;s=s.padStart(9,'0');let t=0;for(let i=0;i<9;i++){let n=+s[i]*(i%2?2:1);if(n>9)n-=9;t+=n}return t%10===0}
+const wName=w=>[w.first,w.last].filter(Boolean).join(' ')||'(ללא שם)';
+const empName=e=>e?(e.company||e.contact||'(ללא שם)'):'';
+const getW=id=>S.workers.find(x=>x.id===id);
+const getE=id=>S.employers.find(x=>x.id===id);
+const certsOfW=id=>S.certs.filter(c=>c.workerId===id).sort((a,b)=>b.until.localeCompare(a.until)||b.date.localeCompare(a.date));
+const latest=id=>certsOfW(id)[0];
+function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2600)}
+function waLink(phone,text){let p=String(phone||'').replace(/\D/g,'');if(!p)return '';if(p.startsWith('0'))p='972'+p.slice(1);return 'https://wa.me/'+p+'?text='+encodeURIComponent(text)}
+function insIssues(onDate){
+  const I=S.instructor,o=[];
+  if(!I.name)o.push('שם המדריך');if(!I.id)o.push('ת.ז. המדריך');if(!I.address)o.push('כתובת');if(!I.phone)o.push('טלפון');
+  if(!I.certNo)o.push('מספר תעודת מדריך');
+  if(!I.certExpiry)o.push('תוקף תעודת המדריך');
+  else if(I.certExpiry<(onDate||today()))o.push('תעודת המדריך פגה ב-'+fmt(I.certExpiry));
+  return o}
+const backupDue=()=>S.certs.length>0&&(!S.lastBackup||(Date.now()-new Date(S.lastBackup))>30*864e5);
+
+/* =====================================================================
+   ממשק
+   ===================================================================== */
+let view={name:'home'};let sel=new Set();let q='';let fstat='all';
+function go(name,id){view={name,id};sel=new Set();q='';fstat='all';render();window.scrollTo(0,0)}
+function modal(html){const m=document.createElement('div');m.className='modal';m.innerHTML='<div class="sheet">'+html+'</div>';m.addEventListener('mousedown',e=>{if(e.target===m)m.remove()});document.body.appendChild(m);m.close=()=>m.remove();return m}
+const fld=(label,name,val,attr='')=>`<label class="fld">${label}<input name="${name}" value="${esc(val)}" ${attr}></label>`;
+
+function render(){
+  const v=view,I=S.instructor;
+  let body='';
+  if(v.name==='home')body=homeV();
+  else if(v.name==='employers')body=employersV();
+  else if(v.name==='employer')body=employerV(v.id);
+  else if(v.name==='certs')body=certsV();
+  else if(v.name==='settings')body=settingsV();
+  const tab=v.name==='employer'?'employers':v.name;
+  const nav=[['home','ראשי'],['employers','מעסיקים'],['certs','אישורים'],['settings','הגדרות']].map(([k,t])=>`<button class="${tab===k?'on':''}" data-act="go" data-v="${k}">${t}</button>`).join('');
+  $('#app').innerHTML=`<header><b>אישורי הדרכה – עבודה בגובה</b><small>${esc(I.name)}</small></header><main>${body}</main><nav>${nav}</nav>`;
+  const s=$('#q');if(s&&q){s.value=q}
+}
+
+/* ---------- ראשי ---------- */
+function latestAll(){return S.workers.map(w=>{const c=latest(w.id);return c?{c,w,e:getE(w.employerId),until:c.until}:null}).filter(Boolean)}
+function homeV(){
+  const L=latestAll(),cnt={ok:0,soon:0,expired:0};L.forEach(x=>cnt[st(x.until)]++);
+  let h='';
+  const iss=insIssues();
+  if(iss.length)h+=`<div class="banner bad"><span>לא ניתן להנפיק עד שתושלם הגדרת המדריך: ${iss.join(', ')}</span><button class="btn sm" data-act="go" data-v="settings">להגדרות</button></div>`;
+  else if(daysUntil(S.instructor.certExpiry)<=REMIND_DAYS)h+=`<div class="banner warn"><span>תעודת המדריך פגה בעוד ${daysUntil(S.instructor.certExpiry)} ימים (${fmt(S.instructor.certExpiry)}). אחרי התאריך ההנפקה תיחסם.</span></div>`;
+  if(backupDue())h+=`<div class="banner warn"><span>לא בוצע גיבוי ב-30 הימים האחרונים. הנתונים שמורים רק במכשיר הזה.</span><button class="btn sm" data-act="export">ייצא גיבוי</button></div>`;
+  h+=`<div class="stats"><div class="stat ok"><b>${cnt.ok}</b>בתוקף</div><div class="stat soon"><b>${cnt.soon}</b>פוקעים ב-${REMIND_DAYS} יום</div><div class="stat expired"><b>${cnt.expired}</b>פג תוקף</div></div>`;
+  const need=L.filter(x=>st(x.until)!=='ok').sort((a,b)=>a.until.localeCompare(b.until));
+  h+=`<h2>דורשים חידוש</h2>`;
+  h+=need.length?need.map(x=>certRow(x)).join(''):`<div class="empty">${L.length?'אין תעודות שפגות או פוקעות בקרוב.':'עוד לא הונפקו תעודות. התחל במעסיקים ← הוספת מעסיק.'}</div>`;
+  return h}
+function certRow(x,withSel){
+  const{c,w,e}=x;const s=st(c.until);
+  const msg=`שלום, אישור ההדרכה לעבודה בגובה של ${wName(w)} ${s==='expired'?'פג':'יפוג'} בתאריך ${fmt(c.until)}. נשמח לתאם הדרכת חידוש. ${S.instructor.name}${S.instructor.phone?', '+S.instructor.phone:''}`;
+  const wa=e&&e.phone?waLink(e.phone,msg):'';
+  return `<div class="card"><div class="row">${withSel?`<input type="checkbox" class="cb" data-sel="${c.id}" ${sel.has(c.id)?'checked':''}>`:''}<div class="grow"><b>${esc(wName(w))}</b> <span class="mut">${esc(w.idnum||'')}</span><div class="mut">${esc(empName(e))} · ${fmt(c.date)} ← ${fmt(c.until)}${c.serial?' · '+esc(c.serial):''}</div></div><span class="chip ${s}">${stText(c.until)}</span></div>
+  <div class="actions" style="margin:8px 0 0"><button class="btn sm" data-act="renew" data-w="${w.id}">חידוש</button><button class="btn sm sec" data-act="print" data-ids="${c.id}">הדפס</button>${wa?`<a class="btn sm sec" href="${wa}" target="_blank" rel="noopener">WhatsApp למעסיק</a>`:''}<button class="btn sm sec" data-act="worker" data-w="${w.id}">פרטים</button></div></div>`}
+
+/* ---------- מעסיקים ---------- */
+function employersV(){
+  return `<div class="row"><div class="grow"><input id="q" class="search" placeholder="חיפוש מעסיק, עובד או ת.ז." data-q="emp" value="${esc(q)}"></div><button class="btn" data-act="newEmp">+ מעסיק</button></div><div id="list">${empList()}</div>`}
+function empList(){
+  const t=q.trim().toLowerCase();
+  const rows=S.employers.map(e=>{
+    const ws=S.workers.filter(w=>w.employerId===e.id);
+    let hit=!t||[e.company,e.contact,e.idnum,e.phone].some(x=>String(x||'').toLowerCase().includes(t));
+    let wm=t?ws.filter(w=>[w.first,w.last,w.idnum].some(x=>String(x||'').toLowerCase().includes(t))):[];
+    return{e,ws,show:hit||wm.length,wm:hit?[]:wm}}).filter(r=>r.show).sort((a,b)=>empName(a.e).localeCompare(empName(b.e),'he'));
+  if(!rows.length)return `<div class="empty">${S.employers.length?'לא נמצאו תוצאות.':'אין מעסיקים. לחץ על "+ מעסיק".'}</div>`;
+  return rows.map(({e,ws,wm})=>{const ls=ws.map(w=>latest(w.id)).filter(Boolean);const bad=ls.filter(c=>st(c.until)!=='ok').length;
+    return `<div class="card" data-act="go" data-v="employer" data-id="${e.id}" style="cursor:pointer"><div class="row"><div class="grow"><b>${esc(empName(e))}</b><div class="mut">${ws.length} עובדים${wm.length?' · נמצא: '+esc(wm.map(wName).join(', ')):''}</div></div>${bad?`<span class="chip soon">${bad} לטיפול</span>`:''}</div></div>`}).join('')}
+
+function employerV(id){
+  const e=getE(id);if(!e){return '<div class="empty">המעסיק לא נמצא</div>'}
+  const ws=S.workers.filter(w=>w.employerId===id).sort((a,b)=>wName(a).localeCompare(wName(b),'he'));
+  let h=`<div class="row" style="margin-bottom:4px"><button class="btn sm sec" data-act="go" data-v="employers">→ חזרה</button></div>
+  <div class="card"><div class="row"><div class="grow"><b style="font-size:18px">${esc(empName(e))}</b><div class="mut">${esc(e.type)}${e.contact&&e.company?' · '+esc(e.contact):''}${e.phone?' · '+esc(e.phone):''}</div></div><button class="btn sm sec" data-act="editEmp" data-id="${id}">עריכה</button></div></div>
+  <div class="actions"><button class="btn" data-act="newWorker" data-e="${id}">+ עובד</button><button class="btn sec" data-act="pasteWorkers" data-e="${id}">הדבקת רשימה</button></div>`;
+  h+=`<h2>עובדים (${ws.length})</h2>`;
+  if(!ws.length)h+='<div class="empty">אין עובדים. הוסף עובד או הדבק רשימה מאקסל.</div>';
+  else{
+    h+=`<label class="mut" style="display:flex;gap:8px;align-items:center;margin:0 4px 6px"><input type="checkbox" class="cb" data-selall="1"> בחר הכל</label>`;
+    h+=ws.map(w=>{const c=latest(w.id);const s=c?st(c.until):'none';
+      return `<div class="card"><div class="row"><input type="checkbox" class="cb" data-selw="${w.id}" ${sel.has(w.id)?'checked':''}><div class="grow" data-act="worker" data-w="${w.id}" style="cursor:pointer"><b>${esc(wName(w))}</b> <span class="mut">${esc(w.idnum||'')}</span><div class="mut">${c?'עד '+fmt(c.until):'טרם הודרך'}${w.profession?' · '+esc(w.profession):''}</div></div><span class="chip ${s}">${c?stText(c.until):'אין תעודה'}</span></div></div>`}).join('');
+    h+=`<div class="sticky"><button class="btn" style="width:100%;padding:13px" data-act="issueSel" data-e="${id}" id="issueBtn" ${sel.size?'':'disabled'}>הנפקת אישורים לנבחרים (${sel.size})</button></div>`}
+  return h}
+
+/* ---------- אישורים ---------- */
+function certsV(){
+  return `<input id="q" class="search" placeholder="חיפוש לפי שם, ת.ז. או מעסיק" data-q="cert" value="${esc(q)}">
+  <div class="row"><select class="search" style="margin:0" data-f="1"><option value="all">כל המצבים</option><option value="ok">בתוקף</option><option value="soon">פוקעים בקרוב</option><option value="expired">פג תוקף</option></select><button class="btn" data-act="printSel" id="printBtn" ${sel.size?'':'disabled'}>הדפס (${sel.size})</button></div><div id="list">${certList()}</div>`}
+function certList(){
+  const t=q.trim().toLowerCase();
+  const L=S.certs.map(c=>({c,w:getW(c.workerId)||{},e:getE(c.employerId)})).filter(x=>{
+    if(fstat!=='all'&&st(x.c.until)!==fstat)return false;
+    if(!t)return true;
+    return [wName(x.w),x.w.idnum,empName(x.e),x.c.serial].some(s=>String(s||'').toLowerCase().includes(t))}).sort((a,b)=>b.c.date.localeCompare(a.c.date)||(b.c.serial||'').localeCompare(a.c.serial||''));
+  return L.length?L.map(x=>certRow(x,true)).join(''):'<div class="empty">אין אישורים להצגה.</div>'}
+
+/* ---------- הגדרות ---------- */
+function settingsV(){
+  const I=S.instructor,O=S.opts;
+  return `<h2>פרטי המדריך (מודפסים בסעיף ב׳ ובסעיף ה׳)</h2>
+  <form class="card" id="insForm">
+   ${fld('שם ומשפחה','name',I.name)}
+   <div class="g2">${fld('ת.ז.','id',I.id,'inputmode="numeric"')}${fld('טלפון','phone',I.phone,'inputmode="tel"')}</div>
+   ${fld('כתובת','address',I.address)}
+   <div class="g3">${fld('מס׳ תעודת מדריך','certNo',I.certNo,'inputmode="numeric"')}<label class="fld">בתוקף עד<input type="date" name="certExpiry" value="${esc(I.certExpiry)}"></label>${fld('ותק (שנים), אופציונלי','years',I.years,'inputmode="numeric"')}</div>
+   <button class="btn" type="submit">שמירה</button>
+  </form>
+  <h2>חתימה וחותמת</h2>
+  <div class="card">
+   <div class="row" style="align-items:flex-start"><div class="grow"><b>חתימה</b><div class="mut">צילום או סריקה של החתימה על דף לבן</div></div>${I.signature?`<img class="sigimg" src="${I.signature}">`:''}</div>
+   <div class="actions"><label class="btn sm sec">העלאה<input type="file" accept="image/*" hidden data-img="signature"></label>${I.signature?'<button class="btn sm danger" data-act="rmImg" data-k="signature">הסרה</button>':''}</div><hr style="border:0;border-top:1px solid var(--line)">
+   <div class="row" style="align-items:flex-start"><div class="grow"><b>חותמת</b></div>${I.stamp?`<img class="sigimg" src="${I.stamp}">`:''}</div>
+   <div class="actions"><label class="btn sm sec">העלאה<input type="file" accept="image/*" hidden data-img="stamp"></label>${I.stamp?'<button class="btn sm danger" data-act="rmImg" data-k="stamp">הסרה</button>':''}</div>
+   <label class="mut" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rmBg" checked> הסרת רקע לבן בהעלאה</label>
+  </div>
+  <h2>אפשרויות הדפסה</h2>
+  <div class="card">
+   <label style="display:flex;gap:8px;margin:6px 0"><input type="checkbox" data-opt="sig" ${O.sig?'checked':''}> הדפס חתימת המדריך על האישור</label>
+   <label style="display:flex;gap:8px;margin:6px 0"><input type="checkbox" data-opt="stamp" ${O.stamp?'checked':''}> הדפס חותמת</label>
+   <label style="display:flex;gap:8px;margin:6px 0"><input type="checkbox" data-opt="serial" ${O.serial?'checked':''}> מספר פנימי קטן בשולי הדף</label>
+  </div>
+  <h2>גיבוי ונתונים</h2>
+  <div class="card"><div class="mut">הנתונים שמורים במכשיר הזה בלבד. גיבוי אחרון: ${S.lastBackup?fmt(S.lastBackup.slice(0,10)):'לא בוצע'}</div>
+   <div class="actions"><button class="btn" data-act="export">ייצוא גיבוי</button><label class="btn sec">ייבוא / מיזוג<input type="file" accept="application/json,.json" hidden id="importFile"></label></div>
+   <div class="mut">ייבוא מוסיף רשומות חדשות בלי למחוק קיימות. לא ניתן לשחזר נתונים שנמחקו בלי גיבוי.</div></div>`}
+
+/* ---------- אירועים ---------- */
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;
+  const f=ACT[b.dataset.act];if(f)f(b.dataset,b,e)});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.dataset.sel!==undefined){t.checked?sel.add(t.dataset.sel):sel.delete(t.dataset.sel);const bt=$('#printBtn');if(bt){bt.disabled=!sel.size;bt.textContent='הדפס ('+sel.size+')'}}
+  else if(t.dataset.selw!==undefined){t.checked?sel.add(t.dataset.selw):sel.delete(t.dataset.selw);updIssue()}
+  else if(t.dataset.selall!==undefined){document.querySelectorAll('[data-selw]').forEach(c=>{c.checked=t.checked;t.checked?sel.add(c.dataset.selw):sel.delete(c.dataset.selw)});updIssue()}
+  else if(t.dataset.f){fstat=t.value;$('#list').innerHTML=certList()}
+  else if(t.dataset.opt){S.opts[t.dataset.opt]=t.checked;save()}
+  else if(t.dataset.img){handleImg(t)}
+  else if(t.id==='importFile'){importFile(t.files[0]);t.value=''}});
+function updIssue(){const b=$('#issueBtn');if(b){b.disabled=!sel.size;b.textContent='הנפקת אישורים לנבחרים ('+sel.size+')'}}
+document.addEventListener('input',e=>{const t=e.target;if(t.dataset.q){q=t.value;$('#list').innerHTML=t.dataset.q==='emp'?empList():certList()}});
+document.addEventListener('submit',e=>{e.preventDefault();const f=e.target;
+  if(f.getAttribute('id')==='insForm'){const d=Object.fromEntries(new FormData(f));Object.assign(S.instructor,d);S.instructor.id=S.instructor.id.replace(/\D/g,'');
+    if(S.instructor.id&&!validId(S.instructor.id))toast('שימו לב: ת.ז. המדריך לא עוברת בדיקת תקינות');else toast('נשמר');save();render()}});
+
+const ACT={
+  go:d=>go(d.v,d.id),
+  export:()=>exportData(),
+  rmImg:d=>{S.instructor[d.k]='';save();render()},
+  newEmp:()=>empForm(),
+  editEmp:d=>empForm(getE(d.id)),
+  newWorker:d=>workerForm(null,d.e),
+  worker:d=>workerSheet(d.w),
+  pasteWorkers:d=>pasteForm(d.e),
+  issueSel:d=>issueForm([...sel].filter(id=>getW(id))),
+  renew:d=>issueForm([d.w]),
+  print:d=>preview(d.ids.split(',')),
+  printSel:()=>preview([...sel])
+};
+
+/* ---------- מעסיק ---------- */
+function empForm(e){
+  e=e||{type:'תופש המפעל'};
+  const m=modal(`<h3>${e.id?'עריכת מעסיק':'מעסיק חדש'}</h3><form id="f">
+   <label class="fld">סוג (מה שלא נבחר יימחק בדפוס)<select name="type">${ETYPES.map(t=>`<option ${t===e.type?'selected':''}>${t}</option>`).join('')}</select></label>
+   ${fld('שם המפעל / החברה','company',e.company)}
+   ${fld('שם ומשפחה (איש קשר / בעלים)','contact',e.contact)}
+   <div class="g2">${fld('ת.ז. / ח.פ.','idnum',e.idnum,'inputmode="numeric"')}${fld('טלפון','phone',e.phone,'inputmode="tel"')}</div>
+   <div class="g2">${fld('כתובת','address',e.address)}${fld('מיקוד','zip',e.zip,'inputmode="numeric"')}</div>
+   <div class="actions"><button class="btn" type="submit">שמירה</button><button type="button" class="btn sec" id="cx">ביטול</button>${e.id?'<button type="button" class="btn danger" id="del">מחיקה</button>':''}</div></form>`);
+  $('#cx',m).onclick=m.close;
+  $('#f',m).onsubmit=ev=>{ev.preventDefault();const d=Object.fromEntries(new FormData(ev.target));
+    if(!d.company.trim()&&!d.contact.trim())return toast('חסר שם מעסיק');
+    if(e.id)Object.assign(e,d);else{e.id=uid();Object.assign(e,d);S.employers.push(e)}
+    save();m.close();if(view.name==='employers')go('employers');else render();};
+  const del=$('#del',m);if(del)del.onclick=()=>{const n=S.workers.filter(w=>w.employerId===e.id).length;
+    if(!confirm(`למחוק את המעסיק ואת ${n} העובדים והאישורים שלו? אי אפשר לשחזר.`))return;
+    const wid=new Set(S.workers.filter(w=>w.employerId===e.id).map(w=>w.id));
+    S.certs=S.certs.filter(c=>!wid.has(c.workerId));S.workers=S.workers.filter(w=>w.employerId!==e.id);S.employers=S.employers.filter(x=>x.id!==e.id);save();m.close();go('employers')}}
+
+/* ---------- עובד ---------- */
+function workerForm(w,eid){
+  w=w||{employerId:eid};
+  const m=modal(`<h3>${w.id?'עריכת עובד':'עובד חדש'}</h3><form id="f">
+   <div class="g3">${fld('שם פרטי','first',w.first)}${fld('שם משפחה','last',w.last)}${fld('שם האב','father',w.father)}</div>
+   <div class="g3">${fld('מס׳ ת.ז.','idnum',w.idnum,'inputmode="numeric"')}${fld('שנת לידה','birthYear',w.birthYear,'inputmode="numeric" maxlength="4"')}${fld('מקצוע','profession',w.profession)}</div>
+   ${fld('כתובת','address',w.address)}
+   <div class="actions"><button class="btn" type="submit">שמירה</button><button type="button" class="btn sec" id="cx">ביטול</button></div></form>`);
+  $('#cx',m).onclick=m.close;
+  $('#f',m).onsubmit=ev=>{ev.preventDefault();const d=Object.fromEntries(new FormData(ev.target));d.idnum=d.idnum.replace(/\D/g,'');
+    if(!d.first.trim()||!d.last.trim())return toast('חסר שם פרטי או משפחה');
+    if(!d.idnum)return toast('חסרה ת.ז.');
+    if(!validId(d.idnum)&&!confirm('מספר הת.ז. לא עובר בדיקת תקינות. לשמור בכל זאת?'))return;
+    const dup=S.workers.find(x=>x.idnum===d.idnum&&x.id!==w.id);
+    if(dup&&!confirm('קיים כבר עובד עם אותה ת.ז. ('+wName(dup)+', '+empName(getE(dup.employerId))+'). ההיסטוריה שלו תפוצל. להמשיך?'))return;
+    if(d.birthYear&&!/^(19|20)\d\d$/.test(d.birthYear))return toast('שנת לידה לא תקינה');
+    if(w.id)Object.assign(w,d);else{w.id=uid();Object.assign(w,d);S.workers.push(w)}
+    save();m.close();render()}}
+function workerSheet(id){
+  const w=getW(id);if(!w)return;const cs=certsOfW(id);
+  const m=modal(`<h3>${esc(wName(w))}</h3><div class="mut">${esc(w.idnum)} · ${esc(empName(getE(w.employerId)))}${w.profession?' · '+esc(w.profession):''}${w.birthYear?' · נולד '+esc(w.birthYear):''}</div>
+   <div class="actions"><button class="btn" id="ren">הנפקה / חידוש</button><button class="btn sec" id="edit">עריכת פרטים</button><button class="btn danger" id="del">מחיקת עובד</button></div>
+   <h2>היסטוריית הדרכות</h2>${cs.length?cs.map(c=>`<div class="card"><div class="row"><div class="grow"><b>${fmt(c.date)} ← ${fmt(c.until)}</b> <span class="chip ${st(c.until)}">${stText(c.until)}</span><div class="mut">סעיפים: ${c.topics.join(', ')}${c.serial?' · '+esc(c.serial):''}</div></div></div><div class="actions" style="margin:8px 0 0"><button class="btn sm sec" data-p="${c.id}">הדפס</button><button class="btn sm danger" data-d="${c.id}">מחק</button></div></div>`).join(''):'<div class="empty">טרם הונפקו אישורים.</div>'}
+   <div class="actions"><button class="btn sec" id="cx">סגירה</button></div>`);
+  $('#cx',m).onclick=m.close;
+  $('#ren',m).onclick=()=>{m.close();issueForm([id])};
+  $('#edit',m).onclick=()=>{m.close();workerForm(w)};
+  $('#del',m).onclick=()=>{if(!confirm('למחוק את העובד וכל האישורים שלו? אי אפשר לשחזר.'))return;S.certs=S.certs.filter(c=>c.workerId!==id);S.workers=S.workers.filter(x=>x.id!==id);save();m.close();render()};
+  m.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{m.close();preview([b.dataset.p])});
+  m.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{if(!confirm('למחוק את האישור הזה?'))return;S.certs=S.certs.filter(c=>c.id!==b.dataset.d);save();m.close();render();workerSheet(id)})}
+
+/* ---------- הדבקת רשימה ---------- */
+function pasteForm(eid){
+  const m=modal(`<h3>הדבקת רשימת עובדים</h3><div class="mut">שורה לכל עובד. העמודות לפי הסדר (אפשר להעתיק ישר מאקסל):<br><b>שם פרטי · שם משפחה · ת.ז. · מקצוע · שנת לידה · שם האב · כתובת</b><br>חובה: שם פרטי, שם משפחה, ת.ז.</div>
+   <textarea id="ta" rows="9" style="width:100%;margin-top:8px;padding:10px;border:1px solid #d6d3cc;border-radius:9px;font-size:15px" placeholder="דוד	כהן	123456782	רתך	1985"></textarea>
+   <div id="pv" class="mut" style="margin:6px 0"></div>
+   <div class="actions"><button class="btn" id="ok">הוספה</button><button class="btn sec" id="cx">ביטול</button></div>`);
+  const parse=()=>$('#ta',m).value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>{const c=l.split(/\t|;|,/).map(x=>x.trim());return{first:c[0]||'',last:c[1]||'',idnum:(c[2]||'').replace(/\D/g,''),profession:c[3]||'',birthYear:c[4]||'',father:c[5]||'',address:c[6]||''}});
+  $('#ta',m).oninput=()=>{const r=parse();const bad=r.filter(x=>!x.first||!x.last||!x.idnum);const inv=r.filter(x=>x.idnum&&!validId(x.idnum));
+    $('#pv',m).innerHTML=r.length?`${r.length} שורות${bad.length?` · <span style="color:var(--bad)">${bad.length} חסרים שדות חובה (ידולגו)</span>`:''}${inv.length?` · <span style="color:var(--warn)">${inv.length} ת.ז. לא תקינות</span>`:''}`:''};
+  $('#cx',m).onclick=m.close;
+  $('#ok',m).onclick=()=>{const r=parse().filter(x=>x.first&&x.last&&x.idnum);let n=0,sk=0;
+    r.forEach(x=>{if(S.workers.some(w=>w.idnum===x.idnum&&w.employerId===eid)){sk++;return}S.workers.push({id:uid(),employerId:eid,...x});n++});
+    save();m.close();render();toast(`נוספו ${n} עובדים`+(sk?`, ${sk} כבר קיימים`:''))}}
+
+/* ---------- הנפקה ---------- */
+function issueForm(ids){
+  if(!ids.length)return;
+  const ws=ids.map(getW).filter(Boolean);
+  const iss=insIssues();if(iss.length){modal(`<h3>אי אפשר להנפיק</h3><p>חסר או לא תקין בהגדרות המדריך: <b>${iss.join(', ')}</b></p><div class="actions"><button class="btn" id="g">להגדרות</button></div>`).querySelector('#g').onclick=function(){this.closest('.modal').remove();go('settings')};return}
+  const last=S.lastTopics||[];
+  const m=modal(`<h3>הנפקת אישור – ${ws.length===1?esc(wName(ws[0])):ws.length+' עובדים'}</h3>
+   <div class="mut">${ws.map(w=>esc(wName(w))).join(' · ')}</div>
+   <form id="f"><div class="g2"><label class="fld">תאריך הדרכה (תחילת תוקף)<input type="date" name="date" value="${today()}" required></label><label class="fld">תוקף עד (עד שנתיים)<input type="date" name="until" required></label></div>
+   <div class="mut" style="margin:6px 0 2px"><b>תחומי ההדרכה</b> (מה שלא יסומן יימחק בדפוס) <a href="#" id="all">הכל</a> · <a href="#" id="none">נקה</a></div>
+   <div class="topics">${TOPICS.slice(1).map((t,i)=>`<label><input type="checkbox" name="t" value="${i+1}" ${last.includes(i+1)?'checked':''}>(${i+1}) ${t}</label>`).join('')}</div>
+   <div class="actions"><button class="btn" type="submit">הנפק והצג להדפסה</button><button type="button" class="btn sec" id="cx">ביטול</button></div></form>`);
+  const D=$('[name=date]',m),U=$('[name=until]',m);
+  const sync=()=>{if(D.value)U.value=addYears(D.value,2)};sync();D.onchange=sync;
+  $('#all',m).onclick=e=>{e.preventDefault();m.querySelectorAll('[name=t]').forEach(c=>c.checked=true)};
+  $('#none',m).onclick=e=>{e.preventDefault();m.querySelectorAll('[name=t]').forEach(c=>c.checked=false)};
+  $('#cx',m).onclick=m.close;
+  $('#f',m).onsubmit=ev=>{ev.preventDefault();
+    const date=D.value,until=U.value,topics=[...m.querySelectorAll('[name=t]:checked')].map(c=>+c.value);
+    if(!topics.length)return toast('סמן לפחות תחום אחד');
+    if(until<=date)return toast('תאריך התוקף חייב להיות אחרי תאריך ההדרכה');
+    if(until>addYears(date,2))return toast('התוקף לא יכול לעלות על שנתיים');
+    const iss2=insIssues(date);if(iss2.length)return toast('תעודת המדריך לא בתוקף בתאריך ההדרכה');
+    if(daysUntil(date)>0&&!confirm('תאריך ההדרכה בעתיד. להמשיך?'))return;
+    const out=[];
+    ws.forEach(w=>{const c={id:uid(),workerId:w.id,employerId:w.employerId,date,until,topics,serial:new Date(date).getFullYear()+'-'+String(S.nextSerial++).padStart(3,'0'),createdAt:new Date().toISOString()};S.certs.push(c);out.push(c.id)});
+    S.lastTopics=topics;if(!save())return;m.close();sel=new Set();render();preview(out)}}
+
+/* ---------- תצוגה מקדימה והדפסה ---------- */
+function certPage(c){
+  const w=getW(c.workerId)||{},e=getE(c.employerId)||{},I=S.instructor,O=S.opts;
+  const F=(label,val,fl)=>`<div class="f" style="flex:${fl||1}"><span>${label}</span><i>${esc(val)}</i></div>`;
+  const typ=ETYPES.map(t=>t===e.type?esc(t):`<span class="st">${esc(t)}</span>`).join(' / ');
+  const tp=TOPICS.slice(1).map((t,i)=>{const n=i+1,s=`(${n}) ${t}${n<9?';':''}`;return c.topics.includes(n)?s:`<span class="st">${s}</span>`}).join(' ');
+  const sigI=O.sig&&I.signature?`<img src="${I.signature}">`:'',stI=O.stamp&&I.stamp?`<img class="stamp${sigI?' beside':''}" src="${I.stamp}">`:'';
+  return `<div class="pagewrap"><div class="page">
+  <h1>תוספת</h1><div class="sub">(תקנה <bdi>5(2)</bdi>)</div>
+  <h2>אישור על הדרכת עובד לביצוע עבודה בגובה</h2>
+  <h3><u>(א) המבצע</u></h3>
+  <div class="fr"><div class="p" style="margin:0">${typ} (מחק את המיותר)</div></div>
+  <div class="fr">${F('שם ומשפחה',e.contact,1.5)}${F('ת.ז.',e.idnum,1)}${F('שם המפעל',e.company,1.4)}</div>
+  <div class="fr">${F('כתובת',e.address,1.5)}${F('מיקוד',e.zip,1)}${F('טלפון',e.phone,1.2)}</div>
+  <h3><u>(ב) פרטי מדריך העבודה בגובה</u></h3>
+  <div class="fr">${F('שם ומשפחה',I.name,1.6)}${F('ת.ז.',I.id,1.2)}</div>
+  <div class="fr">${F('ותק וניסיון בעבודה בגובה (בשנים)',I.years,1.5)}${F('תעודה מס\'',I.certNo,1)}${F('בתוקף עד',fmt(I.certExpiry),1)}</div>
+  <div class="fr">${F('כתובת',I.address,1.7)}${F('טלפון',I.phone,1)}</div>
+  <h3><u>(ג) פרטי העובד שהודרך לביצוע עבודה בגובה</u></h3>
+  <div class="fr">${F('שם המשפחה',w.last)}${F('שם פרטי',w.first)}${F('שם האב',w.father)}</div>
+  <div class="fr">${F('מס\' ת.ז.',w.idnum)}${F('שנת לידה',w.birthYear)}${F('מקצוע',w.profession)}</div>
+  <div class="fr">${F('כתובת',w.address)}</div>
+  <h3><u>(ד) תוקף האישור</u></h3>
+  <div class="fr">${F('האישור בתוקף מיום',fmt(c.date),1)}${F('עד יום',fmt(c.until),1)}<div class="f" style="white-space:nowrap;font-size:9.5pt">(תוקף ההדרכה לא יעלה על שנתיים)</div></div>
+  <div class="big">(ה) הצהרת המדריך</div>
+  <div class="p p1">אני החתום מטה מצהיר בזה כי האדם שפרטיו מפורטים בסעיף (ג) לעיל, הודרך על ידי לשמש כאדם העובד בגובה בתחומים אלה: ${tp}</div>
+  <div class="p" style="font-size:10pt">(מחק את המיותר), וכי הוא עומד בכל הדרישות המפורטות בפרקים ב' ו – ג' לתקנות הבטיחות בעבודה (עבודה בגובה), התשס"ז – 2006. (להלן- התקנות).</div>
+  <div class="sig big2"><div><div class="v">${fmt(c.date)}</div>תאריך</div><div><div class="v">${esc(I.name)}</div>שם המדריך</div><div><div class="v">${sigI}${stI}</div>חתימה</div></div>
+  <h3 style="margin-top:6mm">(ו) הצהרת העובד בגובה</h3>
+  <div class="p" style="font-size:10.5pt">אני מצהיר בזה שכל הנתונים האישיים המפורטים בסעיף (ג) לעיל נכונים, וכי הודרכתי לבצע עבודה בגובה, על ידי מדריך העבודה בגובה <b>${esc(I.name)}</b> כנדרש בתקנה <bdi>5(2)</bdi>.</div>
+  <div class="sig"><div><div class="v">${fmt(c.date)}</div>תאריך</div><div><div class="v">${esc(wName(w))}</div>שם הממנה</div><div><div class="v"></div>חתימה</div></div>
+  ${O.serial&&c.serial?`<div class="foot">${esc(c.serial)}</div>`:''}
+  </div></div>`}
+function preview(ids){
+  ids=ids.filter(id=>S.certs.some(c=>c.id===id));if(!ids.length)return;
+  const pv=$('#preview');
+  let draw=()=>{pv.innerHTML=`<div class="bar"><button class="btn" id="pr">הדפסה / שמירה כ-PDF</button><button class="btn sec" id="pc" style="background:#fff">סגירה</button><label><input type="checkbox" id="osg" ${S.opts.sig?'checked':''}>חתימה</label><label><input type="checkbox" id="ost" ${S.opts.stamp?'checked':''}>חותמת</label><span style="opacity:.7;font-size:13px">${ids.length} אישורים</span></div>`+ids.map(id=>certPage(S.certs.find(c=>c.id===id))).join('');
+    const z=Math.min(1,(innerWidth-16)/(210*3.7795));pv.style.setProperty('--z',z.toFixed(3));
+    $('#pr',pv).onclick=()=>window.print();$('#pc',pv).onclick=()=>{pv.classList.remove('on');pv.innerHTML='';document.body.style.overflow=''};
+    $('#osg',pv).onchange=e=>{S.opts.sig=e.target.checked;save();draw()};$('#ost',pv).onchange=e=>{S.opts.stamp=e.target.checked;save();draw()}};
+  const fitAll=()=>pv.querySelectorAll('.page .f i').forEach(i=>{let fs=11;i.style.fontSize='';while(i.scrollWidth>i.clientWidth&&fs>6.5){fs-=.5;i.style.fontSize=fs+'pt'}});
+  draw();pv.classList.add('on');pv.scrollTop=0;document.body.style.overflow='hidden';fitAll();
+  const _d=draw;draw=()=>{_d();fitAll()}}
+
+/* ---------- תמונות / גיבוי ---------- */
+function handleImg(inp){
+  const f=inp.files[0];if(!f)return;const k=inp.dataset.img,rm=$('#rmBg').checked;
+  const img=new Image();img.onload=()=>{
+    const sc=Math.min(1,520/img.width),cv=document.createElement('canvas');cv.width=Math.round(img.width*sc);cv.height=Math.round(img.height*sc);
+    const x=cv.getContext('2d');x.drawImage(img,0,0,cv.width,cv.height);
+    if(rm){const d=x.getImageData(0,0,cv.width,cv.height),p=d.data;for(let i=0;i<p.length;i+=4){const l=Math.min(p[i],p[i+1],p[i+2]);p[i+3]=Math.min(p[i+3],Math.max(0,Math.min(255,(238-l)*5)))}x.putImageData(d,0,0)}
+    S.instructor[k]=cv.toDataURL('image/png');save();render();URL.revokeObjectURL(img.src)};
+  img.onerror=()=>toast('לא ניתן לקרוא את הקובץ');img.src=URL.createObjectURL(f)}
+function exportData(){
+  S.lastBackup=new Date().toISOString();save();
+  const b=new Blob([JSON.stringify({app:'hw-cert',version:1,exported:S.lastBackup,data:S},null,1)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='גיבוי-אישורי-גובה-'+today()+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);render();toast('הגיבוי נוצר')}
+function importFile(f){
+  if(!f)return;const r=new FileReader();r.onload=()=>{try{
+    const j=JSON.parse(r.result),d=j.data||j;let n=0;
+    if(d.instructor)for(const k in d.instructor)if(d.instructor[k])S.instructor[k]=d.instructor[k];
+    for(const k of['employers','workers','certs']){const have=new Set(S[k].map(x=>x.id));(d[k]||[]).forEach(x=>{if(x&&x.id&&!have.has(x.id)){S[k].push(x);n++}})}
+    S.nextSerial=Math.max(S.nextSerial,d.nextSerial||1);save();render();toast('יובאו '+n+' רשומות')}catch(e){toast('קובץ לא תקין')}};r.readAsText(f)}
+
+render();
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
