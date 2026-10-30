@@ -129,7 +129,7 @@ nav svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.7;st
 /* =====================================================================
    נתונים
    ===================================================================== */
-var syncTimer=null,syncing=false,showArch=false;
+var syncTimer=null,syncing=false,showArch=false,showOldEmps=false,oldLimit=50;
 const KEY='hw_cert_app_v1';
 const TOPICS=[null,'על סולמות','מתוך סלים להרמת אדם','מתוך בימות הרמה מתרוממות ופיגומים ממוכנים','בתוך מקום מוקף','מעל לפיגומים נייחים','מעל גגות','מעל מבנה קונסטרוקציה','בטיפול בעצים וגיזומם','בהקמת בימות והתקנת מערכות תאורה והגברה'];
 const ETYPES=['תופש המפעל','מבצע הבניה','בעל מכונת הרמה','אחר'];
@@ -214,7 +214,7 @@ const backupDue=()=>S.certs.length>0&&(!S.lastBackup||(Date.now()-new Date(S.las
    ממשק
    ===================================================================== */
 let view={name:'home'};let sel=new Set();let q='';let fstat='all';
-function go(name,id){view={name,id};sel=new Set();q='';fstat='all';render();window.scrollTo(0,0)}
+function go(name,id){view={name,id};sel=new Set();q='';fstat='all';oldLimit=50;render();window.scrollTo(0,0)}
 function modal(html){const m=document.createElement('div');m.className='modal';m.innerHTML='<div class="sheet">'+html+'</div>';m.addEventListener('mousedown',e=>{if(e.target===m)m.remove()});document.body.appendChild(m);m.close=()=>m.remove();return m}
 const fld=(label,name,val,attr='')=>`<label class="fld">${label}<input name="${name}" value="${esc(val)}" ${attr}></label>`;
 
@@ -225,10 +225,11 @@ function render(){
   else if(v.name==='employers')body=employersV();
   else if(v.name==='employer')body=employerV(v.id);
   else if(v.name==='certs')body=certsV();
+  else if(v.name==='old')body=oldV();
   else if(v.name==='settings')body=settingsV();
   const tab=v.name==='employer'?'employers':v.name;
-  const IC={home:'<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/>',employers:'<path d="M4 20V6l8-3v17"/><path d="M12 9h8v11"/><path d="M8 9h.01M8 13h.01M8 17h.01M16 13h.01M16 17h.01"/>',certs:'<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/><path d="M10 13h6M10 17h6"/>',settings:'<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>'};
-  const nav=[['home','ראשי'],['employers','מעסיקים'],['certs','אישורים'],['settings','הגדרות']].map(([k,t])=>`<button class="${tab===k?'on':''}" data-act="go" data-v="${k}" ${tab===k?'aria-current="page"':''}><svg viewBox="0 0 24 24" aria-hidden="true">${IC[k]}</svg>${t}</button>`).join('');
+  const IC={home:'<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/>',employers:'<path d="M4 20V6l8-3v17"/><path d="M12 9h8v11"/><path d="M8 9h.01M8 13h.01M8 17h.01M16 13h.01M16 17h.01"/>',certs:'<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/><path d="M10 13h6M10 17h6"/>',old:'<path d="M4 6h16v4H4z"/><path d="M6 10v9h12v-9"/><path d="M10 14h4"/>',settings:'<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>'};
+  const nav=[['home','ראשי'],['employers','מעסיקים'],['old','ישנים'],['certs','אישורים'],['settings','הגדרות']].map(([k,t])=>`<button class="${tab===k?'on':''}" data-act="go" data-v="${k}" ${tab===k?'aria-current="page"':''}><svg viewBox="0 0 24 24" aria-hidden="true">${IC[k]}</svg>${t}</button>`).join('');
   $('#app').innerHTML=`<header><b>אישורי הדרכה – עבודה בגובה</b><small>${esc(I.name)}${syncBadge()}</small></header><main>${body}</main><nav>${nav}</nav>`;
   const s=$('#q');if(s&&q){s.value=q}
 }
@@ -336,14 +337,20 @@ function employersV(){
   <div class="actions" style="margin:0 0 6px"><button class="btn sm sec" data-act="newPrivate">+ עובד פרטי (בלי חברה)</button><button class="btn sm sec" data-act="importHist">ייבוא רישום קיים</button></div><div id="list">${empList()}</div>`}
 function empList(){
   const t=q.trim().toLowerCase();
+  let hidden=0;
   const rows=S.employers.map(e=>{
-    const ws=S.workers.filter(w=>w.employerId===e.id);
-    let hit=!t||[e.company,e.contact,e.idnum,e.phone].some(x=>String(x||'').toLowerCase().includes(t));
-    let wm=t?ws.filter(w=>[w.first,w.last,w.idnum].some(x=>String(x||'').toLowerCase().includes(t))):[];
-    return{e,ws,show:hit||wm.length,wm:hit?[]:wm}}).filter(r=>r.show).sort((a,b)=>empName(a.e).localeCompare(empName(b.e),'he'));
-  if(!rows.length)return `<div class="empty">${S.employers.length?'לא נמצאו תוצאות.':'אין מעסיקים. לחץ על "+ מעסיק".'}</div>`;
-  return rows.map(({e,ws,wm})=>{const ls=ws.map(w=>latest(w.id)).filter(Boolean);const bad=ws.filter(w=>!w.archived).map(w=>latest(w.id)).filter(c=>c&&st(c.until)!=='ok').length;
-    return `<div class="card" data-act="go" data-v="employer" data-id="${e.id}" style="cursor:pointer"><div class="row"><div class="grow"><b>${esc(empName(e))}</b><div class="mut">${ws.length} עובדים${wm.length?' · נמצא: '+esc(wm.map(wName).join(', ')):''}</div></div>${bad?`<span class="chip soon">${bad} לטיפול</span>`:''}</div></div>`}).join('')}
+    const ws=S.workers.filter(w=>w.employerId===e.id),act=ws.filter(w=>!w.archived);
+    const hit=!t||[e.company,e.contact,e.idnum,e.phone].some(x=>String(x||'').toLowerCase().includes(t));
+    const wm=t?ws.filter(w=>[w.first,w.last,w.idnum].some(x=>String(x||'').toLowerCase().includes(t))):[];
+    let show=hit||wm.length;
+    if(show&&!t&&ws.length&&!act.length&&!showOldEmps){show=false;hidden++}
+    return{e,ws,act,show,wm:hit?[]:wm}}).filter(r=>r.show).sort((a,b)=>empName(a.e).localeCompare(empName(b.e),'he'));
+  let h=rows.map(({e,ws,act,wm})=>{const bad=act.map(w=>latest(w.id)).filter(c=>c&&st(c.until)!=='ok').length,na=ws.length-act.length;
+    return `<div class="card" data-act="go" data-v="employer" data-id="${e.id}" style="cursor:pointer"><div class="row"><div class="grow"><b>${esc(empName(e))}</b><div class="mut">${act.length} עובדים${na?` · ${na} בארכיון`:''}${wm.length?' · נמצא: '+esc(wm.map(wName).join(', ')):''}</div></div>${bad?`<span class="chip soon">${bad} לטיפול</span>`:''}</div></div>`}).join('');
+  if(!rows.length&&!hidden)h=`<div class="empty">${S.employers.length?'לא נמצאו תוצאות.':'אין מעסיקים. לחץ על "+ מעסיק".'}</div>`;
+  if(hidden)h+=`<div class="empty"><a href="#" data-act="toggleOldEmps">הצג גם ${hidden} מעסיקים ללא עובדים פעילים</a></div>`;
+  else if(showOldEmps&&!t&&S.employers.some(e=>{const w=S.workers.filter(x=>x.employerId===e.id);return w.length&&w.every(x=>x.archived)}))h+=`<div class="empty"><a href="#" data-act="toggleOldEmps">הסתר מעסיקים ללא עובדים פעילים</a></div>`;
+  return h}
 
 function employerV(id){
   const e=getE(id);if(!e){return '<div class="empty">המעסיק לא נמצא</div>'}
@@ -362,17 +369,46 @@ function employerV(id){
     h+=`<label class="mut" style="display:flex;gap:8px;align-items:center;margin:0 4px 6px"><input type="checkbox" class="cb" data-selall="1"> בחר הכל</label>`;
     h+=ws.map(w=>{const c=latest(w.id);const s=c?st(c.until):'none';
       return `<div class="card"><div class="row"><input type="checkbox" class="cb" data-selw="${w.id}" ${sel.has(w.id)?'checked':''} aria-label="בחירת עובד"><div class="grow" data-act="worker" data-w="${w.id}" style="cursor:pointer"><b>${esc(wName(w))}</b> <span class="mut">${esc(w.idnum||'')}</span><div class="mut">${c?'עד '+fmt(c.until):'טרם הודרך'}${w.profession?' · '+esc(w.profession):''}</div></div>${w.archived?'<span class="chip none">ארכיון</span>':`<span class="chip ${s}">${c?stText(c.until):'אין תעודה'}</span>`}</div></div>`}).join('');
-    h+=`<div class="sticky"><button class="btn" style="width:100%;padding:13px" data-act="issueSel" data-e="${id}" id="issueBtn" ${sel.size?'':'disabled'}>${sel.size?`הנפקת אישורים (${sel.size})`:'בחר עובדים להנפקה'}</button></div>`}
+    h+=`<div class="sticky" style="display:flex;gap:8px"><button class="btn" style="flex:2;padding:13px" data-act="issueSel" data-e="${id}" id="issueBtn" ${sel.size?'':'disabled'}>${sel.size?`הנפקת אישורים (${sel.size})`:'בחר עובדים להנפקה'}</button><button class="btn sec" style="flex:1;padding:13px;background:#fff" data-act="archSel" id="archBtn" ${sel.size?'':'disabled'}>לארכיון</button></div>`}
   return h}
+
+/* ---------- ישנים (ארכיון) ---------- */
+function oldV(){
+  const n=S.workers.filter(w=>w.archived).length;
+  return `<div class="mut" style="margin:2px 4px 8px">עובדים שהועברו לארכיון. הם לא מופיעים בראשי, במעסיקים ובאישורים, וניתן לחפש אותם כאן.</div>
+  <input id="q" class="search" aria-label="חיפוש" placeholder="חיפוש בארכיון: שם, ת.ז. או מעסיק" data-q="old" value="${esc(q)}">
+  <div class="actions" style="margin:0 0 6px"><button class="btn sm sec" data-act="autoArch">ארכוב מהיר לפי תפוגה</button><span class="mut" style="align-self:center">${n} בארכיון</span></div>
+  <div id="list">${oldList()}</div>`}
+function oldList(){
+  const t=q.trim().toLowerCase();
+  let L=S.workers.filter(w=>w.archived&&(!t||[w.first,w.last,wName(w),w.idnum,empName(getE(w.employerId))].some(x=>String(x||'').toLowerCase().includes(t))));
+  const lastDate=w=>{const c=latest(w.id);return c?c.date:''};
+  L.sort((a,b)=>lastDate(b).localeCompare(lastDate(a))||wName(a).localeCompare(wName(b),'he'));
+  if(!L.length)return `<div class="empty">${t?'לא נמצאו תוצאות.':'הארכיון ריק. עובדים שמועברים לארכיון יופיעו כאן.'}</div>`;
+  const total=L.length;L=L.slice(0,oldLimit);
+  return L.map(w=>{const c=latest(w.id),e=getE(w.employerId);
+    return `<div class="card item"><div class="row"><div class="grow" data-act="worker" data-w="${w.id}" style="cursor:pointer"><div><b class="name">${esc(wName(w))}</b> <span class="mut">${esc(w.idnum||'')}</span></div><div class="sub">${esc(empName(e))}</div><div class="exp">${c?`הדרכה אחרונה <b>${fmt(c.date)}</b>`:'ללא הדרכות'}</div></div><span class="chip none">${c?(st(c.until)==='expired'?'פג':'בתוקף'):'ארכיון'}</span></div>
+    <div class="actions" style="margin:10px 0 0"><button class="btn sm sec" data-act="worker" data-w="${w.id}">היסטוריה</button><button class="btn sm sec" data-act="unarch" data-w="${w.id}">החזרה מהארכיון</button><button class="btn sm" data-act="renew" data-w="${w.id}">${c?'חידוש':'הנפקה'}</button></div></div>`}).join('')+(total>oldLimit?`<div class="empty"><button class="btn sec" data-act="moreOld">הצג עוד (${total-oldLimit})</button></div>`:'')}
+function autoArchForm(){
+  const m=modal(`<h3>ארכוב מהיר לפי תפוגה</h3><div class="mut">מעביר לארכיון עובדים שהאישור האחרון שלהם פג לפני יותר מהזמן שתבחר. מי שיש לו אישור תקף או שפג לאחרונה נשאר ברשימות.</div>
+   <label class="fld">אישור שפג לפני יותר מ-<select id="mo"><option value="0">היום (כל מי שפג)</option><option value="3">3 חודשים</option><option value="6" selected>6 חודשים</option><option value="12">שנה</option><option value="24">שנתיים</option></select></label>
+   <div id="pv" class="mut" style="margin:8px 0"></div>
+   <div class="actions"><button class="btn" id="ok" disabled>העברה לארכיון</button><button class="btn sec" id="cx">ביטול</button></div>`);
+  const pick=()=>{const mo=+$('#mo',m).value,d=new Date();d.setMonth(d.getMonth()-mo);const lim=d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());
+    return S.workers.filter(w=>!w.archived).filter(w=>{const c=latest(w.id);return c&&c.until<lim})};
+  const upd=()=>{const L=pick();$('#pv',m).textContent=L.length?`יועברו לארכיון ${L.length} עובדים.`:'אין עובדים מתאימים.';$('#ok',m).disabled=!L.length};
+  $('#mo',m).onchange=upd;upd();$('#cx',m).onclick=m.close;
+  $('#ok',m).onclick=()=>{const L=pick();L.forEach(w=>w.archived=true);save();m.close();render();toast(L.length+' עובדים הועברו לארכיון',{label:'ביטול',fn:()=>{L.forEach(w=>w.archived=false);save();render()}})}}
 
 /* ---------- אישורים ---------- */
 function certsV(){
   return `<input id="q" class="search" aria-label="חיפוש" placeholder="חיפוש לפי שם, ת.ז. או מעסיק" data-q="cert" value="${esc(q)}">
-  <div class="row"><select class="search" style="margin:0" data-f="1"><option value="all">כל המצבים</option><option value="ok">בתוקף</option><option value="soon">פוקעים בקרוב</option><option value="expired">פג תוקף</option><option value="old">ישנים (הוחלפו בחידוש)</option></select><button class="btn" data-act="printSel" id="printBtn" ${sel.size?'':'disabled'}>הדפס (${sel.size})</button></div><div id="list">${certList()}</div>`}
+  <div class="row"><select class="search" style="margin:0" data-f="1"><option value="all">כל המצבים</option><option value="ok">בתוקף</option><option value="soon">פוקעים בקרוב</option><option value="expired">פג תוקף</option><option value="old">הוחלפו בחידוש</option><option value="archived">עובדים בארכיון</option></select><button class="btn" data-act="printSel" id="printBtn" ${sel.size?'':'disabled'}>הדפס (${sel.size})</button></div><div id="list">${certList()}</div>`}
 function certList(){
   const t=q.trim().toLowerCase();
   const L=S.certs.map(c=>({c,w:getW(c.workerId)||{},e:getE(c.employerId)})).filter(x=>{
-    if(fstat==='old'){if(!isSuper(x.c))return false}else if(fstat!=='all'&&(isSuper(x.c)||st(x.c.until)!==fstat))return false;
+    const arch=!!x.w.archived;
+    if(fstat==='archived'){if(!arch)return false}else{if(arch)return false;if(fstat==='old'){if(!isSuper(x.c))return false}else if(fstat!=='all'&&(isSuper(x.c)||st(x.c.until)!==fstat))return false}
     if(!t)return true;
     return [wName(x.w),x.w.idnum,empName(x.e),x.c.serial].some(s=>String(s||'').toLowerCase().includes(t))}).sort((a,b)=>b.c.date.localeCompare(a.c.date)||(b.c.serial||'').localeCompare(a.c.serial||''));
   return L.length?L.map(x=>certRow(x,true)).join(''):'<div class="empty">אין אישורים להצגה.</div>'}
@@ -437,8 +473,8 @@ document.addEventListener('change',e=>{
   else if(t.dataset.opt){S.opts[t.dataset.opt]=t.checked;save()}
   else if(t.dataset.img){handleImg(t)}
   else if(t.id==='importFile'){importFile(t.files[0]);t.value=''}});
-function updIssue(){const b=$('#issueBtn');if(b){b.disabled=!sel.size;b.textContent=sel.size?'הנפקת אישורים ('+sel.size+')':'בחר עובדים להנפקה'}}
-document.addEventListener('input',e=>{const t=e.target;if(t.dataset.q){q=t.value;$('#list').innerHTML=t.dataset.q==='emp'?empList():t.dataset.q==='home'?homeList():certList()}});
+function updIssue(){const b=$('#issueBtn');if(b){b.disabled=!sel.size;b.textContent=sel.size?'הנפקת אישורים ('+sel.size+')':'בחר עובדים להנפקה'}const a=$('#archBtn');if(a)a.disabled=!sel.size}
+document.addEventListener('input',e=>{const t=e.target;if(t.dataset.q){q=t.value;$('#list').innerHTML=t.dataset.q==='emp'?empList():t.dataset.q==='home'?homeList():t.dataset.q==='old'?oldList():certList()}});
 document.addEventListener('submit',e=>{e.preventDefault();const f=e.target;
   if(f.getAttribute('id')==='insForm'){const d=Object.fromEntries(new FormData(f));Object.assign(S.instructor,d);S.instructor.id=S.instructor.id.replace(/\D/g,'');
     if(S.instructor.id&&!validId(S.instructor.id))toast('שימו לב: ת.ז. המדריך לא עוברת בדיקת תקינות');else toast('נשמר');save();render()}});
@@ -446,6 +482,11 @@ document.addEventListener('submit',e=>{e.preventDefault();const f=e.target;
 const ACT={
   go:d=>go(d.v,d.id),
   toggleArch:(d,b,e)=>{e.preventDefault();showArch=!showArch;render()},
+  toggleOldEmps:(d,b,e)=>{e.preventDefault();showOldEmps=!showOldEmps;$('#list').innerHTML=empList()},
+  unarch:d=>{const w=getW(d.w);if(!w)return;w.archived=false;save();$('#list').innerHTML=oldList();toast('הוחזר מהארכיון: '+wName(w))},
+  moreOld:()=>{oldLimit+=50;$('#list').innerHTML=oldList()},
+  autoArch:()=>autoArchForm(),
+  archSel:d=>{const ids=[...sel].filter(id=>getW(id));if(!ids.length)return;ids.forEach(id=>getW(id).archived=true);sel=new Set();save();render();toast(ids.length+' עובדים הועברו לארכיון (לשונית ישנים)',{label:'ביטול',fn:()=>{ids.forEach(id=>{const w=getW(id);if(w)w.archived=false});save();render()}})},
   newPrivate:()=>workerForm(null,null,{priv:true}),
   importHist:()=>importHist(),
   restoreTrash:d=>{const n=trashRestore(d.g);toast(n?'שוחזרו '+n+' רשומות':'כל הרשומות כבר קיימות')},
@@ -621,6 +662,7 @@ function importHist(){
    <textarea id="ta" rows="8" dir="rtl" style="width:100%;padding:10px;border:1px solid #d6d3cc;border-radius:9px;font-size:15px" placeholder="חברת דוגמה	דוד	כהן	123456782	15/03/2025"></textarea>
    <div class="mut" style="margin:8px 0 2px"><b>תחומי ברירת מחדל</b> (לשורות בלי עמודת תחומים) <a href="#" id="all">הכל</a> · <a href="#" id="none">נקה</a></div>
    <div class="topics">${topicsHtml(S.lastTopics||[])}</div>
+   <label class="fld">ארכוב אוטומטי של עובדים חדשים בייבוא<select id="am"><option value="expired" selected>ארכב מי שהאישור האחרון שלו כבר פג</option><option value="none">אל תארכב</option><option value="all">ארכב את כולם</option></select></label>
    <div id="pv" class="mut" style="margin:8px 0"></div>
    <div class="actions"><button class="btn" id="ok" disabled>ייבוא</button><button class="btn sec" id="cx">ביטול</button></div>`);
   const defT=()=>[...m.querySelectorAll('[name=t]:checked')].map(c=>+c.value);
@@ -639,7 +681,7 @@ function importHist(){
   $('#cp',m).onclick=()=>{try{navigator.clipboard.writeText(HIST_HEAD.join('\t')).then(()=>toast('הועתק'),()=>toast('ההעתקה נחסמה'))}catch(e){toast('ההעתקה נחסמה')}};
   $('#cx',m).onclick=m.close;
   $('#ok',m).onclick=()=>{
-    const rows=calc();let nw=0,ne=0,nc=0;
+    const rows=calc();let nw=0,ne=0,nc=0;const created=new Set(),am=$('#am',m).value;
     rows.forEach(r=>{
       let w=S.workers.find(x=>x.idnum===r.idnum);
       if(!w){
@@ -647,10 +689,11 @@ function importHist(){
         if(!e){e=n?{id:uid(),type:'תופש המפעל',company:r.employer,contact:'',idnum:'',phone:'',address:'',zip:'',typeOther:''}
                   :{id:uid(),type:'אחר',typeOther:'עובד פרטי',company:'',contact:r.first+' '+r.last,idnum:r.idnum,phone:'',address:r.address||'',zip:''};S.employers.push(e);ne++}
         w={id:uid(),employerId:e.id,first:r.first,last:r.last,father:r.father,idnum:r.idnum,birthYear:/^(19|20)\d\d$/.test(r.birthYear)?r.birthYear:'',profession:r.profession,address:r.address,signature:null};
-        S.workers.push(w);nw++}
+        S.workers.push(w);created.add(w.id);nw++}
       else{['father','profession','address'].forEach(k=>{if(!w[k]&&r[k])w[k]=r[k]});if(!w.birthYear&&/^(19|20)\d\d$/.test(r.birthYear))w.birthYear=r.birthYear}
       if(!S.certs.some(c=>c.workerId===w.id&&c.date===r.date)){S.certs.push({id:uid(),workerId:w.id,employerId:w.employerId,date:r.date,until:r.until,topics:r.topics,serial:r.serial||'',signature:null,imported:true,createdAt:new Date().toISOString()});nc++}});
-    save();m.close();go('home');toast(`יובאו ${nc} הדרכות, ${nw} עובדים חדשים, ${ne} מעסיקים חדשים`)}}
+    let na=0;created.forEach(id=>{const w=getW(id),c=latest(id);if(am==='all'||(am==='expired'&&c&&c.until<today())){w.archived=true;na++}});
+    save();m.close();go('home');toast(`יובאו ${nc} הדרכות, ${nw} עובדים חדשים${na?`, ${na} הועברו לארכיון`:''}`)}}
 
 /* ---------- הנפקה ---------- */
 function topicsHtml(sel){return TOPICS.slice(1).map((t,i)=>`<label><input type="checkbox" name="t" value="${i+1}" ${sel.includes(i+1)?'checked':''}>(${i+1}) ${t}</label>`).join('')}
