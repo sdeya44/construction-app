@@ -68,21 +68,21 @@ label.fld input.bad{border-color:var(--bad)}
 #preview .bar label{font-size:13px;display:flex;gap:5px;align-items:center}
 #preview .bar .btn{border-color:#fff}
 .pagewrap{margin:14px auto;width:210mm;zoom:var(--z,1);box-shadow:0 2px 12px rgba(0,0,0,.4)}
-.page{width:210mm;height:296.5mm;overflow:hidden;box-sizing:border-box;padding:9mm 18mm 7mm;background:#fff;color:#000;font:11pt/1.4 Arial,"Helvetica Neue",Tahoma,sans-serif;direction:rtl;position:relative}
+.page{width:210mm;height:289mm;overflow:hidden;box-sizing:border-box;padding:7mm 18mm 3mm;background:#fff;color:#000;font:11pt/1.4 Arial,"Helvetica Neue",Tahoma,sans-serif;direction:rtl;position:relative}
 .page .lh{text-align:center;padding-bottom:2mm;margin-bottom:3mm;border-bottom:.5mm solid #000;position:relative}
 .page .lh:after{content:'';display:block;border-bottom:.2mm solid #000;margin-top:.8mm;position:absolute;left:0;right:0;bottom:-1.6mm}
 .page .lh b{display:block;font-weight:800;font-size:30pt;letter-spacing:.3px;line-height:1.15}
-.page .lh .t{font-size:15pt;font-weight:700;letter-spacing:.4px;margin-top:.4mm}
-.page .lh .c{font-size:12.5pt;font-weight:700;color:#000;margin-top:.2mm}
+.page .lh .t{font-size:13pt;font-weight:700;letter-spacing:.4px;margin-top:.4mm}
+.page .lh .c{font-size:11pt;font-weight:700;color:#000;margin-top:.2mm}
 .page h1{margin:0;text-align:center;font-size:11pt;font-weight:400}
 .page .sub{text-align:center}
 .page h2{text-align:center;text-decoration:underline;font-size:15pt;font-weight:700;margin:1.5mm 0 1mm;color:#000}
 .page .serial{text-align:center;font-size:11pt;margin:0 0 1mm}
-.page .sig.big3 .v{height:16mm}
+.page .sig.big3 .v{height:14mm}
 .page .sig .v svg{width:auto}
-.page h3{font-size:10.5pt;margin:2.8mm 0 .8mm;font-weight:700;color:#000}
+.page h3{font-size:10.5pt;margin:2.2mm 0 .7mm;font-weight:700;color:#000}
 .page h3 u{text-underline-offset:1px}
-.page .fr{display:flex;gap:5mm;margin:1.8mm 0;align-items:flex-end}
+.page .fr{display:flex;gap:5mm;margin:1.6mm 0;align-items:flex-end}
 .page .f{display:flex;align-items:flex-end;gap:1.5mm;min-width:0}
 .page .f span{white-space:nowrap}
 .page .f i{font-style:normal;font-weight:600;flex:1;border-bottom:.25mm solid #000;min-height:5mm;padding:0 1.5mm;text-align:center;overflow:hidden;white-space:nowrap;min-width:12mm}
@@ -96,17 +96,17 @@ label.fld input.bad{border-color:var(--bad)}
 .page .sig.big2 .v{height:18mm}
 .page .sig .v{height:14mm;display:flex;align-items:flex-end;justify-content:center;border-bottom:.25mm solid #000;font-weight:600;gap:2mm;position:relative}
 .page .sig img{max-height:14mm;max-width:100%}
-.page .sig img.stamp{max-height:19mm;max-width:62mm;position:absolute;left:50%;transform:translateX(-50%);bottom:.5mm}
+.page .sig img.stamp{max-height:17mm;max-width:62mm;position:absolute;left:50%;transform:translateX(-50%);bottom:.5mm}
 .page .sig img.stamp.beside{left:auto;transform:none;right:-8mm;max-height:19mm}
 .page .foot{position:absolute;bottom:6mm;left:18mm;font-size:7pt;color:#777;direction:ltr}
 @page{size:A4;margin:0}
 @media screen{#printonly{display:none}}
 @media print{
- html,body{background:#fff}
+ html,body{background:#fff;height:auto!important;overflow:visible!important;margin:0!important;padding:0!important}
  body>*:not(#preview){display:none!important}
- #preview{position:static;display:block!important;background:none;overflow:visible}
+ #preview{position:static;display:block!important;background:none;overflow:visible!important;height:auto!important;inset:auto}
  #preview .bar{display:none}
- .pagewrap{zoom:1!important;margin:0;box-shadow:none;break-after:page}
+ .pagewrap{zoom:1!important;margin:0;box-shadow:none;break-after:page;break-inside:avoid;overflow:hidden}
  .pagewrap:last-child{break-after:auto}
 }
 </style>
@@ -469,7 +469,7 @@ function certPage(c){
   const w=getW(c.workerId)||{},e=getE(c.employerId)||{},I=S.instructor,O=S.opts;
   const F=(label,val,fl)=>`<div class="f" style="flex:${fl||1}"><span>${label}</span><i>${esc(val)}</i></div>`;
   const typTxt=e.type==='אחר'&&e.typeOther?'אחר: '+e.typeOther:(e.type||'');
-  const wsig=c.signature?sigSvg(c.signature,'height:15mm;max-width:100%'):'';
+  const wsig=c.signature?sigSvg(c.signature,'height:13mm;max-width:100%'):'';
   const tp=TOPICS.slice(1).map((t,i)=>{const n=i+1,s=`(${n}) ${t}${n<9?';':''}`;return c.topics.includes(n)?s:`<span class="st">${s}</span>`}).join(' ');
   const sigI=O.sig&&I.signature?`<img src="${I.signature}">`:'',stI=O.stamp&&I.stamp?`<img class="stamp${sigI?' beside':''}" src="${I.stamp}">`:'';
   const lh=O.head!==false?`<div class="lh"><b>${esc(I.name)}</b><div class="t">מדריך עבודה בגובה${I.certNo?' · תעודה מס\' '+esc(I.certNo):''}</div><div class="c">${[I.address,I.phone].filter(Boolean).map(esc).join(' · ')}</div></div>`:'';
@@ -510,7 +510,7 @@ function makePdf(imgs){
   const begin=id=>{off[id]=len;str(id+' 0 obj\n')};
   begin(1);str('<</Type/Catalog/Pages 2 0 R>>\nendobj\n');
   begin(2);str('<</Type/Pages/Kids['+imgs.map((_,i)=>(3+3*i)+' 0 R').join(' ')+']/Count '+n+'>>\nendobj\n');
-  imgs.forEach((im,i)=>{const p=3+3*i,cs=`q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
+  imgs.forEach((im,i)=>{const p=3+3*i,hh=+(W*im.h/im.w).toFixed(2),cs=`q ${W} 0 0 ${hh} 0 ${(H-hh).toFixed(2)} cm /Im0 Do Q`;
     begin(p);str(`<</Type/Page/Parent 2 0 R/MediaBox[0 0 ${W} ${H}]/Resources<</XObject<</Im0 ${p+2} 0 R>>>>/Contents ${p+1} 0 R>>\nendobj\n`);
     begin(p+1);str(`<</Length ${cs.length}>>\nstream\n${cs}\nendstream\nendobj\n`);
     begin(p+2);str(`<</Type/XObject/Subtype/Image/Width ${im.w}/Height ${im.h}/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length ${im.data.length}>>\nstream\n`);push(im.data);str('\nendstream\nendobj\n')});
