@@ -407,10 +407,11 @@ function settingsV(){
   <div class="card"><label class="fld">המספר הסידורי הבא<input data-nser value="${esc(nextSerial())}"></label><div class="mut">למשל 2026-001 או 1001. מתקדם אוטומטית בכל הנפקה, וניתן לשנות גם בחלון ההנפקה.</div></div>
   <h2>סנכרון לגוגל שיטס</h2>
   <div class="card">
-   <label class="fld">כתובת ה-Web App (Apps Script)<input id="sy_url" value="${esc(S.sync.url)}" placeholder="https://script.google.com/macros/s/.../exec" dir="ltr"></label>
-   <label class="fld">מפתח סודי<input id="sy_key" type="password" value="${esc(S.sync.key)}" dir="ltr" autocomplete="off"></label>
+   <label class="fld">כתובת ה-Web App (Apps Script)<input id="sy_url" value="${esc(S.sync.url)}" placeholder="https://script.google.com/macros/s/.../exec" dir="ltr" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"></label>
+   <label class="fld">מפתח סודי<input id="sy_key" type="password" value="${esc(S.sync.key)}" dir="ltr" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
    <div class="actions"><button class="btn sec" data-act="gasPrep" style="width:100%">① הכנת הסקריפט והמפתח (התקנה ראשונה)</button></div>
    <div class="actions"><button class="btn" data-act="syncSave">שמירה וסנכרון</button><button class="btn sec" data-act="syncNow">סנכרן עכשיו</button>${S.sync.url?'<button class="btn danger" data-act="syncOff">ניתוק</button>':''}</div>
+   ${S.sync.url&&S.sync.key?'<div class="actions"><button class="btn sec" data-act="syncLink" style="width:100%">חיבור מכשיר נוסף: העתק/שלח קישור</button></div>':''}
    <div class="mut" id="sy_status">${esc(syncStatus())}</div>
    <div class="mut" style="margin-top:6px">הנתונים נשמרים גם בטלפון וגם בגיליון. אפשר לעבוד בלי אינטרנט, והסנכרון יקרה כשיחזור החיבור. ההתקנה הראשונה: לוחצים על ①.</div></div>
   <h2>נמחקו לאחרונה</h2>
@@ -465,6 +466,11 @@ const ACT={
     if(u!==S.sync.url||k!==S.sync.key){S.sync.last=0;S.sync.hashes={};S.sync.metaHash='';S.sync.metaU=0}
     S.sync.url=u;S.sync.key=k;S.sync.err='';save(true);syncNow(true)},
   syncNow:()=>syncNow(true),
+  syncLink:async()=>{
+    const link=location.origin+location.pathname.replace(/index\.html$/,'')+'#sync='+btoa(unescape(encodeURIComponent(S.sync.url+'\n'+S.sync.key)));
+    if(!confirm('הקישור מכיל את מפתח הסנכרון. שלח אותו רק לעצמך (למשל ב-WhatsApp) ולא לאחרים. להמשיך?'))return;
+    try{if(navigator.share){await navigator.share({title:'חיבור אישורי הדרכה',text:link});return}}catch(e){if(e&&e.name==='AbortError')return}
+    try{await navigator.clipboard.writeText(link);toast('הקישור הועתק. פתח אותו בטלפון')}catch(e){prompt('העתק את הקישור:',link)}},
   gasPrep:()=>{
     const ki=$('#sy_key');let key=ki.value.trim();
     if(key.length<16){const a=new Uint8Array(24),al='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';crypto.getRandomValues(a);key=[...a].map(v=>al[v%al.length]).join('');ki.value=key;ki.type='text'}
@@ -817,6 +823,11 @@ function importFile(f){
     for(const k of['employers','workers','certs']){const have=new Set(S[k].map(x=>x.id));(d[k]||[]).forEach(x=>{if(x&&x.id&&!have.has(x.id)){S[k].push(x);n++}})}
     S.nextSerial=Math.max(S.nextSerial,d.nextSerial||1);save();render();toast('יובאו '+n+' רשומות')}catch(e){toast('קובץ לא תקין')}};r.readAsText(f)}
 
+(function(){const h=location.hash;if(!h.startsWith('#sync='))return;
+  try{const [u,k]=decodeURIComponent(escape(atob(h.slice(6)))).split('\n');history.replaceState(null,'',location.pathname+location.search);
+    if(/^https:\/\/script\.google(usercontent)?\.com\//.test(u)&&k){
+      if(confirm('לחבר את המכשיר הזה לגיליון הסנכרון ולמשוך את הנתונים?')){S.sync={...S.sync,url:u,key:k,last:0,hashes:{},metaHash:'',metaU:0,err:''};save(true);setTimeout(()=>syncNow(true),600)}}}
+  catch(e){}})();
 render();
 setTimeout(()=>scheduleSync(),800);
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
