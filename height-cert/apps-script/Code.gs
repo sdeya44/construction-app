@@ -19,11 +19,12 @@ const SECRET = 'CHANGE-ME-TO-A-LONG-RANDOM-KEY';
 
 const SCHEMA = {
   employers: ['id', '_u', 'deleted', 'type', 'typeOther', 'company', 'contact', 'idnum', 'phone', 'address', 'zip'],
-  workers:   ['id', '_u', 'deleted', 'employerId', 'first', 'last', 'father', 'idnum', 'birthYear', 'profession', 'address', 'signature'],
-  certs:     ['id', '_u', 'deleted', 'workerId', 'employerId', 'date', 'until', 'serial', 'topics', 'signature', 'createdAt'],
+  workers:   ['id', '_u', 'deleted', 'employerId', 'first', 'last', 'father', 'idnum', 'birthYear', 'profession', 'address', 'signature', 'archived'],
+  certs:     ['id', '_u', 'deleted', 'workerId', 'employerId', 'date', 'until', 'serial', 'topics', 'signature', 'createdAt', 'snap', 'imported'],
   meta:      ['id', '_u', 'deleted', 'data']
 };
-const JSON_COLS = { signature: 1, topics: 1, data: 1 };
+const JSON_COLS = { signature: 1, topics: 1, data: 1, snap: 1 };
+const BOOL_COLS = { deleted: 1, archived: 1, imported: 1 };
 const KINDS = ['employers', 'workers', 'certs', 'meta'];
 
 function doGet() {
@@ -79,28 +80,37 @@ function syncCore(req, store, nowMs) {
 /* ---------- אחסון בגיליון ---------- */
 function colsOf(kind) { return SCHEMA[kind].concat(['srv']); }
 
+// מחזיר את הגיליון ואת סדר העמודות בפועל (מוסיף עמודות חדשות שחסרות, כך שגרסאות ישנות ממשיכות לעבוד)
 function sheetFor(kind) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const want = colsOf(kind);
   let sh = ss.getSheetByName(kind);
   if (!sh) {
     sh = ss.insertSheet(kind);
-    const c = colsOf(kind);
-    sh.getRange(1, 1, 1, c.length).setNumberFormat('@').setValues([c]);
+    sh.getRange(1, 1, 1, want.length).setNumberFormat('@').setValues([want]);
     sh.setFrozenRows(1);
+    return { sh: sh, cols: want.slice() };
   }
-  return sh;
+  const lc = sh.getLastColumn();
+  const have = lc ? sh.getRange(1, 1, 1, lc).getValues()[0].map(String) : [];
+  const missing = want.filter(function (c) { return have.indexOf(c) < 0; });
+  if (missing.length) {
+    sh.getRange(1, have.length + 1, 1, missing.length).setNumberFormat('@').setValues([missing]);
+    missing.forEach(function (c) { have.push(c); });
+  }
+  return { sh: sh, cols: have };
 }
 
 function decode(col, v) {
   if (col === '_u' || col === 'srv') return Number(v) || 0;
-  if (col === 'deleted') return v === true || v === 'true';
+  if (BOOL_COLS[col]) return v === true || v === 'true';
   if (JSON_COLS[col]) { if (v === '' || v == null) return null; try { return JSON.parse(v); } catch (e) { return null; } }
   return v == null ? '' : String(v);
 }
 
 function encode(col, v) {
   if (v === undefined || v === null) return '';
-  if (col === 'deleted') return v ? 'true' : '';
+  if (BOOL_COLS[col]) return v ? 'true' : '';
   if (JSON_COLS[col]) return JSON.stringify(v);
   return String(v);
 }
@@ -108,7 +118,7 @@ function encode(col, v) {
 function makeStore() {
   return {
     read: function (kind) {
-      const sh = sheetFor(kind), cols = colsOf(kind), n = sh.getLastRow();
+      const f = sheetFor(kind), sh = f.sh, cols = f.cols, n = sh.getLastRow();
       if (n < 2) return [];
       const vals = sh.getRange(2, 1, n - 1, cols.length).getValues();
       const out = [];
@@ -121,7 +131,7 @@ function makeStore() {
     },
     write: function (kind, updates, appends) {
       if (!updates.length && !appends.length) return;
-      const sh = sheetFor(kind), cols = colsOf(kind);
+      const f = sheetFor(kind), sh = f.sh, cols = f.cols;
       const toRow = function (rec) { return cols.map(function (c) { return encode(c, rec[c]); }); };
       updates.forEach(function (u) {
         sh.getRange(u.row, 1, 1, cols.length).setNumberFormat('@').setValues([toRow(u.rec)]);

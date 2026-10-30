@@ -120,16 +120,17 @@ label.fld input.bad{border-color:var(--bad)}
 /* =====================================================================
    נתונים
    ===================================================================== */
-var syncTimer=null,syncing=false;
+var syncTimer=null,syncing=false,showArch=false;
 const KEY='hw_cert_app_v1';
 const TOPICS=[null,'על סולמות','מתוך סלים להרמת אדם','מתוך בימות הרמה מתרוממות ופיגומים ממוכנים','בתוך מקום מוקף','מעל לפיגומים נייחים','מעל גגות','מעל מבנה קונסטרוקציה','בטיפול בעצים וגיזומם','בהקמת בימות והתקנת מערכות תאורה והגברה'];
 const ETYPES=['תופש המפעל','מבצע הבניה','בעל מכונת הרמה','אחר'];
 const REMIND_DAYS=60;
 const SEED_INSTRUCTOR={name:'אחמד קאסם',id:'032987224',address:'מוקייבלה',phone:'050-7858593',certNo:'30137',stamp:'data:image/png;base64,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'};
 const defaults=()=>({instructor:{name:'',id:'',address:'',phone:'',certNo:'',certExpiry:'',years:'',signature:'',stamp:''},
-  employers:[],workers:[],certs:[],nextSerial:1,lastTopics:[],opts:{sig:true,stamp:true,head:true,serialTitle:true},lastSerial:'',nextSerialStr:'',lastBackup:'',seeded:false,sync:{url:'',key:'',last:0,hashes:{},metaHash:'',metaU:0,lastOk:'',err:''}});
+  employers:[],workers:[],certs:[],nextSerial:1,lastTopics:[],opts:{sig:true,stamp:true,head:true,serialTitle:true},lastSerial:'',nextSerialStr:'',lastBackup:'',seeded:false,trash:[],sync:{url:'',key:'',last:0,hashes:{},metaHash:'',metaU:0,lastOk:'',err:''}});
 let S=load();
 // מילוי חד-פעמי של פרטי המדריך (לא דורס שדות שכבר מולאו, ולא חוזר אחרי מחיקה ידנית)
+S.trash=(S.trash||[]).filter(t=>Date.now()-t.ts<90*864e5);
 if(!S.seeded){for(const k in SEED_INSTRUCTOR)if(!S.instructor[k])S.instructor[k]=SEED_INSTRUCTOR[k];S.seeded=true;save()}
 function load(){try{const j=JSON.parse(localStorage.getItem(KEY)||'null');if(j){const d=defaults();return {...d,...j,instructor:{...d.instructor,...(j.instructor||{})},opts:{...d.opts,...(j.opts||{})},sync:{...d.sync,...(j.sync||{})}}}}catch(e){}return defaults()}
 function save(ns){try{localStorage.setItem(KEY,JSON.stringify(S));if(!ns)scheduleSync();return true}catch(e){toast('השמירה נכשלה – המקום במכשיר מלא. ייצא גיבוי.');return false}}
@@ -180,7 +181,16 @@ function signPad(initial,cb){
   $('#clr',m).onclick=()=>{st=[];draw()};$('#cx',m).onclick=m.close;
   $('#ok',m).onclick=()=>{const n=st.reduce((t,a)=>t+a.length/2,0);if(!st.length||n<4){m.close();cb(null);return}m.close();cb(st)};
   draw()}
-function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2600)}
+const isSuper=c=>{const l=latest(c.workerId);return !!l&&l.id!==c.id};
+function makeSnap(w,e){const I=S.instructor,pick=(o,ks)=>ks.reduce((a,k)=>(a[k]=(o&&o[k])||'',a),{});
+  return{i:pick(I,['name','id','address','phone','certNo','certExpiry','years']),e:pick(e,['type','typeOther','company','contact','idnum','phone','address','zip']),w:pick(w,['first','last','father','idnum','birthYear','profession','address'])}}
+function trashPush(label,items){const gid=uid();items.forEach(([kind,rec])=>S.trash.push({gid,label,kind,rec:JSON.parse(JSON.stringify(rec)),ts:Date.now()}));return gid}
+function trashRestore(gid){const its=S.trash.filter(t=>t.gid===gid);let n=0;
+  its.forEach(t=>{if(!S[t.kind].some(x=>x.id===t.rec.id)){S[t.kind].push(t.rec);n++}});
+  S.trash=S.trash.filter(t=>t.gid!==gid);save();render();return n}
+function toast(t,undo){const e=document.createElement('div');e.className='toast';e.textContent=t;
+  if(undo){const b=document.createElement('button');b.textContent=undo.label;b.style.cssText='margin-inline-start:12px;background:none;border:0;color:#ffd98a;font-weight:700;font-size:14px;cursor:pointer';b.onclick=()=>{undo.fn();e.remove()};e.appendChild(b)}
+  document.body.appendChild(e);setTimeout(()=>e.remove(),undo?8000:2600)}
 function waLink(phone,text){let p=String(phone||'').replace(/\D/g,'');if(!p)return '';if(p.startsWith('0'))p='972'+p.slice(1);return 'https://wa.me/'+p+'?text='+encodeURIComponent(text)}
 function insIssues(onDate){
   const I=S.instructor,o=[];
@@ -218,6 +228,11 @@ const KINDS=['employers','workers','certs'];
 function stable(o){return JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v)}
 function hashRec(r){const c={...r};delete c._u;const t=stable(c);let h=5381;for(let i=0;i<t.length;i++)h=((h<<5)+h+t.charCodeAt(i))|0;return t.length+':'+h}
 function metaData(){const i={...S.instructor};delete i.stamp;delete i.signature;return{instructor:i,opts:S.opts,nextSerialStr:S.nextSerialStr||''}}
+function trashHtml(){
+  const g={};S.trash.forEach(t=>{(g[t.gid]=g[t.gid]||{gid:t.gid,label:t.label,ts:t.ts,n:0}).n++});
+  const L=Object.values(g).sort((a,b)=>b.ts-a.ts);
+  if(!L.length)return '<div class="mut">אין פריטים שנמחקו. פריט שנמחק נשמר כאן 90 יום.</div>';
+  return L.map(x=>`<div class="row" style="padding:7px 0;border-bottom:1px solid var(--line)"><div class="grow">${esc(x.label)}<div class="mut">${new Date(x.ts).toLocaleDateString('he-IL')} · ${x.n} רשומות</div></div><button class="btn sm sec" data-act="restoreTrash" data-g="${x.gid}">שחזור</button></div>`).join('')}
 function syncBadge(){if(!S.sync.url)return '';return S.sync.err?' · <span style="color:#ffb4a8">לא מסונכרן</span>':(S.sync.lastOk?' · מסונכרן':'')}
 function syncStatus(){const y=S.sync;if(!y.url)return 'לא מחובר.';if(y.err)return 'שגיאה: '+y.err;return y.lastOk?'סונכרן לאחרונה: '+new Date(y.lastOk).toLocaleString('he-IL'):'עוד לא סונכרן.'}
 function scheduleSync(){if(!S||!S.sync||!S.sync.url||syncing)return;clearTimeout(syncTimer);syncTimer=setTimeout(()=>syncNow(false),2500)}
@@ -263,7 +278,7 @@ window.addEventListener('online',()=>scheduleSync());
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')scheduleSync()});
 
 /* ---------- ראשי ---------- */
-function latestAll(){return S.workers.map(w=>{const c=latest(w.id);return c?{c,w,e:getE(w.employerId),until:c.until}:null}).filter(Boolean)}
+function latestAll(){return S.workers.filter(w=>!w.archived).map(w=>{const c=latest(w.id);return c?{c,w,e:getE(w.employerId),until:c.until}:null}).filter(Boolean)}
 function homeV(){
   const L=latestAll(),cnt={ok:0,soon:0,expired:0};L.forEach(x=>cnt[st(x.until)]++);
   let h='';
@@ -271,21 +286,40 @@ function homeV(){
   if(iss.length)h+=`<div class="banner bad"><span>לא ניתן להנפיק עד שתושלם הגדרת המדריך: ${iss.join(', ')}</span><button class="btn sm" data-act="go" data-v="settings">להגדרות</button></div>`;
   else if(daysUntil(S.instructor.certExpiry)<=REMIND_DAYS)h+=`<div class="banner warn"><span>תעודת המדריך פגה בעוד ${daysUntil(S.instructor.certExpiry)} ימים (${fmt(S.instructor.certExpiry)}). אחרי התאריך ההנפקה תיחסם.</span></div>`;
   if(backupDue())h+=`<div class="banner warn"><span>לא בוצע גיבוי ב-30 הימים האחרונים. הנתונים שמורים רק במכשיר הזה.</span><button class="btn sm" data-act="export">ייצא גיבוי</button></div>`;
-  h+=`<div class="stats"><div class="stat ok"><b>${cnt.ok}</b>בתוקף</div><div class="stat soon"><b>${cnt.soon}</b>פוקעים ב-${REMIND_DAYS} יום</div><div class="stat expired"><b>${cnt.expired}</b>פג תוקף</div></div>`;
+  h+=`<input id="q" class="search" placeholder="חיפוש עובד לפי שם, ת.ז. או מעסיק" data-q="home" value="${esc(q)}">`;
+  h+=`<div id="list">${homeList()}</div>`;
+  return h}
+function workerRow(w){
+  const c=latest(w.id),e=getE(w.employerId),s=c?st(c.until):'none';
+  const msg=c?`שלום, אישור ההדרכה לעבודה בגובה של ${wName(w)} ${s==='expired'?'פג':'יפוג'} בתאריך ${fmt(c.until)}. נשמח לתאם הדרכת חידוש. ${S.instructor.name}${S.instructor.phone?', '+S.instructor.phone:''}`:'';
+  const wa=c&&s!=='ok'&&e&&e.phone?waLink(e.phone,msg):'';
+  return `<div class="card"><div class="row"><div class="grow"><b>${esc(wName(w))}</b> <span class="mut">${esc(w.idnum||'')}</span><div class="mut">${esc(empName(e))}${c?' · עד '+fmt(c.until):''}${w.profession?' · '+esc(w.profession):''}</div></div>${w.archived?'<span class="chip none">ארכיון</span>':`<span class="chip ${s}">${c?stText(c.until):'אין תעודה'}</span>`}</div>
+  <div class="actions" style="margin:8px 0 0"><button class="btn sm" data-act="renew" data-w="${w.id}">${c?'חידוש':'הנפקה'}</button>${c?`<button class="btn sm sec" data-act="print" data-ids="${c.id}">הדפס אחרון</button>`:''}<button class="btn sm sec" data-act="worker" data-w="${w.id}">היסטוריה</button>${wa?`<a class="btn sm sec" href="${wa}" target="_blank" rel="noopener">WhatsApp</a>`:''}</div></div>`}
+function homeList(){
+  const t=q.trim().toLowerCase();
+  if(t.length>=2){
+    const ws=S.workers.filter(w=>[w.first,w.last,wName(w),w.idnum,empName(getE(w.employerId))].some(x=>String(x||'').toLowerCase().includes(t))||certsOfW(w.id).some(c=>c.serial&&String(c.serial).toLowerCase()===t)).sort((a,b)=>wName(a).localeCompare(wName(b),'he')).slice(0,40);
+    const em=S.employers.filter(e=>[e.company,e.contact,e.idnum].some(x=>String(x||'').toLowerCase().includes(t))).slice(0,5);
+    let h=em.map(e=>`<div class="card" data-act="go" data-v="employer" data-id="${e.id}" style="cursor:pointer"><b>${esc(empName(e))}</b> <span class="mut">מעסיק · ${S.workers.filter(w=>w.employerId===e.id).length} עובדים</span></div>`).join('');
+    h+=ws.map(workerRow).join('');
+    return h||'<div class="empty">לא נמצאו תוצאות.</div>'}
+  const L=latestAll(),cnt={ok:0,soon:0,expired:0};L.forEach(x=>cnt[st(x.until)]++);
+  let h=`<div class="stats"><div class="stat ok"><b>${cnt.ok}</b>בתוקף</div><div class="stat soon"><b>${cnt.soon}</b>פוקעים ב-${REMIND_DAYS} יום</div><div class="stat expired"><b>${cnt.expired}</b>פג תוקף</div></div>`;
   const need=L.filter(x=>st(x.until)!=='ok').sort((a,b)=>a.until.localeCompare(b.until));
   h+=`<h2>דורשים חידוש</h2>`;
-  h+=need.length?need.map(x=>certRow(x)).join(''):`<div class="empty">${L.length?'אין תעודות שפגות או פוקעות בקרוב.':'עוד לא הונפקו תעודות. התחל במעסיקים ← הוספת מעסיק.'}</div>`;
+  h+=need.length?need.map(x=>certRow(x)).join(''):`<div class="empty">${L.length?'אין תעודות שפגות או פוקעות בקרוב.':'עוד לא הונפקו תעודות.<div class="actions" style="justify-content:center"><button class="btn" data-act="importHist">ייבוא רישום קיים</button><button class="btn sec" data-act="go" data-v="employers">הוספת מעסיק</button></div>'}</div>`;
   return h}
 function certRow(x,withSel){
-  const{c,w,e}=x;const s=st(c.until);
+  const{c,w,e}=x;const old=isSuper(c);const s=old?'none':st(c.until);
   const msg=`שלום, אישור ההדרכה לעבודה בגובה של ${wName(w)} ${s==='expired'?'פג':'יפוג'} בתאריך ${fmt(c.until)}. נשמח לתאם הדרכת חידוש. ${S.instructor.name}${S.instructor.phone?', '+S.instructor.phone:''}`;
   const wa=e&&e.phone?waLink(e.phone,msg):'';
-  return `<div class="card"><div class="row">${withSel?`<input type="checkbox" class="cb" data-sel="${c.id}" ${sel.has(c.id)?'checked':''}>`:''}<div class="grow"><b>${esc(wName(w))}</b> <span class="mut">${esc(w.idnum||'')}</span><div class="mut">${esc(empName(e))} · ${fmt(c.date)} ← ${fmt(c.until)}${c.serial?' · '+esc(c.serial):''}</div></div><span class="chip ${s}">${stText(c.until)}</span></div>
-  <div class="actions" style="margin:8px 0 0"><button class="btn sm" data-act="renew" data-w="${w.id}">חידוש</button><button class="btn sm sec" data-act="print" data-ids="${c.id}">הדפס</button><button class="btn sm sec" data-act="editCert" data-id="${c.id}">עריכה</button>${wa?`<a class="btn sm sec" href="${wa}" target="_blank" rel="noopener">WhatsApp למעסיק</a>`:''}<button class="btn sm sec" data-act="worker" data-w="${w.id}">פרטים</button></div></div>`}
+  return `<div class="card"><div class="row">${withSel?`<input type="checkbox" class="cb" data-sel="${c.id}" ${sel.has(c.id)?'checked':''}>`:''}<div class="grow"><b>${esc(wName(w))}</b> <span class="mut">${esc(w.idnum||'')}</span><div class="mut">${esc(empName(e))} · ${fmt(c.date)} ← ${fmt(c.until)}${c.serial?' · '+esc(c.serial):''}</div></div><span class="chip ${s}">${old?'הוחלף בחידוש':stText(c.until)}</span></div>
+  <div class="actions" style="margin:8px 0 0">${old?'':`<button class="btn sm" data-act="renew" data-w="${w.id}">חידוש</button>`}<button class="btn sm sec" data-act="print" data-ids="${c.id}">הדפס</button><button class="btn sm sec" data-act="editCert" data-id="${c.id}">עריכה</button>${wa&&!old?`<a class="btn sm sec" href="${wa}" target="_blank" rel="noopener">WhatsApp למעסיק</a>`:''}<button class="btn sm sec" data-act="worker" data-w="${w.id}">פרטים</button></div></div>`}
 
 /* ---------- מעסיקים ---------- */
 function employersV(){
-  return `<div class="row"><div class="grow"><input id="q" class="search" placeholder="חיפוש מעסיק, עובד או ת.ז." data-q="emp" value="${esc(q)}"></div><button class="btn" data-act="newEmp">+ מעסיק</button></div><div id="list">${empList()}</div>`}
+  return `<div class="row"><div class="grow"><input id="q" class="search" placeholder="חיפוש מעסיק, עובד או ת.ז." data-q="emp" value="${esc(q)}"></div><button class="btn" data-act="newEmp">+ מעסיק</button></div>
+  <div class="actions" style="margin:0 0 6px"><button class="btn sm sec" data-act="newPrivate">+ עובד פרטי (בלי חברה)</button><button class="btn sm sec" data-act="importHist">ייבוא רישום קיים</button></div><div id="list">${empList()}</div>`}
 function empList(){
   const t=q.trim().toLowerCase();
   const rows=S.employers.map(e=>{
@@ -294,32 +328,35 @@ function empList(){
     let wm=t?ws.filter(w=>[w.first,w.last,w.idnum].some(x=>String(x||'').toLowerCase().includes(t))):[];
     return{e,ws,show:hit||wm.length,wm:hit?[]:wm}}).filter(r=>r.show).sort((a,b)=>empName(a.e).localeCompare(empName(b.e),'he'));
   if(!rows.length)return `<div class="empty">${S.employers.length?'לא נמצאו תוצאות.':'אין מעסיקים. לחץ על "+ מעסיק".'}</div>`;
-  return rows.map(({e,ws,wm})=>{const ls=ws.map(w=>latest(w.id)).filter(Boolean);const bad=ls.filter(c=>st(c.until)!=='ok').length;
+  return rows.map(({e,ws,wm})=>{const ls=ws.map(w=>latest(w.id)).filter(Boolean);const bad=ws.filter(w=>!w.archived).map(w=>latest(w.id)).filter(c=>c&&st(c.until)!=='ok').length;
     return `<div class="card" data-act="go" data-v="employer" data-id="${e.id}" style="cursor:pointer"><div class="row"><div class="grow"><b>${esc(empName(e))}</b><div class="mut">${ws.length} עובדים${wm.length?' · נמצא: '+esc(wm.map(wName).join(', ')):''}</div></div>${bad?`<span class="chip soon">${bad} לטיפול</span>`:''}</div></div>`}).join('')}
 
 function employerV(id){
   const e=getE(id);if(!e){return '<div class="empty">המעסיק לא נמצא</div>'}
-  const ws=S.workers.filter(w=>w.employerId===id).sort((a,b)=>wName(a).localeCompare(wName(b),'he'));
+  const allW=S.workers.filter(w=>w.employerId===id).sort((a,b)=>wName(a).localeCompare(wName(b),'he'));
+  const nArch=allW.filter(w=>w.archived).length,ws=showArch?allW:allW.filter(w=>!w.archived);
+  const due=allW.filter(w=>!w.archived).map(w=>({w,c:latest(w.id)})).filter(x=>x.c&&st(x.c.until)!=='ok').sort((a,b)=>a.c.until.localeCompare(b.c.until));
+  const batch=due.length&&e.phone?waLink(e.phone,`שלום${e.contact?' '+e.contact:''}, תוקף אישורי ההדרכה לעבודה בגובה של העובדים הבאים פג או עומד לפוג:\n`+due.map(x=>`• ${wName(x.w)} – ${fmt(x.c.until)}`).join('\n')+`\nנשמח לתאם הדרכת חידוש. ${S.instructor.name}${S.instructor.phone?', '+S.instructor.phone:''}`):'';
   let h=`<div class="row" style="margin-bottom:4px"><button class="btn sm sec" data-act="go" data-v="employers">→ חזרה</button></div>
   <div class="card"><div class="row"><div class="grow"><b style="font-size:18px">${esc(empName(e))}</b><div class="mut">${esc(e.type)}${e.contact&&e.company?' · '+esc(e.contact):''}${e.phone?' · '+esc(e.phone):''}</div></div><button class="btn sm sec" data-act="editEmp" data-id="${id}">עריכה</button></div></div>
-  <div class="actions"><button class="btn" data-act="newWorker" data-e="${id}">+ עובד</button><button class="btn sec" data-act="pasteWorkers" data-e="${id}">הדבקת רשימה</button></div>`;
-  h+=`<h2>עובדים (${ws.length})</h2>`;
+  <div class="actions"><button class="btn" data-act="newWorker" data-e="${id}">+ עובד</button><button class="btn sec" data-act="pasteWorkers" data-e="${id}">הדבקת רשימה</button>${batch?`<a class="btn sec" href="${batch}" target="_blank" rel="noopener">תזכורת WhatsApp (${due.length})</a>`:''}</div>`;
+  h+=`<h2>עובדים (${ws.length})${nArch?` <a href="#" data-act="toggleArch" style="font-weight:400;font-size:13px">${showArch?'הסתר ארכיון':'הצג ארכיון ('+nArch+')'}</a>`:''}</h2>`;
   if(!ws.length)h+='<div class="empty">אין עובדים. הוסף עובד או הדבק רשימה מאקסל.</div>';
   else{
     h+=`<label class="mut" style="display:flex;gap:8px;align-items:center;margin:0 4px 6px"><input type="checkbox" class="cb" data-selall="1"> בחר הכל</label>`;
     h+=ws.map(w=>{const c=latest(w.id);const s=c?st(c.until):'none';
-      return `<div class="card"><div class="row"><input type="checkbox" class="cb" data-selw="${w.id}" ${sel.has(w.id)?'checked':''}><div class="grow" data-act="worker" data-w="${w.id}" style="cursor:pointer"><b>${esc(wName(w))}</b> <span class="mut">${esc(w.idnum||'')}</span><div class="mut">${c?'עד '+fmt(c.until):'טרם הודרך'}${w.profession?' · '+esc(w.profession):''}</div></div><span class="chip ${s}">${c?stText(c.until):'אין תעודה'}</span></div></div>`}).join('');
+      return `<div class="card"><div class="row"><input type="checkbox" class="cb" data-selw="${w.id}" ${sel.has(w.id)?'checked':''}><div class="grow" data-act="worker" data-w="${w.id}" style="cursor:pointer"><b>${esc(wName(w))}</b> <span class="mut">${esc(w.idnum||'')}</span><div class="mut">${c?'עד '+fmt(c.until):'טרם הודרך'}${w.profession?' · '+esc(w.profession):''}</div></div>${w.archived?'<span class="chip none">ארכיון</span>':`<span class="chip ${s}">${c?stText(c.until):'אין תעודה'}</span>`}</div></div>`}).join('');
     h+=`<div class="sticky"><button class="btn" style="width:100%;padding:13px" data-act="issueSel" data-e="${id}" id="issueBtn" ${sel.size?'':'disabled'}>הנפקת אישורים לנבחרים (${sel.size})</button></div>`}
   return h}
 
 /* ---------- אישורים ---------- */
 function certsV(){
   return `<input id="q" class="search" placeholder="חיפוש לפי שם, ת.ז. או מעסיק" data-q="cert" value="${esc(q)}">
-  <div class="row"><select class="search" style="margin:0" data-f="1"><option value="all">כל המצבים</option><option value="ok">בתוקף</option><option value="soon">פוקעים בקרוב</option><option value="expired">פג תוקף</option></select><button class="btn" data-act="printSel" id="printBtn" ${sel.size?'':'disabled'}>הדפס (${sel.size})</button></div><div id="list">${certList()}</div>`}
+  <div class="row"><select class="search" style="margin:0" data-f="1"><option value="all">כל המצבים</option><option value="ok">בתוקף</option><option value="soon">פוקעים בקרוב</option><option value="expired">פג תוקף</option><option value="old">ישנים (הוחלפו בחידוש)</option></select><button class="btn" data-act="printSel" id="printBtn" ${sel.size?'':'disabled'}>הדפס (${sel.size})</button></div><div id="list">${certList()}</div>`}
 function certList(){
   const t=q.trim().toLowerCase();
   const L=S.certs.map(c=>({c,w:getW(c.workerId)||{},e:getE(c.employerId)})).filter(x=>{
-    if(fstat!=='all'&&st(x.c.until)!==fstat)return false;
+    if(fstat==='old'){if(!isSuper(x.c))return false}else if(fstat!=='all'&&(isSuper(x.c)||st(x.c.until)!==fstat))return false;
     if(!t)return true;
     return [wName(x.w),x.w.idnum,empName(x.e),x.c.serial].some(s=>String(s||'').toLowerCase().includes(t))}).sort((a,b)=>b.c.date.localeCompare(a.c.date)||(b.c.serial||'').localeCompare(a.c.serial||''));
   return L.length?L.map(x=>certRow(x,true)).join(''):'<div class="empty">אין אישורים להצגה.</div>'}
@@ -359,6 +396,10 @@ function settingsV(){
    <div class="actions"><button class="btn" data-act="syncSave">שמירה וסנכרון</button><button class="btn sec" data-act="syncNow">סנכרן עכשיו</button>${S.sync.url?'<button class="btn danger" data-act="syncOff">ניתוק</button>':''}</div>
    <div class="mut" id="sy_status">${esc(syncStatus())}</div>
    <div class="mut" style="margin-top:6px">הנתונים נשמרים גם בטלפון וגם בגיליון. אפשר לעבוד בלי אינטרנט, והסנכרון יקרה כשיחזור החיבור. הוראות התקנה בקובץ apps-script/Code.gs.</div></div>
+  <h2>נמחקו לאחרונה</h2>
+  <div class="card">${trashHtml()}</div>
+  <h2>ייבוא רישום קיים</h2>
+  <div class="card"><div class="mut">להעברת הדרכות מהרישום הידני או מאקסל: עובדים, מעסיקים ותאריכי הדרכה. כך מעקב החידושים מתחיל מיד.</div><div class="actions"><button class="btn" data-act="importHist">ייבוא מאקסל</button></div></div>
   <h2>גיבוי ונתונים</h2>
   <div class="card"><div class="mut">הנתונים שמורים במכשיר הזה בלבד. גיבוי אחרון: ${S.lastBackup?fmt(S.lastBackup.slice(0,10)):'לא בוצע'}</div>
    <div class="actions"><button class="btn" data-act="export">ייצוא גיבוי</button><label class="btn sec">ייבוא / מיזוג<input type="file" accept="application/json,.json" hidden id="importFile"></label></div>
@@ -379,13 +420,17 @@ document.addEventListener('change',e=>{
   else if(t.dataset.img){handleImg(t)}
   else if(t.id==='importFile'){importFile(t.files[0]);t.value=''}});
 function updIssue(){const b=$('#issueBtn');if(b){b.disabled=!sel.size;b.textContent='הנפקת אישורים לנבחרים ('+sel.size+')'}}
-document.addEventListener('input',e=>{const t=e.target;if(t.dataset.q){q=t.value;$('#list').innerHTML=t.dataset.q==='emp'?empList():certList()}});
+document.addEventListener('input',e=>{const t=e.target;if(t.dataset.q){q=t.value;$('#list').innerHTML=t.dataset.q==='emp'?empList():t.dataset.q==='home'?homeList():certList()}});
 document.addEventListener('submit',e=>{e.preventDefault();const f=e.target;
   if(f.getAttribute('id')==='insForm'){const d=Object.fromEntries(new FormData(f));Object.assign(S.instructor,d);S.instructor.id=S.instructor.id.replace(/\D/g,'');
     if(S.instructor.id&&!validId(S.instructor.id))toast('שימו לב: ת.ז. המדריך לא עוברת בדיקת תקינות');else toast('נשמר');save();render()}});
 
 const ACT={
   go:d=>go(d.v,d.id),
+  toggleArch:(d,b,e)=>{e.preventDefault();showArch=!showArch;render()},
+  newPrivate:()=>workerForm(null,null,{priv:true}),
+  importHist:()=>importHist(),
+  restoreTrash:d=>{const n=trashRestore(d.g);toast(n?'שוחזרו '+n+' רשומות':'כל הרשומות כבר קיימות')},
   export:()=>exportData(),
   rmImg:d=>{S.instructor[d.k]='';save();render()},
   newEmp:()=>empForm(),
@@ -424,44 +469,59 @@ function empForm(e){
     if(e.id)Object.assign(e,d);else{e.id=uid();Object.assign(e,d);S.employers.push(e)}
     save();m.close();if(view.name==='employers')go('employers');else render();};
   const del=$('#del',m);if(del)del.onclick=()=>{const n=S.workers.filter(w=>w.employerId===e.id).length;
-    if(!confirm(`למחוק את המעסיק ואת ${n} העובדים והאישורים שלו? אי אפשר לשחזר.`))return;
+    if(!confirm(`למחוק את המעסיק ואת ${n} העובדים והאישורים שלו? אפשר לשחזר מ"נמחקו לאחרונה" בהגדרות במשך 90 יום.`))return;
     const wid=new Set(S.workers.filter(w=>w.employerId===e.id).map(w=>w.id));
-    S.certs=S.certs.filter(c=>!wid.has(c.workerId));S.workers=S.workers.filter(w=>w.employerId!==e.id);S.employers=S.employers.filter(x=>x.id!==e.id);save();m.close();go('employers')}}
+    const gid=trashPush('מעסיק: '+empName(e),[['employers',e],...S.workers.filter(w=>wid.has(w.id)).map(w=>['workers',w]),...S.certs.filter(c=>wid.has(c.workerId)).map(c=>['certs',c])]);
+    S.certs=S.certs.filter(c=>!wid.has(c.workerId));S.workers=S.workers.filter(w=>w.employerId!==e.id);S.employers=S.employers.filter(x=>x.id!==e.id);save();m.close();go('employers');toast('המעסיק נמחק',{label:'ביטול',fn:()=>trashRestore(gid)})}}
 
 /* ---------- עובד ---------- */
-function workerForm(w,eid){
-  w=w||{employerId:eid};let sig=w.signature||null;
-  const m=modal(`<h3>${w.id?'עריכת עובד':'עובד חדש'}</h3><form id="f">
+function workerForm(w,eid,o){
+  o=o||{};w=w||{employerId:eid};let sig=w.signature||null;
+  const emps=[...S.employers].sort((a,b)=>empName(a).localeCompare(empName(b),'he'));
+  const m=modal(`<h3>${w.id?'עריכת עובד':o.priv?'עובד פרטי חדש':'עובד חדש'}</h3><form id="f">
    <div class="g3">${fld('שם פרטי','first',w.first)}${fld('שם משפחה','last',w.last)}${fld('שם האב','father',w.father)}</div>
    <div class="g3">${fld('מס׳ ת.ז.','idnum',w.idnum,'inputmode="numeric"')}${fld('שנת לידה','birthYear',w.birthYear,'inputmode="numeric" maxlength="4"')}${fld('מקצוע','profession',w.profession)}</div>
    ${fld('כתובת','address',w.address)}
+   ${o.priv?fld('טלפון (לתזכורות)','ephone','','inputmode="tel"'):''}
+   ${w.id?`<label class="fld">מעסיק (שינוי מעביר את העובד, וההיסטוריה נשמרת)<select name="employerId">${emps.map(e=>`<option value="${e.id}" ${e.id===w.employerId?'selected':''}>${esc(empName(e))}</option>`).join('')}</select></label>`:''}
    <div class="card" style="margin:10px 0"><div class="row"><div class="grow"><b>חתימת העובד</b><div class="mut" id="sigst"></div></div><div id="sigprev" style="width:110px;height:38px"></div><button type="button" class="btn sm sec" id="sg">חתימה</button></div></div>
    <div class="actions"><button class="btn" type="submit">שמירה</button><button type="button" class="btn sec" id="cx">ביטול</button></div></form>`);
   $('#cx',m).onclick=m.close;
   const upd=()=>{$('#sigprev',m).innerHTML=sigSvg(sig,'height:38px;width:110px');$('#sigst',m).textContent=sig?'נחתם':'טרם נחתם';$('#sg',m).textContent=sig?'חתימה מחדש':'חתימה'};upd();
   $('#sg',m).onclick=()=>signPad(sig,s=>{sig=s;upd()});
   $('#f',m).onsubmit=ev=>{ev.preventDefault();const d=Object.fromEntries(new FormData(ev.target));d.idnum=d.idnum.replace(/\D/g,'');d.signature=sig;
+    const ephone=d.ephone;delete d.ephone;
     if(!d.first.trim()||!d.last.trim())return toast('חסר שם פרטי או משפחה');
     if(!d.idnum)return toast('חסרה ת.ז.');
+    if(d.birthYear&&!/^(19|20)\d\d$/.test(d.birthYear))return toast('שנת לידה לא תקינה');
     if(!validId(d.idnum)&&!confirm('מספר הת.ז. לא עובר בדיקת תקינות. לשמור בכל זאת?'))return;
     const dup=S.workers.find(x=>x.idnum===d.idnum&&x.id!==w.id);
-    if(dup&&!confirm('קיים כבר עובד עם אותה ת.ז. ('+wName(dup)+', '+empName(getE(dup.employerId))+'). ההיסטוריה שלו תפוצל. להמשיך?'))return;
-    if(d.birthYear&&!/^(19|20)\d\d$/.test(d.birthYear))return toast('שנת לידה לא תקינה');
+    if(dup&&w.id)return toast('הת.ז. הזו כבר קיימת אצל '+wName(dup));
+    if(dup){ // עובד קיים: מעבירים אותו במקום ליצור כפילות
+      const tgt=o.priv?null:w.employerId;
+      if(!confirm('קיים כבר עובד עם אותה ת.ז.: '+wName(dup)+' ('+empName(getE(dup.employerId))+').\nלהעביר אותו למעסיק הזה ולשמור על ההיסטוריה שלו?'))return;
+      Object.assign(dup,d,{signature:d.signature||dup.signature||null,archived:false});if(tgt)dup.employerId=tgt;
+      save();m.close();render();return toast('העובד הועבר והיסטוריה נשמרה')}
+    if(o.priv){const e={id:uid(),type:'אחר',typeOther:'עובד פרטי',company:'',contact:d.first.trim()+' '+d.last.trim(),idnum:d.idnum,phone:ephone||'',address:d.address||'',zip:''};S.employers.push(e);w.employerId=e.id}
     if(w.id)Object.assign(w,d);else{w.id=uid();Object.assign(w,d);S.workers.push(w)}
-    save();m.close();render()}}
+    save();m.close();if(o.priv)go('employer',w.employerId);else render()}}
 function workerSheet(id){
   const w=getW(id);if(!w)return;const cs=certsOfW(id);
   const m=modal(`<h3>${esc(wName(w))}</h3><div class="mut">${esc(w.idnum)} · ${esc(empName(getE(w.employerId)))}${w.profession?' · '+esc(w.profession):''}${w.birthYear?' · נולד '+esc(w.birthYear):''}</div>
-   <div class="actions"><button class="btn" id="ren">הנפקה / חידוש</button><button class="btn sec" id="edit">עריכת פרטים</button><button class="btn danger" id="del">מחיקת עובד</button></div>
-   <h2>היסטוריית הדרכות</h2>${cs.length?cs.map(c=>`<div class="card"><div class="row"><div class="grow"><b>${fmt(c.date)} ← ${fmt(c.until)}</b> <span class="chip ${st(c.until)}">${stText(c.until)}</span><div class="mut">סעיפים: ${c.topics.join(', ')}${c.serial?' · '+esc(c.serial):''}</div></div></div><div class="actions" style="margin:8px 0 0"><button class="btn sm sec" data-p="${c.id}">הדפס</button><button class="btn sm sec" data-e="${c.id}">עריכה</button><button class="btn sm danger" data-d="${c.id}">מחק</button></div></div>`).join(''):'<div class="empty">טרם הונפקו אישורים.</div>'}
+   <div class="actions"><button class="btn" id="ren">הנפקה / חידוש</button><button class="btn sec" id="edit">עריכת פרטים</button><button class="btn sec" id="arch">${w.archived?'החזר מארכיון':'העבר לארכיון (עזב)'}</button><button class="btn danger" id="del">מחיקה</button></div>
+   <h2>היסטוריית הדרכות</h2>${cs.length?cs.map(c=>`<div class="card"><div class="row"><div class="grow"><b>${fmt(c.date)} ← ${fmt(c.until)}</b> <span class="chip ${isSuper(c)?'none':st(c.until)}">${isSuper(c)?'הוחלף':stText(c.until)}</span>${c.imported?' <span class="mut">(מיובא)</span>':''}<div class="mut">סעיפים: ${c.topics.join(', ')}${c.serial?' · '+esc(c.serial):''}</div></div></div><div class="actions" style="margin:8px 0 0"><button class="btn sm sec" data-p="${c.id}">הדפס</button><button class="btn sm sec" data-e="${c.id}">עריכה</button><button class="btn sm danger" data-d="${c.id}">מחק</button></div></div>`).join(''):'<div class="empty">טרם הונפקו אישורים.</div>'}
    <div class="actions"><button class="btn sec" id="cx">סגירה</button></div>`);
   $('#cx',m).onclick=m.close;
   $('#ren',m).onclick=()=>{m.close();issueForm([id])};
   $('#edit',m).onclick=()=>{m.close();workerForm(w)};
-  $('#del',m).onclick=()=>{if(!confirm('למחוק את העובד וכל האישורים שלו? אי אפשר לשחזר.'))return;S.certs=S.certs.filter(c=>c.workerId!==id);S.workers=S.workers.filter(x=>x.id!==id);save();m.close();render()};
+  $('#arch',m).onclick=()=>{w.archived=!w.archived;save();m.close();render();toast(w.archived?'הועבר לארכיון: לא יופיע ברשימות התוקף':'הוחזר מהארכיון')};
+  $('#del',m).onclick=()=>{if(!confirm('למחוק את העובד וכל האישורים שלו? אפשר לשחזר מ"נמחקו לאחרונה" בהגדרות במשך 90 יום.'))return;
+    const gid=trashPush('עובד: '+wName(w),[['workers',w],...S.certs.filter(c=>c.workerId===id).map(c=>['certs',c])]);
+    S.certs=S.certs.filter(c=>c.workerId!==id);S.workers=S.workers.filter(x=>x.id!==id);save();m.close();render();toast('העובד נמחק',{label:'ביטול',fn:()=>trashRestore(gid)})};
   m.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{m.close();preview([b.dataset.p])});
   m.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>{m.close();certEdit(b.dataset.e)});
-  m.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{if(!confirm('למחוק את האישור הזה?'))return;S.certs=S.certs.filter(c=>c.id!==b.dataset.d);save();m.close();render();workerSheet(id)})}
+  m.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{if(!confirm('למחוק את האישור הזה?'))return;const cc=S.certs.find(c=>c.id===b.dataset.d);
+    const gid=trashPush('אישור: '+wName(w)+' '+fmt(cc.date),[['certs',cc]]);S.certs=S.certs.filter(c=>c.id!==b.dataset.d);save();m.close();render();workerSheet(id);toast('האישור נמחק',{label:'ביטול',fn:()=>{trashRestore(gid);workerSheet(id)}})})}
 
 /* ---------- הדבקת רשימה ---------- */
 function pasteForm(eid){
@@ -476,6 +536,81 @@ function pasteForm(eid){
   $('#ok',m).onclick=()=>{const r=parse().filter(x=>x.first&&x.last&&x.idnum);let n=0,sk=0;
     r.forEach(x=>{if(S.workers.some(w=>w.idnum===x.idnum&&w.employerId===eid)){sk++;return}S.workers.push({id:uid(),employerId:eid,...x});n++});
     save();m.close();render();toast(`נוספו ${n} עובדים`+(sk?`, ${sk} כבר קיימים`:''))}}
+
+/* ---------- ייבוא רישום קיים ---------- */
+const HIST_COLS=['employer','first','last','idnum','date','until','profession','birthYear','father','address','topics','serial'];
+const HIST_HEAD=['מעסיק','שם פרטי','שם משפחה','ת.ז.','תאריך הדרכה','תאריך תפוגה (רשות)','מקצוע','שנת לידה','שם האב','כתובת','תחומים (מספרים, רשות)','מספר סידורי (רשות)'];
+const normName=x=>String(x||'').replace(/\s+/g,' ').trim().toLowerCase();
+function parseDateStr(x){
+  x=String(x||'').trim();if(!x)return '';
+  let m,y,mo,d;
+  if(m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(x)){y=+m[1];mo=+m[2];d=+m[3]}
+  else if(m=/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/.exec(x)){d=+m[1];mo=+m[2];y=+m[3];if(y<100)y+=2000}
+  else if(/^\d{5}$/.test(x)){const t=new Date(Date.UTC(1899,11,30)+(+x)*864e5);y=t.getUTCFullYear();mo=t.getUTCMonth()+1;d=t.getUTCDate()}
+  else return null;
+  const dt=new Date(Date.UTC(y,mo-1,d));if(dt.getUTCFullYear()!==y||dt.getUTCMonth()!==mo-1||dt.getUTCDate()!==d)return null;
+  return y+'-'+p2(mo)+'-'+p2(d)}
+function parseHist(text,defTopics){
+  const rows=[],errs=[];let clamped=0;
+  text.split(/\r?\n/).filter(l=>l.trim()).forEach((l,idx)=>{
+    const c=(l.includes('\t')?l.split('\t'):l.includes(';')?l.split(';'):l.split(',')).map(x=>x.trim());
+    const r={};HIST_COLS.forEach((k,i)=>r[k]=c[i]||'');
+    r.idnum=r.idnum.replace(/\D/g,'');
+    let dt=parseDateStr(r.date);
+    if(idx===0&&!r.idnum&&!dt&&/ת\.?ז|שם|תאריך/.test(l))return;   // שורת כותרות
+    const row=idx+1,bad=[];
+    if(!r.first||!r.last)bad.push('חסר שם');
+    if(!r.idnum)bad.push('חסרה ת.ז.');
+    if(!dt)bad.push(r.date?'תאריך הדרכה לא תקין':'חסר תאריך הדרכה');
+    let un=r.until?parseDateStr(r.until):'';
+    if(r.until&&!un)bad.push('תאריך תפוגה לא תקין');
+    if(dt&&!bad.length){
+      if(!un)un=addYears(dt,2);
+      if(un<=dt)bad.push('התפוגה לפני ההדרכה');
+      else if(un>addYears(dt,2)){un=addYears(dt,2);clamped++}}
+    let tp=(r.topics.match(/[1-9]/g)||[]).map(Number).filter((v,i,a)=>a.indexOf(v)===i).sort((a,b)=>a-b);
+    if(!tp.length)tp=defTopics;
+    if(!tp.length)bad.push('חסרים תחומי הדרכה');
+    if(bad.length){errs.push(`שורה ${row}: ${bad.join(', ')}`);return}
+    rows.push({...r,date:dt,until:un,topics:tp})});
+  return{rows,errs,clamped}}
+function importHist(){
+  const m=modal(`<h3>ייבוא רישום קיים</h3>
+   <div class="mut">הדבק שורות מאקסל, שורה לכל עובד והדרכה, בעמודות לפי הסדר:<br><b>${HIST_HEAD.join(' · ')}</b><br>חובה: שם פרטי, שם משפחה, ת.ז., תאריך הדרכה (למשל 15/03/2025). מעסיק ריק = עובד פרטי. אם אין תאריך תפוגה, הוא יחושב כשנתיים מההדרכה.</div>
+   <div class="actions"><button type="button" class="btn sm sec" id="cp">העתק שורת כותרות</button></div>
+   <textarea id="ta" rows="8" dir="rtl" style="width:100%;padding:10px;border:1px solid #d6d3cc;border-radius:9px;font-size:15px" placeholder="חברת דוגמה	דוד	כהן	123456782	15/03/2025"></textarea>
+   <div class="mut" style="margin:8px 0 2px"><b>תחומי ברירת מחדל</b> (לשורות בלי עמודת תחומים) <a href="#" id="all">הכל</a> · <a href="#" id="none">נקה</a></div>
+   <div class="topics">${topicsHtml(S.lastTopics||[])}</div>
+   <div id="pv" class="mut" style="margin:8px 0"></div>
+   <div class="actions"><button class="btn" id="ok" disabled>ייבוא</button><button class="btn sec" id="cx">ביטול</button></div>`);
+  const defT=()=>[...m.querySelectorAll('[name=t]:checked')].map(c=>+c.value);
+  const calc=()=>{
+    const {rows,errs,clamped}=parseHist($('#ta',m).value,defT());
+    const emps=new Set(),ws=new Set(),seenC=new Set();let certs=0;
+    rows.forEach(r=>{const w=S.workers.find(x=>x.idnum===r.idnum);const k=r.idnum+'|'+r.date;if(seenC.has(k))return;seenC.add(k);
+      if(!w){ws.add(r.idnum);const n=normName(r.employer);if(n&&!S.employers.some(e=>normName(e.company||e.contact)===n))emps.add(n)}
+      if(!w||!S.certs.some(c=>c.workerId===w.id&&c.date===r.date))certs++});
+    const inv=rows.filter(r=>!validId(r.idnum)).length;
+    $('#pv',m).innerHTML=(rows.length||errs.length)?`<b>${rows.length}</b> שורות תקינות · ${emps.size} מעסיקים חדשים · ${ws.size} עובדים חדשים · ${certs} הדרכות להוספה${inv?` · <span style="color:var(--warn)">${inv} ת.ז. לא תקינות</span>`:''}${clamped?` · <span style="color:var(--warn)">${clamped} תפוגות קוצרו לשנתיים</span>`:''}${errs.length?`<div style="color:var(--bad);margin-top:6px">${errs.length} שורות עם שגיאה (לא ייובאו):<br>${errs.slice(0,6).map(esc).join('<br>')}${errs.length>6?'<br>…':''}</div>`:''}`:'';
+    $('#ok',m).disabled=!rows.length;return rows};
+  $('#ta',m).oninput=calc;m.querySelectorAll('[name=t]').forEach(c=>c.onchange=calc);
+  $('#all',m).onclick=e=>{e.preventDefault();m.querySelectorAll('[name=t]').forEach(c=>c.checked=true);calc()};
+  $('#none',m).onclick=e=>{e.preventDefault();m.querySelectorAll('[name=t]').forEach(c=>c.checked=false);calc()};
+  $('#cp',m).onclick=()=>{try{navigator.clipboard.writeText(HIST_HEAD.join('\t')).then(()=>toast('הועתק'),()=>toast('ההעתקה נחסמה'))}catch(e){toast('ההעתקה נחסמה')}};
+  $('#cx',m).onclick=m.close;
+  $('#ok',m).onclick=()=>{
+    const rows=calc();let nw=0,ne=0,nc=0;
+    rows.forEach(r=>{
+      let w=S.workers.find(x=>x.idnum===r.idnum);
+      if(!w){
+        const n=normName(r.employer);let e=n?S.employers.find(x=>normName(x.company||x.contact)===n):null;
+        if(!e){e=n?{id:uid(),type:'תופש המפעל',company:r.employer,contact:'',idnum:'',phone:'',address:'',zip:'',typeOther:''}
+                  :{id:uid(),type:'אחר',typeOther:'עובד פרטי',company:'',contact:r.first+' '+r.last,idnum:r.idnum,phone:'',address:r.address||'',zip:''};S.employers.push(e);ne++}
+        w={id:uid(),employerId:e.id,first:r.first,last:r.last,father:r.father,idnum:r.idnum,birthYear:/^(19|20)\d\d$/.test(r.birthYear)?r.birthYear:'',profession:r.profession,address:r.address,signature:null};
+        S.workers.push(w);nw++}
+      else{['father','profession','address'].forEach(k=>{if(!w[k]&&r[k])w[k]=r[k]});if(!w.birthYear&&/^(19|20)\d\d$/.test(r.birthYear))w.birthYear=r.birthYear}
+      if(!S.certs.some(c=>c.workerId===w.id&&c.date===r.date)){S.certs.push({id:uid(),workerId:w.id,employerId:w.employerId,date:r.date,until:r.until,topics:r.topics,serial:r.serial||'',signature:null,imported:true,createdAt:new Date().toISOString()});nc++}});
+    save();m.close();go('home');toast(`יובאו ${nc} הדרכות, ${nw} עובדים חדשים, ${ne} מעסיקים חדשים`)}}
 
 /* ---------- הנפקה ---------- */
 function topicsHtml(sel){return TOPICS.slice(1).map((t,i)=>`<label><input type="checkbox" name="t" value="${i+1}" ${sel.includes(i+1)?'checked':''}>(${i+1}) ${t}</label>`).join('')}
@@ -503,10 +638,12 @@ function issueForm(ids){
     const err=certErr(date,until,topics);if(err)return toast(err);
     if(daysUntil(date)>0&&!confirm('תאריך ההדרכה בעתיד. להמשיך?'))return;
     if(ws.some(w=>!w.signature)&&!confirm('לחלק מהעובדים אין חתימה. תודפס שורת חתימה ריקה לחתימה ידנית. להמשיך?'))return;
+    const yr=+date.slice(0,4),minors=ws.filter(w=>/^(19|20)\d\d$/.test(w.birthYear||'')&&yr-(+w.birthYear)<18);
+    if(minors.length&&!confirm('לפי שנת הלידה, העובדים הבאים מתחת לגיל 18: '+minors.map(wName).join(', ')+'.\nיש לוודא שמותר להעסיקם בעבודה בגובה. להמשיך?'))return;
     const sers=ws.map((w,i)=>s0?incSerial(s0,i):'');
     if(sers.some(x=>x&&S.certs.some(c=>c.serial===x))&&!confirm('מספר סידורי כבר קיים באישור אחר. להמשיך?'))return;
     const out=[];
-    ws.forEach((w,i)=>{const c={id:uid(),workerId:w.id,employerId:w.employerId,date,until,topics,serial:sers[i],signature:w.signature||null,createdAt:new Date().toISOString()};S.certs.push(c);out.push(c.id)});
+    ws.forEach((w,i)=>{const c={id:uid(),workerId:w.id,employerId:w.employerId,date,until,topics,serial:sers[i],signature:w.signature||null,snap:makeSnap(w,getE(w.employerId)),createdAt:new Date().toISOString()};S.certs.push(c);out.push(c.id)});
     if(s0)S.nextSerialStr=incSerial(sers[sers.length-1],1);
     S.lastTopics=topics;if(!save())return;m.close();sel=new Set();render();preview(out)}}
 function certEdit(id){
@@ -516,6 +653,7 @@ function certEdit(id){
    <div class="row" style="margin:-2px 0 4px"><button type="button" class="btn sm sec" id="a2">תפוגה = שנתיים מהמתן</button></div>
    <label class="fld">מספר סידורי<input name="serial" value="${esc(c.serial||'')}"></label>
    <div class="mut" style="margin:6px 0 2px"><b>תחומי ההדרכה</b></div><div class="topics">${topicsHtml(c.topics)}</div>
+   <label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0;font-size:13px"><input type="checkbox" id="rs" style="margin-top:3px"><span>עדכן את פרטי המדריך, המעסיק והעובד באישור לפי הנתונים הנוכחיים<br><span class="mut">${c.snap?'האישור שומר את הפרטים כפי שהיו ביום ההנפקה. סמן רק אם זה תיקון טעות.':'אישור זה ללא תיעוד של פרטי היום שבו הונפק, ולכן מודפס לפי הנתונים הנוכחיים.'}</span></span></label>
    <div class="card" style="margin:10px 0"><div class="row"><div class="grow"><b>חתימת העובד על אישור זה</b><div class="mut" id="sigst"></div></div><div id="sigprev" style="width:110px;height:38px"></div><button type="button" class="btn sm sec" id="sg">חתימה</button></div></div>
    <div class="actions"><button class="btn" type="submit">שמירה</button><button type="button" class="btn sec" id="cx">ביטול</button></div></form>`);
   const D=$('[name=date]',m),U=$('[name=until]',m);
@@ -527,11 +665,11 @@ function certEdit(id){
     const date=D.value,until=U.value,topics=[...m.querySelectorAll('[name=t]:checked')].map(x=>+x.value),ser=$('[name=serial]',m).value.trim();
     const err=certErr(date,until,topics);if(err)return toast(err);
     if(ser&&S.certs.some(x=>x.serial===ser&&x.id!==id)&&!confirm('מספר סידורי כבר קיים באישור אחר. להמשיך?'))return;
-    Object.assign(c,{date,until,topics,serial:ser,signature:sig});if(sig&&sig!==w.signature)w.signature=sig;
+    Object.assign(c,{date,until,topics,serial:ser,signature:sig});if($('#rs',m).checked)c.snap=makeSnap(w,getE(c.employerId)||getE(w.employerId));if(sig&&sig!==w.signature)w.signature=sig;
     save();m.close();render();toast('נשמר')}}
 /* ---------- תצוגה מקדימה והדפסה ---------- */
 function certPage(c){
-  const w=getW(c.workerId)||{},e=getE(c.employerId)||{},I=S.instructor,O=S.opts;
+  const sn=c.snap||{},w=sn.w||getW(c.workerId)||{},e=sn.e||getE(c.employerId)||{},I={...S.instructor,...(sn.i||{})},O=S.opts;
   const F=(label,val,fl)=>`<div class="f" style="flex:${fl||1}"><span>${label}</span><i>${esc(val)}</i></div>`;
   const typTxt=e.type==='אחר'&&e.typeOther?'אחר: '+e.typeOther:(e.type||'');
   const wsig=c.signature?sigSvg(c.signature,'height:10mm;max-width:100%'):'';
