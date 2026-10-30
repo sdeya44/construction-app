@@ -72,13 +72,13 @@ label.fld input.bad{border-color:var(--bad)}
 .page .lh{text-align:center;padding-bottom:2mm;margin-bottom:3mm;border-bottom:.5mm solid #000;position:relative}
 .page .lh:after{content:'';display:block;border-bottom:.2mm solid #000;margin-top:.8mm;position:absolute;left:0;right:0;bottom:-1.6mm}
 .page .lh b{display:block;font-weight:800;font-size:30pt;letter-spacing:.3px;line-height:1.15}
-.page .lh .t{font-size:13pt;font-weight:700;letter-spacing:.4px;margin-top:.4mm}
-.page .lh .c{font-size:11pt;font-weight:700;color:#000;margin-top:.2mm}
+.page .lh .t{font-size:15pt;font-weight:700;letter-spacing:.4px;margin-top:.4mm}
+.page .lh .c{font-size:12.5pt;font-weight:700;color:#000;margin-top:.2mm}
 .page h1{margin:0;text-align:center;font-size:11pt;font-weight:400}
 .page .sub{text-align:center}
 .page h2{text-align:center;text-decoration:underline;font-size:15pt;font-weight:700;margin:1.5mm 0 1mm;color:#000}
 .page .serial{text-align:center;font-size:11pt;margin:0 0 1mm}
-.page .sig.big3 .v{height:14mm}
+.page .sig.big3 .v{height:13mm}
 .page .sig .v svg{width:auto}
 .page h3{font-size:10.5pt;margin:2.2mm 0 .7mm;font-weight:700;color:#000}
 .page h3 u{text-underline-offset:1px}
@@ -91,12 +91,12 @@ label.fld input.bad{border-color:var(--bad)}
 .page .p{text-align:justify;margin:1mm 0}
 .page .p1{font-size:11.5pt;line-height:1.45;font-weight:700}
 .page .p1 .st{font-weight:400}
-.page .sig{display:flex;gap:9mm;margin:3mm 8mm 0}
+.page .sig{display:flex;gap:9mm;margin:2mm 8mm 0}
 .page .sig>div{flex:1;text-align:center}
-.page .sig.big2 .v{height:18mm}
+.page .sig.big2 .v{height:17mm}
 .page .sig .v{height:14mm;display:flex;align-items:flex-end;justify-content:center;border-bottom:.25mm solid #000;font-weight:600;gap:2mm;position:relative}
 .page .sig img{max-height:14mm;max-width:100%}
-.page .sig img.stamp{max-height:17mm;max-width:62mm;position:absolute;left:50%;transform:translateX(-50%);bottom:.5mm}
+.page .sig img.stamp{max-height:16mm;max-width:58mm;position:absolute;left:50%;transform:translateX(-50%);bottom:.5mm}
 .page .sig img.stamp.beside{left:auto;transform:none;right:-8mm;max-height:19mm}
 .page .foot{position:absolute;bottom:6mm;left:18mm;font-size:7pt;color:#777;direction:ltr}
 @page{size:A4;margin:0}
@@ -469,7 +469,7 @@ function certPage(c){
   const w=getW(c.workerId)||{},e=getE(c.employerId)||{},I=S.instructor,O=S.opts;
   const F=(label,val,fl)=>`<div class="f" style="flex:${fl||1}"><span>${label}</span><i>${esc(val)}</i></div>`;
   const typTxt=e.type==='אחר'&&e.typeOther?'אחר: '+e.typeOther:(e.type||'');
-  const wsig=c.signature?sigSvg(c.signature,'height:13mm;max-width:100%'):'';
+  const wsig=c.signature?sigSvg(c.signature,'height:12mm;max-width:100%'):'';
   const tp=TOPICS.slice(1).map((t,i)=>{const n=i+1,s=`(${n}) ${t}${n<9?';':''}`;return c.topics.includes(n)?s:`<span class="st">${s}</span>`}).join(' ');
   const sigI=O.sig&&I.signature?`<img src="${I.signature}">`:'',stI=O.stamp&&I.stamp?`<img class="stamp${sigI?' beside':''}" src="${I.stamp}">`:'';
   const lh=O.head!==false?`<div class="lh"><b>${esc(I.name)}</b><div class="t">מדריך עבודה בגובה${I.certNo?' · תעודה מס\' '+esc(I.certNo):''}</div><div class="c">${[I.address,I.phone].filter(Boolean).map(esc).join(' · ')}</div></div>`:'';
@@ -493,10 +493,10 @@ function certPage(c){
   <div class="fr">${F('האישור בתוקף מיום',fmt(c.date),1)}${F('עד יום',fmt(c.until),1)}<div class="f" style="white-space:nowrap;font-size:9.5pt">(תוקף ההדרכה לא יעלה על שנתיים)</div></div>
   <div class="big">(ה) הצהרת המדריך</div>
   <div class="p p1">אני החתום מטה מצהיר בזה כי האדם שפרטיו מפורטים בסעיף (ג) לעיל, הודרך על ידי לשמש כאדם העובד בגובה בתחומים אלה: ${tp}</div>
-  <div class="p" style="font-size:10pt">(מחק את המיותר), וכי הוא עומד בכל הדרישות המפורטות בפרקים ב' ו – ג' לתקנות הבטיחות בעבודה (עבודה בגובה), התשס"ז – 2006. (להלן- התקנות).</div>
+  <div class="p" style="font-size:9.5pt;margin:0">(מחק את המיותר), וכי הוא עומד בכל הדרישות המפורטות בפרקים ב' ו – ג' לתקנות הבטיחות בעבודה (עבודה בגובה), התשס"ז – 2006. (להלן- התקנות).</div>
   <div class="sig big2"><div><div class="v">${fmt(c.date)}</div>תאריך</div><div><div class="v">${esc(I.name)}</div>שם המדריך</div><div><div class="v">${sigI}${stI}</div>חתימה</div></div>
-  <h3 style="margin-top:4mm">(ו) הצהרת העובד בגובה</h3>
-  <div class="p" style="font-size:10.5pt">אני מצהיר בזה שכל הנתונים האישיים המפורטים בסעיף (ג) לעיל נכונים, וכי הודרכתי לבצע עבודה בגובה, על ידי מדריך העבודה בגובה <b>${esc(I.name)}</b> כנדרש בתקנה <bdi>5(2)</bdi>.</div>
+  <h3 style="margin-top:2mm">(ו) הצהרת העובד בגובה</h3>
+  <div class="p" style="font-size:10pt;margin:0">אני מצהיר בזה שכל הנתונים האישיים המפורטים בסעיף (ג) לעיל נכונים, וכי הודרכתי לבצע עבודה בגובה, על ידי מדריך העבודה בגובה <b>${esc(I.name)}</b> כנדרש בתקנה <bdi>5(2)</bdi>.</div>
   <div class="sig big3"><div><div class="v">${fmt(c.date)}</div>תאריך</div><div><div class="v">${esc(wName(w))}</div>שם הממנה</div><div><div class="v">${wsig}</div>חתימה</div></div>
   </div></div>`}
 function fitFields(root){root.querySelectorAll('.page .f i').forEach(i=>{let fs=11;i.style.fontSize='';while(i.scrollWidth>i.clientWidth&&fs>6.5){fs-=.5;i.style.fontSize=fs+'pt'}})}
