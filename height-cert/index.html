@@ -539,7 +539,14 @@ async function preparePdfs(ids){
    <div class="actions">${can?'<button class="btn" id="sh">שיתוף (WhatsApp, מייל ועוד)</button>':''}<button class="btn ${can?'sec':''}" id="dl">הורדה למכשיר</button><button class="btn sec" id="cx">סגירה</button></div>
    ${can?'':'<div class="mut">שיתוף ישיר לא נתמך בדפדפן הזה. אפשר להוריד ולצרף ידנית.</div>'}`);
   $('#cx',m).onclick=m.close;
-  const sh=$('#sh',m);if(sh)sh.onclick=async()=>{try{await navigator.share({files,title:'אישור הדרכה לעבודה בגובה'});m.close()}catch(e){if(e&&e.name!=='AbortError')toast('השיתוף נכשל, נסה הורדה')}};
+  const sh=$('#sh',m);if(sh)sh.onclick=async()=>{
+    if(sh.disabled)return;sh.disabled=true;let last=null;
+    for(const d of [{files},{files,text:'אישור הדרכה לעבודה בגובה'}]){
+      try{await navigator.share(d);m.close();return}
+      catch(e){if(e&&e.name==='AbortError'&&/cancel/i.test(e.message||'cancel')){sh.disabled=false;return}last=e}}
+    sh.disabled=false;
+    const box=document.createElement('div');box.className='mut';box.style.cssText='margin-top:8px;color:#b42318;direction:ltr;text-align:left';
+    box.textContent='Share failed: '+(last&&last.name)+' – '+(last&&last.message);m.querySelector('.sheet').appendChild(box)};
   $('#dl',m).onclick=()=>files.forEach((f,i)=>setTimeout(()=>{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)},i*500))}
 function preview(ids){
   ids=ids.filter(id=>S.certs.some(c=>c.id===id));if(!ids.length)return;
