@@ -326,9 +326,9 @@ function certRow(x,withSel){
   const msg=`שלום, אישור ההדרכה לעבודה בגובה של ${wName(w)} ${s==='expired'?'פג':'יפוג'} בתאריך ${fmt(c.until)}. נשמח לתאם הדרכת חידוש. ${S.instructor.name}${S.instructor.phone?', '+S.instructor.phone:''}`;
   const wa=e&&e.phone&&!old?waLink(e.phone,msg):'';
   const acts=withSel
-    ?`${old?'':`<button class="btn sm" data-act="renew" data-w="${w.id}">חידוש</button>`}<button class="btn sm sec" data-act="print" data-ids="${c.id}">הדפס</button><button class="btn sm sec" data-act="editCert" data-id="${c.id}">עריכה</button>${wa?`<a class="btn sm sec" href="${wa}" target="_blank" rel="noopener">WhatsApp</a>`:''}`
+    ?`${old?'':`<button class="btn sm" data-act="renew" data-w="${w.id}">חידוש</button>`}<button class="btn sm sec" data-act="print" data-ids="${c.id}">הדפס</button>${x.n>1?`<button class="btn sm sec" data-act="worker" data-w="${w.id}">היסטוריה (${x.n})</button>`:''}<button class="btn sm sec" data-act="editCert" data-id="${c.id}">עריכה</button>${wa?`<a class="btn sm sec" href="${wa}" target="_blank" rel="noopener">WhatsApp</a>`:''}`
     :`<button class="btn sm" data-act="renew" data-w="${w.id}">חידוש</button>${wa?`<a class="btn sm sec" href="${wa}" target="_blank" rel="noopener">WhatsApp</a>`:''}`;
-  return `<div class="card item"><div class="row">${withSel?`<input type="checkbox" class="cb" data-sel="${c.id}" ${sel.has(c.id)?'checked':''} aria-label="בחירה">`:''}<div class="grow" data-act="worker" data-w="${w.id}" style="cursor:pointer"><div><b class="name">${esc(wName(w))}</b> <span class="mut">${esc(w.idnum||'')}</span></div><div class="sub">${esc(empName(e))}</div><div class="exp">${old?`${fmt(c.date)} ← ${fmt(c.until)}`:`תוקף עד <b>${fmt(c.until)}</b>`}${c.serial?` <div class="mut" style="font-size:13px">מס׳ <bdi>${esc(c.serial)}</bdi></div>`:''}</div></div><span class="chip ${s}">${old?'הוחלף בחידוש':stText(c.until)}</span></div>
+  return `<div class="card item"><div class="row">${withSel?`<input type="checkbox" class="cb" data-sel="${c.id}" ${sel.has(c.id)?'checked':''} aria-label="בחירה">`:''}<div class="grow" data-act="worker" data-w="${w.id}" style="cursor:pointer"><div><b class="name">${esc(wName(w))}</b> <span class="mut">${esc(w.idnum||'')}</span></div><div class="sub">${esc(empName(e))}</div><div class="exp">${old?`${fmt(c.date)} ← ${fmt(c.until)}`:`תוקף עד <b>${fmt(c.until)}</b>`}${c.serial?` <div class="mut" style="font-size:13px">מס׳ <bdi>${esc(c.serial)}</bdi></div>`:''}${x.n>1?`<div class="sub">${x.n} אישורים בהיסטוריה</div>`:''}</div></div><span class="chip ${s}">${old?'הוחלף בחידוש':stText(c.until)}</span></div>
   <div class="actions" style="margin:10px 0 0">${acts}</div></div>`}
 
 /* ---------- מעסיקים ---------- */
@@ -403,14 +403,19 @@ function autoArchForm(){
 /* ---------- אישורים ---------- */
 function certsV(){
   return `<input id="q" class="search" aria-label="חיפוש" placeholder="חיפוש לפי שם, ת.ז. או מעסיק" data-q="cert" value="${esc(q)}">
-  <div class="row"><select class="search" style="margin:0" data-f="1"><option value="all">כל המצבים</option><option value="ok">בתוקף</option><option value="soon">פוקעים בקרוב</option><option value="expired">פג תוקף</option><option value="old">הוחלפו בחידוש</option><option value="archived">עובדים בארכיון</option></select><button class="btn" data-act="printSel" id="printBtn" ${sel.size?'':'disabled'}>הדפס (${sel.size})</button></div><div id="list">${certList()}</div>`}
+  <div class="row"><select class="search" style="margin:0" data-f="1"><option value="all">כל המצבים</option><option value="ok">בתוקף</option><option value="soon">פוקעים בקרוב</option><option value="expired">פג תוקף</option><option value="archived">עובדים בארכיון</option><option value="allcerts">כל האישורים (כולל ישנים)</option></select><button class="btn" data-act="printSel" id="printBtn" ${sel.size?'':'disabled'}>הדפס (${sel.size})</button></div><div id="list">${certList()}</div>`}
 function certList(){
   const t=q.trim().toLowerCase();
-  const L=S.certs.map(c=>({c,w:getW(c.workerId)||{},e:getE(c.employerId)})).filter(x=>{
-    const arch=!!x.w.archived;
-    if(fstat==='archived'){if(!arch)return false}else{if(arch)return false;if(fstat==='old'){if(!isSuper(x.c))return false}else if(fstat!=='all'&&(isSuper(x.c)||st(x.c.until)!==fstat))return false}
-    if(!t)return true;
-    return [wName(x.w),x.w.idnum,empName(x.e),x.c.serial].some(s=>String(s||'').toLowerCase().includes(t))}).sort((a,b)=>b.c.date.localeCompare(a.c.date)||(b.c.serial||'').localeCompare(a.c.serial||''));
+  const match=(w,e,cs)=>!t||[wName(w),w.idnum,empName(e),...cs.map(c=>c.serial)].some(x=>String(x||'').toLowerCase().includes(t));
+  let L;
+  if(fstat==='allcerts'){
+    L=S.certs.map(c=>({c,w:getW(c.workerId)||{},e:getE(c.employerId)})).filter(x=>!x.w.archived&&match(x.w,x.e,[x.c]));
+  }else{
+    L=S.workers.filter(w=>fstat==='archived'?w.archived:!w.archived).map(w=>({w,cs:certsOfW(w.id),e:getE(w.employerId)})).filter(x=>x.cs.length)
+      .map(x=>({c:x.cs[0],w:x.w,e:x.e,n:x.cs.length,cs:x.cs}))
+      .filter(x=>(['ok','soon','expired'].includes(fstat)?st(x.c.until)===fstat:true)&&match(x.w,x.e,x.cs));
+  }
+  L.sort((a,b)=>b.c.date.localeCompare(a.c.date)||(b.c.serial||'').localeCompare(a.c.serial||''));
   return L.length?L.map(x=>certRow(x,true)).join(''):'<div class="empty">אין אישורים להצגה.</div>'}
 
 /* ---------- הגדרות ---------- */
