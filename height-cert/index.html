@@ -487,6 +487,7 @@ function settingsV(){
   <div class="card"><label class="fld">המספר הסידורי הבא<input data-nser value="${esc(nextSerial())}"></label><div class="mut">למשל 2026-001 או 1001. מתקדם אוטומטית בכל הנפקה, וניתן לשנות גם בחלון ההנפקה.</div></div>
   <h2>סנכרון לגוגל שיטס</h2>
   <div class="card">
+   ${S.sync.url?'':'<label class="fld">הדבק קישור חיבור (מהמכשיר שכבר מחובר)<input id="sy_link" dir="ltr" placeholder="https://…#sync=…" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"></label><div class="actions"><button class="btn" data-act="syncPaste" style="width:100%">חיבור מהקישור</button></div><div class="mut" style="margin-bottom:6px">באייפון, האפליקציה שבמסך הבית לא חולקת זיכרון עם Safari, לכן צריך לחבר אותה כאן פעם אחת.</div>'}
    <label class="fld">כתובת ה-Web App (Apps Script)<input id="sy_url" value="${esc(S.sync.url)}" placeholder="https://script.google.com/macros/s/.../exec" dir="ltr" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"></label>
    <label class="fld">מפתח סודי<input id="sy_key" type="password" value="${esc(S.sync.key)}" dir="ltr" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
    <div class="actions"><button class="btn sec" data-act="gasPrep" style="width:100%">① הכנת הסקריפט והמפתח (התקנה ראשונה)</button></div>
@@ -557,6 +558,12 @@ const ACT={
     if(!k)return toast('חסר מפתח סודי');
     if(u!==S.sync.url||k!==S.sync.key){S.sync.last=0;S.sync.hashes={};S.sync.metaHash='';S.sync.metaU=0}
     S.sync.url=u;S.sync.key=k;S.sync.err='';save(true);syncNow(true)},
+  syncPaste:()=>{const t=($('#sy_link').value||'').trim();const i=t.indexOf('#sync=');
+    if(i<0)return toast('הקישור לא תקין. העתק אותו שוב מהמכשיר המחובר');
+    try{const [u,k]=decodeURIComponent(escape(atob(t.slice(i+6).trim()))).split('\n');
+      if(!(/^https:\/\/script\.google(usercontent)?\.com\//.test(u)&&k))throw 0;
+      S.sync={...S.sync,url:u,key:k,last:0,hashes:{},metaHash:'',metaU:0,err:''};save(true);render();syncNow(true)}
+    catch(e){toast('הקישור לא תקין. העתק אותו שוב מהמכשיר המחובר')}},
   syncNow:()=>syncNow(true),
   hideInstall:()=>{try{localStorage.setItem('hw_no_install','1')}catch(e){}render()},
   persist:async(d,b,e)=>{if(e)e.preventDefault();let ok=null;try{ok=await navigator.storage.persist()}catch(e){}toast(ok?'האחסון הוגדר כקבוע':'הדפדפן לא אישר אחסון קבוע. הוסף למסך הבית');upPersist()},
