@@ -456,6 +456,8 @@ tr.rgrp-grand td.num{text-align:left}
   .rsec{break-inside:avoid}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .rsec-pagebreak{break-before:page;page-break-before:always}
   @page{size:A4 landscape;margin:10mm}
+  @page portrait-page{size:A4 portrait;margin:14mm}
+  .report.report-portrait{page:portrait-page}
 }
 
 @media(max-width:900px){
@@ -2520,8 +2522,12 @@ Screens.import=()=>SKNImport.render();
 //  MODULE: REPORTS  (screen report, A4 print, per-item calculation sheet)
 // ═══════════════════════════════════════════════════════════════════════
 const Reports = {
-  _accountId:null, _mode:'cumulative', _sheetItemId:null, _layout:'concise',
+  _accountId:null, _mode:'cumulative', _sheetItemId:null, _layout:'concise', _orientation:'landscape',
   _printPerPage:false, _showCards:true, _showContract:true, _itemFilter:'all',
+  reportClass(){
+    if(this._orientation==='portrait') return 'report report-portrait';
+    return this._layout==='detailed' ? 'report' : 'report report-wide';
+  },
   openAccountReport(accountId){ this._accountId=accountId; this._sheetItemId=null; App.showTab('reports'); },
   openItemSheet(itemId){ this._sheetItemId=itemId; this._accountId=this._accountId||Accounts.current(State.project).id; App.showTab('reports'); },
   account(p){ return Accounts.byId(p,this._accountId)||Accounts.current(p); },
@@ -2733,7 +2739,7 @@ const Reports = {
     const p=State.project, account=this.account(p);
     if(this._sheetItemId){
       const it=findItem(p,this._sheetItemId); if(!it) return '<div class="empty">סעיף לא נמצא</div>';
-      return `<div class="report">${this.headerHTML(p,account,'דף חישוב לסעיף',itemFullCode(it)+' — '+(it.description||''))}
+      return `<div class="${this.reportClass()}">${this.headerHTML(p,account,'דף חישוב לסעיף',itemFullCode(it)+' — '+(it.description||''))}
         ${this.itemSectionHTML(p,it,account,'cumulative',false,this._showContract)}
         ${this.auditSidebarHTML(p,it)}
         ${this.signaturesHTML(p)}</div>`;
@@ -2741,7 +2747,7 @@ const Reports = {
     const items=this.reportItems(p);
     const totals=Accounts.projectTotals(p,account);
     const title = this._mode==='period' ? `תנועה בחשבון ${account.number}` : `חשבון חלקי מס' ${account.number}`;
-    let h=`<div class="report${this._layout==='detailed'?'':' report-wide'}">${this.headerHTML(p,account,title,ACCOUNT_STATUS_LABEL[account.status])}`;
+    let h=`<div class="${this.reportClass()}">${this.headerHTML(p,account,title,ACCOUNT_STATUS_LABEL[account.status])}`;
     if(this._layout==='detailed'){
       if(this._showCards){
         h+=`<div class="scards">
@@ -2774,6 +2780,12 @@ const Reports = {
       <div class="rc-row" style="padding-top:12px;flex-wrap:wrap">
         <label class="opt"><input type="radio" name="rlayout" ${this._layout!=='detailed'?'checked':''} onchange="Reports._layout='concise';App.refresh()">תמציתי (סעיף לשורה, כמו הדפסה רגילה)</label>
         <label class="opt"><input type="radio" name="rlayout" ${this._layout==='detailed'?'checked':''} onchange="Reports._layout='detailed';App.refresh()">מפורט (שורות מדידה, שרטוט ונוסחה)</label>
+        <label class="opt">כיוון הדפסה
+          <select onchange="Reports._orientation=this.value;App.refresh()">
+            <option value="landscape" ${this._orientation==='landscape'?'selected':''}>לרוחב</option>
+            <option value="portrait" ${this._orientation==='portrait'?'selected':''}>לאורך</option>
+          </select>
+        </label>
         <label class="opt">סעיפים להצגה
           <select onchange="Reports._itemFilter=this.value;App.refresh()">
             <option value="all" ${this._itemFilter==='all'?'selected':''}>הכל</option>
