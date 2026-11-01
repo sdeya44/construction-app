@@ -407,12 +407,12 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:poin
 .rgrouped th{white-space:nowrap;font-size:9.5px;padding:6px 5px;background:#F3F4F7}
 .rgrouped td{padding:4px 6px}
 .rgrouped td.num{direction:ltr;font-weight:600;text-align:right}
-tr.rgrp-b td{background:var(--navy);color:#fff;font-weight:800;padding:8px 10px;font-size:13px;text-align:right}
+tr.rgrp-b td{background:var(--paper);color:var(--navy);font-weight:800;padding:8px 10px;font-size:13px;text-align:right;border-top:3px solid var(--navy) !important;border-bottom:2px solid var(--navy) !important}
 tr.rgrp-c td{background:var(--paper);color:var(--navy);font-weight:800;padding:6px 10px;text-decoration:underline;font-size:12px;text-align:right}
 tr.rgrp-s td{color:var(--navy);font-weight:700;text-decoration:underline;padding:5px 10px;font-size:11.5px;text-align:right}
 tr.rgrp-tot td{font-weight:800;background:#F7F8FA;text-align:right}
 tr.rgrp-tot td.num{text-align:left}
-tr.rgrp-grand td{font-weight:900;font-size:13px;background:var(--navy);color:#fff;text-align:right}
+tr.rgrp-grand td{font-weight:900;font-size:13px;background:var(--paper);color:var(--navy);text-align:right;border-top:2px solid var(--navy) !important;border-bottom:3px solid var(--navy) !important}
 tr.rgrp-grand td.num{text-align:left}
 .rmeta{font-size:11.5px;text-align:left;color:var(--ink);font-weight:700}.rmeta div{margin:2px 0}.rmeta span{display:none}
 .rhdr-wide{grid-template-columns:1fr}
@@ -440,8 +440,8 @@ tr.rgrp-grand td.num{text-align:left}
 .rbal{display:flex;align-items:stretch;border:1px solid var(--navy);border-top:none;border-radius:0 0 8px 8px;overflow:hidden}
 .rbal .bc{padding:7px 14px;display:flex;flex-direction:column;gap:1px;border-inline-start:1px solid var(--line);justify-content:center;flex:1;text-align:center}
 .rbal .bc .k{font-size:9px;color:var(--muted);letter-spacing:.05em}.rbal .bc .v{font-weight:800;font-size:13px;direction:ltr}
-.rbal .bc.net{background:var(--navy);color:#fff}
-.rbal .bc.net .k{color:#B9C7D9}.rbal .bc.net .v{color:var(--gold);font-size:15px}
+.rbal .bc.net{background:var(--paper);border:2px solid var(--navy)}
+.rbal .bc.net .k{color:var(--muted)}.rbal .bc.net .v{color:var(--navy);font-size:15px;font-weight:900}
 .rsigns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12mm;margin-top:9mm}
 .rsigns div{border-top:1px solid var(--navy);padding-top:5px;font-size:10.5px;color:var(--muted);text-align:center}
 .rsigns div span{display:block;color:var(--ink);font-weight:600;margin-top:2px;min-height:14px}
@@ -558,7 +558,7 @@ tr.rgrp-grand td.num{text-align:left}
 const Util = (() => {
   function uid(prefix){ return prefix+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
   function nz(v){ if(v===''||v==null) return 0; const n=parseFloat(String(v).replace(',','.').replace(/[^\d.\-]/g,'')); return isNaN(n)?0:n; }
-  function fn(v,dp=3){ const n=+v; if(isNaN(n))return'0'; return n.toLocaleString('he-IL',{minimumFractionDigits:0,maximumFractionDigits:dp}); }
+  function fn(v,dp=1){ const n=+v; if(isNaN(n))return'0'; return n.toLocaleString('he-IL',{minimumFractionDigits:0,maximumFractionDigits:dp}); }
   function fq(v){ const n=+v; if(isNaN(n))return'0'; return n.toLocaleString('he-IL',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   function fnum(v){ const n=parseFloat(v); return isNaN(n)?'':(n%1===0?String(n):parseFloat(n.toFixed(3))); }
   function money(v){ const n=+v||0; return '₪'+n.toLocaleString('he-IL',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -965,8 +965,11 @@ function rowFormulaText(m,kind){
   kind=kind||inferKindFromShape(m);
   const bv=baseVal(m,kind);
   const d1=fnum(m.d1)||0, d2=fnum(m.d2)||0, d3=fnum(m.d3)||0, t=fnum(m.t)||0;
-  if(kind==='length') return `${d1} = ${fn(bv.v,3)}`;
-  if(kind==='count') return `${fnum(m.d1)||1} = ${fn(bv.v,3)}`;
+  const n=(m.qty===''||m.qty==null)?1:nz(m.qty);
+  const nSuffix=Math.abs(n-1)>1e-9 ? ` × ${fnum(n)}` : '';
+  const total=bv.v*n;
+  if(kind==='length') return `${d1}${nSuffix} = ${fn(total)}`;
+  if(kind==='count') return `${fnum(m.d1)||1}${nSuffix} = ${fn(total)}`;
   const c=CROSS[m.shape]; if(!c) return '';
   let areaExpr;
   if(c.custom) areaExpr=`${d1}`;
@@ -976,8 +979,8 @@ function rowFormulaText(m,kind){
   else if(m.shape==='עיגול') areaExpr=`π×(${d1}÷2)²`;
   else if(m.shape==='חצי-עיגול') areaExpr=`π×(${d1}÷2)²÷2`;
   else areaExpr=c.lbl;
-  if(kind==='area') return `${areaExpr} = ${fn(bv.v,3)}`;
-  return `(${areaExpr}) × ${t} = ${fn(bv.v,3)}`; // volume: cross-section area × extrusion length
+  if(kind==='area') return `${areaExpr}${nSuffix} = ${fn(total)}`;
+  return `(${areaExpr}) × ${t}${nSuffix} = ${fn(total)}`; // volume: cross-section area × extrusion length
 }
 function rowSig(m){ return JSON.stringify([m.shape,m.d1,m.d2,m.d3,m.t,m.qty,m.sign]); }
 
@@ -1834,7 +1837,7 @@ const Measurements = {
     State.scheduleSave();
     const fEl=byId('f-'+rowId), rEl=byId('r-'+rowId), stEl=byId('st-'+rowId), apEl=byId('ap-'+rowId), shapeEl=byId('shape-'+rowId);
     if(fEl) fEl.innerHTML=this.formulaHTML(m,kind);
-    if(rEl){ const v=calcRow(m,item); rEl.textContent=fn(v,3); rEl.className='res '+(v<0?'n':'p'); }
+    if(rEl){ const v=calcRow(m,item); rEl.textContent=fn(v); rEl.className='res '+(v<0?'n':'p'); }
     if(stEl){ const s=this.liveRowStatus(m); stEl.outerHTML=`<span id="st-${rowId}" class="stat ${ROW_STATUS_CLASS[s]}">${ROW_STATUS_LABEL[s]}</span>`; }
     if(apEl) apEl.outerHTML=this.approvalCellHTML(m);
     if(shapeEl) shapeEl.innerHTML=shapeSVG(m.shape,m.d1,m.d2,m.d3,m.sign===-1,false,m.t,kind);
@@ -1993,7 +1996,7 @@ const Measurements = {
     cells+=`<td style="max-width:52px"><input value="${esc(m.qty)}" placeholder="1" oninput="Measurements.liveUpdate('${m.id}','qty',this.value)"></td>`;
     cells+=`<td class="formula" id="f-${m.id}">${this.formulaHTML(m,kind)}</td>`;
     cells+=`<td><span class="sign-pill ${m.sign===-1?'n':'p'}" onclick="Measurements.toggleSign('${m.id}')">${m.sign===-1?'－':'＋'}</span></td>`;
-    cells+=`<td class="res ${v<0?'n':'p'}" id="r-${m.id}">${fn(v,3)}</td>`;
+    cells+=`<td class="res ${v<0?'n':'p'}" id="r-${m.id}">${fn(v)}</td>`;
     cells+=`<td>${this.approvalCellHTML(m)}</td>`;
     cells+=`<td id="st-${m.id}"><span class="stat ${ROW_STATUS_CLASS[status]}">${ROW_STATUS_LABEL[status]}</span></td>`;
     cells+=`<td><input value="${esc(m.notes)}" style="min-width:80px" oninput="Measurements.liveUpdate('${m.id}','notes',this.value)"></td>`;
@@ -2190,7 +2193,7 @@ const WorksheetUI = {
       sumAmount+=mv.amount;
       const info=this.quickInfo(p,it,draft);
       const qtyCell = info.locked
-        ? `<span class="ws-locked" title="לסעיף זה יש שורות מדידה מפורטות — עריכה דרך המחשבון בלבד">${fn(info.value,3)} 🔒</span>
+        ? `<span class="ws-locked" title="לסעיף זה יש שורות מדידה מפורטות — עריכה דרך המחשבון בלבד">${fn(info.value)} 🔒</span>
            <button class="icon-btn" title="פתיחת חישוב כמויות מפורט" onclick="Measurements.openItem('${it.id}');App.showTab('measurements')">🧮</button>`
         : `<input class="ws-qty-in" id="ws-in-${it.id}" data-row-id="${info.row?info.row.id:''}" value="${info.row?esc(info.row.d1):''}" placeholder="0"
              oninput="WorksheetUI.setQty('${it.id}', this.dataset.rowId||null, this.value, this)">
@@ -2606,12 +2609,12 @@ const Reports = {
     });
     closeSub();closeChapter();closeBuilding();
     rows+=`<tr class="rgrp-grand"><td colspan="9">סה"כ כללי</td><td class="num">${money(grand)}</td></tr>`;
-    return `<table class="rtbl rgrouped"><thead><tr>
+    return `<div class="tbl-wrap"><table class="rtbl rgrouped"><thead><tr>
       <th style="width:80px">סעיף</th><th>תיאור</th><th style="width:45px">יחידה</th>
       <th style="width:65px">כמות חוזה</th><th style="width:55px">% ביצוע</th><th style="width:70px">מצטבר קודם</th>
       <th style="width:70px">כמות נוכחית</th><th style="width:75px">כמות מצטברת</th>
       <th style="width:75px">מחיר יחידה</th><th style="width:85px">סה"כ מצטבר</th>
-    </tr></thead><tbody>${rows}</tbody></table>`;
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
   },
   // simplified "ריכוז" rollup — subchapter/chapter/building totals only, indented by level
   rollupHTML(p,account,items){
@@ -2665,8 +2668,8 @@ const Reports = {
       const differs=Math.abs(claimedVal-approvedVal)>1e-9;
       return `<tr class="${r.sign===-1?'rded':''}"><td class="ri">${i+1}</td><td class="rname">${esc(r.desc||'')}</td>
         <td>${svg}</td><td class="rf">${esc(rowFormulaText(r,kind))}</td>
-        <td class="rres ${claimedVal<0?'n':'p'}">${fn(claimedVal,3)}</td>
-        <td class="rres ${approvedVal<0?'n':'p'}" style="${differs?'color:var(--neg);font-weight:800':''}">${fn(approvedVal,3)}</td></tr>`;
+        <td class="rres ${claimedVal<0?'n':'p'}">${fn(claimedVal)}</td>
+        <td class="rres ${approvedVal<0?'n':'p'}" style="${differs?'color:var(--neg);font-weight:800':''}">${fn(approvedVal)}</td></tr>`;
     }).join('');
     return `<div class="rsec${pageBreak?' rsec-pagebreak':''}"><div class="rsec-hd"><span class="rcode">${esc(itemFullCode(it))}</span>
       <span class="rtitle">${esc(it.description||'')}</span><span class="rfacts">${esc(it.unit)} · ${money(mv.unitPrice)}/${esc(it.unit)}</span></div>
