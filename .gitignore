@@ -361,3 +361,8 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# KAYAN BOQ: licensed price book and customer data never go into the (public) repo
+boq/**/*.db
+boq/**/*.sqlite
+boq/node_modules/
+boq/dist/

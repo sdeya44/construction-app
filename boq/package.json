@@ -1,0 +1,26 @@
+{
+  "name": "kayan-boq",
+  "productName": "KAYAN BOQ",
+  "version": "1.0.0",
+  "description": "ניהול כתבי כמויות, הצעות מחיר וחשבונות — כולל מחירון דקל ו-SKN",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\"",
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "devDependencies": {
+    "electron": "38.8.6",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.kayan.boq",
+    "productName": "KAYAN BOQ",
+    "directories": { "output": "dist" },
+    "files": ["index.html", "css/**", "js/**", "vendor/**", "electron/**", "package.json"],
+    "win": { "target": "nsis" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "perMachine": false, "shortcutName": "KAYAN BOQ", "language": "1037" }
+  }
+}

@@ -1,0 +1,103 @@
+/* Printed documents (bill per account-8 layout, BOQ / quote). Sheets are real A4 boxes,
+   paginated in the DOM so carry-forward rows (מהעברה / להעברה) are exact. */
+@page land { size: A4 landscape; margin: 0; }
+@page port { size: A4 portrait; margin: 0; }
+.print-root { background: #9aa0a6; padding: 18px 0 40px; min-height: 100%; }
+.print-bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; align-items: center; justify-content: center; padding: 10px; background: var(--surface); border-bottom: 1px solid var(--line); margin: -18px 0 18px; }
+.sheet { background: #fff; color: #000; margin: 0 auto 18px; box-shadow: 0 2px 10px rgba(0, 0, 0, .25); display: flex; flex-direction: column; padding: 9mm 10mm 7mm; font: 10.5px/1.35 var(--font); direction: rtl; overflow: hidden; }
+.sheet.land { width: 297mm; height: 210mm; page: land; }
+.sheet.port { width: 210mm; height: 297mm; page: port; }
+.sheet .s-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; border-bottom: 1.5px solid #000; padding-bottom: 4mm; margin-bottom: 3mm; gap: 6mm; }
+.sheet .s-head .issuer b { font-size: 13px; display: block; }
+.sheet .s-head .title { text-align: center; }
+.sheet .s-head .title h1 { font-size: 15px; margin: 0; }
+.sheet .s-head .title .proj { font-size: 12px; font-weight: 600; margin-top: 1mm; }
+.sheet .s-head .meta { text-align: left; }
+.sheet .recipient { color: #0b3d91; font-weight: 700; }
+.sheet .s-sub { display: flex; gap: 8mm; font-weight: 700; margin-bottom: 2mm; font-size: 11.5px; }
+.sheet .s-body { flex: 1; min-height: 0; overflow: hidden; }
+.sheet .s-foot { border-top: 1px solid #000; padding-top: 2mm; margin-top: 2mm; display: flex; justify-content: space-between; font-size: 9.5px; color: #333; }
+.sheet table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.sheet th { border: 1px solid #000; background: #e9ecef; padding: 1.2mm 1mm; font-weight: 700; font-size: 9.8px; text-align: center; }
+.sheet td { border-inline: 1px solid #000; padding: 1mm 1.2mm; vertical-align: top; }
+.sheet tbody tr:last-child td { border-bottom: 1px solid #000; }
+.sheet td.nm { text-align: left; direction: ltr; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sheet td.cd { direction: ltr; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sheet tr.sum td { border-top: 1px solid #000; border-bottom: 1px solid #000; font-weight: 700; background: #f5f6f7; }
+.sheet tr.sum.chap td { background: #e2e6ea; }
+.sheet tr.carry td { font-style: italic; font-weight: 600; background: #fafafa; border-top: 1px solid #000; border-bottom: 1px solid #000; }
+.sheet tr.sh td { font-weight: 700; text-decoration: underline; border-top: none; }
+.sheet tr.note td { font-style: italic; color: #333; }
+.sheet .pay { width: 100%; font-size: 12.5px; }
+.sheet .pay td { border: none; border-bottom: 1px dotted #888; padding: 2.2mm 1mm; }
+.sheet .pay td:last-child { text-align: left; direction: ltr; font-variant-numeric: tabular-nums; width: 45mm; }
+.sheet .pay tr.b td { font-weight: 700; border-bottom: 1px solid #000; }
+.sheet .pay tr.g td { font-weight: 800; font-size: 14px; border-bottom: 2px solid #000; }
+.sheet .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 20mm; margin-top: 18mm; }
+.sheet .sign div { border-top: 1px solid #000; padding-top: 2mm; text-align: center; }
+@media print {
+  body, .print-root { background: #fff !important; padding: 0 !important; }
+  .print-bar { display: none !important; }
+  .sheet { margin: 0 !important; box-shadow: none !important; break-after: page; }
+  .sheet:last-child { break-after: auto; }
+}
+
+/* ---------- Binarit bill layout ---------- */
+.bn-sheet { padding: 7mm 13mm 6mm; font-family: Arial, "Segoe UI", sans-serif; font-size: 12.6px; }
+.bn-head { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "right left" "title title"; align-items: end; margin-bottom: 1.5mm; position: relative; }
+.bn-right { grid-area: right; text-align: right; line-height: 1.35; font-size: 11.5px; }
+.bn-left { grid-area: left; text-align: left; direction: ltr; line-height: 1.35; font-size: 11.5px; align-self: end; }
+.bn-pgl { display: flex; gap: 6mm; direction: rtl; justify-content: flex-end; }
+.bn-pgl span { order: 2; }
+.bn-issuer { font-weight: 700; font-style: italic; font-size: 13px; margin-bottom: 9mm; }
+.bn-project { color: #0b3cd6; font-size: 12px; }
+.bn-title { position: absolute; left: 0; right: 0; top: 13mm; margin: 0; text-align: center; color: #0b3cd6; font-size: 19px; font-weight: 400; pointer-events: none; }
+.bn-body { flex: 1; min-height: 0; overflow: hidden; }
+.bn-body.bn-short { flex: 0 0 auto; }
+.bn-t { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1px solid #000; border-top: none; }
+.bn-t th { font-style: italic; font-weight: 400; font-size: 12.5px; background: #fff; border: 1px solid #000; border-bottom: 1.5px solid #000; padding: 1mm 1.2mm; vertical-align: bottom; text-align: right; white-space: pre-line; line-height: 1.15; }
+.bn-t td { border-inline: 1px solid #000; padding: .6mm 1.2mm; vertical-align: bottom; text-align: right; border-bottom: none; }
+.bn-t td.nm { text-align: right; direction: ltr; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bn-t td.cd { white-space: nowrap; direction: ltr; text-align: right; vertical-align: top; }
+.bn-t td.ds { vertical-align: top; line-height: 1.42; }
+.bn-t td.un { white-space: nowrap; }
+.bn-t tr.bn-item td { padding-top: 2.6mm; }
+.bn-t tr.bn-h td span { font-weight: 700; text-decoration: underline; }
+.bn-t tr.bn-h td { padding-top: 3mm; padding-bottom: 1mm; }
+.bn-t tr.bn-sum td, .bn-t tr.bn-carry td, .bn-t tr.bn-end-first td { border-top: 1.5px solid #000; border-bottom: 1px solid #000; font-weight: 700; }
+.bn-t tr.bn-end td { font-weight: 700; padding-top: .2mm; padding-bottom: .2mm; }
+.bn-t tr.bn-end:last-child td { border-bottom: 1px solid #000; }
+.bn-t tr.bn-from td { font-weight: 700; }
+.bn-t tr.bn-from td.lab, .bn-t tr.bn-carry td.lab, .bn-t tr.bn-sum td.lab, .bn-t tr.bn-end td.lab { text-align: right; }
+.bn-t td.lab { border-inline-end: 1px solid #000; }
+.bn-t tr.bn-fill td { padding: 0; }
+/* concentration */
+.bn-t tr.bn-c-gap td { padding-top: 2.4mm; }
+.bn-t tr.bn-c-chap td { padding-top: 2.4mm; border-bottom: 1.5px solid #000; }
+.bn-t tr.bn-c-struct td { border-top: 1px solid #000; border-bottom: 1.5px solid #000; padding: .6mm 1.2mm; }
+.sheet table.bn-gen { width: 41%; margin-inline-start: auto; border-collapse: collapse; table-layout: fixed; border: 1px solid #000; border-top: none; }
+.sheet table.bn-gen th { background: #fff; font-style: italic; font-weight: 400; font-size: 12.5px; border: 1px solid #000; border-bottom: 1.5px solid #000; padding: 4mm 1.2mm .8mm; text-align: center; }
+.sheet table.bn-gen td { font-weight: 700; padding: .5mm 1.2mm; border-inline: 1px solid #000; }
+.bn-gen td.nm { text-align: right; direction: ltr; }
+.bn-gen tr + tr td.nm { border-top: 1.5px solid #000; }
+.bn-gen tr.bn-g-total td { border-top: 1px solid #000; }
+.bn-company { text-align: center; font-size: 11px; padding-top: 1mm; min-height: 5mm; }
+.bn-company.bn-company-rule { border-top: 1px solid #000; margin-top: auto; padding-top: 1mm; }
+.bn-company-rule ~ .bn-foot { margin-top: 0 !important; }
+.bn-foot { margin-top: auto !important; display: flex; justify-content: space-between; border-top: 1px solid #000; padding-top: 1.2mm; margin-top: 2mm; font-size: 9.5px; font-weight: 700; }
+/* summary */
+.bn-summary .bn-body { padding: 0 12mm; }
+.bn-scope { margin: 7mm 0 0; font-size: 12px; border-bottom: 1px solid #000; padding-bottom: .5mm; width: 66%; }
+.bn-pay { width: 66%; border-collapse: collapse; border-inline-start: 1px solid #000; border-bottom: 1px solid #000; font-size: 12px; }
+.bn-pay td { padding: .3mm 1.5mm; font-weight: 700; }
+.bn-pay td.nm { text-align: left; direction: ltr; font-variant-numeric: tabular-nums; }
+.bn-pay td.sg { text-align: left; direction: ltr; }
+.bn-pay tr.ul td.nm { border-bottom: 1px solid #000; }
+.bn-pay tr.bn-due td { border-top: 1px solid #000; }
+.bn-note { font-size: 12px; margin: 5mm 0 0; }
+.bn-sign { display: flex; justify-content: space-between; padding: 9mm 12mm 0; font-size: 11px; letter-spacing: .25em; }
+.bn-sign div { border-top: 1.5px solid #000; padding-top: 1mm; min-width: 70mm; text-align: right; }
+.bn-sign div:last-child { min-width: 30mm; }
+
+.bn-head.noiss .bn-title { top: -1mm; }
+.bn-head.noiss { min-height: 13mm; }
