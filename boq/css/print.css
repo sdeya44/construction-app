@@ -101,3 +101,5 @@
 
 .bn-head.noiss .bn-title { top: -1mm; }
 .bn-head.noiss { min-height: 13mm; }
+
+.sheet tr.sh.st td { font-size: 12px; text-decoration: none; background: #eef1f4; border-top: 1px solid #000; }

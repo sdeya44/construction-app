@@ -27,7 +27,7 @@
 html, body { margin: 0; height: 100%; }
 body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font: inherit; color: inherit; }
-.num, td.n, th.n, input.n { font-variant-numeric: tabular-nums; direction: ltr; text-align: left; }
+.num, td.n, th.n, input.n { font-variant-numeric: tabular-nums; direction: ltr; text-align: right; }
 .muted { color: var(--muted); }
 .pre { white-space: pre-wrap; }
 [hidden] { display: none !important; }
@@ -223,3 +223,16 @@ table.bn-screen tr.bn-ssum td:first-child, table.bn-screen tr.bn-csum td:first-c
 table.bn-screen tr.bn-csum td { background: #efece4; }
 table.bn-screen td.minus { color: var(--bad); }
 table.bn-screen td.n { text-align: right; }
+
+/* grids: fixed columns, visible column rules, numbers aligned with their headers */
+table.t.fixed { table-layout: fixed; min-width: 900px; }
+table.t.lines th, table.t.lines td { border-inline-start: 1px solid var(--line); }
+table.t.lines th:last-child, table.t.lines td:last-child { border-inline-start: none; }
+table.t th.n { text-align: right; }
+table.t td.n, table.t td.edit input.n { text-align: right; direction: ltr; }
+table.t td.edit input.n { min-width: 0 !important; width: 100%; padding: 7px 6px; }
+table.t.fixed td.desc, table.t.fixed td.edit.desc { width: auto; min-width: 0; max-width: none; }
+table.t.fixed th { white-space: normal; line-height: 1.25; vertical-align: bottom; }
+table.t.fixed td { overflow: hidden; text-overflow: ellipsis; }
+table.t.fixed tr.group td, table.t.fixed tr.bn-shead td, table.t.fixed tr.bn-ssum td, table.t.fixed tr.bn-csum td { border-inline-start: none; }
+table.t.fixed td.code { overflow: visible; text-overflow: clip; font-size: 13px; }

@@ -119,7 +119,8 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
 
   const numInput = (value, onCommit, enabled, cls = '') => {
     if (!enabled) return h('td', { class: `n locked ${cls}` }, n2(value));
-    const inp = h('input', { class: 'n', value: value === '0' || value == null ? '' : value, dir: 'ltr', inputmode: 'decimal', 'data-col': cls });
+    const shown = value === '0' || value == null || value === '' ? '' : (/^-?\d+(\.\d{1,2})?$/.test(String(value)) ? Number(value).toFixed(2) : String(value));
+    const inp = h('input', { class: 'n', value: shown, dir: 'ltr', inputmode: 'decimal', 'data-col': cls });
     inp.addEventListener('change', () => { if (onCommit(inp.value) !== undefined) { res = api.calc(b.id); draw(); drawSum(); setTimeout(() => focusNext(cls, inp.closest('tr')?.dataset.id, 0), 0); } });
     inp.addEventListener('keydown', (e) => {
       if (!['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
@@ -206,7 +207,8 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
       h('span', { class: 'sep' }),
       copyBtn('q_calc', 'q_sub', 'מחושבת ← מוגשת', editable), copyBtn('q_sub', 'q_appr', 'מוגשת ← מאושרת', apprEditable),
       h('div', { class: 'grow' }), h('span', { class: 'muted' }, canEdit ? 'הזן כמות נוכחית או מצטברת · Enter לשורה הבאה' : 'החשבון נעול לעריכה')),
-    h('div', { class: 'grid-area' }, h('table', { class: 't exec bn-screen' },
+    h('div', { class: 'grid-area' }, h('table', { class: 't exec bn-screen lines fixed' },
+      h('colgroup', {}, [92, null, 58, 90, 78, 94, 98, 98, ...(showVersions ? [90, 90, 90] : []), 96, 116].map((w) => h('col', { style: w ? { width: `${w}px` } : {} }))),
       h('thead', {}, h('tr', {}, heads.map((x, i) => h('th', { class: i >= 3 ? 'n' : '' }, x)))), tbody)),
     sumBox);
 }

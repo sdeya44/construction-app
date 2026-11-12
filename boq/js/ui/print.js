@@ -16,34 +16,55 @@ const cash = (c) => money(c);
  * @param carryCols number of columns before the amount column
  */
 function paginate(root, mkSheet, rows, carryCols, totalCols, groupKey = () => '') {
-  let page = mkSheet(), running = 0, group = null;
+  // Fills every page: headings stay with the row after them, and a long row (r.split) is
+  // divided between pages — the first part of the text here, the rest with the numbers next page.
+  let page = mkSheet(rows[0]), running = 0, group = null;
   root.append(page.sheet);
   const carryRow = (label, v) => h('tr', { class: 'carry' }, h('td', { colspan: carryCols }, label), h('td', { class: 'nm' }, cash(v)), totalCols > carryCols + 1 ? h('td', { colspan: totalCols - carryCols - 1 }) : null);
-  const fits = () => page.body.scrollHeight <= page.body.clientHeight + 1;
+  const fits = () => page.tbody.closest('table').offsetHeight <= page.body.clientHeight + 1;
+  const fitsWithCarry = () => { const pr = carryRow('להעברה', running); page.tbody.append(pr); const ok = fits(); pr.remove(); return ok; };
+  const newPage = (r, el) => {
+    const moving = [el];
+    while (page.tbody.lastElementChild?._keep && page.tbody.children.length > 1) { const k = page.tbody.lastElementChild; k.remove(); moving.unshift(k); }
+    if (running) page.tbody.append(carryRow('להעברה', running));
+    page = mkSheet(r); root.append(page.sheet);
+    if (running) page.tbody.append(carryRow('מהעברה', running));
+    moving.forEach((m) => page.tbody.append(m));
+  };
   for (const r of rows) {
     const g = groupKey(r);
-    if (r.breakBefore && page.tbody.children.length) {
-      page = mkSheet(r); root.append(page.sheet); running = 0;
-    } else if (g !== group) running = 0;
+    if (g !== group) running = 0;
     group = g;
+    r.el._keep = !!r.keep;
     page.tbody.append(r.el);
-    // leave room for a carry row
-    const probe = carryRow('להעברה', running);
-    page.tbody.append(probe);
-    const ok = fits();
-    probe.remove();
-    if (!ok && page.tbody.children.length > 1) {
+    if (!fitsWithCarry() && page.tbody.children.length > 1) {
       r.el.remove();
-      page.tbody.append(carryRow('להעברה', running));
-      page = mkSheet(r, true); root.append(page.sheet);
-      page.tbody.append(carryRow('מהעברה', running));
-      page.tbody.append(r.el);
+      let done = false;
+      if (r.split) {
+        // largest word count of the first part that still fits on this page
+        const words = r.words;
+        let lo = 1, hi = words.length - 1, best = 0;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          const part = r.split(words.slice(0, mid).join(' '), false);
+          page.tbody.append(part);
+          const ok = fitsWithCarry();
+          part.remove();
+          if (ok) { best = mid; lo = mid + 1; } else hi = mid - 1;
+        }
+        if (best >= 3) {
+          page.tbody.append(r.split(words.slice(0, best).join(' '), false));
+          r.el = r.split(words.slice(best).join(' '), true);
+          newPage(r, r.el); done = true;
+        }
+      }
+      if (!done) newPage(r, r.el);
     }
     if (r.reset) running = 0;
     running += r.amount ?? 0;
   }
   const sheets = [...root.querySelectorAll('.sheet')];
-  sheets.forEach((s, i) => { const p = s.querySelector('.pg'); if (p) p.textContent = `עמוד ${i + 1} מתוך ${sheets.length}`; });
+  sheets.forEach((sh, i) => { const p = sh.querySelector('.pg'); if (p) p.textContent = `עמוד ${i + 1} מתוך ${sheets.length}`; });
 }
 
 function docShell(title, onBack, fileName) {
@@ -88,21 +109,29 @@ export function boqPrintView(ctx, cid) {
   };
   const rows = [];
   const chapters = [...new Set(items.map((i) => `${i.struct}.${i.chapter}`))].sort();
+  let lastStruct = null;
   for (const key of chapters) {
     const [st, ch] = key.split('.');
+    if (st !== lastStruct) {
+      lastStruct = st;
+      rows.push({ el: h('tr', { class: 'sh st' }, h('td', { class: 'cd' }, st), h('td', { colspan: 5 }, `מבנה ${+st} ${secs.get(st)?.name ?? ''}`)), struct: st, chapter: ch, keep: true });
+    }
     let sub = null, subSum = 0, chSum = 0, first = true;
     const pushSub = () => { if (sub != null) rows.push({ el: h('tr', { class: 'sum' }, h('td', { colspan: 5 }, `סה"כ ${sub} ${secs.get(`${key}.${sub}`)?.name ?? ''}`), h('td', { class: 'nm' }, cash(subSum))), struct: st, chapter: ch, reset: true }); };
     for (const it of items.filter((i) => i.struct === st && i.chapter === ch)) {
       if (it.sub !== sub) {
         pushSub(); sub = it.sub; subSum = 0;
-        rows.push({ el: h('tr', { class: 'sh' }, h('td', { class: 'cd' }, `${ch}.${it.sub}`), h('td', { colspan: 5 }, secs.get(`${key}.${it.sub}`)?.name ?? '')), struct: st, chapter: ch, breakBefore: first });
+        rows.push({ el: h('tr', { class: 'sh' }, h('td', { class: 'cd' }, `${ch}.${it.sub}`), h('td', { colspan: 5 }, secs.get(`${key}.${it.sub}`)?.name ?? '')), struct: st, chapter: ch, keep: true });
         first = false;
       }
       const a = isBillable(it) ? lineCents(it.qty, it.price) : 0;
       subSum += a; chSum += a;
-      rows.push({ el: it.kind === 'note' ? h('tr', { class: 'note' }, h('td', {}), h('td', { colspan: 5 }, it.description))
-        : h('tr', {}, h('td', { class: 'cd' }, itemCode(it).slice(3)), h('td', {}, it.description), h('td', {}, it.unit), h('td', { class: 'nm' }, qty(it.qty)), h('td', { class: 'nm' }, qty(it.price)), h('td', { class: 'nm' }, cash(a))),
-      amount: a, struct: st, chapter: ch });
+      const mkRow = (text, full) => (it.kind === 'note'
+        ? h('tr', { class: 'note' }, h('td', {}), h('td', { colspan: 5 }, text))
+        : h('tr', {}, h('td', { class: 'cd' }, full === 'first' || full === undefined ? itemCode(it).slice(3) : ''), h('td', {}, text), h('td', {}, full !== false ? it.unit : ''),
+          h('td', { class: 'nm' }, full !== false ? qty(it.qty) : ''), h('td', { class: 'nm' }, full !== false ? qty(it.price) : ''), h('td', { class: 'nm' }, full !== false ? cash(a) : '')));
+      rows.push({ el: mkRow(it.description), amount: a, struct: st, chapter: ch, words: it.description.split(' '),
+        split: (text, isLast) => { const r = mkRow(text, isLast ? true : false); if (!isLast) r.querySelector('td.cd') && (r.querySelector('td.cd').textContent = itemCode(it).slice(3)); return r; } });
     }
     pushSub();
     rows.push({ el: h('tr', { class: 'sum chap' }, h('td', { colspan: 5 }, `סה"כ פרק ${ch} ${secs.get(key)?.name ?? ''}`), h('td', { class: 'nm' }, cash(chSum))), struct: st, chapter: ch, reset: true });
