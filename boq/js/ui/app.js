@@ -11,6 +11,7 @@ import { settingsView } from './settings.js';
 import { boqPrintView } from './print.js';
 import { billPrintRoute } from './print-bill.js';
 import { dekelReportView } from './dekel-ui.js';
+import { profitView, statusView, defectsView } from './reports.js';
 
 const ctx = {
   SQL: null, store: null, api: null, dekel: null,
@@ -32,6 +33,9 @@ const ROUTES = [
   [/^c\/(\d+)$/, (m) => boqView(ctx, +m[1])],
   [/^c\/(\d+)\/bills$/, (m) => billsView(ctx, +m[1])],
   [/^c\/(\d+)\/dekel$/, (m) => dekelReportView(ctx, +m[1])],
+  [/^c\/(\d+)\/profit$/, (m) => profitView(ctx, +m[1])],
+  [/^p\/(\d+)\/defects$/, (m) => defectsView(ctx, +m[1])],
+  [/^status$/, () => statusView(ctx)],
   [/^c\/(\d+)\/print$/, (m) => boqPrintView(ctx, +m[1])],
   [/^b\/(\d+)(?:\/(\w+))?$/, (m) => (m[2] === 'print' ? billPrintRoute(ctx, +m[1]) : billView(ctx, +m[1], m[2] || 'exec'))],
   [/^indices$/, () => indicesView(ctx)],
@@ -51,6 +55,7 @@ function crumbsFor(path) {
     else if ((m = path.match(/^c\/(\d+)/))) addContract(+m[1]);
     else if ((m = path.match(/^b\/(\d+)/))) { const b = api.bill(+m[1]); addContract(b.contract_id); out.push([`חשבון ${b.number}`, `b/${b.id}`]); }
     else if (path === 'indices') out.push(['מדדים', 'indices']);
+    else if (path === 'status') out.push(['מצב לתאריך', 'status']);
     else if (path === 'settings') out.push(['הגדרות', 'settings']);
   } catch { /* stale link */ }
   return out;
@@ -68,6 +73,7 @@ function topbar(path) {
     h('div', { class: 'spacer' }),
     h('nav', { class: 'topnav' },
       h('a', { href: '#/', class: path === '' ? 'on' : '' }, 'פרויקטים'),
+      h('a', { href: '#/status', class: path === 'status' ? 'on' : '' }, 'מצב לתאריך'),
       h('a', { href: '#/indices', class: path === 'indices' ? 'on' : '' }, 'מדדים'),
       h('a', { href: '#/settings', class: path === 'settings' ? 'on' : '' }, 'הגדרות')),
     h('span', { class: `tag ${ctx.dekel ? 'ok' : 'warn'}`, title: ctx.dekel ? `${ctx.dekel.items.length.toLocaleString()} סעיפים` : 'טען מחירון בהגדרות' }, ctx.dekel ? `דקל ${ctx.dekel.label || ''}`.trim() : 'דקל לא נטען'),

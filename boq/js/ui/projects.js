@@ -119,6 +119,7 @@ export function projectView(ctx, id) {
     h('div', { class: 'page-head' },
       h('div', {}, h('h1', {}, p.name), h('div', { class: 'sub' }, [p.client, p.location].filter(Boolean).join(' · '), `  ·  סף דקל ${p.dekel_threshold}%`)),
       h('div', { class: 'actions' },
+        h('button', { onclick: () => ctx.go(`p/${id}/defects`) }, 'ליקויים'),
         h('button', { onclick: () => projectForm(ctx, p) }, 'עריכה'),
         h('button', { class: 'danger', onclick: async () => {
           if (await confirmBox('מחיקת פרויקט', `למחוק את "${p.name}" וכל החוזים שבו?`, { danger: true, ok: 'מחיקה' }))

@@ -5,6 +5,8 @@ import { itemCode, isBillable } from '../engine.js';
 import { deviation, deviationFlag } from '../dekel.js';
 import { parseSkn, buildSkn } from '../skn.js';
 import { pickFile, download } from '../persist.js';
+import { loadExcel, exportBoq, readSheetRows } from '../excel.js';
+import { readPdf } from '../pdfimport.js';
 import { KIND, contractForm } from './projects.js';
 import { dekelPanel } from './dekel-ui.js';
 
@@ -59,7 +61,7 @@ function sectionForm(ctx, contract, code, sec) {
 function parsePaste(text) {
   return text.replace(/\r/g, '').split('\n').filter((l) => l.trim()).map((l) => l.split('\t').map((c) => c.trim().replace(/^"|"$/g, '')));
 }
-function pasteImport(ctx, contract, sel) {
+function pasteImport(ctx, contract, sel, initial = '', title = 'הדבקה מאקסל') {
   const [s0, c0, t0] = (sel.code && sel.code !== 'all' ? sel.code : '01.01.01').split('.');
   const ta = h('textarea', { rows: 10, style: { width: '100%', fontFamily: 'monospace', direction: 'rtl' }, placeholder: 'העתק שורות מאקסל והדבק כאן (Ctrl+V)' });
   const COLS = [['', '— התעלם —'], ['code', 'מספר סעיף'], ['description', 'תיאור'], ['unit', 'יחידה'], ['qty', 'כמות'], ['price', 'מחיר'], ['dekel_code', 'קוד דקל']];
@@ -77,32 +79,45 @@ function pasteImport(ctx, contract, sel) {
     preview.textContent = rows.length ? `${rows.length} שורות` : '';
   };
   ta.addEventListener('input', refresh);
-  modal('הדבקה מאקסל', [h('p', { class: 'muted' }, `מספר סעיף בפורמט מבנה.פרק.תת-פרק.סעיף (או פרק.תת-פרק.סעיף). בלי עמודת מספר — הסעיפים ימוספרו אוטומטית תחת ${s0}.${c0}.${t0}. שורת כותרת תדולג אם אין בה מספרים.`), ta, mapBox, preview], {
+  if (initial) { ta.value = initial; setTimeout(refresh, 0); }
+  modal(title, [h('p', { class: 'muted' }, `מספר סעיף בפורמט מבנה.פרק.תת-פרק.סעיף (או פרק.תת-פרק.סעיף). בלי עמודת מספר — הסעיפים ימוספרו אוטומטית תחת ${s0}.${c0}.${t0}. שורת כותרת תדולג אם אין בה מספרים.`), ta, mapBox, preview], {
     wide: true,
     actions: [{ label: 'ביטול' }, { label: 'ייבוא', primary: true, onClick: () => {
       const map = selects.map((s) => s.value);
       const at = (r, k) => { const i = map.indexOf(k); return i < 0 ? '' : r[i] ?? ''; };
       let auto = ctx.api.nextNum(contract.id, s0, c0, t0);
       const items = [];
+      const sections = [];
+      let cur = { s: s0, c: c0, t: t0 };
       for (const r of rows) {
         const q = at(r, 'qty').replace(/,/g, ''), p = at(r, 'price').replace(/,/g, '').replace(/₪/g, '').trim();
         if (q && isNaN(+q)) continue; // header row
-        let s = s0, c = c0, t = t0, n;
+        const desc = at(r, 'description');
+        if (/^סה"?כ/.test(desc) && !q) continue; // total rows (e.g. from our own Excel export)
         const code = at(r, 'code');
-        if (code) {
-          const parts = code.split(/[.\-/ ]+/).filter(Boolean).map((x) => x.replace(/\D/g, ''));
+        const parts = code ? code.split(/[.\-/ ]+/).filter(Boolean).map((x) => x.replace(/\D/g, '')).filter(Boolean) : [];
+        // a code without quantity/price is a structure / chapter / subchapter title row
+        if (parts.length && !q && !p && (parts.length <= 3 && parts.every((x) => x.length <= 2))) {
+          const [a, b2, c2] = parts.map((x) => x.padStart(2, '0'));
+          if (parts.length === 1) { cur = { s: a, c: cur.c, t: cur.t }; sections.push({ code: a, name: desc }); }
+          else if (parts.length === 2) { cur = { s: a, c: b2, t: '01' }; sections.push({ code: `${a}.${b2}`, name: desc }); }
+          else { cur = { s: a, c: b2, t: c2 }; sections.push({ code: `${a}.${b2}.${c2}`, name: desc }); }
+          continue;
+        }
+        let s = cur.s, c = cur.c, t = cur.t, n;
+        if (parts.length) {
           if (parts.length >= 4) [s, c, t, n] = parts.slice(-4);
           else if (parts.length === 3) [c, t, n] = parts;
           else if (parts.length === 2) [c, n] = parts;
           else n = parts[0];
           n = Number(n);
         } else { n = auto; auto += 10; }
-        if (!at(r, 'description') && !q) continue;
-        items.push({ struct: s, chapter: c, sub: t, num: n, description: at(r, 'description'), unit: at(r, 'unit'), qty: q || '0', price: p || '0',
-          dekel_code: at(r, 'dekel_code') || null, kind: !q && !p ? 'note' : c.padStart(2, '0') === '99' ? 'extra' : 'contract' });
+        if (!desc && !q) continue;
+        items.push({ struct: s, chapter: c, sub: t, num: n, description: desc, unit: at(r, 'unit'), qty: q || '0', price: p || '0',
+          dekel_code: at(r, 'dekel_code') || null, kind: !q && !p ? 'note' : String(c).padStart(2, '0') === '99' ? 'extra' : 'contract' });
       }
       if (!items.length) { toast('לא זוהו שורות לייבוא', 'err'); return false; }
-      const ok = attempt(() => ctx.api.importItems(contract.id, { items }), `יובאו ${items.length} סעיפים`);
+      const ok = attempt(() => ctx.api.importItems(contract.id, { items, sections: sections.filter((x) => x.name) }), `יובאו ${items.length} סעיפים`);
       if (ok === undefined) return false;
       if (ctx.dekel) for (const it of ctx.api.items(contract.id)) if (it.dekel_code && !it.dekel_price) { const d = ctx.dekel.get(it.dekel_code); if (d) ctx.api.linkDekel(it.id, d); }
       ctx.refresh();
@@ -321,6 +336,9 @@ export function boqView(ctx, cid) {
     h('button', { onclick: () => importSkn(ctx, contract) }, 'ייבוא SKN'),
     h('button', { onclick: () => exportSkn(ctx, contract) }, 'ייצוא SKN'),
     h('button', { onclick: () => pasteImport(ctx, contract, sel) }, 'הדבקה מאקסל'),
+    h('button', { onclick: () => importExcel(ctx, contract, sel) }, 'ייבוא Excel'),
+    h('button', { onclick: () => exportExcel(ctx, contract) }, 'ייצוא Excel'),
+    h('button', { onclick: () => importPdf(ctx, contract) }, 'ייבוא PDF'),
     h('span', { class: 'sep' }),
     h('button', { class: sel.showDekel ? 'primary' : '', onclick: () => { sel.showDekel = !sel.showDekel; saveSel(cid, sel); renderSide(); ctx.refresh(); } }, 'דקל'),
     h('button', { onclick: () => ctx.go(`c/${cid}/dekel`) }, 'בדיקת תמחור מול דקל'),
@@ -366,4 +384,51 @@ function convertQuote(ctx, q) {
     ctx.api.saveContract({ ...ctx.api.contract(id), mode: v.mode });
     ctx.go(`c/${id}`);
   }, { submit: 'יצירת חוזה', intro: h('p', { class: 'muted' }, 'נוצר חוזה מזמין חדש עם כל הסעיפים והמחירים הסופיים של ההצעה. ההצעה עצמה נשמרת ללא שינוי.') });
+}
+
+async function importExcel(ctx, contract, sel) {
+  const f = await pickFile('.xlsx');
+  if (!f) return;
+  try {
+    const sheets = await readSheetRows(await loadExcel(), f.bytes);
+    if (!sheets.length) return toast('הקובץ ריק', 'err');
+    const open = (sh) => pasteImport(ctx, contract, sel, sh.rows.map((r) => r.join('\t')).join('\n'), `ייבוא Excel — ${sh.name}`);
+    if (sheets.length === 1) return open(sheets[0]);
+    const m = modal('בחירת גיליון', h('div', { class: 'stack' }, sheets.map((sh) => h('button', { onclick: () => { m.close(); open(sh); } }, `${sh.name} (${sh.rows.length} שורות)`))));
+  } catch (e) { toast(`קריאת הקובץ נכשלה: ${e.message}`, 'err'); }
+}
+
+async function exportExcel(ctx, contract) {
+  try {
+    const bytes = await exportBoq(await loadExcel(), { contract, sections: ctx.api.sections(contract.id), items: ctx.api.items(contract.id) });
+    download(`${contract.name.replace(/[\\/:*?"<>|]/g, '_')}.xlsx`, bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  } catch (e) { toast(`ייצוא נכשל: ${e.message}`, 'err'); }
+}
+
+async function importPdf(ctx, contract) {
+  const f = await pickFile('.pdf');
+  if (!f) return;
+  toast('קורא את קובץ ה-PDF…');
+  let r;
+  try { r = await readPdf(f.bytes); } catch (e) { return toast(`קריאת ה-PDF נכשלה: ${e.message}`, 'err'); }
+  if (!r.items.length) return toast('לא זוהו סעיפים בקובץ. ייבוא PDF תומך בכתבי כמויות וחשבונות בפורמט בנארית.', 'err');
+  const total = r.items.reduce((s, i) => s + lineCents(i.qty, i.price), 0);
+  const rows = r.items.map((it) => {
+    const desc = h('textarea', { rows: 2, style: { width: '100%' } }, it.description);
+    desc.addEventListener('change', () => { it.description = desc.value.trim(); });
+    return h('tr', {}, h('td', { class: 'code' }, `${it.struct}.${it.chapter}.${it.sub}.${String(it.num).padStart(4, '0')}`), h('td', { class: 'edit desc' }, desc),
+      h('td', {}, it.unit), h('td', { class: 'n' }, qty(it.qty)), h('td', { class: 'n' }, qty(it.price)), h('td', { class: 'n' }, money(lineCents(it.qty, it.price))));
+  });
+  modal('ייבוא כתב כמויות מ-PDF — בדיקה לפני שמירה', [
+    h('div', { class: 'alert info' }, `זוהו ${r.items.length} סעיפים בסך ${money(total)} ₪ (${r.layout === 'bill' ? 'מתוך חשבון — הכמות היא כמות החוזה' : 'כתב כמויות'}). `,
+      'קריאת PDF אינה מדויקת ב-100%: בדוק את התיאורים ותקן לפני השמירה. הערות כלליות אינן מיובאות.'),
+    r.warnings.length ? h('div', { class: 'alert' }, h('div', { class: 'pre' }, r.warnings.slice(0, 15).join('\n'))) : null,
+    h('div', { class: 'table-wrap', style: { maxHeight: '55vh' } }, h('table', { class: 't lines' },
+      h('thead', {}, h('tr', {}, ['סעיף', 'תאור', "יח'", 'כמות', 'מחיר', 'סה"כ'].map((x, i) => h('th', { class: i >= 3 ? 'n' : '' }, x)))), h('tbody', {}, rows))),
+  ], { wide: true, actions: [{ label: 'ביטול' }, { label: `ייבוא ${r.items.length} סעיפים`, primary: true, onClick: () => {
+    const items = r.items.map(({ _layout, _page, ...it }) => it);
+    const ok = attempt(() => ctx.api.importItems(contract.id, { items, sections: r.sections }), `יובאו ${items.length} סעיפים`);
+    if (ok === undefined) return false;
+    ctx.refresh();
+  } }] });
 }

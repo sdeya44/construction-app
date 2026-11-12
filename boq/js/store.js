@@ -20,6 +20,7 @@ export class Store {
     if (!has('items')) return; // fresh database
     const cols = (t) => this.all(`PRAGMA table_info(${t})`).map((c) => c.name);
     if (!cols('contracts').includes('planned_cents')) this.db.run('ALTER TABLE contracts ADD COLUMN planned_cents INTEGER NOT NULL DEFAULT 0');
+    if (has('payments') && !cols('payments').includes('group_id')) this.db.run('ALTER TABLE payments ADD COLUMN group_id INTEGER DEFAULT NULL');
     // v1 had a table-level UNIQUE on item numbers; Binarit files repeat note numbers → rebuild without it
     const sql = this.get("SELECT sql FROM sqlite_master WHERE name='items'").sql;
     if (/UNIQUE\s*\(contract_id/.test(sql)) {
