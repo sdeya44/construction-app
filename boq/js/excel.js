@@ -153,3 +153,40 @@ export async function readSheetRows(ExcelJS, bytes) {
   });
   return sheets.filter((s) => s.rows.length);
 }
+
+/** Bid form for one bidder: items with an empty, unlocked price column; total = qty × price. */
+export async function exportBidForm(ExcelJS, { tender, bidder, sections, company }) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'KAYAN BOQ';
+  const ws = wb.addWorksheet('הצעת מחיר');
+  sheetSetup(ws, [16, 70, 9, 12, 14, 16]);
+  ws.views = [{ rightToLeft: true, state: 'frozen', ySplit: 4 }];
+  ws.addRow([`${company ?? ''} — מכרז: ${tender.name}`]).font = { bold: true, size: 13 };
+  ws.addRow([`מציע: ${bidder?.name ?? ''}`, tender.due ? `מועד הגשה: ${tender.due}` : '']);
+  ws.addRow(['יש למלא מחיר יחידה בעמודה E בלבד (לפני מע"מ). אין לשנות את מספרי הסעיפים.']).font = { italic: true, color: { argb: 'FF8A5A00' } };
+  header(ws, ['סעיף', 'תאור', 'יחידה', 'כמות', 'מחיר יחידה', 'סה"כ']);
+  const sec = new Map(sections.map((s) => [s.code, s.name]));
+  let lastSub = null; const totals = [];
+  for (const it of tender.items) {
+    const subKey = `${it.struct}.${it.chapter}.${it.sub}`;
+    if (subKey !== lastSub) { lastSub = subKey; bold(ws.addRow([subKey, `${sec.get(`${it.struct}.${it.chapter}`) ?? ''} · ${sec.get(subKey) ?? ''}`])); }
+    const r = ws.addRow([itemCode(it), it.description, it.unit, n(it.qty), null]);
+    r.getCell(6).value = { formula: `IF(E${r.number}="","",D${r.number}*E${r.number})` };
+    r.getCell(2).alignment = { wrapText: true, vertical: 'top' };
+    r.getCell(4).numFmt = QTY; r.getCell(5).numFmt = MONEY; r.getCell(6).numFmt = MONEY;
+    r.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF8DC' } };
+    r.getCell(5).protection = { locked: false };
+    totals.push(r.number);
+  }
+  const t = bold(ws.addRow(['', 'סה"כ הצעה (לפני מע"מ)']));
+  t.getCell(6).value = { formula: `SUM(F${totals[0] ?? 5}:F${totals.at(-1) ?? 5})` }; t.getCell(6).numFmt = MONEY;
+  await ws.protect('', { selectLockedCells: true, selectUnlockedCells: true, formatColumns: true });
+  return new Uint8Array(await wb.xlsx.writeBuffer());
+}
+
+/** Filled bid form → [{code, price}] (code in column A, price in column E). */
+export async function readBidForm(ExcelJS, bytes) {
+  const [sheet] = await readSheetRows(ExcelJS, bytes);
+  if (!sheet) return [];
+  return sheet.rows.filter((r) => /^\d{2}\.\d{2}\.\d{2}\.\d{4}$/.test(r[0] ?? '')).map((r) => ({ code: r[0], price: (r[4] ?? '').trim() }));
+}

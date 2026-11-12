@@ -236,3 +236,14 @@ table.t.fixed th { white-space: normal; line-height: 1.25; vertical-align: botto
 table.t.fixed td { overflow: hidden; text-overflow: ellipsis; }
 table.t.fixed tr.group td, table.t.fixed tr.bn-shead td, table.t.fixed tr.bn-ssum td, table.t.fixed tr.bn-csum td { border-inline-start: none; }
 table.t.fixed td.code { overflow: visible; text-overflow: clip; font-size: 13px; }
+/* stage 3 */
+td.bid-low, .bid-low { background: var(--ok-weak) !important; color: var(--ok); font-weight: 650; }
+td.bid-low input { color: var(--ok); font-weight: 650; }
+table.tender td.bid-actions { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px !important; }
+table.tender th .muted { font-weight: 400; font-size: 11px; }
+.cf-bar { height: 7px; display: flex; margin: 2px 0; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.cf-bar span { display: block; height: 100%; }
+.cf-bar.in .a { background: var(--ok); } .cf-bar.in .e { background: #9fd0b2; }
+.cf-bar.out .a { background: var(--bad); } .cf-bar.out .e { background: #e8aaa6; }
+table.cf tr.cf-past td { color: var(--ink-2); }
+.topnav a { white-space: nowrap; }

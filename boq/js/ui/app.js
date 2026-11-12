@@ -12,6 +12,7 @@ import { boqPrintView } from './print.js';
 import { billPrintRoute } from './print-bill.js';
 import { dekelReportView } from './dekel-ui.js';
 import { profitView, statusView, defectsView } from './reports.js';
+import { tendersView, tenderView, cashflowView, managementView } from './stage3.js';
 
 const ctx = {
   SQL: null, store: null, api: null, dekel: null,
@@ -36,6 +37,10 @@ const ROUTES = [
   [/^c\/(\d+)\/profit$/, (m) => profitView(ctx, +m[1])],
   [/^p\/(\d+)\/defects$/, (m) => defectsView(ctx, +m[1])],
   [/^status$/, () => statusView(ctx)],
+  [/^c\/(\d+)\/tenders$/, (m) => tendersView(ctx, +m[1])],
+  [/^t\/(\d+)$/, (m) => tenderView(ctx, +m[1])],
+  [/^cashflow$/, () => cashflowView(ctx)],
+  [/^mgmt$/, () => managementView(ctx)],
   [/^c\/(\d+)\/print$/, (m) => boqPrintView(ctx, +m[1])],
   [/^b\/(\d+)(?:\/(\w+))?$/, (m) => (m[2] === 'print' ? billPrintRoute(ctx, +m[1]) : billView(ctx, +m[1], m[2] || 'exec'))],
   [/^indices$/, () => indicesView(ctx)],
@@ -56,6 +61,9 @@ function crumbsFor(path) {
     else if ((m = path.match(/^b\/(\d+)/))) { const b = api.bill(+m[1]); addContract(b.contract_id); out.push([`חשבון ${b.number}`, `b/${b.id}`]); }
     else if (path === 'indices') out.push(['מדדים', 'indices']);
     else if (path === 'status') out.push(['מצב לתאריך', 'status']);
+    else if (path === 'cashflow') out.push(['תזרים', 'cashflow']);
+    else if (path === 'mgmt') out.push(['דוחות מנהלים', 'mgmt']);
+    else if ((m = path.match(/^t\/(\d+)/))) { const t = api.tender(+m[1]); addContract(t.contract_id); out.push([`מכרז: ${t.name}`, `t/${t.id}`]); }
     else if (path === 'settings') out.push(['הגדרות', 'settings']);
   } catch { /* stale link */ }
   return out;
@@ -73,6 +81,8 @@ function topbar(path) {
     h('div', { class: 'spacer' }),
     h('nav', { class: 'topnav' },
       h('a', { href: '#/', class: path === '' ? 'on' : '' }, 'פרויקטים'),
+      h('a', { href: '#/mgmt', class: path === 'mgmt' ? 'on' : '' }, 'דוחות מנהלים'),
+      h('a', { href: '#/cashflow', class: path === 'cashflow' ? 'on' : '' }, 'תזרים'),
       h('a', { href: '#/status', class: path === 'status' ? 'on' : '' }, 'מצב לתאריך'),
       h('a', { href: '#/indices', class: path === 'indices' ? 'on' : '' }, 'מדדים'),
       h('a', { href: '#/settings', class: path === 'settings' ? 'on' : '' }, 'הגדרות')),

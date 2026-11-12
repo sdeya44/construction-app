@@ -1,5 +1,5 @@
 // Database schema. Decimal values are TEXT (exact), money is INTEGER agorot.
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS contracts (
   index_series TEXT NOT NULL DEFAULT 'residential', index_base_month TEXT DEFAULT '',
   index_lag INTEGER NOT NULL DEFAULT 0, index_threshold TEXT NOT NULL DEFAULT '0', index_share TEXT NOT NULL DEFAULT '100',
   quote_markup TEXT NOT NULL DEFAULT '0', planned_cents INTEGER NOT NULL DEFAULT 0,
+  end_month TEXT DEFAULT '', pay_terms INTEGER NOT NULL DEFAULT 60,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','closed')),
   created_at TEXT NOT NULL
 );
@@ -92,6 +93,28 @@ CREATE TABLE IF NOT EXISTS purchases (
   amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0),
   parent_id INTEGER DEFAULT NULL REFERENCES purchases(id) ON DELETE SET NULL,
   bill_id INTEGER DEFAULT NULL REFERENCES bills(id) ON DELETE SET NULL
+);
+
+-- Tenders (מכרזים): a set of items from a contract sent to several bidders for prices.
+CREATE TABLE IF NOT EXISTS tenders (
+  id INTEGER PRIMARY KEY, contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, scope TEXT NOT NULL DEFAULT '', due TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','awarded','cancelled')),
+  awarded_bidder INTEGER DEFAULT NULL, awarded_contract INTEGER DEFAULT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tender_items (
+  tender_id INTEGER NOT NULL REFERENCES tenders(id) ON DELETE CASCADE,
+  item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  PRIMARY KEY (tender_id, item_id)
+);
+CREATE TABLE IF NOT EXISTS bidders (
+  id INTEGER PRIMARY KEY, tender_id INTEGER NOT NULL REFERENCES tenders(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, contact TEXT DEFAULT '', discount TEXT NOT NULL DEFAULT '0', note TEXT DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS bid_prices (
+  bidder_id INTEGER NOT NULL REFERENCES bidders(id) ON DELETE CASCADE,
+  item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  price TEXT NOT NULL,
+  PRIMARY KEY (bidder_id, item_id)
 );
 
 -- Defects (ליקויים), linked to a project and optionally to a contract item.
