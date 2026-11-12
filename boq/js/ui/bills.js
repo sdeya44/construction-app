@@ -15,6 +15,7 @@ export function billsView(ctx, cid) {
   const c = api.contract(cid);
   const bills = api.bills(cid);
   const v = api.contractValue(cid);
+  const scope = c.planned_cents || v.net; // signed contract amount when set
   const lastAppr = [...bills].reverse().find((b) => b.status === 'approved');
   const paid = bills.reduce((s, b) => s + b.paid, 0);
   const dueAll = bills.filter((b) => b.status === 'approved').reduce((s, b) => s + b.snap.due, 0);
@@ -34,9 +35,9 @@ export function billsView(ctx, cid) {
       h('div', { class: 'actions' }, h('button', { onclick: () => ctx.go(`c/${cid}`) }, 'כתב כמויות'),
         h('button', { class: 'primary', disabled: c.status === 'closed', onclick: () => attempt(newBill) }, '+ חשבון חדש'))),
     h('div', { class: 'kpis' },
-      h('div', { class: 'kpi' }, h('div', { class: 'l' }, 'היקף חוזה (אחרי הנחות)'), h('div', { class: 'v' }, money(v.net))),
+      h('div', { class: 'kpi' }, h('div', { class: 'l' }, c.planned_cents ? 'סכום חוזה חתום' : 'היקף חוזה (אחרי הנחות)'), h('div', { class: 'v' }, money(scope))),
       h('div', { class: 'kpi accent' }, h('div', { class: 'l' }, 'מצטבר מאושר'), h('div', { class: 'v' }, money(lastAppr?.snap.cumNet ?? 0))),
-      h('div', { class: 'kpi' }, h('div', { class: 'l' }, 'ביצוע מההיקף'), h('div', { class: 'v' }, v.net ? `${(((lastAppr?.snap.cumNet ?? 0) / v.net) * 100).toFixed(1)}%` : '—')),
+      h('div', { class: 'kpi' }, h('div', { class: 'l' }, 'ביצוע מההיקף'), h('div', { class: 'v' }, scope ? `${(((lastAppr?.snap.cumNet ?? 0) / scope) * 100).toFixed(1)}%` : '—')),
       h('div', { class: 'kpi' }, h('div', { class: 'l' }, 'עיכבון מצטבר'), h('div', { class: 'v' }, money(lastAppr?.snap.cumRetention ?? 0))),
       h('div', { class: 'kpi' }, h('div', { class: 'l' }, 'לתשלום כולל מע"מ (מאושר)'), h('div', { class: 'v' }, money(dueAll))),
       h('div', { class: 'kpi' }, h('div', { class: 'l' }, 'יתרה פתוחה'), h('div', { class: 'v' }, money(dueAll - paid)))),
