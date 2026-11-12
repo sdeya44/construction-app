@@ -279,7 +279,8 @@ export function boqView(ctx, cid) {
     const m = modal(`סעיף ${itemCode(it)}`, h('div', { class: 'stack' }, acts.map(([l, f]) => h('button', { onclick: () => { m.close(); f(); } }, l))));
   }
 
-  const grid = h('div', { class: 'grid-area' }, visible.length ? h('table', { class: 't' },
+  const grid = h('div', { class: 'grid-area' }, visible.length ? h('table', { class: 't lines fixed' },
+    h('colgroup', {}, [136, null, 64, 100, 100, 120, 132, 40].map((w) => h('col', { style: w ? { width: `${w}px` } : {} }))),
     h('thead', {}, h('tr', {}, h('th', {}, 'סעיף'), h('th', {}, 'תיאור'), h('th', {}, "יח'"), h('th', { class: 'n' }, 'כמות'), h('th', { class: 'n' }, 'מחיר'),
       h('th', { class: 'n' }, 'סה"כ'), h('th', {}, 'דקל / סטייה'), h('th', { class: 'no-print' }, ''))),
     tbody) : h('div', { class: 'empty' }, h('b', {}, items.length ? 'אין סעיפים בתצוגה' : 'כתב הכמויות ריק'),
