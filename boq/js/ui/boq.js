@@ -342,6 +342,7 @@ export function boqView(ctx, cid) {
     h('span', { class: 'sep' }),
     h('button', { class: sel.showDekel ? 'primary' : '', onclick: () => { sel.showDekel = !sel.showDekel; saveSel(cid, sel); renderSide(); ctx.refresh(); } }, 'דקל'),
     h('button', { onclick: () => ctx.go(`c/${cid}/dekel`) }, 'בדיקת תמחור מול דקל'),
+    h('button', { onclick: () => ctx.go(`c/${cid}/tenders`) }, 'מכרזים'),
     h('span', { class: 'sep' }),
     !isQuote ? h('button', { onclick: () => ctx.go(`c/${cid}/bills`) }, 'חשבונות') : h('button', { onclick: () => convertQuote(ctx, contract) }, 'המרה לחוזה'),
     h('button', { onclick: () => ctx.go(`c/${cid}/print`) }, isQuote ? 'הדפסת הצעה' : 'הדפסה'),

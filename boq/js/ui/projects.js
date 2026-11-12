@@ -37,6 +37,8 @@ export function contractForm(ctx, c) {
       { name: 'retention_rate', label: 'עיכבון %', value: c.retention_rate ?? '0', numeric: true },
       { name: 'advance', label: 'מקדמה ששולמה (₪)', value: String((c.advance_cents ?? 0) / 100), numeric: true },
       { name: 'advance_rate', label: 'קיזוז מקדמה מכל חשבון %', value: c.advance_rate ?? '0', numeric: true },
+      { name: 'end_month', label: 'חודש סיום צפוי (לתזרים)', type: 'month', value: c.end_month },
+      { name: 'pay_terms', label: 'תנאי תשלום — שוטף + ימים', value: c.pay_terms ?? 60, numeric: true },
       { name: 'planned', label: 'סכום חוזה חתום (₪)', value: String((c.planned_cents ?? 0) / 100), numeric: true, hint: 'מודפס כ"היקף עבודה מתוכנן" בסיכום החשבון; 0 = מחושב מכתב הכמויות' },
       { name: 'opening', label: 'יתרת פתיחה — מצטבר קודם מאושר (₪)', value: String((c.opening_cents ?? 0) / 100), numeric: true, hint: 'רק להעברת חוזה קיים באמצע ביצוע' },
       { type: 'section', label: 'הצמדה למדד' },

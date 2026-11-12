@@ -1,7 +1,7 @@
 // Business operations. Every mutation is one transaction; rules are enforced here, not in the UI.
 import { nowIso, today } from './store.js';
 import { calcBill, contractValue, isBillable, itemCode } from './engine.js';
-import { fixed, dec, cents, norm, lineCents } from './money.js';
+import { fixed, dec, cents, norm, lineCents, pct } from './money.js';
 import { quotePrice } from './dekel.js';
 
 const two = (v) => String(v ?? '').trim().padStart(2, '0').slice(-2);
@@ -66,6 +66,8 @@ export class Api {
       index_threshold: rate(c.index_threshold ?? '0', 'סף הצמדה'), index_share: rate(c.index_share ?? '100', 'שיעור הצמדה'),
       quote_markup: rate(c.quote_markup ?? '0', 'תוספת/הנחה מדקל'),
       planned_cents: cents(c.planned ?? (c.planned_cents != null ? c.planned_cents / 100 : '0')),
+      end_month: c.end_month ? month(c.end_month) : '',
+      pay_terms: Math.max(0, Math.min(365, Number(c.pay_terms ?? 60) || 0)),
       parent_id: c.parent_id || null, status: c.status === 'closed' ? 'closed' : 'active',
     };
     if (['full', 'threshold', 'partial'].includes(f.index_rule) && !f.index_base_month) throw new Error('בהצמדה אוטומטית חובה להגדיר חודש מדד בסיס');
@@ -507,9 +509,14 @@ export class Api {
         const ci = this.s.get('SELECT * FROM items WHERE id=?', [si.source_item_id]);
         if (!ci) continue;
         const plannedClient = lineCents(ci.qty, ci.price), plannedSub = lineCents(ci.qty, si.price);
-        const execClient = cRows.get(ci.id)?.cumGross ?? 0, execSub = sRows.get(si.id)?.cumGross ?? 0;
+        // margin on executed work = client-approved quantity × (client price − sub price); the sub's
+        // own billing (execSub) is shown for reference but its timing must not inflate the margin
+        const cRow = cRows.get(ci.id);
+        const execQ = cRow?.cumQ ?? '0';
+        const execClient = cRow?.cumGross ?? 0, execSub = sRows.get(si.id)?.cumGross ?? 0;
+        const execMargin = lineCents(execQ, cRow?.price ?? ci.price) - lineCents(execQ, si.price);
         lines.push({ sub: s.name, subId: s.id, item: ci, subPrice: si.price, plannedClient, plannedSub, plannedMargin: plannedClient - plannedSub,
-          execClient, execSub, execMargin: execClient - execSub, unitMargin: dec(fixed(ci.price) - fixed(si.price)) });
+          execQ, execClient, execSub, execMargin, unitMargin: dec(fixed(ci.price) - fixed(si.price)) });
       }
     }
     const sum = (k) => lines.reduce((a, l) => a + l[k], 0);
@@ -532,6 +539,185 @@ export class Api {
     }, d.id ? 'עדכון ליקוי' : 'ליקוי חדש');
   }
   deleteDefect(id) { this.s.tx(() => this.s.run('DELETE FROM defects WHERE id=?', [id]), 'מחיקת ליקוי'); }
+
+  // ---------------- stage 3: tenders, cash flow, management report ----------------
+  tenders(contractId) {
+    return this.s.all('SELECT t.*, (SELECT COUNT(*) FROM bidders b WHERE b.tender_id=t.id) bidders, (SELECT COUNT(*) FROM tender_items i WHERE i.tender_id=t.id) items FROM tenders t WHERE contract_id=? ORDER BY id DESC', [contractId]);
+  }
+  tender(id) {
+    const t = must(this.s.get('SELECT * FROM tenders WHERE id=?', [id]), 'המכרז לא נמצא');
+    t.items = this.s.all('SELECT i.* FROM tender_items ti JOIN items i ON i.id=ti.item_id WHERE ti.tender_id=? ORDER BY i.struct, i.chapter, i.sub, i.num', [id]);
+    t.bidders = this.s.all('SELECT * FROM bidders WHERE tender_id=? ORDER BY id', [id]);
+    return t;
+  }
+  /** scope: '' (all) or a code prefix such as '01', '01.02' or '01.02.01'. */
+  createTender(contractId, { name, scope = '', due = '' }) {
+    const nm = must(text(name, 200), 'שם המכרז חובה');
+    const items = this.items(contractId).filter((i) => isBillable(i) && (!scope || itemCode(i).startsWith(scope + '.')));
+    if (!items.length) throw new Error('אין סעיפים בהיקף שנבחר');
+    return this.s.tx(() => {
+      const id = this.s.run('INSERT INTO tenders (contract_id, name, scope, due, created_at) VALUES (?,?,?,?,?)', [contractId, nm, scope, due || '', nowIso()]).id;
+      for (const i of items) this.s.run('INSERT INTO tender_items (tender_id, item_id) VALUES (?,?)', [id, i.id]);
+      return id;
+    }, `מכרז חדש: ${nm}`);
+  }
+  deleteTender(id) { this.s.tx(() => this.s.run('DELETE FROM tenders WHERE id=?', [id]), 'מחיקת מכרז'); }
+  saveBidder(b) {
+    const name = must(text(b.name, 160), 'שם המציע חובה');
+    const f = [name, text(b.contact, 200), rate(b.discount ?? '0', 'הנחה'), text(b.note, 500)];
+    return this.s.tx(() => (b.id
+      ? (this.s.run('UPDATE bidders SET name=?, contact=?, discount=?, note=? WHERE id=?', [...f, b.id]), b.id)
+      : this.s.run('INSERT INTO bidders (tender_id, name, contact, discount, note) VALUES (?,?,?,?,?)', [b.tender_id, ...f]).id), 'עדכון מציע');
+  }
+  deleteBidder(id) { this.s.tx(() => this.s.run('DELETE FROM bidders WHERE id=?', [id]), 'מחיקת מציע'); }
+  setBidPrice(bidderId, itemId, price) {
+    if (price === '' || price == null) return this.s.tx(() => this.s.run('DELETE FROM bid_prices WHERE bidder_id=? AND item_id=?', [bidderId, itemId]));
+    const v = decStr(price, 'מחיר');
+    if (fixed(v) < 0n) throw new Error('מחיר שלילי');
+    this.s.tx(() => this.s.run('INSERT INTO bid_prices (bidder_id, item_id, price) VALUES (?,?,?) ON CONFLICT(bidder_id, item_id) DO UPDATE SET price=excluded.price', [bidderId, itemId, v]));
+  }
+  /** rows: [{code, price}] from a filled bid form; matched by item code. Atomic. */
+  importBidPrices(bidderId, rows) {
+    const b = must(this.s.get('SELECT * FROM bidders WHERE id=?', [bidderId]), 'המציע לא נמצא');
+    const items = new Map(this.tender(b.tender_id).items.map((i) => [itemCode(i), i]));
+    let matched = 0; const unmatched = [], bad = [];
+    this.s.tx(() => {
+      for (const r of rows) {
+        const it = items.get(String(r.code).trim());
+        if (!it) { unmatched.push(r.code); continue; }
+        if (r.price === '' || r.price == null) continue;
+        try { this.setBidPrice(bidderId, it.id, String(r.price).replace(/[,₪\s]/g, '')); matched++; } catch { bad.push(r.code); }
+      }
+    }, `קליטת הצעת מחיר: ${b.name}`);
+    return { matched, unmatched, bad, missing: items.size - matched };
+  }
+  /** Side-by-side comparison: estimate (contract price), Dekel, each bidder; totals after bidder discount. */
+  compareTender(id) {
+    const t = this.tender(id);
+    const prices = new Map(t.bidders.map((b) => [b.id, new Map(this.s.all('SELECT item_id, price FROM bid_prices WHERE bidder_id=?', [b.id]).map((r) => [r.item_id, r.price]))]));
+    const rows = t.items.map((it) => {
+      const bids = {}; let low = null;
+      for (const b of t.bidders) {
+        const p = prices.get(b.id).get(it.id);
+        bids[b.id] = p ?? null;
+        if (p != null && (low == null || fixed(p) < fixed(bids[low]))) low = b.id;
+      }
+      return { item: it, estimate: it.price, dekel: it.dekel_price, bids, low };
+    });
+    const totals = {};
+    for (const b of t.bidders) {
+      let gross = 0, missing = 0;
+      for (const r of rows) { const p = r.bids[b.id]; if (p == null) missing++; else gross += lineCents(r.item.qty, p); }
+      const discount = pct(gross, b.discount);
+      totals[b.id] = { gross, discount, net: gross - discount, missing };
+    }
+    const estimate = rows.reduce((a, r) => a + lineCents(r.item.qty, r.estimate), 0);
+    const complete = t.bidders.filter((b) => !totals[b.id].missing);
+    const best = complete.sort((a, b) => totals[a.id].net - totals[b.id].net)[0]?.id ?? null;
+    return { tender: t, rows, totals, estimate, best };
+  }
+  /** Award to one bidder: creates a subcontract with the bidder's prices, linked to the source items. */
+  awardTender(id, bidderId) {
+    const cmp = this.compareTender(id);
+    const t = cmp.tender;
+    if (t.status === 'awarded') throw new Error('המכרז כבר נסגר');
+    const b = must(t.bidders.find((x) => x.id === bidderId), 'המציע לא נמצא');
+    if (cmp.totals[b.id].missing) throw new Error(`חסרים מחירים ל-${cmp.totals[b.id].missing} סעיפים בהצעה של ${b.name}`);
+    const src = this.contract(t.contract_id);
+    return this.s.tx(() => {
+      const cid = this.saveContract({ project_id: src.project_id, kind: 'sub', name: `${t.name} — ${b.name}`, party: b.name, parent_id: src.kind === 'client' ? src.id : null,
+        mode: src.mode, vat_rate: src.vat_rate, general_discount: b.discount });
+      const secs = new Map(this.sections(src.id).map((x) => [x.code, x]));
+      for (const it of t.items) {
+        for (const code of [it.struct, `${it.struct}.${it.chapter}`, `${it.struct}.${it.chapter}.${it.sub}`]) {
+          const sx = secs.get(code);
+          this.s.run('INSERT OR IGNORE INTO sections (contract_id, code, name, exempt) VALUES (?,?,?,?)', [cid, code, sx?.name ?? '', sx?.exempt ?? 0]);
+        }
+        this.s.run(`INSERT INTO items (contract_id, struct, chapter, sub, num, description, unit, qty, price, kind, change_status, dekel_code, dekel_price, price_manual, source_item_id, notes)
+          VALUES (?,?,?,?,?,?,?,?,?,?, 'approved', ?,?,1,?, '')`,
+          [cid, it.struct, it.chapter, it.sub, it.num, it.description, it.unit, it.qty, cmp.rows.find((r) => r.item.id === it.id).bids[b.id], it.kind, it.dekel_code, it.dekel_price, it.id]);
+      }
+      this.s.run(`UPDATE tenders SET status='awarded', awarded_bidder=?, awarded_contract=? WHERE id=?`, [b.id, cid, id]);
+      return cid;
+    }, `זכייה במכרז ${t.name}: ${b.name}`);
+  }
+
+  /**
+   * Monthly cash flow. In = client contracts, out = subcontracts.
+   * actual: payments by date. expected: open balances of approved bills at bill month + payment terms
+   * (שוטף + N days), overdue ones in the current month; forecast: remaining scope spread evenly
+   * until the contract's end month, invoiced monthly and paid after the same terms.
+   */
+  cashflow({ projectId = null, from = null, to = null, now = today() } = {}) {
+    const cur = now.slice(0, 7);
+    const addM = (m, k) => { const [y, mo] = m.split('-').map(Number); const d = new Date(Date.UTC(y, mo - 1 + k, 1)); return d.toISOString().slice(0, 7); };
+    const payMonth = (billMonth, terms) => { const [y, mo] = billMonth.split('-').map(Number); const end = new Date(Date.UTC(y, mo, 0)); end.setUTCDate(end.getUTCDate() + terms); return end.toISOString().slice(0, 7); };
+    const cs = this.s.all(`SELECT * FROM contracts WHERE kind IN ('client','sub') ${projectId ? 'AND project_id=?' : ''}`, projectId ? [projectId] : []);
+    const months = new Map();
+    const cell = (m) => { if (!months.has(m)) months.set(m, { month: m, inActual: 0, inExpected: 0, outActual: 0, outExpected: 0 }); return months.get(m); };
+    const warnings = [];
+    for (const c of cs) {
+      const dir = c.kind === 'client' ? 'in' : 'out';
+      for (const p of this.s.all('SELECT p.* FROM payments p JOIN bills b ON b.id=p.bill_id WHERE b.contract_id=?', [c.id])) cell(p.date.slice(0, 7))[`${dir}Actual`] += p.amount_cents;
+      const bills = this.bills(c.id);
+      for (const b of bills.filter((x) => x.status === 'approved')) {
+        const bal = b.snap.due - b.paid;
+        if (bal <= 0) continue;
+        let m = payMonth(b.month, c.pay_terms);
+        if (m < cur) m = cur;
+        cell(m)[`${dir}Expected`] += bal;
+      }
+      const last = [...bills].reverse().find((x) => x.status === 'approved');
+      const scope = c.planned_cents || this.contractValue(c.id).net;
+      const remaining = Math.max(0, scope - (last?.snap.cumNet ?? 0));
+      if (remaining > 0 && c.status === 'active') {
+        if (!c.end_month) { warnings.push(`${c.name}: לא הוגדר חודש סיום — היתרה לביצוע (${(remaining / 100).toFixed(0)} ₪) לא נכללה בתחזית`); continue; }
+        const start = addM(last ? (last.month > cur ? last.month : cur) : cur, last && last.month >= cur ? 1 : 0);
+        const ms = []; for (let m = start; m <= c.end_month; m = addM(m, 1)) ms.push(m);
+        if (!ms.length) { warnings.push(`${c.name}: חודש הסיום (${c.end_month}) עבר אך נותרה יתרה לביצוע`); continue; }
+        const withVat = remaining + pct(remaining, c.vat_rate);
+        ms.forEach((m, k) => { const share = k === ms.length - 1 ? withVat - Math.floor(withVat / ms.length) * (ms.length - 1) : Math.floor(withVat / ms.length); cell(payMonth(m, c.pay_terms))[`${dir}Expected`] += share; });
+      }
+    }
+    let list = [...months.values()].sort((a, b) => a.month.localeCompare(b.month));
+    if (from) list = list.filter((r) => r.month >= from);
+    if (to) list = list.filter((r) => r.month <= to);
+    let run = 0;
+    for (const r of list) { r.net = r.inActual + r.inExpected - r.outActual - r.outExpected; run += r.net; r.cumulative = run; r.past = r.month < cur; }
+    return { months: list, warnings, current: cur };
+  }
+
+  /** One row per project with the figures a manager checks first. */
+  managementReport() {
+    return this.projects().map((p) => {
+      const cs = this.contracts(p.id);
+      const agg = (kind) => {
+        let scope = 0, cumNet = 0, billed = 0, paid = 0;
+        for (const c of cs.filter((x) => x.kind === kind)) {
+          const bills = this.bills(c.id).filter((b) => b.status === 'approved');
+          scope += c.planned_cents || this.contractValue(c.id).net;
+          cumNet += bills.at(-1)?.snap.cumNet ?? 0;
+          billed += bills.reduce((a, b) => a + b.snap.due, 0);
+          paid += bills.reduce((a, b) => a + b.paid, 0);
+        }
+        return { scope, cumNet, billed, paid, balance: billed - paid };
+      };
+      const client = agg('client'), sub = agg('sub');
+      let plannedMargin = 0, execMargin = 0, overrunItems = 0, overrunCents = 0, extraCents = 0, dekelFlags = 0;
+      for (const c of cs.filter((x) => x.kind === 'client')) {
+        const pr = this.profit(c.id); plannedMargin += pr.totals.plannedMargin; execMargin += pr.totals.execMargin;
+        const snap = this.bills(c.id).filter((b) => b.status === 'approved').at(-1)?.snap;
+        for (const r of snap?.rows ?? []) { if (r.cat.over > 0) { overrunItems++; overrunCents += r.cat.over; } extraCents += r.cat.extra; }
+      }
+      for (const c of cs) for (const it of this.items(c.id)) {
+        if (!it.dekel_price || it.kind === 'note' || !Number(it.dekel_price)) continue;
+        if (Math.abs(Number(it.price) / Number(it.dekel_price) - 1) * 100 > Number(p.dekel_threshold)) dekelFlags++;
+      }
+      const defects = this.defects(p.id).filter((d) => d.status !== 'closed');
+      return { project: p, client, sub, progress: client.scope ? client.cumNet / client.scope : 0, plannedMargin, execMargin,
+        overrunItems, overrunCents, extraCents, dekelFlags, openDefects: defects.length, overdueDefects: defects.filter((d) => d.due && d.due < today()).length };
+    });
+  }
 
   audit(limit = 300) { return this.s.all('SELECT * FROM audit ORDER BY id DESC LIMIT ?', [limit]); }
 }
