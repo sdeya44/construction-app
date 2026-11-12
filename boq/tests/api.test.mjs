@@ -2,12 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Store } from '../js/store.js';
 import { Api } from '../js/api.js';
 import { parseSkn, buildSkn } from '../js/skn.js';
 
 const require = createRequire(import.meta.url);
-const SQL = await require('../vendor/sql-wasm.js')({ locateFile: (f) => new URL(`../vendor/${f}`, import.meta.url).pathname });
+const SQL = await require('../vendor/sql-wasm.js')({ locateFile: (f) => fileURLToPath(new URL(`../vendor/${f}`, import.meta.url)) });
 
 function setup(contract = {}) {
   let saved = null;

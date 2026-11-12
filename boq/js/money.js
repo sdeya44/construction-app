@@ -55,6 +55,6 @@ export const cmpQ = (a, b) => (fixed(a) > fixed(b) ? 1 : fixed(a) < fixed(b) ? -
 const nf2 = new Intl.NumberFormat('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const nfq = new Intl.NumberFormat('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 /** agorot → "1,234.56" */
-export const money = (c) => nf2.format(Number(c) / 100);
+export const money = (c) => nf2.format(Number(c) / 100 || 0);
 /** decimal string → "1,234.5" */
 export const qty = (v) => nfq.format(Number(v || 0));
