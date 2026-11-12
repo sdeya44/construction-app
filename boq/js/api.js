@@ -1,7 +1,7 @@
 // Business operations. Every mutation is one transaction; rules are enforced here, not in the UI.
 import { nowIso, today } from './store.js';
 import { calcBill, contractValue, isBillable, itemCode } from './engine.js';
-import { fixed, dec, cents, norm } from './money.js';
+import { fixed, dec, cents, norm, lineCents } from './money.js';
 import { quotePrice } from './dekel.js';
 
 const two = (v) => String(v ?? '').trim().padStart(2, '0').slice(-2);
@@ -252,6 +252,7 @@ export class Api {
     const b = this.bill(billId);
     if (b.status === 'approved') return b.snap;
     const contract = this.contract(b.contract_id);
+    b.purchasesCents = this.s.get('SELECT COALESCE(SUM(amount_cents),0) s FROM purchases WHERE bill_id=?', [b.id]).s;
     return calcBill({ contract, sections: this.sections(contract.id), items: this.items(contract.id), bill: b,
       lines: this.lines(b.id), prev: this.prevApproved(contract.id, b.number), indexValue: this.indexValue });
   }
@@ -375,6 +376,162 @@ export class Api {
       ON CONFLICT(series, month) DO UPDATE SET value=excluded.value, source=excluded.source`, [series, m, v, source]));
   }
   deleteIndex(series, m) { this.s.tx(() => this.s.run('DELETE FROM indices WHERE series=? AND month=?', [series, m])); }
+
+  // ---------------- stage 2: reopen, payment allocation, purchases, cut-off, profit, defects ----------------
+  /** Reopen the last approved bill (no later bills, no payments). Requires a reason; audited. */
+  reopenBill(id, reason) {
+    const b = this.bill(id);
+    if (b.status !== 'approved') throw new Error('רק חשבון מאושר ניתן לפתיחה מחדש');
+    const why = text(reason, 300);
+    if (why.length < 3) throw new Error('חובה לציין סיבה לפתיחה מחדש');
+    if (this.s.get('SELECT 1 x FROM bills WHERE contract_id=? AND number>?', [b.contract_id, b.number])) throw new Error('קיימים חשבונות מאוחרים יותר — ניתן לפתוח מחדש רק את החשבון האחרון');
+    if (b.paid > 0) throw new Error('לחשבון נרשמו תשלומים — יש למחוק אותם לפני פתיחה מחדש');
+    this.s.tx(() => {
+      this.s.run(`UPDATE bills SET status='submitted', snapshot=NULL, approved_at=NULL WHERE id=?`, [id]);
+      if (b.type === 'final') this.s.run(`UPDATE contracts SET status='active' WHERE id=?`, [b.contract_id]);
+      this.s.run('INSERT INTO audit (at, action, detail) VALUES (?,?,?)', [nowIso(), `פתיחה מחדש של חשבון ${b.number}`, why]);
+    });
+  }
+
+  /** Open balances of approved bills of a contract, oldest first. */
+  openBills(contractId) {
+    return this.bills(contractId).filter((b) => b.status === 'approved' && b.snap.due - b.paid > 0)
+      .map((b) => ({ id: b.id, number: b.number, month: b.month, due: b.snap.due, paid: b.paid, balance: b.snap.due - b.paid }));
+  }
+  /**
+   * One receipt split across bills. allocations: [{bill_id, amount}] — omitted = oldest first.
+   * The allocations must add up to the receipt exactly and stay within each bill's balance.
+   */
+  addReceipt(contractId, { amount, date, method, ref, note, allocations }) {
+    const total = cents(amount);
+    if (total <= 0) throw new Error('סכום חיובי בלבד');
+    const open = this.openBills(contractId);
+    let alloc;
+    if (allocations?.length) {
+      alloc = allocations.map((a) => ({ bill_id: Number(a.bill_id), cents: cents(a.amount) })).filter((a) => a.cents > 0);
+    } else {
+      let left = total; alloc = [];
+      for (const b of open) { if (!left) break; const c = Math.min(left, b.balance); alloc.push({ bill_id: b.id, cents: c }); left -= c; }
+      if (left) throw new Error(`הסכום גבוה מהיתרה הפתוחה בכל החשבונות (${(open.reduce((s, b) => s + b.balance, 0) / 100).toFixed(2)})`);
+    }
+    const sum = alloc.reduce((s, a) => s + a.cents, 0);
+    if (sum !== total) throw new Error(`סכום ההקצאות (${(sum / 100).toFixed(2)}) שונה מסכום התשלום (${(total / 100).toFixed(2)})`);
+    const bal = new Map(open.map((b) => [b.id, b.balance]));
+    for (const a of alloc) {
+      if (!bal.has(a.bill_id)) throw new Error('הקצאה לחשבון שאינו מאושר או שאינו פתוח');
+      if (a.cents > bal.get(a.bill_id)) throw new Error('ההקצאה חורגת מיתרת החשבון');
+    }
+    return this.s.tx(() => {
+      let group = null;
+      for (const a of alloc) {
+        const id = this.s.run('INSERT INTO payments (bill_id, amount_cents, date, method, ref, note, group_id) VALUES (?,?,?,?,?,?,?)',
+          [a.bill_id, a.cents, date || today(), text(method, 40), text(ref, 60), text(note, 300), group]).id;
+        if (group == null) { group = id; this.s.run('UPDATE payments SET group_id=? WHERE id=?', [id, id]); }
+      }
+      return { group, allocations: alloc };
+    }, `קבלת תשלום ${(total / 100).toFixed(2)} ₪`);
+  }
+
+  // purchases (קיזוז רכש)
+  purchases(contractId) { return this.s.all('SELECT * FROM purchases WHERE contract_id=? ORDER BY date, id', [contractId]); }
+  savePurchase(p) {
+    const type = ['order', 'delivery', 'invoice'].includes(p.type) ? p.type : 'invoice';
+    const f = { type, doc_no: text(p.doc_no, 60), date: p.date || today(), supplier: text(p.supplier, 120), description: text(p.description, 300),
+      amount_cents: cents(p.amount ?? (p.amount_cents != null ? p.amount_cents / 100 : '0')), parent_id: p.parent_id ? Number(p.parent_id) : null };
+    if (f.amount_cents < 0) throw new Error('סכום שלילי');
+    return this.s.tx(() => {
+      if (p.id) {
+        const old = this.s.get('SELECT * FROM purchases WHERE id=?', [p.id]);
+        if (old.bill_id && this.bill(old.bill_id).status === 'approved') throw new Error('המסמך קוזז בחשבון מאושר ואינו ניתן לעריכה');
+        this.s.run('UPDATE purchases SET type=?, doc_no=?, date=?, supplier=?, description=?, amount_cents=?, parent_id=? WHERE id=?', [...Object.values(f), p.id]);
+        return p.id;
+      }
+      return this.s.run('INSERT INTO purchases (contract_id, type, doc_no, date, supplier, description, amount_cents, parent_id) VALUES (?,?,?,?,?,?,?,?)', [p.contract_id, ...Object.values(f)]).id;
+    }, 'רישום מסמך רכש');
+  }
+  deletePurchase(id) {
+    const p = this.s.get('SELECT * FROM purchases WHERE id=?', [id]);
+    if (p?.bill_id && this.bill(p.bill_id).status === 'approved') throw new Error('המסמך קוזז בחשבון מאושר');
+    this.s.tx(() => this.s.run('DELETE FROM purchases WHERE id=?', [id]), 'מחיקת מסמך רכש');
+  }
+  /** Offset a purchase document in a draft bill (billId = null removes it). Blocks double counting along a chain. */
+  assignPurchase(id, billId) {
+    const p = this.s.get('SELECT * FROM purchases WHERE id=?', [id]);
+    if (!p) throw new Error('המסמך לא נמצא');
+    if (p.bill_id && this.bill(p.bill_id).status === 'approved') throw new Error('המסמך כבר קוזז בחשבון מאושר');
+    if (billId) {
+      const b = this.bill(billId);
+      if (b.contract_id !== p.contract_id) throw new Error('המסמך שייך לחוזה אחר');
+      this.assertEditable(b);
+      // walk the chain both ways: none of the linked documents may be offset already
+      const chain = new Set([id]);
+      for (let cur = p; cur?.parent_id; cur = this.s.get('SELECT * FROM purchases WHERE id=?', [cur.parent_id])) chain.add(cur.parent_id);
+      let grew = true;
+      while (grew) { grew = false; for (const r of this.purchases(p.contract_id)) if (r.parent_id && chain.has(r.parent_id) && !chain.has(r.id)) { chain.add(r.id); grew = true; } }
+      const dup = this.purchases(p.contract_id).find((r) => chain.has(r.id) && r.id !== id && r.bill_id);
+      if (dup) throw new Error(`מסמך מקושר (${dup.doc_no || dup.id}) כבר קוזז — קיזוז נוסף יספור את אותו רכש פעמיים`);
+    }
+    this.s.tx(() => this.s.run('UPDATE purchases SET bill_id=? WHERE id=?', [billId || null, id]), billId ? 'קיזוז מסמך רכש בחשבון' : 'ביטול קיזוז מסמך רכש');
+  }
+
+  /** Status of every contract as of a cut-off date (approvals and payments up to that day). */
+  statusAsOf(date, projectId = null) {
+    const day = date || today();
+    const cs = this.s.all(`SELECT c.*, p.name AS project FROM contracts c JOIN projects p ON p.id=c.project_id WHERE c.kind!='quote' ${projectId ? 'AND c.project_id=?' : ''} ORDER BY p.name, c.kind, c.name`, projectId ? [projectId] : []);
+    return cs.map((c) => {
+      const last = this.s.get(`SELECT * FROM bills WHERE contract_id=? AND status='approved' AND substr(approved_at,1,10)<=? ORDER BY number DESC LIMIT 1`, [c.id, day]);
+      const snap = last ? JSON.parse(last.snapshot) : null;
+      const billed = this.s.all(`SELECT snapshot FROM bills WHERE contract_id=? AND status='approved' AND substr(approved_at,1,10)<=?`, [c.id, day])
+        .reduce((s, r) => s + JSON.parse(r.snapshot).due, 0);
+      const paid = this.s.get(`SELECT COALESCE(SUM(p.amount_cents),0) s FROM payments p JOIN bills b ON b.id=p.bill_id WHERE b.contract_id=? AND p.date<=?`, [c.id, day]).s;
+      const scope = c.planned_cents || this.contractValue(c.id).net;
+      return { contract: c, project: c.project, lastBill: last?.number ?? null, lastMonth: last?.month ?? null, cumNet: snap?.cumNet ?? 0,
+        scope, progress: scope ? (snap?.cumNet ?? 0) / scope : 0, billed, paid, balance: billed - paid, retention: snap?.cumRetention ?? 0 };
+    });
+  }
+
+  /** Margin between the client contract and its subcontracts, per item (planned and executed). */
+  profit(clientId) {
+    const client = this.contract(clientId);
+    if (client.kind !== 'client') throw new Error('דוח רווח מחושב לחוזה מזמין');
+    const subs = this.s.all(`SELECT * FROM contracts WHERE parent_id=? AND kind='sub'`, [clientId]);
+    const lastSnap = (cid) => { const b = this.s.get(`SELECT snapshot FROM bills WHERE contract_id=? AND status='approved' ORDER BY number DESC LIMIT 1`, [cid]); return b ? JSON.parse(b.snapshot) : null; };
+    const cSnap = lastSnap(clientId);
+    const cRows = new Map((cSnap?.rows ?? []).map((r) => [r.itemId, r]));
+    const lines = [];
+    for (const s of subs) {
+      const sSnap = lastSnap(s.id);
+      const sRows = new Map((sSnap?.rows ?? []).map((r) => [r.itemId, r]));
+      for (const si of this.items(s.id)) {
+        if (si.kind === 'note' || !si.source_item_id) continue;
+        const ci = this.s.get('SELECT * FROM items WHERE id=?', [si.source_item_id]);
+        if (!ci) continue;
+        const plannedClient = lineCents(ci.qty, ci.price), plannedSub = lineCents(ci.qty, si.price);
+        const execClient = cRows.get(ci.id)?.cumGross ?? 0, execSub = sRows.get(si.id)?.cumGross ?? 0;
+        lines.push({ sub: s.name, subId: s.id, item: ci, subPrice: si.price, plannedClient, plannedSub, plannedMargin: plannedClient - plannedSub,
+          execClient, execSub, execMargin: execClient - execSub, unitMargin: dec(fixed(ci.price) - fixed(si.price)) });
+      }
+    }
+    const sum = (k) => lines.reduce((a, l) => a + l[k], 0);
+    return { client, subs, lines, totals: { plannedClient: sum('plannedClient'), plannedSub: sum('plannedSub'), plannedMargin: sum('plannedMargin'),
+      execClient: sum('execClient'), execSub: sum('execSub'), execMargin: sum('execMargin') } };
+  }
+
+  // defects (ליקויים)
+  defects(projectId) { return this.s.all('SELECT * FROM defects WHERE project_id=? ORDER BY status, opened DESC, id DESC', [projectId]); }
+  saveDefect(d) {
+    const desc = must(text(d.description, 1000), 'תיאור הליקוי חובה');
+    const f = { contract_id: d.contract_id ? Number(d.contract_id) : null, item_id: d.item_id ? Number(d.item_id) : null, location: text(d.location, 200), description: desc,
+      severity: ['low', 'normal', 'high', 'critical'].includes(d.severity) ? d.severity : 'normal', responsible: text(d.responsible, 120),
+      status: ['open', 'in_progress', 'fixed', 'closed'].includes(d.status) ? d.status : 'open', due: d.due || '', notes: text(d.notes, 2000) };
+    f.closed = f.status === 'closed' ? (d.closed || today()) : '';
+    return this.s.tx(() => {
+      if (d.id) { const cols = Object.keys(f); this.s.run(`UPDATE defects SET ${cols.map((k) => `${k}=?`).join(',')} WHERE id=?`, [...Object.values(f), d.id]); return d.id; }
+      const cols = ['project_id', 'opened', ...Object.keys(f)];
+      return this.s.run(`INSERT INTO defects (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, [d.project_id, d.opened || today(), ...Object.values(f)]).id;
+    }, d.id ? 'עדכון ליקוי' : 'ליקוי חדש');
+  }
+  deleteDefect(id) { this.s.tx(() => this.s.run('DELETE FROM defects WHERE id=?', [id]), 'מחיקת ליקוי'); }
 
   audit(limit = 300) { return this.s.all('SELECT * FROM audit ORDER BY id DESC LIMIT ?', [limit]); }
 }

@@ -165,7 +165,8 @@ export function calcBill({ contract, sections, items, bill, lines, prev, indexVa
   const advance = adj.advance != null && adj.advance !== ''
     ? cents(adj.advance)
     : Math.min(advanceLeft, pct(Math.max(0, periodNet), contract.advance_rate ?? '0'));
-  const materials = cents(adj.materials || '0');
+  // manual materials offset + purchases assigned to this bill (frozen with the snapshot)
+  const materials = cents(adj.materials || '0') + (bill.purchasesCents ?? 0);
   const other = cents(adj.other || '0');
   const beforeVat = periodNet + ix.amount - retention + release - advance - materials - other;
   const vatRate = adj.vat ?? contract.vat_rate ?? '18';
@@ -174,7 +175,7 @@ export function calcBill({ contract, sections, items, bill, lines, prev, indexVa
 
   return {
     version: 1, mode: contract.mode, basis: bill.basis, rows, totals: T, warnings,
-    prevNet, periodNet, cumNet, indexation: ix, retentionRate, retention, release, advance, materials,
+    prevNet, periodNet, cumNet, indexation: ix, retentionRate, retention, release, advance, materials, purchases: bill.purchasesCents ?? 0,
     otherLabel: adj.other_label || 'הפחתות אחרות', other, beforeVat, vatRate, vat, due,
     cumIndex: (prev?.cumIndex ?? 0) + ix.amount,
     cumRetention: (prev?.cumRetention ?? 0) + retention - release,

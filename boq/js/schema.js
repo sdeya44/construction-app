@@ -1,5 +1,5 @@
 // Database schema. Decimal values are TEXT (exact), money is INTEGER agorot.
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -79,7 +79,29 @@ CREATE TABLE IF NOT EXISTS bill_lines (
 CREATE TABLE IF NOT EXISTS payments (
   id INTEGER PRIMARY KEY, bill_id INTEGER NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
   amount_cents INTEGER NOT NULL CHECK (amount_cents > 0), date TEXT NOT NULL,
-  method TEXT DEFAULT '', ref TEXT DEFAULT '', note TEXT DEFAULT ''
+  method TEXT DEFAULT '', ref TEXT DEFAULT '', note TEXT DEFAULT '', group_id INTEGER DEFAULT NULL
+);
+
+-- Purchases / deliveries / invoices supplied by us and offset from a bill (קיזוז רכש).
+-- parent_id links a delivery to its order or an invoice to its delivery; only one document
+-- in such a chain may be offset, which prevents counting the same material twice.
+CREATE TABLE IF NOT EXISTS purchases (
+  id INTEGER PRIMARY KEY, contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('order','delivery','invoice')),
+  doc_no TEXT DEFAULT '', date TEXT NOT NULL, supplier TEXT DEFAULT '', description TEXT DEFAULT '',
+  amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0),
+  parent_id INTEGER DEFAULT NULL REFERENCES purchases(id) ON DELETE SET NULL,
+  bill_id INTEGER DEFAULT NULL REFERENCES bills(id) ON DELETE SET NULL
+);
+
+-- Defects (ליקויים), linked to a project and optionally to a contract item.
+CREATE TABLE IF NOT EXISTS defects (
+  id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  contract_id INTEGER DEFAULT NULL REFERENCES contracts(id) ON DELETE SET NULL,
+  item_id INTEGER DEFAULT NULL REFERENCES items(id) ON DELETE SET NULL,
+  location TEXT DEFAULT '', description TEXT NOT NULL, severity TEXT NOT NULL DEFAULT 'normal' CHECK (severity IN ('low','normal','high','critical')),
+  responsible TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','fixed','closed')),
+  opened TEXT NOT NULL, due TEXT DEFAULT '', closed TEXT DEFAULT '', notes TEXT DEFAULT ''
 );
 
 -- Index series values: residential = תשומות בנייה למגורים, roads = סלילה וגישור, general = מחירים לצרכן

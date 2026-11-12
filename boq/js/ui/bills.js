@@ -3,6 +3,8 @@ import { h, formModal, modal, attempt, confirmBox, toast, monthLabel, dateLabel 
 import { money, qty, addQ } from '../money.js';
 import { STATUS, KIND } from './projects.js';
 import { INDEX_SERIES } from '../schema.js';
+import { loadExcel, exportBill } from '../excel.js';
+import { download } from '../persist.js';
 
 const BASIS = { calc: 'מחושבת', sub: 'מוגשת', appr: 'מאושרת' };
 const billTag = (b) => {
@@ -33,6 +35,9 @@ export function billsView(ctx, cid) {
     h('div', { class: 'page-head' },
       h('div', {}, h('h1', {}, `חשבונות — ${c.name}`), h('div', { class: 'sub' }, [KIND[c.kind], c.party, c.mode === 'periodic' ? 'תקופתי' : 'מצטבר'].filter(Boolean).join(' · '))),
       h('div', { class: 'actions' }, h('button', { onclick: () => ctx.go(`c/${cid}`) }, 'כתב כמויות'),
+        c.kind === 'client' ? h('button', { onclick: () => ctx.go(`c/${cid}/profit`) }, 'רווח מול קבלני משנה') : null,
+        h('button', { onclick: () => receiptForm(ctx, c) }, 'קבלת תשלום'),
+        h('button', { onclick: () => purchasesView(ctx, c) }, 'מסמכי רכש'),
         h('button', { class: 'primary', disabled: c.status === 'closed', onclick: () => attempt(newBill) }, '+ חשבון חדש'))),
     h('div', { class: 'kpis' },
       h('div', { class: 'kpi' }, h('div', { class: 'l' }, c.planned_cents ? 'סכום חוזה חתום' : 'היקף חוזה (אחרי הנחות)'), h('div', { class: 'v' }, money(scope))),
@@ -76,6 +81,10 @@ export function billView(ctx, bid, tab) {
     b.status !== 'approved' ? h('button', { class: 'danger ghost', onclick: async () => {
       if (await confirmBox('מחיקת חשבון', `למחוק את חשבון ${b.number}?`, { danger: true, ok: 'מחיקה' })) attempt(() => { api.deleteBill(bid); ctx.go(`c/${c.id}/bills`); });
     } }, 'מחיקה') : null,
+    b.status === 'approved' ? h('button', { class: 'ghost', onclick: () => formModal(`פתיחה מחדש של חשבון ${b.number}`, [
+      { name: 'reason', label: 'סיבה (נרשמת ביומן הפעולות)', type: 'textarea', span: true, required: true },
+    ], (v) => { api.reopenBill(bid, v.reason); ctx.refresh(); }, { submit: 'פתיחה מחדש', intro: h('p', { class: 'muted' }, 'אפשרי רק לחשבון המאושר האחרון וללא תשלומים רשומים. החשבון יחזור למצב "הוגש" ויחושב מחדש.') }) }, 'פתיחה מחדש') : null,
+    h('button', { onclick: async () => { try { download(`${c.name} - חשבון ${b.doc.displayNumber || b.number}.xlsx`.replace(/[\\/:*?"<>|]/g, '_'), await exportBill(await loadExcel(), { contract: c, bill: b, calc: r, sections: api.sections(c.id) }), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); } catch (e) { toast(e.message, 'err'); } } }, 'ייצוא Excel'),
     h('button', { onclick: () => ctx.go(`b/${bid}/print`) }, 'הפקת חשבון / PDF'));
 
   const tabs = h('nav', { class: 'tabs no-print' }, [['exec', 'כמויות ביצוע'], ['summary', 'סיכום והתאמות'], ['pay', 'תשלומים']].map(([k, l]) =>
@@ -272,6 +281,7 @@ function summaryTab(ctx, b, c, r, editable) {
     h('div', { class: 'stack' },
       h('div', { class: 'card' }, h('header', {}, h('h2', {}, 'ריכוז לפי פרקים')), h('div', { class: 'table-wrap' }, groups),
         h('div', { class: 'card-body muted', style: { fontSize: '12.5px' } }, 'הנחות פרקים ופטור מההנחה הכללית נקבעים בכתב הכמויות (לחיצה כפולה על פרק בעץ). הנחה כללית — בהגדרות החוזה.')),
+      purchasesCard(ctx, b, c, editable),
       h('div', { class: 'card' }, h('header', {}, h('h2', {}, 'מצטברים')), h('div', { class: 'card-body' }, h('table', { class: 'ledger' }, h('tbody', {},
         line('התייקרות מצטברת', r.cumIndex), line('עיכבון מצטבר (נטו לאחר שחרורים)', r.cumRetention), line('מקדמה שקוזזה מצטבר', r.cumAdvance), line('סה"כ לתשלום מצטבר', r.cumDue, 'strong')))))))));
 }
@@ -296,4 +306,76 @@ function paymentsTab(ctx, b, r) {
         h('tbody', {}, pays.map((p) => h('tr', {}, h('td', {}, dateLabel(p.date)), h('td', { class: 'n' }, money(p.amount_cents)), h('td', {}, p.method), h('td', {}, p.ref), h('td', {}, p.note),
           h('td', {}, h('button', { class: 'ghost sm danger', onclick: async () => { if (await confirmBox('מחיקת תשלום', 'למחוק?', { danger: true })) attempt(() => { api.deletePayment(p.id); ctx.refresh(); }); } }, 'מחיקה'))))))
         : h('div', { class: 'empty' }, 'לא נרשמו תשלומים'))));
+}
+
+// ---------------------------------------------------------------------------------------------
+const PTYPE = { order: 'הזמנה', delivery: 'תעודת משלוח', invoice: 'חשבונית' };
+
+function purchaseForm(ctx, c, p = {}) {
+  const others = ctx.api.purchases(c.id).filter((x) => x.id !== p.id);
+  formModal(p.id ? 'עריכת מסמך רכש' : 'מסמך רכש חדש', [
+    { name: 'type', label: 'סוג', type: 'select', value: p.type ?? 'invoice', options: Object.entries(PTYPE) },
+    { name: 'doc_no', label: 'מספר מסמך', value: p.doc_no },
+    { name: 'date', label: 'תאריך', type: 'date', value: p.date ?? new Date().toISOString().slice(0, 10) },
+    { name: 'supplier', label: 'ספק', value: p.supplier },
+    { name: 'amount', label: 'סכום לקיזוז (₪, לפני מע"מ)', value: p.amount_cents != null ? String(p.amount_cents / 100) : '', numeric: true, required: true },
+    { name: 'parent_id', label: 'מקושר למסמך (הזמנה/משלוח)', type: 'select', value: p.parent_id ?? '', options: [['', '—'], ...others.map((o) => [o.id, `${PTYPE[o.type]} ${o.doc_no} · ${money(o.amount_cents)}`])], hint: 'מונע קיזוז כפול של אותו רכש' },
+    { name: 'description', label: 'תיאור', span: true, value: p.description },
+  ], (v) => { ctx.api.savePurchase({ ...p, ...v, contract_id: c.id }); ctx.refresh(); });
+}
+
+function purchasesCard(ctx, b, c, editable) {
+  const api = ctx.api;
+  const list = api.purchases(c.id).filter((p) => !p.bill_id || p.bill_id === b.id);
+  const rows = list.map((p) => h('tr', {},
+    h('td', {}, h('input', { type: 'checkbox', checked: p.bill_id === b.id, disabled: !editable, onchange: (e) => { if (attempt(() => api.assignPurchase(p.id, e.target.checked ? b.id : null)) === undefined) e.target.checked = !e.target.checked; else ctx.refresh(); } })),
+    h('td', {}, PTYPE[p.type]), h('td', {}, p.doc_no), h('td', {}, dateLabel(p.date)), h('td', {}, p.supplier), h('td', { class: 'n' }, money(p.amount_cents))));
+  return h('div', { class: 'card' }, h('header', {}, h('h2', {}, 'קיזוז רכש'), h('div', { class: 'actions' }, h('button', { class: 'sm', onclick: () => purchaseForm(ctx, c) }, '+ מסמך'))),
+    list.length ? h('div', { class: 'table-wrap' }, h('table', { class: 't' }, h('thead', {}, h('tr', {}, ['קיזוז', 'סוג', 'מס׳', 'תאריך', 'ספק', 'סכום'].map((x, i) => h('th', { class: i === 5 ? 'n' : '' }, x)))), h('tbody', {}, rows)))
+      : h('div', { class: 'empty' }, 'אין מסמכי רכש פתוחים לקיזוז'),
+    h('div', { class: 'card-body muted', style: { fontSize: '12.5px' } }, 'סמן מסמך כדי לקזז אותו בחשבון זה. מסמך שקוזז בחשבון מאושר ננעל. לא ניתן לקזז שני מסמכים מאותה שרשרת (הזמנה→משלוח→חשבונית).'));
+}
+
+function purchasesView(ctx, c) {
+  const api = ctx.api;
+  const list = api.purchases(c.id);
+  const bills = new Map(api.bills(c.id).map((b) => [b.id, b]));
+  const m = modal(`מסמכי רכש — ${c.name}`, [
+    h('div', { style: { marginBottom: '10px' } }, h('button', { class: 'primary', onclick: () => { m.close(); purchaseForm(ctx, c); } }, '+ מסמך רכש')),
+    list.length ? h('table', { class: 't lines' }, h('thead', {}, h('tr', {}, ['סוג', 'מס׳', 'תאריך', 'ספק', 'תיאור', 'סכום', 'קוזז בחשבון', ''].map((x) => h('th', {}, x)))),
+      h('tbody', {}, list.map((p) => h('tr', {}, h('td', {}, PTYPE[p.type]), h('td', {}, p.doc_no), h('td', {}, dateLabel(p.date)), h('td', {}, p.supplier), h('td', {}, p.description),
+        h('td', { class: 'n' }, money(p.amount_cents)), h('td', {}, p.bill_id ? `${bills.get(p.bill_id)?.number ?? ''} (${STATUS[bills.get(p.bill_id)?.status] ?? ''})` : '—'),
+        h('td', {}, h('button', { class: 'ghost sm', onclick: () => { m.close(); purchaseForm(ctx, c, p); } }, 'עריכה'),
+          h('button', { class: 'ghost sm danger', onclick: async () => { if (await confirmBox('מחיקה', 'למחוק את המסמך?', { danger: true })) { attempt(() => api.deletePurchase(p.id)); m.close(); ctx.refresh(); } } }, 'מחיקה'))))))
+      : h('div', { class: 'empty' }, 'אין מסמכי רכש'),
+  ], { wide: true });
+}
+
+function receiptForm(ctx, c) {
+  const api = ctx.api;
+  const open = api.openBills(c.id);
+  if (!open.length) return toast('אין חשבונות מאושרים עם יתרה פתוחה', 'err');
+  const inputs = new Map();
+  const total = h('input', { class: 'n', dir: 'ltr', inputmode: 'decimal', placeholder: '0.00' });
+  const sumLabel = h('b');
+  const recompute = () => { const s = [...inputs.values()].reduce((a, i) => a + (Number(i.value) || 0), 0); sumLabel.textContent = s.toLocaleString('he-IL', { minimumFractionDigits: 2 }); };
+  const autoFill = () => { let left = Number(total.value) || 0; for (const b of open) { const v = Math.min(left, b.balance / 100); inputs.get(b.id).value = v ? v.toFixed(2) : ''; left = Math.round((left - v) * 100) / 100; } recompute(); };
+  total.addEventListener('input', autoFill);
+  const date = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10) });
+  const method = h('select', {}, ['העברה', 'צ׳ק', 'מזומן', 'קיזוז', 'אחר'].map((x) => h('option', {}, x)));
+  const ref = h('input', { placeholder: 'אסמכתא' });
+  modal(`קבלת תשלום — ${c.name}`, [
+    h('div', { class: 'form-grid' }, h('label', { class: 'field' }, h('span', {}, 'סכום התשלום (₪)'), total), h('label', { class: 'field' }, h('span', {}, 'תאריך'), date),
+      h('label', { class: 'field' }, h('span', {}, 'אמצעי'), method), h('label', { class: 'field' }, h('span', {}, 'אסמכתא'), ref)),
+    h('h3', { style: { margin: '14px 0 6px' } }, 'הקצאה לחשבונות (מהישן לחדש; ניתן לשנות)'),
+    h('table', { class: 't lines' }, h('thead', {}, h('tr', {}, ['חשבון', 'חודש', 'לתשלום', 'שולם', 'יתרה', 'הקצאה'].map((x, i) => h('th', { class: i >= 2 ? 'n' : '' }, x)))),
+      h('tbody', {}, open.map((b) => { const i = h('input', { class: 'n', dir: 'ltr', inputmode: 'decimal', oninput: recompute }); inputs.set(b.id, i);
+        return h('tr', {}, h('td', {}, b.number), h('td', {}, monthLabel(b.month)), h('td', { class: 'n' }, money(b.due)), h('td', { class: 'n' }, money(b.paid)), h('td', { class: 'n' }, money(b.balance)), h('td', { class: 'edit' }, i)); }))),
+    h('p', {}, 'סה"כ הוקצה: ', sumLabel),
+  ], { wide: true, actions: [{ label: 'ביטול' }, { label: 'רישום', primary: true, onClick: () => {
+    const allocations = [...inputs].filter(([, i]) => Number(i.value) > 0).map(([bill_id, i]) => ({ bill_id, amount: i.value }));
+    const ok = attempt(() => api.addReceipt(c.id, { amount: total.value, date: date.value, method: method.value, ref: ref.value, allocations }), 'התשלום נרשם');
+    if (ok === undefined) return false;
+    ctx.refresh();
+  } }] });
 }
