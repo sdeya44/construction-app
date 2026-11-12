@@ -214,3 +214,12 @@ table.t td.desc textarea { min-width: 260px; field-sizing: content; max-height: 
 table.t td.edit.desc { min-width: 240px; width: 30%; }
 table.t td.edit input.n { min-width: 92px; }
 table.t td.edit.desc textarea { width: 100%; min-width: 0; line-height: 1.4; }
+/* bill screen mirrors the printed Binarit layout */
+table.bn-screen td { vertical-align: bottom; }
+table.bn-screen td.code, table.bn-screen td.desc { vertical-align: top; }
+table.bn-screen tr.bn-shead td { font-weight: 700; text-decoration: underline; color: var(--ink); background: #fff; padding-top: 12px; }
+table.bn-screen tr.bn-ssum td, table.bn-screen tr.bn-csum td { font-weight: 700; background: var(--surface-2); border-top: 1px solid var(--line-2); }
+table.bn-screen tr.bn-ssum td:first-child, table.bn-screen tr.bn-csum td:first-child { text-align: right; }
+table.bn-screen tr.bn-csum td { background: #efece4; }
+table.bn-screen td.minus { color: var(--bad); }
+table.bn-screen td.n { text-align: right; }

@@ -8,7 +8,8 @@ import { boqView } from './boq.js';
 import { billsView, billView } from './bills.js';
 import { indicesView } from './indices.js';
 import { settingsView } from './settings.js';
-import { billPrintView, boqPrintView } from './print.js';
+import { boqPrintView } from './print.js';
+import { billPrintRoute } from './print-bill.js';
 import { dekelReportView } from './dekel-ui.js';
 
 const ctx = {
@@ -32,7 +33,7 @@ const ROUTES = [
   [/^c\/(\d+)\/bills$/, (m) => billsView(ctx, +m[1])],
   [/^c\/(\d+)\/dekel$/, (m) => dekelReportView(ctx, +m[1])],
   [/^c\/(\d+)\/print$/, (m) => boqPrintView(ctx, +m[1])],
-  [/^b\/(\d+)(?:\/(\w+))?$/, (m) => (m[2] === 'print' ? billPrintView(ctx, +m[1]) : billView(ctx, +m[1], m[2] || 'exec'))],
+  [/^b\/(\d+)(?:\/(\w+))?$/, (m) => (m[2] === 'print' ? billPrintRoute(ctx, +m[1]) : billView(ctx, +m[1], m[2] || 'exec'))],
   [/^indices$/, () => indicesView(ctx)],
   [/^settings$/, () => settingsView(ctx)],
 ];

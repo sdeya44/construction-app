@@ -95,3 +95,21 @@ test('final bill closes the contract; approval is sequential; missing index bloc
   assert.equal(api.contract(c).status, 'closed');
   assert.throws(() => api.createBill(c, { month: '2026-02' }), /סופי/);
 });
+
+test('v1 database (UNIQUE on items, no planned_cents) is migrated in place', () => {
+  const db = new SQL.Database();
+  db.exec(`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+    CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT NOT NULL, client TEXT DEFAULT '', location TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'active', dekel_threshold TEXT NOT NULL DEFAULT '15', notes TEXT DEFAULT '', created_at TEXT NOT NULL);
+    CREATE TABLE contracts (id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL, kind TEXT NOT NULL, parent_id INTEGER, name TEXT NOT NULL, number TEXT DEFAULT '', party TEXT DEFAULT '', mode TEXT NOT NULL DEFAULT 'cumulative', vat_rate TEXT NOT NULL DEFAULT '18', retention_rate TEXT NOT NULL DEFAULT '0', advance_cents INTEGER NOT NULL DEFAULT 0, advance_rate TEXT NOT NULL DEFAULT '0', general_discount TEXT NOT NULL DEFAULT '0', opening_cents INTEGER NOT NULL DEFAULT 0, index_rule TEXT NOT NULL DEFAULT 'none', index_series TEXT NOT NULL DEFAULT 'residential', index_base_month TEXT DEFAULT '', index_lag INTEGER NOT NULL DEFAULT 0, index_threshold TEXT NOT NULL DEFAULT '0', index_share TEXT NOT NULL DEFAULT '100', quote_markup TEXT NOT NULL DEFAULT '0', status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL);
+    CREATE TABLE items (id INTEGER PRIMARY KEY, contract_id INTEGER NOT NULL, struct TEXT NOT NULL, chapter TEXT NOT NULL, sub TEXT NOT NULL, num INTEGER NOT NULL, description TEXT NOT NULL DEFAULT '', unit TEXT NOT NULL DEFAULT '', qty TEXT NOT NULL DEFAULT '0', price TEXT NOT NULL DEFAULT '0', kind TEXT NOT NULL DEFAULT 'contract', change_status TEXT NOT NULL DEFAULT 'approved', dekel_code TEXT, dekel_price TEXT, price_manual INTEGER NOT NULL DEFAULT 1, source_item_id INTEGER, notes TEXT DEFAULT '', UNIQUE (contract_id, struct, chapter, sub, num));
+    INSERT INTO projects (id, name, created_at) VALUES (1, 'p', 'x');
+    INSERT INTO contracts (id, project_id, kind, name, created_at) VALUES (1, 1, 'client', 'c', 'x');
+    INSERT INTO items (contract_id, struct, chapter, sub, num, kind, description) VALUES (1, '01', '00', '01', 10, 'note', 'a');`);
+  const api = new Api(new Store(SQL, db.export()));
+  assert.equal(api.contract(1).planned_cents, 0);
+  api.importItems(1, { items: [{ struct: '01', chapter: '00', sub: '01', num: 10, kind: 'note', description: 'b', unit: '', qty: '0', price: '0' }] });
+  assert.equal(api.items(1).length, 2);
+  assert.throws(() => api.importItems(1, { items: [
+    { struct: '01', chapter: '01', sub: '01', num: 10, unit: "יח'", qty: '1', price: '1', description: 'x' },
+    { struct: '01', chapter: '01', sub: '01', num: 10, unit: "יח'", qty: '1', price: '1', description: 'y' }] }));
+});

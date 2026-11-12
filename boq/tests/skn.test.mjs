@@ -32,8 +32,8 @@ test('export rejects what Binarit cannot read', () => {
   assert.throws(() => buildSkn('t', [], [{ ...base, qty: '1000000' }]));
   assert.throws(() => buildSkn('t', [], [{ ...base, unit: 'חודש' }]));
   assert.throws(() => buildSkn('t', [], [{ ...base, qty: '-1' }]));
-  const w = buildSkn('t', [], [{ ...base, unit: 'מטר', qty: '1.255' }]).warnings.join('\n');
-  assert.match(w, /מ"א/);
+  const w = buildSkn('t', [], [{ ...base, unit: 'מ"א', qty: '1.255' }]).warnings.join('\n');
+  assert.match(w, /מטר/);
   assert.match(w, /עוגלה/);
 });
 
@@ -42,4 +42,27 @@ test('unit mapping and encodings', () => {
   assert.equal(unitCode('מ״ר'), '03');
   assert.equal(unitCode('קומפ'), '09');
   assert.equal(decodeSkn(new Uint8Array([0x80, 0x81])), 'אב'); // cp862 fallback
+});
+
+test('long text uses Binarit continuation lines; notes may repeat numbers', () => {
+  const long = 'א'.repeat(149) + ' ' + 'ב'.repeat(150) + 'ג'.repeat(150) + 'ד'.repeat(150) + 'ה'.repeat(20);
+  const items = [
+    { struct: '01', chapter: '00', sub: '01', num: 10, kind: 'note', description: long, unit: '', qty: '0', price: '0' },
+    { struct: '01', chapter: '00', sub: '01', num: 10, kind: 'note', description: 'הערה שנייה', unit: '', qty: '0', price: '0' },
+  ];
+  const out = buildSkn('t', [{ code: '01', name: 'מבנה' }, { code: '01.00', name: 'מוקדמות' }, { code: '01.00.01', name: 'מוקדמות' }], items);
+  const L = out.text.split('\r\n');
+  // structure title, chapter-00 title (same code, unit 00), subchapter title
+  assert.equal(L[2].slice(0, 12), '0100000000  ');
+  assert.equal(L[4].slice(0, 12), '010000000000');
+  assert.equal(L[8].slice(0, 12), '010001001000');
+  assert.equal(L[9].slice(0, 33), ' '.repeat(33));
+  assert.equal(L[10].slice(0, 33), '0100010010 0' + ' '.repeat(21));
+  assert.equal(L[12].slice(0, 33), ' 1 0 1  10 0' + ' '.repeat(21));
+  assert.equal(L[13], '');
+  const back = parseSkn(out.bytes);
+  assert.equal(back.items.length, 2);
+  assert.equal(back.items[0].description, long);
+  assert.equal(back.sections.find((s) => s.code === '01').name, 'מבנה');
+  assert.equal(back.sections.find((s) => s.code === '01.00').name, 'מוקדמות');
 });

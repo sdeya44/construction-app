@@ -48,12 +48,12 @@ export function discountTotals(rows, sectionOf, generalRate, key = 'amount') {
     if (!g) {
       const s = sectionOf(k);
       g = { key: k, struct: r.struct, chapter: r.chapter, name: s?.name ?? '', rate: s?.discount ?? '0',
-            exempt: s ? !!s.exempt : r.chapter === '99', gross: 0, cat: { contract: 0, over: 0, extra: 0 }, subs: new Map() };
+            exempt: s ? !!s.exempt : r.chapter === '99', gross: 0, cat: { contract: 0, over: 0, extra: 0 }, subs: {} };
       groups.set(k, g);
     }
     g.gross += r[key];
     g.cat.contract += r.cat.contract; g.cat.over += r.cat.over; g.cat.extra += r.cat.extra;
-    g.subs.set(r.sub, (g.subs.get(r.sub) ?? 0) + r[key]);
+    g.subs[r.sub] = (g.subs[r.sub] ?? 0) + r[key]; // plain object: survives the JSON snapshot
   }
   const list = [...groups.values()].sort((a, b) => a.key.localeCompare(b.key));
   for (const g of list) { g.discount = pct(g.gross, g.rate); g.net = g.gross - g.discount; }

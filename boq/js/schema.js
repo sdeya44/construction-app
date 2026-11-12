@@ -1,5 +1,5 @@
 // Database schema. Decimal values are TEXT (exact), money is INTEGER agorot.
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS contracts (
   index_rule TEXT NOT NULL DEFAULT 'none' CHECK (index_rule IN ('none','manual','full','threshold','partial')),
   index_series TEXT NOT NULL DEFAULT 'residential', index_base_month TEXT DEFAULT '',
   index_lag INTEGER NOT NULL DEFAULT 0, index_threshold TEXT NOT NULL DEFAULT '0', index_share TEXT NOT NULL DEFAULT '100',
-  quote_markup TEXT NOT NULL DEFAULT '0',
+  quote_markup TEXT NOT NULL DEFAULT '0', planned_cents INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','closed')),
   created_at TEXT NOT NULL
 );
@@ -50,9 +50,10 @@ CREATE TABLE IF NOT EXISTS items (
   kind TEXT NOT NULL DEFAULT 'contract' CHECK (kind IN ('contract','extra','note')),
   change_status TEXT NOT NULL DEFAULT 'approved' CHECK (change_status IN ('approved','pending','rejected')),
   dekel_code TEXT DEFAULT NULL, dekel_price TEXT DEFAULT NULL, price_manual INTEGER NOT NULL DEFAULT 1,
-  source_item_id INTEGER DEFAULT NULL, notes TEXT DEFAULT '',
-  UNIQUE (contract_id, struct, chapter, sub, num)
+  source_item_id INTEGER DEFAULT NULL, notes TEXT DEFAULT ''
 );
+-- item numbers are unique per subchapter; notes may repeat a number (Binarit does this)
+CREATE UNIQUE INDEX IF NOT EXISTS items_unique ON items(contract_id, struct, chapter, sub, num) WHERE kind != 'note';
 CREATE INDEX IF NOT EXISTS items_contract ON items(contract_id, struct, chapter, sub, num);
 
 CREATE TABLE IF NOT EXISTS bills (

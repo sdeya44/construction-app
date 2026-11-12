@@ -65,6 +65,7 @@ export class Api {
       index_lag: Math.max(0, Math.min(3, Number(c.index_lag) || 0)),
       index_threshold: rate(c.index_threshold ?? '0', 'סף הצמדה'), index_share: rate(c.index_share ?? '100', 'שיעור הצמדה'),
       quote_markup: rate(c.quote_markup ?? '0', 'תוספת/הנחה מדקל'),
+      planned_cents: cents(c.planned ?? (c.planned_cents != null ? c.planned_cents / 100 : '0')),
       parent_id: c.parent_id || null, status: c.status === 'closed' ? 'closed' : 'active',
     };
     if (['full', 'threshold', 'partial'].includes(f.index_rule) && !f.index_base_month) throw new Error('בהצמדה אוטומטית חובה להגדיר חודש מדד בסיס');
@@ -103,7 +104,7 @@ export class Api {
     }, 'עדכון מבנה/פרק');
   }
   items(contractId) {
-    return this.s.all('SELECT * FROM items WHERE contract_id=? ORDER BY struct, chapter, sub, num', [contractId]);
+    return this.s.all('SELECT * FROM items WHERE contract_id=? ORDER BY struct, chapter, sub, num, id', [contractId]);
   }
   item(id) { return must(this.s.get('SELECT * FROM items WHERE id=?', [id]), 'הסעיף לא נמצא'); }
 
@@ -176,12 +177,14 @@ export class Api {
         if (this.s.get(`SELECT COUNT(*) n FROM bills WHERE contract_id=?`, [contractId]).n) throw new Error('בחוזה יש חשבונות — אפשר רק להוסיף סעיפים, לא להחליף');
         this.s.run('DELETE FROM items WHERE contract_id=?', [contractId]);
       }
-      const exists = new Set(this.items(contractId).map((i) => `${i.struct}.${i.chapter}.${i.sub}.${i.num}`));
+      const exists = new Set(this.items(contractId).filter((i) => i.kind !== 'note').map((i) => `${i.struct}.${i.chapter}.${i.sub}.${i.num}`));
       const errors = [];
       for (const it of items) {
         const k = `${two(it.struct)}.${two(it.chapter)}.${two(it.sub)}.${Number(it.num)}`;
-        if (exists.has(k)) { errors.push(`סעיף ${k} כבר קיים`); continue; }
-        exists.add(k);
+        if (it.kind !== 'note') {
+          if (exists.has(k)) { errors.push(`סעיף ${k} כבר קיים`); continue; }
+          exists.add(k);
+        }
         try { this.saveItem({ ...it, contract_id: contractId, change_status: it.kind === 'extra' && contract.kind !== 'quote' ? 'approved' : it.change_status }); }
         catch (e) { errors.push(`${k}: ${e.message}`); }
       }

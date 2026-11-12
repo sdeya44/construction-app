@@ -5,7 +5,6 @@ import { h, dateLabel, monthLabel, toast } from './dom.js';
 import { money, qty, lineCents, pct } from '../money.js';
 import { itemCode, isBillable, contractValue } from '../engine.js';
 import { printPdf } from '../persist.js';
-import { INDEX_SERIES } from '../schema.js';
 
 const cash = (c) => money(c);
 
@@ -61,115 +60,6 @@ function head({ issuer, contact, title, project, recipient, number, date, extra 
     h('div', { class: 'issuer' }, h('b', {}, issuer), h('div', {}, contact)),
     h('div', { class: 'title' }, h('h1', {}, title), h('div', { class: 'proj' }, project), recipient ? h('div', { class: 'recipient' }, `לכבוד: ${recipient}`) : null),
     h('div', { class: 'meta' }, number ? h('div', {}, number) : null, h('div', {}, `תאריך: ${dateLabel(date)}`), extra ? h('div', {}, extra) : null, h('div', { class: 'pg' })));
-}
-
-// ------------------------------------------------------------------------------------------
-export function billPrintView(ctx, bid) {
-  const api = ctx.api;
-  const b = api.bill(bid);
-  const c = api.contract(b.contract_id);
-  const p = api.project(c.project_id);
-  const co = api.company();
-  const r = api.calc(bid);
-  const secs = new Map((r.frozen?.sections ?? api.sections(c.id)).map((s) => [s.code, s]));
-  const periodic = r.mode === 'periodic';
-  const D = {
-    issuer: b.doc.issuer || (c.kind === 'sub' ? c.party : co.name),
-    recipient: b.doc.recipient || (c.kind === 'sub' ? co.name : c.party),
-    project: b.doc.projectTitle || p.name,
-    number: `${b.type === 'final' ? 'חשבון סופי' : 'חשבון חלקי'} מס' ${b.doc.displayNumber || b.number}`,
-    date: b.doc.date || b.created_at.slice(0, 10),
-    contact: b.doc.contact || [co.phone, co.email].filter(Boolean).join(' · '),
-  };
-  const { root, wrap } = docShell(`חשבון ${b.number}`, () => ctx.go(`b/${bid}/summary`), `${D.project} - ${D.number}.pdf`);
-  const foot = () => h('div', { class: 's-foot' }, h('span', {}, `${D.issuer}  ${D.contact}`), h('span', {}, `ביצוע ${monthLabel(b.month)} · ${b.status === 'approved' ? 'מאושר' : 'טיוטה — טרם אושר'}`));
-
-  // ---- details (landscape) ----
-  const COLS = ['סעיף', 'תאור', 'יחידה', 'כמות חוזה', '% ביצוע', periodic ? 'מצטבר קודם' : 'מצטבר קודם', periodic ? 'כמות לתקופה' : 'כמות נוכחית', 'כמות מצטברת', 'מחיר יחידה', periodic ? 'סה"כ לתקופה' : 'סה"כ מצטבר'];
-  const W = [7, 29, 5, 8, 5, 8.5, 8.5, 8.5, 8.5, 12];
-  const mk = (r0) => {
-    const tbody = h('tbody');
-    const body = h('div', { class: 's-body' }, h('table', {}, h('colgroup', {}, W.map((w) => h('col', { style: { width: `${w}%` } }))),
-      h('thead', {}, h('tr', {}, COLS.map((x) => h('th', {}, x)))), tbody));
-    const st = r0?.struct ?? '', ch = r0?.chapter ?? '';
-    const sheet = h('section', { class: 'sheet land' },
-      head({ ...D, title: D.number }),
-      h('div', { class: 's-sub' }, st ? h('span', {}, `מבנה ${st} ${secs.get(st)?.name ?? ''}`) : null, ch ? h('span', {}, `פרק ${ch} ${secs.get(`${st}.${ch}`)?.name ?? ''}`) : null),
-      body, foot());
-    return { sheet, body, tbody };
-  };
-  const rows = [];
-  const byChapter = new Map();
-  for (const x of r.rows) { const k = `${x.struct}.${x.chapter}`; if (!byChapter.has(k)) byChapter.set(k, []); byChapter.get(k).push(x); }
-  const items = new Map(api.items(c.id).map((i) => [i.id, i]));
-  for (const g of r.totals.groups) {
-    const list = (byChapter.get(g.key) ?? []).filter((x) => x.amount !== 0 || x.cumQ !== '0' || x.prevQ !== '0');
-    if (!list.length) continue;
-    let sub = null, subSum = 0, first = true;
-    const pushSub = () => { if (sub != null) rows.push({ el: h('tr', { class: 'sum' }, h('td', { colspan: 9 }, `סה"כ תת-פרק ${sub} ${secs.get(`${g.key}.${sub}`)?.name ?? ''}`), h('td', { class: 'nm' }, cash(subSum))), struct: g.struct, chapter: g.chapter, reset: true }); };
-    for (const x of list) {
-      if (x.sub !== sub) {
-        pushSub(); sub = x.sub; subSum = 0;
-        rows.push({ el: h('tr', { class: 'sh' }, h('td', { class: 'cd' }, `${x.chapter}.${x.sub}`), h('td', { colspan: 9 }, secs.get(`${g.key}.${x.sub}`)?.name ?? '')), struct: g.struct, chapter: g.chapter, breakBefore: first });
-        first = false;
-      }
-      subSum += x.amount;
-      const it = items.get(x.itemId);
-      rows.push({ el: h('tr', {}, h('td', { class: 'cd' }, itemCode(x).slice(3)), h('td', {}, x.description), h('td', {}, x.unit), h('td', { class: 'nm' }, qty(x.contractQty)),
-        h('td', { class: 'nm' }, x.percent === '100' ? '' : `${qty(x.percent)}%`), h('td', { class: 'nm' }, qty(x.prevQ)), h('td', { class: 'nm' }, qty(x.curQ)), h('td', { class: 'nm' }, qty(x.cumQ)),
-        h('td', { class: 'nm' }, qty(x.price)), h('td', { class: 'nm' }, cash(x.amount))), amount: x.amount, struct: g.struct, chapter: g.chapter, _it: it });
-    }
-    pushSub();
-    rows.push({ el: h('tr', { class: 'sum chap' }, h('td', { colspan: 9 }, `סה"כ פרק ${g.chapter} ${g.name}`), h('td', { class: 'nm' }, cash(g.gross))), struct: g.struct, chapter: g.chapter, reset: true });
-    if (g.discount) rows.push({ el: h('tr', { class: 'sum' }, h('td', { colspan: 9 }, `הנחה ${g.rate}%`), h('td', { class: 'nm' }, cash(-g.discount))), struct: g.struct, chapter: g.chapter, reset: true },
-      { el: h('tr', { class: 'sum chap' }, h('td', { colspan: 9 }, `סה"כ פרק ${g.chapter} לאחר הנחה`), h('td', { class: 'nm' }, cash(g.net))), struct: g.struct, chapter: g.chapter, reset: true });
-  }
-
-  // ---- concentration (landscape) ----
-  const conc = () => {
-    const sheet = h('section', { class: 'sheet land' }, head({ ...D, title: `ריכוז — ${D.number}` }),
-      h('div', { class: 's-body' }, h('table', {}, h('thead', {}, h('tr', {}, ['מבנה', 'פרק', 'תאור', 'סכום', 'הנחת פרק', 'לאחר הנחה', 'מוחרג מהנחה כללית'].map((x) => h('th', {}, x)))),
-        h('tbody', {}, r.totals.groups.map((g) => h('tr', {}, h('td', { class: 'cd' }, g.struct), h('td', { class: 'cd' }, g.chapter), h('td', {}, `${secs.get(g.struct)?.name ?? ''} · ${g.name}`),
-          h('td', { class: 'nm' }, cash(g.gross)), h('td', { class: 'nm' }, g.discount ? `${cash(-g.discount)} (${g.rate}%)` : ''), h('td', { class: 'nm' }, cash(g.net)), h('td', {}, g.exempt ? 'כן' : ''))),
-        h('tr', { class: 'sum chap' }, h('td', { colspan: 3 }, 'סה"כ'), h('td', { class: 'nm' }, cash(r.totals.gross)), h('td', { class: 'nm' }, cash(-r.totals.chapterDiscount)), h('td', { class: 'nm' }, cash(r.totals.beforeGeneral)), h('td', {}))))),
-      foot());
-    root.append(sheet);
-  };
-
-  // ---- payment summary (portrait) ----
-  const T = r.totals;
-  const L = (label, v, cls = '') => h('tr', { class: cls }, h('td', {}, label), h('td', {}, cash(v)));
-  const summary = h('section', { class: 'sheet port' }, head({ ...D, title: D.number }),
-    h('div', { class: 's-body' },
-      h('h2', { style: { textAlign: 'center', margin: '4mm 0 6mm', fontSize: '15px' } }, 'סיכום חשבון לתשלום'),
-      h('table', { class: 'pay' }, h('tbody', {},
-        T.general ? [L('סכום לחישוב הנחה כללית', T.eligible), L(`הנחה כללית ${T.generalRate}%`, -T.general), L('לאחר הנחה', T.eligible - T.general), T.exempt ? L('ועוד סכום ללא הנחה', T.exempt) : null] : null,
-        L(periodic ? 'סה"כ לתקופה' : 'מצטבר כללי', periodic ? r.periodNet : r.cumNet, 'b'),
-        L('עבודות לפי כמות חוזה', T.cat.contract), L('עבודות מעל כמות חוזה', T.cat.over), L('עבודות נוספות', T.cat.extra),
-        !periodic ? L('פחות חשבון קודם', -r.prevNet) : null,
-        L('ביצוע לתקופה', r.periodNet, 'b'),
-        r.indexation.amount ? L(`התייקרות${r.indexation.current ? ` (${INDEX_SERIES[c.index_series]} ${r.indexation.current}/${r.indexation.base})` : ''}`, r.indexation.amount) : null,
-        r.retention ? L(`עיכבון ${r.retentionRate}%`, -r.retention) : null,
-        r.release ? L('שחרור עיכבון', r.release) : null,
-        r.advance ? L('קיזוז מקדמה', -r.advance) : null,
-        r.materials ? L('קיזוז חומרים / רכש', -r.materials) : null,
-        r.other ? L(r.otherLabel, -r.other) : null,
-        L('סכום לפני מע"מ', r.beforeVat, 'b'),
-        L(`מע"מ ${r.vatRate}%`, r.vat),
-        L('לתשלום בחשבון זה', r.due, 'g'))),
-      b.doc.note ? h('p', { style: { marginTop: '8mm' } }, b.doc.note) : null,
-      h('div', { class: 'sign' }, h('div', {}, 'חתימת המגיש ותאריך'), h('div', {}, 'אישור המזמין / המפקח ותאריך'))),
-    foot());
-
-  // layout needs the nodes in the document to measure → do it after mount
-  queueMicrotask(() => requestAnimationFrame(() => {
-    paginate(root, (r0) => mk(r0), rows, 9, 10, (x) => `${x.struct}.${x.chapter}`);
-    conc();
-    root.append(summary);
-    const sheets = [...root.querySelectorAll('.sheet')];
-    sheets.forEach((s, i) => { const pg = s.querySelector('.pg'); if (pg) pg.textContent = `עמוד ${i + 1} מתוך ${sheets.length}`; });
-  }));
-  return wrap;
 }
 
 // ------------------------------------------------------------------------------------------

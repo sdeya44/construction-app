@@ -5,14 +5,14 @@
 import { fixed, dec } from './money.js';
 
 export const UNIT_CODES = {
-  '00': 'הערה', '01': "יח'", '02': 'מ"א', '03': 'מ"ר', '04': 'מ"ק', '05': 'טון', '06': "נק'",
+  '00': 'הערה', '01': "יח'", '02': 'מטר', '03': 'מ"ר', '04': 'מ"ק', '05': 'טון', '06': "נק'",
   '07': 'י"ע', '08': 'ש"ע', '09': "קומפ'", '10': 'פאושל', '11': 'ק"ג', '12': 'ליטר', '13': 'דונם',
 };
 const LABEL_TO_CODE = (() => {
   const m = {};
   for (const [k, v] of Object.entries(UNIT_CODES)) m[normUnit(v)] = k;
   Object.assign(m, {
-    [normUnit("יח")]: '01', [normUnit('יחידה')]: '01', [normUnit("מ'")]: '02', [normUnit('מטר')]: '02', [normUnit('מ"ט')]: '02',
+    [normUnit("יח")]: '01', [normUnit('מ"א')]: '02', [normUnit('יחידה')]: '01', [normUnit("מ'")]: '02', [normUnit('מטר')]: '02', [normUnit('מ"ט')]: '02',
     [normUnit('מא')]: '02', [normUnit('קומפלט')]: '09', [normUnit('קומפ')]: '09', [normUnit('פאושלי')]: '10',
     [normUnit('נקודה')]: '06', [normUnit('יום עבודה')]: '07', [normUnit('שעת עבודה')]: '08', [normUnit('קג')]: '11',
   });
@@ -66,11 +66,23 @@ export function decodeSkn(bytes) {
   return Array.from(u8, (b) => (b >= 0x80 && b <= 0x9a ? String.fromCharCode(0x5d0 + b - 0x80) : String.fromCharCode(b))).join('');
 }
 
+// ---- format notes (verified against a real Binarit export, Nov 2026) ------------------------
+// Physical lines are 183 chars: a 33-char prefix + 150 chars of description. Lines come in pairs
+// (a record's 2nd line is empty when there is nothing more to say). Descriptions longer than 300
+// chars continue on further line pairs whose odd line carries a short prefix instead of a header:
+//   segment 3      → "SSCCTTIIII" + " 0" + 21 spaces       (zero-padded code)
+//   segment 5,7,…  → "%2d%2d%2d%4d" + " 0" + 21 spaces       (space-padded code)
+//   even segments  → 33 spaces
+// Chapter title and subchapter-00 title share the code SSCC000000 (unit "00" vs blank); likewise
+// structure title and chapter-00 title share SS00000000. Note numbers may repeat.
+const SEG = 150, PRE = 33;
+const HEADER = /^\d{10}(\d\d| {2})\d{6}\.\d{2}\d{9}\.\d{2}/;
+
 // ---- import -------------------------------------------------------------------------------
 /**
  * @returns {{title:string, sections:{code:string,name:string}[], items:object[], warnings:string[]}}
  */
-export function parseSkn(input, { mergeContinuations = true } = {}) {
+export function parseSkn(input) {
   const text = typeof input === 'string' ? input : decodeSkn(input);
   const lines = text.split(/\r?\n/);
   const recs = [];
@@ -78,60 +90,45 @@ export function parseSkn(input, { mergeContinuations = true } = {}) {
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
     if (!l.trim()) continue;
-    if (/^\d{10}/.test(l)) {
-      const part1 = l.slice(33);
-      const next = lines[i + 1] ?? '';
-      let desc;
-      if (next.length > 33 && /^ {33}/.test(next) && next.trim()) { desc = part1.padEnd(150, ' ').slice(0, 150) + next.slice(33).trimEnd(); i++; }
-      else desc = part1.trimEnd();
-      recs.push({ line: i + 1, code: l.slice(0, 10), unit: l.slice(10, 12), qty: l.slice(12, 21).trim(), price: l.slice(21, 33).trim(), desc: desc.trim() });
-    } else if (/^ {33}/.test(l)) {
-      if (recs.length) recs[recs.length - 1].desc = (recs[recs.length - 1].desc + ' ' + l.slice(33).trim()).trim();
+    if (HEADER.test(l)) {
+      recs.push({ line: i + 1, code: l.slice(0, 10), unit: l.slice(10, 12), qty: l.slice(12, 21).trim(), price: l.slice(21, 33).trim(), segs: [l.slice(33)] });
+    } else if (recs.length && l.length > PRE) {
+      recs[recs.length - 1].segs.push(l.slice(33));
     } else warnings.push(`שורה ${i + 1}: מבנה לא מזוהה, דולגה`);
+  }
+  for (const r of recs) {
+    // every non-final segment is exactly 150 chars wide; joining keeps Binarit's mid-word splits intact
+    r.desc = r.segs.map((s, k) => (k < r.segs.length - 1 ? s.padEnd(SEG, ' ').slice(0, SEG) : s)).join('').trim();
   }
   let title = '';
   const sections = new Map();
   const items = [];
-  let last = null;
   for (const r of recs) {
     const s = r.code.slice(0, 2), c = r.code.slice(2, 4), t = r.code.slice(4, 6), n = Number(r.code.slice(6, 10));
+    const blank = r.unit === '  ';
     const toDec = (v, what) => {
       try { return dec(fixed(v || '0')); } catch { warnings.push(`שורה ${r.line}: ${what} לא תקין "${v}"`); return '0'; }
     };
-    if (r.code === '0000000000') { title = r.desc; last = null; continue; }
-    if (c === '00' && t === '00' && n === 0) { sections.set(s, r.desc); last = null; continue; }
-    if (t === '00' && n === 0) {
-      // chapter title (unit 00) and subchapter-00 title (blank unit) share the code
-      if (r.unit === '00' || !sections.has(`${s}.${c}`)) sections.set(`${s}.${c}`, r.desc);
-      else sections.set(`${s}.${c}.00`, r.desc);
-      last = null; continue;
-    }
-    if (n === 0) { sections.set(`${s}.${c}.${t}`, r.desc); last = null; continue; }
+    if (r.code === '0000000000') { title = r.desc; continue; }
+    if (c === '00' && t === '00' && n === 0) { sections.set(blank ? s : `${s}.00`, r.desc); continue; }
+    if (t === '00' && n === 0) { sections.set(blank ? `${s}.${c}.00` : `${s}.${c}`, r.desc); continue; }
+    if (n === 0) { sections.set(`${s}.${c}.${t}`, r.desc); continue; }
     const isZero = fixed(r.qty || '0') === 0n && fixed(r.price || '0') === 0n;
     if (r.unit === '00' && isZero) {
-      if (mergeContinuations && last && last.struct === s && last.chapter === c && last.sub === t && n === last._lastNum + 1) {
-        last.description = `${last.description} ${r.desc}`.trim();
-        last._lastNum = n;
-        continue;
-      }
       items.push({ struct: s, chapter: c, sub: t, num: n, unit: '', qty: '0', price: '0', description: r.desc, kind: 'note' });
-      last = null; continue;
+      continue;
     }
     const unit = UNIT_CODES[r.unit];
     if (!unit) warnings.push(`שורה ${r.line}: קוד יחידה לא מוכר "${r.unit}" (סעיף ${r.code})`);
-    const it = { struct: s, chapter: c, sub: t, num: n, unit: unit ?? r.unit.trim(), qty: toDec(r.qty, 'כמות'), price: toDec(r.price, 'מחיר'),
-      description: r.desc, kind: c === '99' ? 'extra' : 'contract', _lastNum: n };
-    items.push(it);
-    last = it;
+    items.push({ struct: s, chapter: c, sub: t, num: n, unit: unit ?? r.unit.trim(), qty: toDec(r.qty, 'כמות'), price: toDec(r.price, 'מחיר'),
+      description: r.desc, kind: c === '99' ? 'extra' : 'contract' });
   }
-  for (const it of items) delete it._lastNum;
-  // ensure titles exist for every level used
-  for (const it of items) {
+  for (const it of items)
     for (const k of [it.struct, `${it.struct}.${it.chapter}`, `${it.struct}.${it.chapter}.${it.sub}`])
       if (!sections.has(k)) sections.set(k, '');
-  }
   const seen = new Set();
   for (const it of items) {
+    if (it.kind === 'note') continue;
     const k = `${it.struct}.${it.chapter}.${it.sub}.${it.num}`;
     if (seen.has(k)) warnings.push(`מספור כפול: ${k}`);
     seen.add(k);
@@ -140,23 +137,6 @@ export function parseSkn(input, { mergeContinuations = true } = {}) {
 }
 
 // ---- export -------------------------------------------------------------------------------
-const SEG = 150, PRE = 33, MAXD = 300;
-
-function wsplit(t, n = MAXD) {
-  const out = [];
-  let cur = '';
-  for (const w of t.split(' ')) {
-    const c = cur ? `${cur} ${w}` : w;
-    if (c.length > n) {
-      if (cur) out.push(cur);
-      cur = w;
-      while (cur.length > n) { out.push(cur.slice(0, n)); cur = cur.slice(n); }
-    } else cur = c;
-  }
-  if (cur) out.push(cur);
-  return out.length ? out : [''];
-}
-
 function fmtNum(v, width, maxInt, what, code) {
   const f = fixed(v);
   if (f < 0n) throw new Error(`${code}: ${what} שלילי אינו נתמך ב-SKN`);
@@ -164,6 +144,22 @@ function fmtNum(v, width, maxInt, what, code) {
   const s = `${r2 / 100n}.${String(r2 % 100n).padStart(2, '0')}`;
   if (r2 / 100n >= 10n ** BigInt(maxInt)) throw new Error(`${code}: ${what} ${dec(f)} חורג ממגבלת SKN (${maxInt} ספרות שלמות)`);
   return { s: s.padStart(width, '0'), rounded: f % 100n !== 0n };
+}
+
+function recordLines(code, unit, q, p, desc) {
+  const segs = [];
+  for (let i = 0; i < Math.max(1, desc.length); i += SEG) segs.push(desc.slice(i, i + SEG));
+  const sp = `${+code.slice(0, 2)}`.padStart(2) + `${+code.slice(2, 4)}`.padStart(2) + `${+code.slice(4, 6)}`.padStart(2) + `${+code.slice(6, 10)}`.padStart(4);
+  const out = [];
+  segs.forEach((seg, k) => {
+    let pre;
+    if (k === 0) pre = code + unit + q + p;
+    else if (k % 2 === 1) pre = ' '.repeat(PRE);
+    else pre = (k === 2 ? code : sp) + ' 0' + ' '.repeat(PRE - 12);
+    out.push(pre + seg.padEnd(SEG, ' '));
+  });
+  if (out.length % 2) out.push('');
+  return out;
 }
 
 /**
@@ -177,7 +173,7 @@ export function buildSkn(title, sections, items) {
   const sec = new Map(sections.map((s) => [s.code, s.name]));
   const R = [['0000000000', '00', '0', '0', sknText(title)]];
   const sorted = [...items].sort((a, b) => `${a.struct}${a.chapter}${a.sub}`.localeCompare(`${b.struct}${b.chapter}${b.sub}`)
-    || (a.kind === 'note' ? 0 : 1) - (b.kind === 'note' ? 0 : 1) || a.num - b.num);
+    || a.num - b.num || (a.kind === 'note' ? 0 : 1) - (b.kind === 'note' ? 0 : 1) || (a.id ?? 0) - (b.id ?? 0));
   const tree = new Map();
   for (const it of sorted) {
     for (const [k, v] of [['struct', it.struct], ['chapter', it.chapter], ['sub', it.sub]])
@@ -194,10 +190,8 @@ export function buildSkn(title, sections, items) {
       R.push([`${s}${c}000000`, '00', '0', '0', sknText(sec.get(`${s}.${c}`) || `פרק ${c}`)]);
       for (const [t, its] of subs) {
         if (t !== '00' || sec.get(`${s}.${c}.00`)) R.push([`${s}${c}${t}0000`, '  ', '0', '0', sknText(sec.get(`${s}.${c}.${t}`) || sec.get(`${s}.${c}`) || '')]);
-        const used = new Set(its.map((i) => i.num));
         for (const it of its) {
           const code = `${s}${c}${t}${String(it.num).padStart(4, '0')}`;
-          const parts = wsplit(sknText(it.description));
           let u = '00', q = '0', p = '0';
           if (it.kind !== 'note') {
             u = unitCode(it.unit);
@@ -205,15 +199,7 @@ export function buildSkn(title, sections, items) {
             if (normUnit(it.unit) !== normUnit(UNIT_CODES[u])) warnings.push(`${code}: היחידה "${it.unit}" תופיע בבנארית כ-${UNIT_CODES[u]}`);
             q = it.qty; p = it.price;
           }
-          R.push([code, u, q, p, parts[0]]);
-          let k = it.num;
-          for (const part of parts.slice(1)) {
-            k++;
-            if (used.has(k) || k > 9999) throw new Error(`${code}: אין מספר פנוי להמשך תיאור (${k}) — קצר את התיאור או שנה מספור`);
-            used.add(k);
-            warnings.push(`${code}: תיאור מעל 300 תווים פוצל להמשך בסעיף ${String(k).padStart(4, '0')}`);
-            R.push([`${s}${c}${t}${String(k).padStart(4, '0')}`, '00', '0', '0', part]);
-          }
+          R.push([code, u, q, p, sknText(it.description)]);
         }
       }
     }
@@ -225,13 +211,11 @@ export function buildSkn(title, sections, items) {
     if (fp.rounded) warnings.push(`${code}: מחיר עוגל ל-2 ספרות (${fp.s})`);
     const head = code + u + fq.s + fp.s;
     if (head.length !== PRE) throw new Error(`שגיאה פנימית: אורך כותרת ${head.length}`);
-    lines.push(head + d.slice(0, SEG).padEnd(SEG, ' '));
-    lines.push(d.length > SEG ? ' '.repeat(PRE) + d.slice(SEG).padEnd(SEG, ' ') : '');
+    lines.push(...recordLines(code, u, fq.s, fp.s, d));
   }
   const text = lines.join('\r\n') + '\r\n';
   const { bytes, bad } = encodeCp1255(text);
   if (bad.length) warnings.push(`תווים שאינם נתמכים ב-cp1255 הוחלפו ב-"?": ${bad.join(' ')}`);
-  // self-check
   for (const l of lines) if (l.length !== 0 && l.length !== 183) throw new Error(`שגיאה פנימית: אורך שורה ${l.length}`);
   return { bytes, text, warnings, records: R.length };
 }
