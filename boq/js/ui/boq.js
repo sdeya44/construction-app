@@ -349,6 +349,11 @@ export function boqView(ctx, cid) {
       ['שכפול סעיף', () => itemForm(ctx, contract, { ...it, id: null, num: api.nextNum(cid, it.struct, it.chapter, it.sub) })],
       it.kind === 'extra' && it.change_status !== 'approved' && !isQuote ? ['אישור סעיף חריג', () => attempt(() => { api.approveChange(it.id); ctx.refresh(); }, 'אושר')] : null,
       it.kind === 'extra' && it.change_status === 'pending' && !isQuote ? ['דחיית סעיף חריג', () => attempt(() => { api.approveChange(it.id, 'rejected'); ctx.refresh(); })] : null,
+      !isQuote && (contract.locked || billed.has(it.id)) && it.kind !== 'note' ? ['תיקון מחיר (טעות בכתב הכמויות)…', () => formModal(`תיקון מחיר — ${itemCode(it)}`, [
+        { name: 'price', label: `מחיר נכון (כעת ${qty(it.price)})`, value: it.price, numeric: true, required: true },
+        { name: 'reason', label: 'סיבה (נרשמת בסעיף וביומן)', type: 'textarea', span: true, required: true },
+      ], (v) => { api.correctItemPrice(it.id, v.price, v.reason); toast('המחיר תוקן — החשבון הבא יחושב לפיו, כולל ההפרש על כמויות שחויבו קודם'); ctx.refresh(); }, {
+        submit: 'תיקון מחיר', intro: h('p', { class: 'muted' }, 'לתיקון טעות במחיר (לא לשינוי מוסכם — לזה משמשים סעיפים חריגים). חשבונות שאושרו לא משתנים; החשבון הפתוח / הבא מחשב את כל הכמות המצטברת במחיר המתוקן, ולכן כולל את ההפרש על מה שחויב קודם.') })] : null,
       it.dekel_code ? ['ניתוק מדקל', () => attempt(() => { api.linkDekel(it.id, null); ctx.refresh(); })] : null,
       isQuote && it.price_manual && it.dekel_price ? ['החזרת מחיר מחושב מדקל', () => attempt(() => { api.saveItem({ ...api.item(it.id), price_manual: 0 }); ctx.refresh(); })] : null,
       ['מחיקה', async () => { if (await confirmBox('מחיקת סעיף', `למחוק את ${itemCode(it)}?`, { danger: true, ok: 'מחיקה' })) attempt(() => { api.deleteItem(it.id); ctx.refresh(); }); }],

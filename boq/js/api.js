@@ -171,6 +171,28 @@ export class Api {
       throw e;
     }
   }
+  /**
+   * Correct a wrong unit price in a locked / billed contract (an error, not a change order). Approved
+   * bills stay frozen; the next bill recalculates the cumulative quantity at the corrected price, so the
+   * difference on quantities billed earlier is settled in that bill. Reason required; audited.
+   */
+  correctItemPrice(itemId, price, reason) {
+    const it = this.item(itemId);
+    const c = this.contract(it.contract_id);
+    const why = text(reason, 300);
+    if (why.length < 3) throw new Error('חובה לציין סיבה לתיקון המחיר');
+    const p = decStr(price, 'מחיר');
+    if (fixed(p) < 0n) throw new Error('מחיר לא תקין');
+    if (p === it.price) throw new Error('המחיר זהה למחיר הקיים');
+    const open = this.s.get(`SELECT number, status FROM bills WHERE contract_id=? AND status!='approved'`, [c.id]);
+    if (open?.status === 'submitted') throw new Error(`חשבון ${open.number} הוגש — החזר אותו לתיקונים לפני תיקון מחיר`);
+    const day = today();
+    this.s.tx(() => {
+      this.s.run('UPDATE items SET price=?, price_manual=1, notes=? WHERE id=?',
+        [p, text(`${it.notes ? it.notes + ' · ' : ''}מחיר תוקן ${day}: ${it.price} ← ${p} (${why})`, 2000), itemId]);
+      this.s.run('INSERT INTO audit (at, action, detail) VALUES (?,?,?)', [nowIso(), `תיקון מחיר ${itemCode(it)}: ${it.price} ← ${p}`, why]);
+    });
+  }
   /** A line that may still change in a locked contract: a note, or a change item not yet approved. */
   itemOpen(it) { return it.kind === 'note' || (it.kind === 'extra' && it.change_status !== 'approved'); }
   nextNum(contractId, struct, chapter, sub) {
@@ -300,10 +322,10 @@ export class Api {
   boqSource(spec) {
     if (spec.revisionId) {
       const r = this.revision(spec.revisionId);
-      return { label: `${r.snapshot.contract.name} · מהדורה ${r.rev}`, items: r.snapshot.items, sections: r.snapshot.sections };
+      return { label: `${r.snapshot.contract.name} · מהדורה ${r.rev}`, items: r.snapshot.items, sections: r.snapshot.sections, contract: r.snapshot.contract };
     }
     const c = this.contract(spec.contractId);
-    return { label: c.name + (c.version_label ? ` (${c.version_label})` : ''), items: this.items(c.id), sections: this.sections(c.id) };
+    return { label: c.name + (c.version_label ? ` (${c.version_label})` : ''), items: this.items(c.id), sections: this.sections(c.id), contract: c };
   }
   compareBoq(aSpec, bSpec) {
     const A = this.boqSource(aSpec), B = this.boqSource(bSpec);
@@ -326,7 +348,17 @@ export class Api {
       g.a += ta; g.b += tb; chapters.set(ck, g);
     }
     const count = (s) => rows.filter((r) => r.status === s).length;
-    return { a: A.label, b: B.label, rows, chapters: [...chapters.values()],
+    // totals after discounts (structure / chapter / subchapter / general) — what negotiation changes
+    const va = contractValue({ contract: A.contract, sections: A.sections, items: A.items }), vb = contractValue({ contract: B.contract, sections: B.sections, items: B.items });
+    const disc = (v) => ({ net: v.net, discounts: v.gross - v.beforeGeneral, general: v.general, generalRate: v.generalRate });
+    const secDiff = [];
+    const sa = new Map(A.sections.map((s) => [s.code, s])), sb = new Map(B.sections.map((s) => [s.code, s]));
+    for (const code of [...new Set([...sa.keys(), ...sb.keys()])].sort()) {
+      const x = sa.get(code)?.discount ?? '0', y = sb.get(code)?.discount ?? '0';
+      if (norm(x) !== norm(y)) secDiff.push({ code, name: (sb.get(code) ?? sa.get(code))?.name ?? '', a: x, b: y });
+    }
+    if (norm(A.contract.general_discount ?? '0') !== norm(B.contract.general_discount ?? '0')) secDiff.push({ code: 'כללי', name: 'הנחה כללית על הפרויקט', a: A.contract.general_discount ?? '0', b: B.contract.general_discount ?? '0' });
+    return { a: A.label, b: B.label, rows, chapters: [...chapters.values()], valueA: disc(va), valueB: disc(vb), discountChanges: secDiff,
       totals: { a: rows.reduce((s, r) => s + (r.a?.total ?? 0), 0), b: rows.reduce((s, r) => s + (r.b?.total ?? 0), 0) },
       counts: { added: count('added'), removed: count('removed'), changed: count('changed'), same: count('same') } };
   }

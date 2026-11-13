@@ -163,6 +163,9 @@ export function calcBill({ contract, sections, items, bill, lines, prev, indexVa
     }
     if (cumQ > cq && !isExtra(it) && cq > 0n) warnings.push({ type: 'overrun', itemId: it.id, text: `${itemCode(it)}: כמות מצטברת ${dec(cumQ)} חורגת מכמות חוזה ${dec(cq)}` });
     if (cumQ < 0n) warnings.push({ type: 'negative', itemId: it.id, text: `${itemCode(it)}: כמות מצטברת שלילית` });
+    if (p && p.price !== price && fixed(p.cumQ ?? '0') !== 0n)
+      warnings.push({ type: 'price-change', itemId: it.id, text: `${itemCode(it)}: מחיר היחידה שונה מ-${p.price} ל-${price} — החשבון כולל את ההפרש על ${dec(prevQ)} ${it.unit} שחויבו קודם` });
+    if (cumQ < 0n) { /* reported above */ }
     else if (curQ < 0n) warnings.push({ type: 'decrease', itemId: it.id, text: `${itemCode(it)}: כמות נוכחית שלילית ${dec(curQ)} — המצטבר ירד מ-${dec(prevQ)} ל-${dec(cumQ)}` });
     rows.push({
       itemId: it.id, struct: it.struct, chapter: it.chapter, sub: it.sub, num: it.num, code: itemCode(it),
