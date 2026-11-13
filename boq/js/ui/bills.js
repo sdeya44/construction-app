@@ -7,6 +7,7 @@ import { loadExcel, exportBill } from '../excel.js';
 import { download } from '../persist.js';
 import { periodTotals, discountLines } from '../engine.js';
 import { extraForm } from './boq.js';
+import { multiSelect } from './multisel.js';
 
 const BASIS = { calc: 'מחושבת', sub: 'מוגשת', appr: 'מאושרת' };
 /** Work status (בהכנה / הוגש / הוחזר לתיקונים / הוגש מחדש / מאושר) + collection status derived from payments. */
@@ -301,6 +302,14 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
     closeChap();
   }
   draw(); drawSum();
+  // several rows (Ctrl/⌘+click, Shift+click): their total in a floating bar, and copy to Excel
+  const cellText = (td) => (td?.querySelector('input')?.value ?? td?.textContent ?? '').trim();
+  multiSelect(tbody, {
+    amount: (id) => Math.round(Number(cellText(rowRefs.get(id)?.amt).replace(/,/g, '')) * 100) || 0,
+    header: ['סעיף', 'תיאור', 'יחידה', 'כמות חוזה', pv ? 'כמות החודש' : 'כמות מצטברת', pv ? 'סה"כ לחודש' : 'סה"כ מצטבר'].join('\t'),
+    tsv: (id) => { const R = rowRefs.get(id); if (!R) return ''; const it = R.it;
+      return [code(it), it.description, it.unit, it.qty, cellText(pv ? R.cur : R.cum).replace(/[📐\s]/gu, '').replace(/,/g, ''), cellText(R.amt).replace(/,/g, '')].map((v) => String(v ?? '').replace(/[\t\n]+/g, ' ')).join('\t'); },
+  });
 
   const basisSel = h('select', { disabled: !editable && b.status !== 'submitted', onchange: (e) => attempt(() => { api.saveBill(b.id, { basis: e.target.value }); ctx.refresh(); }) },
     Object.entries(BASIS).map(([k, l]) => h('option', { value: k, selected: b.basis === k }, `עדכון כמות ${l}`)));

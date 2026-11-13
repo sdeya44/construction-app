@@ -12,6 +12,7 @@ import { UNIT_CODES } from '../skn.js';
 
 const UNITS = Object.entries(UNIT_CODES).filter(([k]) => k !== '00').map(([, v]) => v).concat(['מ"א']);
 import { dekelPanel } from './dekel-ui.js';
+import { multiSelect } from './multisel.js';
 import { copyDialog, issueRevisionDialog, revisionsDialog } from './versions.js';
 
 const KINDS = { contract: 'חוזה', extra: 'חריג/נוסף', note: 'הערה' };
@@ -495,6 +496,23 @@ export function boqView(ctx, cid) {
       isQuote ? h('span', { class: 'tag' }, `מדקל ${Number(contract.quote_markup) > 0 ? '+' : ''}${contract.quote_markup}%`) : null, verChip, lockChip),
     tb, grid, status);
 
+  // Ctrl/⌘+click or Shift+click selects several rows: total in a floating bar, copy to Excel, duplicate, delete
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const tsvCell = (v) => String(v ?? '').replace(/[\t\n]+/g, ' ');
+  multiSelect(tbody, {
+    amount: (id) => { const it = api.item(id); return isBillable(it) ? lineCents(it.qty, it.price) : 0; },
+    header: ['סעיף', 'תיאור', 'יחידה', 'כמות', 'מחיר', 'סה"כ'].join('\t'),
+    tsv: (id) => { const it = byId.get(id); return [itemCode(it), it.description, it.unit, it.qty, it.price, isBillable(it) ? (lineCents(it.qty, it.price) / 100).toFixed(2) : ''].map(tsvCell).join('\t'); },
+    // a locked contract BOQ changes only through extra (ch. 99) lines, so no bulk duplicate / delete there
+    actions: boqLocked ? [] : [
+      ['שכפול', (ids) => { let n = 0; for (const id of ids) { const it = api.item(id); if (attempt(() => api.saveItem({ ...it, id: null, num: api.nextNum(cid, it.struct, it.chapter, it.sub) })) !== undefined) n++; } if (n) toast(`שוכפלו ${n} סעיפים`); ctx.refresh(); }],
+      ['מחיקה', async (ids) => {
+        if (!(await confirmBox('מחיקת סעיפים', `למחוק ${ids.length} סעיפים?`, { danger: true, ok: 'מחיקה' }))) return;
+        let n = 0; for (const id of ids) if (attempt(() => api.deleteItem(id)) !== undefined) n++;
+        if (n) toast(`נמחקו ${n} סעיפים`); ctx.refresh();
+      }, { danger: true }],
+    ],
+  });
   const root = h('div', { class: `page full` }, h('div', { class: `ws ${sel.showDekel ? 'with-side' : ''}` }, tree, center, side));
   renderSide();
   setTimeout(() => {

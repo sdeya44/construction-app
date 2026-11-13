@@ -1,8 +1,9 @@
-import { h, formModal, attempt, confirmBox, monthLabel, dateLabel } from './dom.js';
+import { h, formModal, attempt, confirmBox, monthLabel, menuButton } from './dom.js';
 import { money } from '../money.js';
 import { INDEX_SERIES } from '../schema.js';
 
-export const KIND = { client: 'חוזה מזמין', sub: 'קבלן משנה', quote: 'הצעת מחיר' };
+// a bill of quantities and a quote are the same document: the BOQ, priced and sent to the client
+export const KIND = { client: 'חוזה מזמין', sub: 'קבלן משנה', quote: 'כתב כמויות / הצעה' };
 export const STATUS = { draft: 'בהכנה', submitted: 'הוגש', approved: 'מאושר' };
 
 export function projectForm(ctx, p = {}) {
@@ -114,66 +115,99 @@ export function projectsView(ctx, selectedId = null) {
   else detail = h('div', { class: 'pd' },
     attentionList(ctx),
     h('div', { class: 'card empty' }, list.length
-      ? [h('b', {}, '← בחר פרויקט מהרשימה'), 'יוצגו כאן כל הקבצים שלו: הצעות מחיר וכתבי כמויות (חשמל, גמרים, אינסטלציה…), חוזים, קבלני משנה וחשבונות.']
-      : [h('b', {}, 'עדיין אין פרויקטים'), 'צור פרויקט, ובתוכו כתבי כמויות / הצעות מחיר, חוזה מזמין וחוזי קבלני משנה.']));
+      ? [h('b', {}, '← בחר פרויקט מהרשימה'), 'יוצגו כאן כתבי הכמויות שלו (חשמל, גמרים, אינסטלציה…), ולכל אחד: ההצעה, החוזה שנבנה ממנו והחשבונות שבתוכו.']
+      : [h('b', {}, 'עדיין אין פרויקטים'), 'צור פרויקט, ובתוכו כתבי כמויות; מכל כתב כמויות נבנה חוזה, ובתוך החוזה החשבונות.']));
   return h('div', { class: 'page full' }, h('div', { class: 'split' }, aside, h('div', { class: 'split-main' }, detail)));
 }
 
-function contractRow(ctx, c, all) {
-  const api = ctx.api;
-  const v = api.contractValue(c.id);
-  const isQuote = c.kind === 'quote';
-  const bills = isQuote ? [] : api.bills(c.id);
-  const last = [...bills].reverse().find((b) => b.status === 'approved');
-  const open = bills.find((b) => b.status !== 'approved');
-  const paid = bills.reduce((s, b) => s + b.paid, 0);
-  const revs = isQuote ? api.revisions(c.id) : [];
-  const converted = isQuote ? all.find((x) => x.kind === 'client' && x.origin_id === c.id) : null;
-  const origin = !isQuote && c.origin_id ? all.find((x) => x.id === c.origin_id) : null;
-  const openLabel = open ? (open.status === 'draft' && open.returned ? 'הוחזר לתיקונים' : open.status === 'submitted' && open.returned ? 'הוגש מחדש' : STATUS[open.status]) : '';
-  return h('tr', { class: 'click', onclick: () => ctx.go(`c/${c.id}`) },
-    h('td', {}, h('b', {}, c.name), c.number ? h('span', { class: 'muted' }, `  ${c.number}`) : null,
-      h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '3px' } },
-        c.version_label ? h('span', { class: 'tag' }, `גרסה: ${c.version_label}`) : null,
-        !isQuote && c.locked ? h('span', { class: 'tag', title: 'כמויות ומחירי המכרז קפואים' }, '🔒 נעול') : null,
-        converted ? h('span', { class: 'tag ok' }, `אושרה ← ${converted.name}`) : null,
-        origin ? h('span', { class: 'tag' }, `מקור: ${origin.name}`) : null)),
-    h('td', {}, c.party),
-    h('td', { class: 'n' }, money(v.net)),
-    h('td', { class: 'n' }, isQuote ? (revs.length ? `מהדורה ${revs[0].rev}` : '—') : last ? money(last.snap.cumNet) : '—'),
-    h('td', {}, isQuote ? (revs.length ? `נשלחה ${revs[0].created_at.slice(8, 10)}/${revs[0].created_at.slice(5, 7)}` : 'טרם נשלחה') : last ? `${last.number} · ${monthLabel(last.month)}` : '—'),
-    h('td', {}, open ? h('span', { class: `tag ${open.returned && open.status === 'draft' ? 'warn' : open.status}` }, `${open.number} ${openLabel}`) : (c.status === 'closed' ? h('span', { class: 'tag' }, 'סגור') : '')),
-    h('td', { class: 'n' }, isQuote ? '' : money(paid)));
+/**
+ * One card per bill of quantities (= the quote: the same document, priced and sent), showing its
+ * whole life in this project: versions / editions → the client contract made from it → that
+ * contract's bills, with the subcontracts taken from it underneath. Chains are rebuilt from the
+ * links copyContract stores (origin_id, parent_id, version_group), so no data model change.
+ */
+function chains(all) {
+  const byId = new Map(all.map((c) => [c.id, c]));
+  const up = (c) => byId.get(c.kind === 'sub' ? (c.parent_id ?? c.origin_id) : c.origin_id) ?? null;
+  const root = (c) => { const seen = new Set(); let r = c; while (up(r) && !seen.has(r.id)) { seen.add(r.id); r = up(r); } return r; };
+  const map = new Map();
+  for (const c of all) {
+    const r = root(c);
+    const key = r.kind === 'sub' ? 'orphan-subs' : r.version_group ?? r.id;
+    if (!map.has(key)) map.set(key, { key, quotes: [], clients: [], subs: [] });
+    map.get(key)[{ quote: 'quotes', client: 'clients', sub: 'subs' }[c.kind]].push(c);
+  }
+  const list = [...map.values()];
+  for (const ch of list) { ch.head = ch.quotes[0] ?? ch.clients[0] ?? ch.subs[0]; }
+  return list.sort((a, b) => (a.key === 'orphan-subs') - (b.key === 'orphan-subs') || a.head.id - b.head.id);
 }
 
-/** The project's flow at a glance: quote(s) → client contract → bills. */
-function pipeline(ctx, all) {
+const billLabel = (b) => (b.status === 'draft' && b.returned ? 'הוחזר לתיקונים' : b.status === 'submitted' && b.returned ? 'הוגש מחדש' : STATUS[b.status]);
+
+function boqCard(ctx, ch, project) {
   const api = ctx.api;
-  const quotes = all.filter((c) => c.kind === 'quote');
-  const clients = all.filter((c) => c.kind === 'client');
-  const client = clients[0];
-  const bills = client ? api.bills(client.id) : [];
-  const lastA = [...bills].reverse().find((b) => b.status === 'approved');
-  const open = bills.find((b) => b.status !== 'approved');
-  const owed = bills.filter((b) => b.status === 'approved').reduce((s, b) => s + b.snap.due - b.paid, 0);
-  const lastQ = quotes.at(-1);
-  const revs = lastQ ? api.revisions(lastQ.id) : [];
-  const step = (k, title, lines, go, empty) => h('button', { class: `pstep ${empty ? 'empty-step' : ''}`, onclick: go }, h('span', { class: 'k' }, k), h('b', {}, title), ...lines.filter(Boolean).map((l) => h('span', { class: 'v' }, l)));
-  return h('div', { class: 'pipeline' },
-    step('1 · הצעת מחיר', quotes.length ? `${quotes.length} ${quotes.length === 1 ? 'הצעה' : 'הצעות / גרסאות'}` : 'אין עדיין',
-      [lastQ && `${lastQ.name}: ${money(api.contractValue(lastQ.id).net)}`, lastQ && (revs.length ? `מהדורה ${revs[0].rev} נשלחה` : 'טרם הופקה מהדורה')],
-      () => (lastQ ? ctx.go(`c/${lastQ.id}`) : null), !quotes.length),
-    h('span', { class: 'arrow' }, '‹'),
-    clients.length > 1
-      ? step('2 · חוזים (כמויות מכרז)', `${clients.length} חוזי מזמין`, [`היקף כולל: ${money(clients.reduce((t, c) => t + (c.planned_cents || api.contractValue(c.id).net), 0))}`, clients.map((c) => c.name).join(' · ')],
-        () => ctx.go(`c/${client.id}`), false)
-      : step('2 · חוזה (כמויות מכרז)', client ? client.name : 'טרם אושרה הצעה',
-      [client && `היקף: ${money(client.planned_cents || api.contractValue(client.id).net)}`, client && (client.locked ? '🔒 כתב הכמויות נעול' : 'פתוח לעריכה')],
-      () => (client ? ctx.go(`c/${client.id}`) : null), !client),
-    h('span', { class: 'arrow' }, '‹'),
-    step('3 · חשבונות', client ? `${bills.length} חשבונות` : '—',
-      [lastA && `מצטבר מאושר: ${money(lastA.snap.cumNet)}`, open && `חשבון ${open.number}: ${open.status === 'draft' && open.returned ? 'הוחזר לתיקונים' : STATUS[open.status]}`, owed > 0 && `יתרה לגבייה: ${money(owed)}`],
-      () => (client ? ctx.go(`c/${client.id}/bills`) : null), !client));
+  const go = (path) => (e) => { e?.stopPropagation(); ctx.go(path); };
+  const cell = (k, title, body, cls = '') => h('div', { class: `bc-step ${cls}` }, h('span', { class: 'k' }, k), title, ...body.filter(Boolean));
+  // 1 · BOQ / quote (all versions; each with its sent editions)
+  const qs = ch.quotes;
+  const stepQ = qs.length
+    ? cell('1 · כתב כמויות / הצעה', null, qs.map((q) => {
+      const revs = api.revisions(q.id);
+      return h('a', { class: 'bc-line', href: `#/c/${q.id}` },
+        h('b', {}, q.version_label || (qs.length > 1 ? q.name : 'כתב הכמויות')), h('span', { class: 'n' }, money(api.contractValue(q.id).net)),
+        h('small', {}, revs.length ? `מהדורה ${revs[0].rev} נשלחה ${revs[0].created_at.slice(8, 10)}/${revs[0].created_at.slice(5, 7)}` : 'טרם נשלח למזמין'));
+    }))
+    : cell('1 · כתב כמויות / הצעה', null, [h('small', { class: 'muted' }, 'החוזה נפתח ישירות, בלי שלב הצעה')], 'dim');
+  // 2 · client contract
+  const cl = ch.clients[0];
+  const stepC = cl
+    ? cell('2 · חוזה', null, [h('a', { class: 'bc-line', href: `#/c/${cl.id}` }, h('b', {}, cl.number ? `חוזה ${cl.number}` : 'חוזה מזמין'),
+      h('span', { class: 'n' }, money(cl.planned_cents || api.contractValue(cl.id).net)), h('small', {}, cl.locked ? '🔒 כמויות ומחירים נעולים' : 'פתוח לעריכה'))])
+    : cell('2 · חוזה', null, [h('small', { class: 'muted' }, 'עדיין לא נחתם'),
+      qs.length ? h('button', { class: 'sm', onclick: go(`c/${qs.at(-1).id}`), title: 'פותח את כתב הכמויות — שם "אישור והמרה לחוזה"' }, 'אישור והמרה לחוזה ←') : null], 'dim');
+  // 3 · bills
+  let stepB;
+  if (cl) {
+    const bills = api.bills(cl.id);
+    const lastA = [...bills].reverse().find((b) => b.status === 'approved');
+    const open = bills.find((b) => b.status !== 'approved');
+    const owed = bills.filter((b) => b.status === 'approved').reduce((t, b) => t + b.snap.due - b.paid, 0);
+    stepB = cell('3 · חשבונות', null, [
+      h('a', { class: 'bc-line', href: `#/c/${cl.id}/bills` }, h('b', {}, bills.length ? `${bills.length} חשבונות` : 'אין עדיין חשבונות'),
+        h('span', { class: 'n' }, lastA ? money(lastA.snap.cumNet) : ''), h('small', {}, lastA ? `מצטבר מאושר (חשבון ${lastA.number} · ${monthLabel(lastA.month)})` : '')),
+      open ? h('a', { class: `bc-tag tag ${open.returned && open.status === 'draft' ? 'warn' : open.status}`, href: `#/b/${open.id}` }, `חשבון ${open.number}: ${billLabel(open)}`) : null,
+      owed > 0 ? h('small', {}, `יתרה לגבייה: ${money(owed)}`) : null]);
+  } else stepB = cell('3 · חשבונות', null, [h('small', { class: 'muted' }, 'נפתחים אחרי החוזה')], 'dim');
+  // subcontracts made from this BOQ
+  const subs = ch.subs.map((sc) => {
+    const bills = api.bills(sc.id);
+    const last = bills.at(-1);
+    return h('a', { class: 'bc-sub', href: `#/c/${sc.id}` }, h('b', {}, sc.party || sc.name), h('span', { class: 'muted' }, sc.party ? sc.name : ''),
+      h('span', { class: 'n' }, money(api.contractValue(sc.id).net)), h('span', {}, last ? `חשבון ${last.number}: ${billLabel(last)}` : 'אין חשבונות'));
+  });
+  const name = ch.head.name.replace(/^(הצעה|חוזה|כתב כמויות)\s*[—–-]\s*/, '');
+  return h('section', { class: 'card bcard' },
+    h('header', {}, h('h2', {}, name), h('span', { class: 'muted' }, ch.head.party || project.client || ''),
+      ch.head.version_label && qs.length === 1 ? h('span', { class: 'tag' }, ch.head.version_label) : null,
+      h('div', { class: 'actions' },
+        cl ? h('button', { class: 'sm', onclick: () => newSub(ctx, project.id, cl) }, '+ קבלן משנה') : null,
+        cl ? h('button', { class: 'sm', title: 'השוואת הצעות של קבלני משנה על כתב הכמויות של החוזה', onclick: go(`c/${cl.id}/tenders`) }, 'מכרז קבלני משנה') : null)),
+    h('div', { class: 'bc-flow' }, stepQ, h('span', { class: 'arrow' }, '‹'), stepC, h('span', { class: 'arrow' }, '‹'), stepB),
+    subs.length ? h('div', { class: 'bc-subs' }, h('span', { class: 'k' }, 'קבלני משנה'), ...subs) : null);
+}
+
+function newSub(ctx, projectId, client) {
+  const api = ctx.api;
+  formModal('קבלן משנה חדש', [
+    { name: 'party', label: 'קבלן משנה', required: true },
+    { name: 'name', label: 'שם החוזה', value: client.name ? `${client.name.replace(/^חוזה\s*[—–-]\s*/, '')} — ` : '' },
+    { name: 'from', label: 'בסיס', type: 'select', value: String(client.id), options: client.id ? [[String(client.id), `סעיפי ${client.name} (ללא מחירים)`], ['', 'כתב כמויות ריק']] : [['', 'כתב כמויות ריק']] },
+  ], (v) => {
+    const name = v.name?.trim() || v.party;
+    const nid = v.from ? api.copyContract(+v.from, { kind: 'sub', name, party: v.party, keepPrices: false })
+      : api.saveContract({ project_id: projectId, kind: 'sub', name, party: v.party });
+    ctx.go(`c/${nid}`);
+  });
 }
 
 export function projectView(ctx, id) { return projectsView(ctx, id); }
@@ -182,47 +216,35 @@ function projectDetail(ctx, id) {
   const api = ctx.api;
   const p = api.project(id);
   const all = api.contracts(id);
-  const section = (kind, title, hint) => {
-    const list = all.filter((c) => c.kind === kind);
-    return h('div', { class: 'card' },
-      h('header', {}, h('h2', {}, title), h('span', { class: 'muted' }, hint),
-        h('div', { class: 'actions' },
-          kind !== 'sub' ? h('button', { onclick: async () => { const { copyDialog } = await import('./versions.js'); copyDialog(ctx, { mode: 'copy', projectId: id, kind }); } }, 'העתקה מכתב כמויות קיים') : null,
-          h('button', { class: kind === 'quote' && !all.some((c) => c.kind === 'quote') ? 'primary' : '', title: kind === 'quote' ? 'תמחור כתב כמויות — מכרז של מזמין או הצעה שלך' : '', onclick: () => newContract(kind) }, kind === 'quote' ? '+ הצעת מחיר / מכרז' : `+ ${KIND[kind]}`),
-          kind === 'sub' ? h('button', { title: 'השוואת הצעות של קבלני משנה על כתב הכמויות של החוזה', onclick: () => { const cl = all.find((c) => c.kind === 'client'); if (cl) ctx.go(`c/${cl.id}/tenders`); else attempt(() => { throw new Error('קודם צריך חוזה מזמין — מכרז קבלני משנה נבנה מכתב הכמויות שלו'); }); } }, 'מכרז קבלני משנה') : null)),
-      list.length ? h('div', { class: 'table-wrap' }, h('table', { class: 't' },
-        h('thead', {}, h('tr', {}, h('th', {}, 'שם'), h('th', {}, kind === 'sub' ? 'קבלן' : 'צד'), h('th', { class: 'n' }, kind === 'quote' ? 'סה"כ הצעה' : 'היקף חוזה'),
-          h('th', { class: 'n' }, kind === 'quote' ? 'מהדורה' : 'מצטבר מאושר'), h('th', {}, kind === 'quote' ? 'נשלחה' : 'חשבון אחרון'), h('th', {}, 'פתוח'), h('th', { class: 'n' }, kind === 'quote' ? '' : 'שולם'))),
-        h('tbody', {}, list.map((c) => contractRow(ctx, c, all)))))
-        : h('div', { class: 'empty' }, 'אין עדיין'));
-  };
-  const newContract = (kind) => {
-    if (kind === 'sub') {
-      const clients = all.filter((c) => c.kind === 'client');
-      formModal('קבלן משנה חדש', [
-        { name: 'name', label: 'שם החוזה', required: true, span: true },
-        { name: 'party', label: 'קבלן משנה' },
-        { name: 'from', label: 'בסיס', type: 'select', value: '', options: [['', 'כתב כמויות ריק'], ...clients.map((c) => [c.id, `העתק סעיפים מ: ${c.name} (ללא מחירים)`])] },
-      ], (v) => {
-        const nid = v.from ? api.copyContract(+v.from, { kind: 'sub', name: v.name, party: v.party, keepPrices: false })
-          : api.saveContract({ project_id: id, kind: 'sub', name: v.name, party: v.party });
-        ctx.go(`c/${nid}`);
-      });
-    } else contractForm(ctx, { project_id: id, kind, party: p.client ?? '' });
-  };
+  const list = chains(all);
+  const clients = all.filter((c) => c.kind === 'client');
+  const scope = clients.reduce((t, c) => t + (c.planned_cents || api.contractValue(c.id).net), 0);
+  const newBoq = () => contractForm(ctx, { project_id: id, kind: 'quote', party: p.client ?? '' });
+  const empty = h('div', { class: 'card empty' }, h('b', {}, 'אין עדיין כתבי כמויות בפרויקט'),
+    'כתב כמויות אחד לכל חוזה (חשמל, גמרים, אינסטלציה…): בונים או קולטים אותו, מתמחרים ושולחים כהצעה; אחרי אישור הוא הופך לחוזה, ובתוך החוזה נפתחים החשבונות.',
+    h('div', { style: { marginTop: '12px', display: 'flex', gap: '8px', justifyContent: 'center' } },
+      h('button', { class: 'primary', onclick: newBoq }, '+ כתב כמויות חדש'),
+      h('button', { onclick: async () => { const { copyDialog } = await import('./versions.js'); copyDialog(ctx, { mode: 'copy', projectId: id, kind: 'quote' }); } }, 'העתקה מכתב כמויות קיים')));
   return h('div', { class: 'pd' },
     h('div', { class: 'page-head' },
-      h('div', {}, h('h1', {}, p.name), h('div', { class: 'sub' }, [p.client, p.location].filter(Boolean).join(' · '), `  ·  סף דקל ${p.dekel_threshold}%`)),
+      h('div', {}, h('h1', {}, p.name), h('div', { class: 'sub' }, [p.client, p.location].filter(Boolean).join(' · '),
+        `  ·  ${list.filter((c) => c.key !== 'orphan-subs').length} כתבי כמויות`, clients.length ? `  ·  היקף חוזים ${money(scope)}` : '')),
       h('div', { class: 'actions' },
-        h('button', { onclick: () => ctx.go(`p/${id}/defects`) }, 'ליקויים'),
-        h('button', { onclick: () => projectForm(ctx, p) }, 'עריכה'),
-        h('button', { class: 'danger', onclick: async () => {
-          if (await confirmBox('מחיקת פרויקט', `למחוק את "${p.name}" וכל החוזים שבו?`, { danger: true, ok: 'מחיקה' }))
-            attempt(() => { api.deleteProject(id); ctx.go(''); }, 'הפרויקט נמחק');
-        } }, 'מחיקה'))),
-    pipeline(ctx, all),
-    h('div', { class: 'stack' },
-      section('quote', 'הצעות מחיר / כתבי כמויות', 'כתב כמויות לכל תחום (חשמל, גמרים, אינסטלציה…) · מתמחרים ושולחים; אישור הופך אותו לחוזה'),
-      section('client', 'חוזי מזמין', 'כמויות ומחירי מכרז · חשבונות שאנו מגישים · אפשר כמה חוזים בפרויקט (חשמל, גמרים, אינסטלציה…)'),
-      section('sub', 'קבלני משנה', 'חשבונות שאנו מאשרים')));
+        h('button', { class: 'primary', onclick: newBoq }, '+ כתב כמויות'),
+        menuButton('עוד', [
+          ['העתקה מכתב כמויות קיים…', async () => { const { copyDialog } = await import('./versions.js'); copyDialog(ctx, { mode: 'copy', projectId: id, kind: 'quote' }); }],
+          ['חוזה מזמין ישיר (בלי שלב הצעה)', () => contractForm(ctx, { project_id: id, kind: 'client', party: p.client ?? '' })],
+          ['קבלן משנה ללא כתב כמויות', () => newSub(ctx, id, { id: '', name: '' })],
+          '-',
+          ['ליקויים', () => ctx.go(`p/${id}/defects`)],
+          ['עריכת פרויקט', () => projectForm(ctx, p)],
+          ['מחיקת פרויקט', async () => {
+            if (await confirmBox('מחיקת פרויקט', `למחוק את "${p.name}" וכל כתבי הכמויות, החוזים והחשבונות שבו?`, { danger: true, ok: 'מחיקה' }))
+              attempt(() => { api.deleteProject(id); ctx.go(''); }, 'הפרויקט נמחק');
+          }],
+        ]))),
+    list.length ? h('div', { class: 'stack' }, list.map((ch) => (ch.key === 'orphan-subs'
+      ? h('section', { class: 'card bcard' }, h('header', {}, h('h2', {}, 'קבלני משנה ללא כתב כמויות מקושר')),
+        h('div', { class: 'bc-subs' }, ch.subs.map((sc) => h('a', { class: 'bc-sub', href: `#/c/${sc.id}` }, h('b', {}, sc.party || sc.name), h('span', { class: 'muted' }, sc.party ? sc.name : ''), h('span', { class: 'n' }, money(api.contractValue(sc.id).net)), h('span')))))
+      : boqCard(ctx, ch, p)))) : empty);
 }
