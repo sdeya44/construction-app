@@ -14,6 +14,8 @@ import { dekelReportView } from './dekel-ui.js';
 import { profitView, statusView, defectsView } from './reports.js';
 import { tendersView, tenderView, cashflowView, managementView } from './stage3.js';
 import { measView, sheetsView } from './meas-ui.js';
+import { themeButton, applyTheme, currentTheme } from './theme.js';
+import { compareView } from './versions.js';
 
 const ctx = {
   SQL: null, store: null, api: null, dekel: null,
@@ -42,7 +44,8 @@ const ROUTES = [
   [/^t\/(\d+)$/, (m) => tenderView(ctx, +m[1])],
   [/^cashflow$/, () => cashflowView(ctx)],
   [/^mgmt$/, () => managementView(ctx)],
-  [/^c\/(\d+)\/print$/, (m) => boqPrintView(ctx, +m[1])],
+  [/^c\/(\d+)\/print$/, (m) => boqPrintView(ctx, +m[1], new URLSearchParams(location.hash.split('?')[1] || '').get('rev'))],
+  [/^c\/(\d+)\/compare$/, (m) => compareView(ctx, +m[1])],
   [/^m\/(\d+)$/, (m) => measView(ctx, +m[1])],
   [/^b\/(\d+)\/sheets$/, (m) => sheetsView(ctx, +m[1], new URLSearchParams(location.hash.split('?')[1] || '').get('item'))],
   [/^b\/(\d+)(?:\/(\w+))?$/, (m) => (m[2] === 'print' ? billPrintRoute(ctx, +m[1]) : billView(ctx, +m[1], m[2] || 'exec'))],
@@ -83,15 +86,22 @@ function topbar(path) {
     h('nav', { class: 'crumbs', 'aria-label': 'מיקום' }, h('a', { href: '#/' }, 'פרויקטים'),
       crumbs.map(([l, p]) => [h('span', { class: 'sep' }, '‹'), h('a', { href: '#/' + p }, l)])),
     h('div', { class: 'spacer' }),
-    h('nav', { class: 'topnav' },
-      h('a', { href: '#/', class: path === '' ? 'on' : '' }, 'פרויקטים'),
-      h('a', { href: '#/mgmt', class: path === 'mgmt' ? 'on' : '' }, 'דוחות מנהלים'),
-      h('a', { href: '#/cashflow', class: path === 'cashflow' ? 'on' : '' }, 'תזרים'),
-      h('a', { href: '#/status', class: path === 'status' ? 'on' : '' }, 'מצב לתאריך'),
-      h('a', { href: '#/indices', class: path === 'indices' ? 'on' : '' }, 'מדדים'),
-      h('a', { href: '#/settings', class: path === 'settings' ? 'on' : '' }, 'הגדרות')),
-    h('span', { class: `tag ${ctx.dekel ? 'ok' : 'warn'}`, title: ctx.dekel ? `${ctx.dekel.items.length.toLocaleString()} סעיפים` : 'טען מחירון בהגדרות' }, ctx.dekel ? `דקל ${ctx.dekel.label || ''}`.trim() : 'דקל לא נטען'),
+    h('nav', { class: 'topnav' }, NAV.map(([p, l]) => h('a', { href: '#/' + p, class: path === p ? 'on' : '' }, l))),
+    dekelTag(),
+    themeButton(render),
     dot);
+}
+const NAV = [['', 'פרויקטים'], ['mgmt', 'דוחות מנהלים'], ['cashflow', 'תזרים'], ['status', 'מצב לתאריך'], ['indices', 'מדדים'], ['settings', 'הגדרות']];
+const dekelTag = () => h('span', { class: `tag ${ctx.dekel ? 'ok' : 'warn'}`, title: ctx.dekel ? `${ctx.dekel.items.length.toLocaleString()} סעיפים` : 'טען מחירון בהגדרות' }, ctx.dekel ? `דקל ${ctx.dekel.label || ''}`.trim() : 'דקל לא נטען');
+function sidenav(path) {
+  const sect = path.split('/')[0];
+  const on = (p) => (p === '' ? ['', 'p', 'c', 'b', 'm', 't'].includes(sect) : sect === p);
+  return h('aside', { class: 'sidenav no-print' },
+    h('a', { class: 'brand', href: '#/' }, 'KAYAN', h('small', {}, 'BOQ')),
+    h('h4', {}, 'עבודה'), NAV.slice(0, 1).map(([p, l]) => h('a', { class: `nav ${on(p) ? 'on' : ''}`, href: '#/' + p }, l)),
+    h('h4', {}, 'דוחות'), NAV.slice(1, 4).map(([p, l]) => h('a', { class: `nav ${on(p) ? 'on' : ''}`, href: '#/' + p }, l)),
+    h('h4', {}, 'מערכת'), NAV.slice(4).map(([p, l]) => h('a', { class: `nav ${on(p) ? 'on' : ''}`, href: '#/' + p }, l)),
+    h('div', { class: 'foot' }, dekelTag(), h('span', {}, 'כיאן הנדסה בע"מ')));
 }
 const saveText = (s) => ({ saved: 'נשמר', pending: 'ממתין לשמירה', saving: 'שומר…', error: 'שגיאת שמירה' }[s]);
 
@@ -108,11 +118,15 @@ function render() {
     view = h('div', { class: 'page' }, h('div', { class: 'alert err' }, e.message), h('a', { href: '#/' }, 'חזרה לפרויקטים'));
   }
   if (token !== renderToken) return;
-  const app = h('div', { class: 'app' }, topbar(path), h('main', { id: 'main' }, view));
+  const main = h('main', { id: 'main' }, view);
+  const app = currentTheme().layout === 'side'
+    ? h('div', { class: 'app side-layout' }, sidenav(path), h('div', { class: 'app-main' }, topbar(path), main))
+    : h('div', { class: 'app' }, topbar(path), main);
   document.body.replaceChildren(app);
 }
 
 async function boot() {
+  applyTheme();
   try {
     ctx.SQL = await globalThis.initSqlJs({ locateFile: (f) => `vendor/${f}` });
     const bytes = await persist.loadData();

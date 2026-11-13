@@ -54,7 +54,7 @@ test('editing a reduced row re-opens the decision as pending (not counted until 
   assert.ok(calc.warnings.some((w) => w.type === 'meas-pending'));
 });
 
-test('approval stamps history and freezes rows; later corrections show as correction; cancelled rows are kept', () => {
+test('approval stamps history and freezes rows; approved rows are locked and corrected only by a correction row', () => {
   const { api, c, vol } = setup();
   const a = row(api, c, vol, { shape: 'מלבן', d1: '10', d2: '1', t: '1' });   // 10
   const b1 = api.createBill(c, { month: '2026-01' }); api.approveBill(b1);
@@ -62,16 +62,23 @@ test('approval stamps history and freezes rows; later corrections show as correc
   assert.equal(api.bill(b1).snap.frozen.measurements[0].value, 10);
   assert.equal(api.bill(b1).snap.rows.find((x) => x.itemId === vol).cumQ, '10');
   const b2 = api.createBill(c, { month: '2026-02' });
-  api.saveMeas(a, { d1: '12' });                                                 // correction +2
-  const n = row(api, c, vol, { shape: 'מלבן', d1: '5', d2: '1', t: '1' });       // addition +5
+  // an approved row does not change: geometry, decision and deletion are blocked
+  assert.throws(() => api.saveMeas(a, { d1: '12' }), /אושרה בחשבון 1/);
+  assert.throws(() => api.setMeasApproval(a, { status: 'rejected' }), /אושרה בחשבון 1/);
+  assert.throws(() => api.deleteMeas(a), /אושרה בחשבון 1/);
+  api.saveMeas(a, { notes: 'הערה מותרת' });
+  assert.equal(api.calc(b2).rows.find((x) => x.itemId === vol).cumQ, '10');
+  // correction: reason required; original cancelled (kept), editable copy replaces it
+  assert.throws(() => api.correctMeas(a, ''), /סיבה/);
+  const fix = api.correctMeas(a, 'מדידה חוזרת בשטח');
+  assert.equal(api.calc(b2).rows.find((x) => x.itemId === vol).cumQ, '10');   // copy = same claim until edited
+  api.saveMeas(fix, { d1: '12' });                                              // correction +2
+  row(api, c, vol, { shape: 'מלבן', d1: '5', d2: '1', t: '1' });               // addition +5
   assert.equal(api.calc(b2).rows.find((x) => x.itemId === vol).curQ, '7');
-  assert.equal(api.deleteMeas(a), 'cancelled');                                   // has history → cancelled, not deleted
-  assert.equal(api.calc(b2).rows.find((x) => x.itemId === vol).cumQ, '5');
-  api.restoreMeas(a);
   api.approveBill(b2);
-  assert.deepEqual(api.meas(a).history.map((h) => h.action), ['created', 'corrected']);
+  assert.deepEqual(api.meas(a).history.map((h) => h.action), ['created', 'cancelled']);
+  assert.deepEqual(api.meas(fix).history.map((h) => h.action), ['created']);
   assert.equal(api.bill(b1).snap.frozen.measurements.find((m) => m.id === a).value, 10); // b1 stays frozen
-  void n;
 });
 
 test('validation blocks approval: volume row without thickness', () => {

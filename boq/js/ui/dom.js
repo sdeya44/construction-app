@@ -89,3 +89,19 @@ export function formModal(title, fields, onSubmit, { submit = 'שמירה', wide
 
 export const monthLabel = (m) => { if (!m) return ''; const [y, mo] = m.split('-'); return `${mo}/${y}`; };
 export const dateLabel = (d) => { if (!d) return ''; const [y, m, dd] = d.slice(0, 10).split('-'); return `${dd}/${m}/${y}`; };
+
+/** A button that opens a short list of actions under it. items: [[label, fn] | null]. */
+export function menuButton(label, items, { cls = '' } = {}) {
+  const btn = h('button', { class: `menu-btn ${cls}`, 'aria-haspopup': 'menu', onclick: (e) => {
+    e.stopPropagation();
+    document.querySelector('.menu-pop')?.remove();
+    const r = btn.getBoundingClientRect();
+    const pop = h('div', { class: 'menu-pop', role: 'menu', style: { top: `${r.bottom + 4}px`, right: `${Math.max(8, window.innerWidth - r.right)}px` } },
+      items.filter(Boolean).map((it) => it === '-' ? h('hr') : h('button', { role: 'menuitem', disabled: !!it[2], title: typeof it[2] === 'string' ? it[2] : '', onclick: () => { close(); it[1](); } }, it[0])));
+    const close = () => { pop.remove(); document.removeEventListener('click', close); document.removeEventListener('keydown', esc); };
+    const esc = (ev) => { if (ev.key === 'Escape') close(); };
+    document.body.append(pop);
+    setTimeout(() => { document.addEventListener('click', close); document.addEventListener('keydown', esc); pop.querySelector('button:not([disabled])')?.focus(); });
+  } }, label, ' ▾');
+  return btn;
+}

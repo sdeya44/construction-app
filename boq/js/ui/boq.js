@@ -1,5 +1,5 @@
 // Bill of quantities workspace: section tree · editable grid · Dekel side panel.
-import { h, $, formModal, modal, attempt, confirmBox, toast } from './dom.js';
+import { h, $, formModal, modal, attempt, confirmBox, toast, menuButton } from './dom.js';
 import { money, qty, lineCents } from '../money.js';
 import { itemCode, isBillable } from '../engine.js';
 import { deviation, deviationFlag } from '../dekel.js';
@@ -9,6 +9,7 @@ import { loadExcel, exportBoq, readSheetRows } from '../excel.js';
 import { readPdf } from '../pdfimport.js';
 import { KIND, contractForm } from './projects.js';
 import { dekelPanel } from './dekel-ui.js';
+import { copyDialog, issueRevisionDialog, revisionsDialog } from './versions.js';
 
 const KINDS = { contract: 'חוזה', extra: 'חריג/נוסף', note: 'הערה' };
 const CHG = { approved: 'מאושר', pending: 'ממתין לאישור', rejected: 'נדחה' };
@@ -39,9 +40,10 @@ export function itemForm(ctx, contract, it, defaults = {}) {
     const fromDekel = contract.kind === 'quote' && v0.dekel_price != null && v.price === String(v0.price ?? '');
     const priceManual = fromDekel ? (it?.id ? it.price_manual : 0) : (it?.id && v.price === it.price ? it.price_manual : 1);
     const id = api.saveItem({ ...v0, ...v, contract_id: contract.id, price_manual: priceManual });
+    if (!it?.id && contract.kind !== 'quote' && contract.locked && v.kind !== 'note') toast('כתב הכמויות נעול — הסעיף נוסף כסעיף חריג וממתין לאישור');
     ctx._focusItem = id;
     ctx.refresh();
-  }, { wide: true });
+  }, { wide: true, intro: contract.kind !== 'quote' && contract.locked ? h('div', { class: 'alert info' }, '🔒 כתב הכמויות החוזי נעול: אפשר לשנות תיאור והערות. כמות, מחיר, יחידה ומספור משתנים רק בסעיף חריג (פקודת שינוי) עד שהוא מאושר. סעיף חדש נשמר כחריג ממתין לאישור.') : null });
 }
 
 function sectionForm(ctx, contract, code, sec) {
@@ -219,7 +221,10 @@ export function boqView(ctx, cid) {
       h('span', { class: `dev-${f}` }, `${Number(d) > 0 ? '+' : ''}${Number(d).toFixed(1)}%`), h('div', { class: 'muted', style: { fontSize: '11.5px' } }, `${it.dekel_code} · ${qty(it.dekel_price)}`));
   };
 
+  const boqLocked = !isQuote && !!contract.locked;
   const cellInput = (it, field, cls = '') => {
+    const frozen = boqLocked && !api.itemOpen(it) && ['qty', 'price', 'unit'].includes(field);
+    if (frozen) return h('td', { class: `locked locked-boq ${cls}`, title: 'כתב הכמויות החוזי נעול — שינוי דרך סעיף חריג' }, field === 'unit' ? it.unit : qty(it[field]));
     const lockedNum = !isQuote && billed.has(it.id) && (field === 'price' || field === 'unit');
     const quoteAuto = isQuote && field === 'price' && !it.price_manual && it.dekel_price;
     if (it.kind === 'note' && field !== 'description') return h('td');
@@ -299,7 +304,7 @@ export function boqView(ctx, cid) {
 
   const grid = h('div', { class: 'grid-area' }, visible.length ? h('table', { class: 't lines fixed' },
     h('colgroup', {}, [136, null, 64, 100, 100, 120, 132, 40].map((w) => h('col', { style: w ? { width: `${w}px` } : {} }))),
-    h('thead', {}, h('tr', {}, h('th', {}, 'סעיף'), h('th', {}, 'תיאור'), h('th', {}, "יח'"), h('th', { class: 'n' }, 'כמות'), h('th', { class: 'n' }, 'מחיר'),
+    h('thead', {}, h('tr', {}, h('th', {}, 'סעיף'), h('th', {}, 'תיאור'), h('th', {}, "יח'"), h('th', { class: 'n' }, isQuote ? 'כמות' : 'כמות מכרז'), h('th', { class: 'n' }, 'מחיר'),
       h('th', { class: 'n' }, 'סה"כ'), h('th', {}, 'דקל / סטייה'), h('th', { class: 'no-print' }, ''))),
     tbody) : h('div', { class: 'empty' }, h('b', {}, items.length ? 'אין סעיפים בתצוגה' : 'כתב הכמויות ריק'),
     items.length ? '' : 'הוסף סעיף, ייבא SKN, הדבק מאקסל או חפש בדקל בפאנל הצד.'));
@@ -332,27 +337,51 @@ export function boqView(ctx, cid) {
   // ---- toolbar ----
   const search = h('input', { type: 'search', placeholder: 'חיפוש בכתב הכמויות…', value: sel.q, oninput: (e) => { sel.q = e.target.value; saveSel(cid, sel); clearTimeout(search._t); search._t = setTimeout(() => { ctx._keepSearchFocus = true; ctx.refresh(); }, 300); } });
   const curSub = () => { const [s, c, t] = (sel.code !== 'all' ? sel.code : '').split('.'); return { struct: s || '01', chapter: c || '01', sub: t || '01' }; };
+  const revCount = isQuote ? api.revisions(cid).length : 0;
+  const hasBills = !isQuote && api.bills(cid).length > 0;
   const tb = h('div', { class: 'toolbar no-print' },
     h('button', { class: 'primary', onclick: () => itemForm(ctx, contract, null, curSub()) }, '+ סעיף'),
     h('button', { onclick: () => itemForm(ctx, contract, null, { ...curSub(), kind: 'note' }) }, '+ הערה'),
     h('span', { class: 'sep' }),
-    h('button', { onclick: () => importSkn(ctx, contract) }, 'ייבוא SKN'),
-    h('button', { onclick: () => exportSkn(ctx, contract) }, 'ייצוא SKN'),
-    h('button', { onclick: () => pasteImport(ctx, contract, sel) }, 'הדבקה מאקסל'),
-    h('button', { onclick: () => importExcel(ctx, contract, sel) }, 'ייבוא Excel'),
-    h('button', { onclick: () => exportExcel(ctx, contract) }, 'ייצוא Excel'),
-    h('button', { onclick: () => importPdf(ctx, contract) }, 'ייבוא PDF'),
+    menuButton('ייבוא', [
+      ['קובץ SKN (בנארית)', () => importSkn(ctx, contract), boqLocked && 'כתב הכמויות נעול'],
+      ['קובץ Excel', () => importExcel(ctx, contract, sel), boqLocked && 'כתב הכמויות נעול'],
+      ['קובץ PDF', () => importPdf(ctx, contract), boqLocked && 'כתב הכמויות נעול'],
+      ['הדבקה מאקסל', () => pasteImport(ctx, contract, sel), boqLocked && 'כתב הכמויות נעול'],
+      '-',
+      ['העתקת פרקים מכתב כמויות אחר…', () => copyDialog(ctx, { mode: 'import', into: cid }), boqLocked && 'כתב הכמויות נעול'],
+    ]),
+    menuButton('ייצוא', [
+      ['קובץ SKN (בנארית)', () => exportSkn(ctx, contract)],
+      ['קובץ Excel', () => exportExcel(ctx, contract)],
+      ['הדפסה / PDF', () => ctx.go(`c/${cid}/print`)],
+    ]),
     h('span', { class: 'sep' }),
     h('button', { class: sel.showDekel ? 'primary' : '', onclick: () => { sel.showDekel = !sel.showDekel; saveSel(cid, sel); renderSide(); ctx.refresh(); } }, 'דקל'),
-    h('button', { onclick: () => ctx.go(`c/${cid}/dekel`) }, 'בדיקת תמחור מול דקל'),
-    h('button', { onclick: () => ctx.go(`c/${cid}/tenders`) }, 'מכרזים'),
     h('button', { onclick: () => { const id = sel.itemId ?? items.find((i) => i.kind !== 'note')?.id; if (id) ctx.go(`m/${id}`); else toast('אין סעיפים', 'err'); } }, '📐 דפי חישוב'),
+    menuButton('כלים', [
+      ['בדיקת תמחור מול דקל', () => ctx.go(`c/${cid}/dekel`)],
+      ['גרסה חדשה (מלאה או לפי פרקים)…', () => copyDialog(ctx, { src: cid, mode: 'version' })],
+      ['העתקה לפרויקט אחר…', () => copyDialog(ctx, { src: cid, mode: 'copy' })],
+      ['השוואת גרסאות / מהדורות', () => ctx.go(`c/${cid}/compare`)],
+      '-',
+      ['מכרזי קבלני משנה', () => ctx.go(`c/${cid}/tenders`)],
+    ]),
     h('span', { class: 'sep' }),
-    !isQuote ? h('button', { onclick: () => ctx.go(`c/${cid}/bills`) }, 'חשבונות') : h('button', { onclick: () => convertQuote(ctx, contract) }, 'המרה לחוזה'),
-    h('button', { onclick: () => ctx.go(`c/${cid}/print`) }, isQuote ? 'הדפסת הצעה' : 'הדפסה'),
+    isQuote ? h('button', { onclick: () => issueRevisionDialog(ctx, contract) }, 'הפקת מהדורה') : null,
+    isQuote ? h('button', { onclick: () => revisionsDialog(ctx, contract) }, `מהדורות${revCount ? ` (${revCount})` : ''}`) : null,
+    isQuote ? h('button', { class: 'primary', onclick: () => convertQuote(ctx, contract) }, 'אישור והמרה לחוזה') : h('button', { onclick: () => ctx.go(`c/${cid}/bills`) }, 'חשבונות'),
     h('button', { onclick: () => contractForm(ctx, contract) }, 'הגדרות'),
     h('div', { class: 'grow' }),
     search);
+
+  const lockChip = isQuote ? null : contract.locked
+    ? h('span', { class: 'lock-chip' }, h('span', { class: 'tag', title: 'כמויות ומחירי החוזה קפואים. שינויים — בסעיפים חריגים.' }, '🔒 כתב כמויות נעול'),
+      !hasBills ? h('button', { class: 'sm ghost', onclick: () => formModal('ביטול נעילת כתב הכמויות', [{ name: 'reason', label: 'סיבה (נרשמת ביומן)', type: 'textarea', span: true, required: true }],
+        (v) => { api.unlockContract(cid, v.reason); ctx.refresh(); }, { submit: 'ביטול נעילה', intro: h('p', { class: 'muted' }, 'אפשרי רק לפני החשבון הראשון — למשל לתיקון טעות בכמות שהועתקה מההצעה.') }) }, 'ביטול נעילה') : null)
+    : h('span', { class: 'lock-chip' }, h('span', { class: 'tag warn' }, 'כתב כמויות פתוח לעריכה'),
+      h('button', { class: 'sm ghost', onclick: () => attempt(() => { api.lockContract(cid); ctx.refresh(); }, 'כתב הכמויות ננעל') }, 'נעילה'));
+  const verChip = contract.version_label ? h('span', { class: 'tag' }, `גרסה: ${contract.version_label}`) : null;
 
   const v = api.contractValue(cid);
   const status = h('div', { class: 'statusbar' },
@@ -367,7 +396,7 @@ export function boqView(ctx, cid) {
   const center = h('section', { class: 'center' },
     h('div', { class: 'toolbar', style: { borderBottom: '1px solid var(--line)' } },
       h('h2', {}, contract.name), h('span', { class: 'muted' }, [KIND[contract.kind], contract.party, contract.number].filter(Boolean).join(' · ')),
-      isQuote ? h('span', { class: 'tag' }, `מדקל ${Number(contract.quote_markup) > 0 ? '+' : ''}${contract.quote_markup}%`) : null),
+      isQuote ? h('span', { class: 'tag' }, `מדקל ${Number(contract.quote_markup) > 0 ? '+' : ''}${contract.quote_markup}%`) : null, verChip, lockChip),
     tb, grid, status);
 
   const root = h('div', { class: `page full` }, h('div', { class: `ws ${sel.showDekel ? 'with-side' : ''}` }, tree, center, side));
@@ -388,7 +417,7 @@ function convertQuote(ctx, q) {
     const id = ctx.api.copyContract(q.id, { kind: 'client', name: v.name, party: v.party });
     ctx.api.saveContract({ ...ctx.api.contract(id), mode: v.mode });
     ctx.go(`c/${id}`);
-  }, { submit: 'יצירת חוזה', intro: h('p', { class: 'muted' }, 'נוצר חוזה מזמין חדש עם כל הסעיפים והמחירים הסופיים של ההצעה. ההצעה עצמה נשמרת ללא שינוי.') });
+  }, { submit: 'יצירת חוזה', intro: h('p', { class: 'muted' }, 'ההצעה אושרה: נוצר חוזה מזמין עם כל הסעיפים והמחירים הסופיים — אלה כמויות ומחירי המכרז. כתב הכמויות החוזי ננעל מיד; שינויים ייעשו בסעיפים חריגים. ההצעה עצמה נשמרת ללא שינוי.') });
 }
 
 async function importExcel(ctx, contract, sel) {

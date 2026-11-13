@@ -98,10 +98,13 @@ export class Api {
   sections(contractId) { return this.s.all('SELECT * FROM sections WHERE contract_id=? ORDER BY code', [contractId]); }
   saveSection(contractId, code, { name, discount, markup, exempt }) {
     if (!/^\d{2}(\.\d{2}){0,2}$/.test(code)) throw new Error('קוד מבנה/פרק לא תקין');
+    const contract = this.contract(contractId);
     this.s.tx(() => {
       const ex = this.s.get('SELECT * FROM sections WHERE contract_id=? AND code=?', [contractId, code]);
       const v = { name: text(name ?? ex?.name ?? '', 300), discount: rate(discount ?? ex?.discount ?? '0', 'הנחה'),
         markup: rate(markup ?? ex?.markup ?? '0', 'תוספת'), exempt: exempt == null ? (ex?.exempt ?? (code.endsWith('.99') ? 1 : 0)) : (exempt ? 1 : 0) };
+      if (contract.kind !== 'quote' && contract.locked && (v.discount !== (ex?.discount ?? '0') || v.exempt !== (ex?.exempt ?? v.exempt)))
+        throw new Error('כתב הכמויות החוזי נעול — הנחת פרק ופטור מהנחה כללית הם תנאי חוזה ואינם ניתנים לשינוי');
       this.s.run(`INSERT INTO sections (contract_id, code, name, discount, markup, exempt) VALUES (?,?,?,?,?,?)
         ON CONFLICT(contract_id, code) DO UPDATE SET name=excluded.name, discount=excluded.discount, markup=excluded.markup, exempt=excluded.exempt`,
         [contractId, code, v.name, v.discount, v.markup, v.exempt]);
@@ -136,12 +139,21 @@ export class Api {
     };
     if (kind === 'note') { f.qty = '0'; f.price = '0'; f.unit = ''; }
     if (contract.kind === 'quote' && !f.price_manual && f.dekel_price != null) f.price = this.quoteItemPrice(contract, struct, chapter, f.dekel_price);
+    const locked = contract.kind !== 'quote' && !!contract.locked;
+    // a locked contract accepts new lines only as change items awaiting approval (notes are free)
+    if (locked && !it.id && f.kind !== 'note') { f.kind = 'extra'; f.change_status = 'pending'; }
+    try {
     return this.s.tx(() => {
       if (it.id) {
         const old = this.item(it.id);
         if (contract.kind !== 'quote' && this.billedInfo(it.id)) {
           if (old.price !== f.price || old.unit !== f.unit || old.struct !== f.struct || old.chapter !== f.chapter || old.sub !== f.sub || old.num !== f.num)
             throw new Error(`הסעיף ${itemCode(old)} חויב בחשבון מאושר — אין לשנות מחיר/יחידה/מספור. שינוי מחיר נעשה בעמודת המחיר בחשבון או בסעיף שינוי.`);
+        }
+        if (locked && !this.itemOpen(old)) {
+          if (old.qty !== f.qty || old.price !== f.price || old.unit !== f.unit || old.kind !== f.kind || old.change_status !== f.change_status
+            || old.struct !== f.struct || old.chapter !== f.chapter || old.sub !== f.sub || old.num !== f.num)
+            throw new Error(`כתב הכמויות החוזי נעול — אין לשנות כמות, מחיר, יחידה או מספור של ${itemCode(old)}. שינוי נעשה בסעיף חריג (פקודת שינוי) שמאושר בנפרד.`);
         }
         const cols = Object.keys(f);
         this.s.run(`UPDATE items SET ${cols.map((k) => `${k}=?`).join(',')} WHERE id=?`, [...cols.map((k) => f[k]), it.id]);
@@ -153,13 +165,21 @@ export class Api {
       this.ensureSections(it.contract_id, [f]);
       return id;
     });
+    } catch (e) {
+      if (/UNIQUE constraint failed: items/.test(e.message)) throw new Error(`מספר סעיף ${struct}.${chapter}.${sub}.${String(num).padStart(4, '0')} כבר קיים בתת-פרק — בחר מספר אחר`);
+      throw e;
+    }
   }
+  /** A line that may still change in a locked contract: a note, or a change item not yet approved. */
+  itemOpen(it) { return it.kind === 'note' || (it.kind === 'extra' && it.change_status !== 'approved'); }
   nextNum(contractId, struct, chapter, sub) {
     const r = this.s.get('SELECT MAX(num) m FROM items WHERE contract_id=? AND struct=? AND chapter=? AND sub=?', [contractId, struct, chapter, sub]);
     return Math.min(9999, (Math.ceil(((r?.m ?? 0) + 1) / 10)) * 10);
   }
   deleteItem(id) {
     const it = this.item(id);
+    const c = this.contract(it.contract_id);
+    if (c.kind !== 'quote' && c.locked && !this.itemOpen(it)) throw new Error(`כתב הכמויות החוזי נעול — לא ניתן למחוק את ${itemCode(it)}`);
     if (this.s.get('SELECT COUNT(*) n FROM bill_lines l JOIN bills b ON b.id=l.bill_id WHERE l.item_id=? AND b.status=\'approved\'', [id]).n)
       throw new Error(`הסעיף ${itemCode(it)} חויב בחשבון מאושר ולא ניתן למחיקה`);
     this.s.tx(() => this.s.run('DELETE FROM items WHERE id=?', [id]), `מחיקת סעיף ${itemCode(it)}`);
@@ -177,6 +197,7 @@ export class Api {
   /** Atomic import (SKN / Excel / paste). mode: 'append' keeps existing items, 'replace' wipes unbilled ones. */
   importItems(contractId, { title, sections = [], items = [] }, mode = 'append') {
     const contract = this.contract(contractId);
+    if (contract.kind !== 'quote' && contract.locked) throw new Error('כתב הכמויות החוזי נעול — לא ניתן לייבא אליו. הוסף סעיפים חריגים, או בטל את הנעילה (רק לפני החשבון הראשון).');
     return this.s.tx(() => {
       if (mode === 'replace') {
         if (this.s.get(`SELECT COUNT(*) n FROM bills WHERE contract_id=?`, [contractId]).n) throw new Error('בחוזה יש חשבונות — אפשר רק להוסיף סעיפים, לא להחליף');
@@ -216,22 +237,116 @@ export class Api {
       price_manual: this.contract(it.contract_id).kind === 'quote' && dk ? 0 : it.price_manual });
   }
   /** Copy a quote or client contract into a new contract (quote→contract, client→subcontract). */
-  copyContract(fromId, { kind, name, party, keepPrices = true }) {
+  /**
+   * Copy a BOQ into a new contract / quote. projectId = target project (default: same project);
+   * chapters = ['SS.CC', …] to copy part of the BOQ; asVersion = the copy joins the source's version family.
+   */
+  copyContract(fromId, { kind, name, party, keepPrices = true, projectId = null, chapters = null, asVersion = false, versionLabel = '' }) {
     const src = this.contract(fromId);
+    const target = projectId ? this.project(projectId).id : src.project_id;
+    const pick = chapters?.length ? new Set(chapters) : null;
+    const inScope = (code) => !pick || [...pick].some((c) => code === c.split('.')[0] || code === c || code.startsWith(c + '.'));
+    const same = target === src.project_id;
     return this.s.tx(() => {
-      const id = this.saveContract({ ...src, id: null, project_id: src.project_id, kind, name, party: party ?? '',
-        parent_id: kind === 'sub' ? fromId : null, opening: '0', advance: '0', index_rule: kind === 'quote' ? 'none' : src.index_rule });
-      for (const s of this.sections(fromId))
+      const id = this.saveContract({ ...src, id: null, project_id: target, kind, name, party: party ?? '',
+        parent_id: kind === 'sub' && same ? fromId : null, opening: '0', advance: '0', index_rule: kind === 'quote' ? 'none' : src.index_rule });
+      let group = null;
+      if (asVersion) { group = src.version_group ?? src.id; if (!src.version_group) this.s.run('UPDATE contracts SET version_group=? WHERE id=?', [group, src.id]); }
+      // a quote converted to a client contract freezes the tender quantities and prices
+      this.s.run('UPDATE contracts SET origin_id=?, version_group=?, version_label=?, locked=? WHERE id=?',
+        [fromId, group, text(versionLabel, 60), src.kind === 'quote' && kind === 'client' ? 1 : 0, id]);
+      for (const s of this.sections(fromId)) {
+        if (!inScope(s.code)) continue;
         this.s.run('INSERT OR REPLACE INTO sections (contract_id, code, name, discount, markup, exempt) VALUES (?,?,?,?,?,?)',
-          [id, s.code, s.name, kind === 'sub' ? '0' : s.discount, '0', s.exempt]);
+          [id, s.code, s.name, kind === 'sub' ? '0' : s.discount, kind === 'quote' ? s.markup : '0', s.exempt]);
+      }
       for (const it of this.items(fromId)) {
         if (it.change_status === 'rejected') continue;
+        if (!inScope(`${it.struct}.${it.chapter}`)) continue;
         this.s.run(`INSERT INTO items (contract_id, struct, chapter, sub, num, description, unit, qty, price, kind, change_status, dekel_code, dekel_price, price_manual, source_item_id, notes)
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
           [id, it.struct, it.chapter, it.sub, it.num, it.description, it.unit, it.qty, keepPrices ? it.price : '0', it.kind, 'approved', it.dekel_code, it.dekel_price, it.id, it.notes]);
       }
       return id;
-    }, `העתקת חוזה ל${name}`);
+    }, `העתקת ${src.name} ל${name}`);
+  }
+  /** Contracts of the same version family (including the contract itself). */
+  versions(contractId) {
+    const c = this.contract(contractId);
+    if (!c.version_group) return [c];
+    return this.s.all('SELECT * FROM contracts WHERE version_group=? ORDER BY id', [c.version_group]);
+  }
+  allContracts() {
+    return this.s.all('SELECT c.*, p.name AS project_name FROM contracts c JOIN projects p ON p.id=c.project_id ORDER BY p.name, c.kind, c.id');
+  }
+  lockContract(id) {
+    const c = this.contract(id);
+    if (c.kind === 'quote') throw new Error('הצעת מחיר אינה ננעלת — המר אותה לחוזה');
+    this.s.tx(() => this.s.run('UPDATE contracts SET locked=1 WHERE id=?', [id]), `נעילת כתב כמויות ${c.name}`);
+  }
+  unlockContract(id, reason) {
+    const c = this.contract(id);
+    const why = text(reason, 300);
+    if (why.length < 3) throw new Error('חובה לציין סיבה לביטול הנעילה');
+    if (this.s.get('SELECT 1 x FROM bills WHERE contract_id=?', [id])) throw new Error('בחוזה יש חשבונות — לא ניתן לבטל נעילה. שינויים נעשים דרך סעיפים חריגים.');
+    this.s.tx(() => {
+      this.s.run('UPDATE contracts SET locked=0 WHERE id=?', [id]);
+      this.s.run('INSERT INTO audit (at, action, detail) VALUES (?,?,?)', [nowIso(), `ביטול נעילת כתב כמויות ${c.name}`, why]);
+    });
+  }
+
+  /** Compare two BOQs ({contractId} or {revisionId}) item by item. */
+  boqSource(spec) {
+    if (spec.revisionId) {
+      const r = this.revision(spec.revisionId);
+      return { label: `${r.snapshot.contract.name} · מהדורה ${r.rev}`, items: r.snapshot.items, sections: r.snapshot.sections };
+    }
+    const c = this.contract(spec.contractId);
+    return { label: c.name + (c.version_label ? ` (${c.version_label})` : ''), items: this.items(c.id), sections: this.sections(c.id) };
+  }
+  compareBoq(aSpec, bSpec) {
+    const A = this.boqSource(aSpec), B = this.boqSource(bSpec);
+    const key = (i) => `${i.struct}.${i.chapter}.${i.sub}.${String(i.num).padStart(4, '0')}`;
+    const live = (list) => new Map(list.filter((i) => i.kind !== 'note' && i.change_status !== 'rejected').map((i) => [key(i), i]));
+    const ma = live(A.items), mb = live(B.items);
+    const names = new Map([...A.sections, ...B.sections].map((s) => [s.code, s.name]));
+    const rows = [];
+    const chapters = new Map();
+    for (const k of [...new Set([...ma.keys(), ...mb.keys()])].sort()) {
+      const a = ma.get(k), b = mb.get(k);
+      const ta = a ? lineCents(a.qty, a.price) : 0, tb = b ? lineCents(b.qty, b.price) : 0;
+      const status = !a ? 'added' : !b ? 'removed' : (norm(a.qty) !== norm(b.qty) || norm(a.price) !== norm(b.price) || a.unit !== b.unit) ? 'changed' : 'same';
+      const it = b ?? a;
+      rows.push({ code: k, chapterKey: `${it.struct}.${it.chapter}`, description: it.description, unit: it.unit, status,
+        a: a ? { qty: a.qty, price: a.price, total: ta } : null, b: b ? { qty: b.qty, price: b.price, total: tb } : null, diff: tb - ta,
+        qtyChanged: !!(a && b && norm(a.qty) !== norm(b.qty)), priceChanged: !!(a && b && norm(a.price) !== norm(b.price)) });
+      const ck = `${it.struct}.${it.chapter}`;
+      const g = chapters.get(ck) ?? { key: ck, name: names.get(ck) ?? '', a: 0, b: 0 };
+      g.a += ta; g.b += tb; chapters.set(ck, g);
+    }
+    const count = (s) => rows.filter((r) => r.status === s).length;
+    return { a: A.label, b: B.label, rows, chapters: [...chapters.values()],
+      totals: { a: rows.reduce((s, r) => s + (r.a?.total ?? 0), 0), b: rows.reduce((s, r) => s + (r.b?.total ?? 0), 0) },
+      counts: { added: count('added'), removed: count('removed'), changed: count('changed'), same: count('same') } };
+  }
+
+  // ---------------- quote revisions (מהדורות) ----------------
+  issueRevision(contractId, { recipient = '', note = '' } = {}) {
+    const c = this.contract(contractId);
+    const items = this.items(contractId), sections = this.sections(contractId);
+    const value = this.contractValue(contractId);
+    return this.s.tx(() => {
+      const rev = (this.s.get('SELECT MAX(rev) m FROM quote_revisions WHERE contract_id=?', [contractId]).m ?? 0) + 1;
+      return this.s.run('INSERT INTO quote_revisions (contract_id, rev, created_at, recipient, note, total_cents, snapshot) VALUES (?,?,?,?,?,?,?)',
+        [contractId, rev, nowIso(), text(recipient || c.party, 200), text(note, 500), value.net, JSON.stringify({ contract: c, items, sections, value })]).id;
+    }, `הפקת מהדורה ל${c.name}`);
+  }
+  revisions(contractId) {
+    return this.s.all('SELECT id, contract_id, rev, created_at, recipient, note, total_cents FROM quote_revisions WHERE contract_id=? ORDER BY rev DESC', [contractId]);
+  }
+  revision(id) {
+    const r = must(this.s.get('SELECT * FROM quote_revisions WHERE id=?', [id]), 'המהדורה לא נמצאה');
+    return { ...r, snapshot: JSON.parse(r.snapshot) };
   }
 
   // ---------------- bills ----------------
@@ -286,6 +401,9 @@ export class Api {
       const lastDoc = last ? JSON.parse(last.doc) : {};
       const id = this.s.run('INSERT INTO bills (contract_id, number, month, type, basis, doc, adj, created_at) VALUES (?,?,?,?,?,?,?,?)',
         [contractId, number, m, type === 'final' ? 'final' : 'partial', basis, JSON.stringify({ ...lastDoc, date: today(), displayNumber: String(number) }), '{}', nowIso()]).id;
+      // the first bill freezes the contract BOQ (tender quantities)
+      if (!c.locked) this.s.run('UPDATE contracts SET locked=1 WHERE id=?', [contractId]);
+      this.billEvent(id, 'draft', 'החשבון נפתח');
       // cumulative: start from the previous cumulative quantities
       if (c.mode === 'cumulative' && last) {
         const prev = this.prevApproved(contractId, number);
@@ -330,14 +448,27 @@ export class Api {
       [JSON.stringify(A), JSON.stringify(D), ['calc', 'sub', 'appr'].includes(basis) ? basis : b.basis,
         type === 'final' || type === 'partial' ? type : b.type, m ? month(m) : b.month, billId]));
   }
-  submitBill(id) {
+  submitBill(id, note = '') {
     const b = this.bill(id); this.assertEditable(b);
-    this.s.tx(() => this.s.run(`UPDATE bills SET status='submitted' WHERE id=?`, [id]), `הגשת חשבון ${b.number}`);
+    this.s.tx(() => {
+      this.s.run(`UPDATE bills SET status='submitted' WHERE id=?`, [id]);
+      this.billEvent(id, 'submitted', text(note, 300) || (b.returned ? 'הוגש מחדש לאחר תיקונים' : 'הוגש'));
+    }, `הגשת חשבון ${b.number}`);
   }
-  returnBill(id) {
+  /** Returned for corrections (בשינויים): editable again, and marked as returned. */
+  returnBill(id, note = '') {
     const b = this.bill(id);
-    if (b.status !== 'submitted') throw new Error('רק חשבון שהוגש ניתן להחזיר להכנה');
-    this.s.tx(() => this.s.run(`UPDATE bills SET status='draft' WHERE id=?`, [id]), `החזרת חשבון ${b.number} להכנה`);
+    if (b.status !== 'submitted') throw new Error('רק חשבון שהוגש ניתן להחזיר לתיקונים');
+    this.s.tx(() => {
+      this.s.run(`UPDATE bills SET status='draft', returned=1 WHERE id=?`, [id]);
+      this.billEvent(id, 'returned', text(note, 300) || 'הוחזר לתיקונים');
+    }, `החזרת חשבון ${b.number} לתיקונים`);
+  }
+  billEvent(billId, status, note = '') { this.s.run('INSERT INTO bill_events (bill_id, at, status, note) VALUES (?,?,?,?)', [billId, nowIso(), status, note]); }
+  billEvents(billId) { return this.s.all('SELECT * FROM bill_events WHERE bill_id=? ORDER BY id', [billId]); }
+  /** Approved-but-unpaid balance of the bills before this one (what the client still owes). */
+  outstandingBefore(contractId, number) {
+    return this.bills(contractId).filter((b) => b.number < number && b.status === 'approved').reduce((s, b) => s + (b.snap.due - b.paid), 0);
   }
   approveBill(id) {
     const b = this.bill(id);
@@ -355,6 +486,7 @@ export class Api {
     this.s.tx(() => {
       r.frozen.measurements = this.measStamp(contract.id, b);
       this.s.run(`UPDATE bills SET status='approved', snapshot=?, approved_at=? WHERE id=?`, [JSON.stringify(r), nowIso(), id]);
+      this.billEvent(id, 'approved', 'אושר ונעול');
       if (b.type === 'final') this.s.run(`UPDATE contracts SET status='closed' WHERE id=?`, [b.contract_id]);
     }, `אישור חשבון ${b.number}`);
   }
@@ -404,6 +536,7 @@ export class Api {
       this.s.run('DELETE FROM meas_history WHERE bill_id=?', [id]);
       if (b.type === 'final') this.s.run(`UPDATE contracts SET status='active' WHERE id=?`, [b.contract_id]);
       this.s.run('INSERT INTO audit (at, action, detail) VALUES (?,?,?)', [nowIso(), `פתיחה מחדש של חשבון ${b.number}`, why]);
+      this.billEvent(id, 'reopened', why);
     });
   }
 
@@ -760,16 +893,65 @@ export class Api {
     this.assertMeasEditable(contractId);
     const it = this.item(itemId);
     if (it.contract_id !== contractId) throw new Error('הסעיף שייך לחוזה אחר');
+    if (!isGroup && it.qsrc !== 'meas') this.setQtySource(itemId, 'meas');
     let sort = (this.s.get('SELECT MAX(sort) m FROM measurements WHERE contract_id=? AND item_id=?', [contractId, itemId]).m ?? 0) + 1;
     if (after) { const a = this.s.get('SELECT sort FROM measurements WHERE id=?', [after]); const nx = this.s.get('SELECT MIN(sort) m FROM measurements WHERE item_id=? AND sort>?', [itemId, a.sort]).m; sort = nx == null ? a.sort + 1 : (a.sort + nx) / 2; }
     const shape = itemUnitKind(it) === 'length' ? 'קו' : itemUnitKind(it) === 'count' ? 'יחידה' : 'מלבן';
     return this.s.tx(() => this.s.run('INSERT INTO measurements (contract_id, item_id, sort, is_group, group_label, shape) VALUES (?,?,?,?,?,?)',
       [contractId, itemId, sort, isGroup ? 1 : 0, isGroup ? 'קבוצה חדשה' : '', shape]).id);
   }
+  /**
+   * Bill quantity source of an item. Switching to the calculation sheet carries what was already
+   * billed manually as an opening balance, so the cumulative never drops by surprise.
+   */
+  setQtySource(itemId, src) {
+    const it = this.item(itemId);
+    const c = this.contract(it.contract_id);
+    if (!['manual', 'meas'].includes(src)) throw new Error('מקור כמות לא תקין');
+    if (it.qsrc === src) return;
+    if (c.kind !== 'quote') this.assertMeasEditable(c.id);
+    this.s.tx(() => {
+      let opening = it.meas_opening;
+      if (src === 'meas' && opening == null) {
+        const last = this.s.get(`SELECT snapshot FROM bills WHERE contract_id=? AND status='approved' ORDER BY number DESC LIMIT 1`, [c.id]);
+        const row = last ? JSON.parse(last.snapshot).rows.find((r) => r.itemId === itemId) : null;
+        const hasHist = this.s.get('SELECT 1 x FROM meas_history h JOIN measurements m ON m.id=h.meas_id WHERE m.item_id=?', [itemId]);
+        if (row && fixed(row.cumQ) !== 0n && !hasHist) opening = row.cumQ;
+      }
+      this.s.run('UPDATE items SET qsrc=?, meas_opening=? WHERE id=?', [src, opening ?? null, itemId]);
+    }, src === 'meas' ? `מקור כמות: דף חישוב (${itemCode(it)})` : `מקור כמות: ידני (${itemCode(it)})`);
+  }
+  /** Bill number in which this row was approved and frozen, or null while it may still change. */
+  measLockedIn(m) {
+    const last = m.history?.at(-1);
+    if (!last || last.action === 'cancelled' || m.cancelled) return null;
+    return last.approvalStatus === 'pending' ? null : last.accountNumber;
+  }
+  assertMeasRowOpen(m) {
+    const n = this.measLockedIn(m);
+    if (n) throw new Error(`שורה זו אושרה בחשבון ${n} ונעולה — כמות שאושרה אינה משתנה. לתיקון השתמש ב"תיקון שורה" (נשמרת היסטוריה).`);
+  }
+  /** Correct an approved row: the original is cancelled (kept in history) and an editable copy replaces it. */
+  correctMeas(id, reason) {
+    const m = this.meas(id);
+    this.assertMeasEditable(m.contractId);
+    const why = text(reason, 300);
+    if (why.length < 3) throw new Error('חובה לציין סיבה לתיקון');
+    const n = this.measLockedIn(m);
+    if (!n) throw new Error('השורה אינה נעולה — ניתן לערוך אותה ישירות');
+    return this.s.tx(() => {
+      const nid = this.addMeas(m.contractId, m.itemId, { after: id });
+      this.s.run('UPDATE measurements SET descr=?, area=?, shape=?, d1=?, d2=?, d3=?, t=?, qty=?, sign=?, notes=? WHERE id=?',
+        [m.desc, m.area, m.shape, m.d1, m.d2, m.d3, m.t, m.qty, m.sign, `תיקון לשורה שאושרה בחשבון ${n}: ${why}`, nid]);
+      this.s.run('UPDATE measurements SET cancelled=1, notes=? WHERE id=?', [text(`${m.notes ? m.notes + ' · ' : ''}בוטלה לתיקון: ${why}`, 1000), id]);
+      return nid;
+    }, `תיקון שורת מדידה (חשבון ${n})`);
+  }
   /** Patch fields of a row; a geometry change re-opens a stale reduce/reject decision as pending. */
   saveMeas(id, patch) {
     const m = this.meas(id);
     this.assertMeasEditable(m.contractId);
+    if (Object.keys(patch).some((k) => k !== 'notes')) this.assertMeasRowOpen(m);
     const item = this.item(m.itemId);
     const next = { ...m };
     for (const k of ['desc', 'area', 'shape', 'd1', 'd2', 'd3', 't', 'qty', 'notes', 'groupLabel']) if (k in patch) next[k] = text(String(patch[k] ?? ''), k === 'desc' || k === 'notes' ? 1000 : 120);
@@ -792,6 +974,7 @@ export class Api {
   deleteMeas(id) {
     const m = this.meas(id);
     this.assertMeasEditable(m.contractId);
+    this.assertMeasRowOpen(m);
     this.s.tx(() => (m.history.length ? this.s.run('UPDATE measurements SET cancelled=1 WHERE id=?', [id]) : this.s.run('DELETE FROM measurements WHERE id=?', [id])),
       m.history.length ? 'ביטול שורת מדידה' : 'מחיקת שורת מדידה');
     return m.history.length ? 'cancelled' : 'deleted';
@@ -809,6 +992,7 @@ export class Api {
   setMeasApproval(id, { status, value, note }) {
     const m = this.meas(id);
     this.assertMeasEditable(m.contractId, true);
+    this.assertMeasRowOpen(m);
     const item = this.item(m.itemId);
     const a = status === 'approved' || !status ? null
       : { status: ['reduced', 'rejected', 'pending'].includes(status) ? status : 'pending', value: status === 'reduced' ? Number(decStr(value, 'כמות מאושרת')) : 0, note: text(note ?? '', 500), claimedAtDecision: calcRow(m, item) };
@@ -830,6 +1014,13 @@ export class Api {
       }
       out.set(m.itemId, t);
     }
+    // quantity billed manually before the sheet was opened counts as claimed and approved
+    for (const it of items.values()) {
+      if (it.qsrc !== 'meas' || it.meas_opening == null) continue;
+      const t = out.get(it.id) ?? { claimed: 0n, approved: 0n, rows: 0, pending: 0 };
+      t.opening = it.meas_opening; t.claimed += fixed(it.meas_opening); t.approved += fixed(it.meas_opening);
+      out.set(it.id, t);
+    }
     return out;
   }
   measPending(contractId) { let n = 0; for (const t of this.measTotals(contractId).values()) n += t.pending; return n; }
@@ -837,6 +1028,8 @@ export class Api {
   measuredLines(contract, bill, lines, prev) {
     const totals = this.measTotals(contract.id);
     if (!totals.size) return lines;
+    const src = new Map(this.items(contract.id).map((i) => [i.id, i.qsrc]));
+    for (const k of [...totals.keys()]) if (src.get(k) !== 'meas') totals.delete(k);
     const prevQ = new Map((prev?.rows ?? []).map((r) => [r.itemId, fixed(r.cumQ)]));
     const out = new Map(lines);
     for (const [itemId, t] of totals) {
