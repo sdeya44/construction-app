@@ -48,3 +48,26 @@ function openPicker(onChange) {
   document.body.append(pop);
   setTimeout(() => { document.addEventListener('click', outside); document.addEventListener('keydown', esc); });
 }
+
+// ---- interface mode: the standard UI (with its colour themes) or the "בטון וזכוכית" UI ----
+const UI_KEY = 'kayan-boq-ui';
+const read = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const write = (k, v) => { try { localStorage.setItem(k, v); } catch { /* storage blocked */ } };
+export const uiPrefs = () => ({ mode: read(UI_KEY, 'std'), night: read(`${UI_KEY}-night`, '0') === '1', dense: read(`${UI_KEY}-dense`, '0') === '1' });
+export function applyUi() {
+  const p = uiPrefs(), d = document.documentElement;
+  // the new interface carries its own palette, so the colour themes of the standard one are set aside
+  if (p.mode === 'cg') { d.dataset.ui = 'cg'; d.removeAttribute('data-theme'); d.toggleAttribute('data-cg-night', p.night); d.toggleAttribute('data-cg-dense', p.dense); }
+  else { delete d.dataset.ui; d.removeAttribute('data-cg-night'); d.removeAttribute('data-cg-dense'); applyTheme(); }
+}
+export function setUi(patch) {
+  const p = { ...uiPrefs(), ...patch };
+  write(UI_KEY, p.mode); write(`${UI_KEY}-night`, p.night ? '1' : '0'); write(`${UI_KEY}-dense`, p.dense ? '1' : '0');
+  applyUi();
+}
+/** The one button that switches between the new and the standard interface (shown in both). */
+export function uiSwitch(onChange) {
+  const cg = uiPrefs().mode === 'cg';
+  return h('button', { class: `ui-switch sm ${cg ? '' : 'new'}`, title: cg ? 'מעבר לתצוגה הסטנדרטית' : 'מעבר לתצוגה החדשה — בטון וזכוכית',
+    onclick: () => { setUi({ mode: cg ? 'std' : 'cg' }); onChange(); } }, cg ? 'תצוגה סטנדרטית' : '✦ תצוגה חדשה');
+}

@@ -14,7 +14,7 @@ import { dekelReportView } from './dekel-ui.js';
 import { profitView, statusView, defectsView } from './reports.js';
 import { tendersView, tenderView, cashflowView, managementView } from './stage3.js';
 import { measView, sheetsView } from './meas-ui.js';
-import { themeButton, applyTheme, currentTheme } from './theme.js';
+import { themeButton, applyTheme, currentTheme, applyUi, uiPrefs, setUi, uiSwitch } from './theme.js';
 import { compareView } from './versions.js';
 import { helpView } from './help.js';
 
@@ -93,6 +93,7 @@ function topbar(path) {
     dekelTag(),
     undoButtons(),
     themeButton(render),
+    uiSwitch(render),
     dot);
 }
 /** ↶ / ↷ — whole-database undo of the last saved changes (also Ctrl+Z / Ctrl+Y outside text fields). */
@@ -142,14 +143,67 @@ function render() {
   }
   if (token !== renderToken) return;
   const main = h('main', { id: 'main' }, view);
+  if (uiPrefs().mode === 'cg') { document.body.replaceChildren(cgShell(path, main)); return; }
   const app = currentTheme().layout === 'side'
     ? h('div', { class: 'app side-layout' }, sidenav(path), h('div', { class: 'app-main' }, topbar(path), main))
     : h('div', { class: 'app' }, topbar(path), main);
   document.body.replaceChildren(app);
 }
 
+// ---------- "בטון וזכוכית" shell: dark bar with segmented navigation, icon rail, status bar ----------
+const ICONS = {
+  home: 'M3 11 12 4l9 7v9H3zM9 20v-6h6v6', folder: 'M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z',
+  chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2', cash: 'M2 6h20v12H2zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6', clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M12 7v5l3 2',
+  index: 'M3 17l6-6 4 4 8-8M15 7h6v6', gear: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1',
+  help: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5V14M12 17.5v.01',
+  sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4', moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5',
+  rows: 'M4 6h16M4 10h16M4 14h16M4 18h16', rowsWide: 'M4 7h16M4 12h16M4 17h16',
+};
+const svg = (d) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'cg-i'); s.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', d); s.append(p); return s; };
+const CG_MAIN = [['', 'פרויקטים'], ['mgmt', 'דוחות מנהלים'], ['cashflow', 'תזרים'], ['status', 'מצב לתאריך']];
+const CG_RAIL = [['', 'folder', 'פרויקטים'], ['mgmt', 'chart', 'דוחות מנהלים'], ['cashflow', 'cash', 'תזרים'], ['status', 'clock', 'מצב לתאריך'], ['indices', 'index', 'מדדים'], '-', ['settings', 'gear', 'הגדרות'], ['help', 'help', 'עזרה']];
+function cgShell(path, main) {
+  const sect = path.split('/')[0];
+  const isOn = (p) => (p === '' ? ['', 'p', 'c', 'b', 'm', 't'].includes(sect) : sect === p);
+  const pref = uiPrefs();
+  const dot = h('span', { class: `save-dot ${persist.saveState.status}`, title: persist.dataLocation() }, saveText(persist.saveState.status));
+  persist.saveState.listeners.clear();
+  persist.saveState.listeners.add((s) => { dot.className = `save-dot ${s}`; dot.textContent = saveText(s); if (s === 'error') toast(`שגיאת שמירה: ${persist.saveState.error?.message}`, 'err'); });
+  const crumbs = crumbsFor(path);
+  const bar = h('header', { class: 'cg-bar no-print' },
+    h('a', { class: 'cg-mono', href: '#/', title: 'KAYAN BOQ' }, h('i', {}, 'כ'), h('b', {}, 'KAYAN')),
+    h('nav', { class: 'cg-seg', 'aria-label': 'ניווט ראשי' }, CG_MAIN.map(([p, l]) => h('a', { href: '#/' + p, class: isOn(p) ? 'on' : '' }, l))),
+    h('nav', { class: 'cg-crumbs', 'aria-label': 'מיקום' }, crumbs.map(([l, p], i) => [i ? h('span', { class: 'sep' }, '‹') : null, h('a', { href: '#/' + p, class: i === crumbs.length - 1 ? 'cur' : '' }, l)])),
+    h('div', { class: 'spacer' }),
+    undoButtons(),
+    h('button', { class: 'cg-ico', title: pref.night ? 'מצב יום' : 'מצב לילה', onclick: () => { setUi({ night: !pref.night }); render(); } }, svg(pref.night ? ICONS.sun : ICONS.moon)),
+    h('button', { class: 'cg-ico', title: pref.dense ? 'צפיפות רגילה' : 'צפיפות גבוהה — יותר שורות במסך', onclick: () => { setUi({ dense: !pref.dense }); render(); } }, svg(pref.dense ? ICONS.rowsWide : ICONS.rows)),
+    uiSwitch(render));
+  const rail = h('nav', { class: 'cg-rail no-print', 'aria-label': 'אזורים' },
+    CG_RAIL.map((x) => (x === '-' ? h('hr') : h('a', { href: '#/' + x[0], class: isOn(x[0]) ? 'on' : '', title: x[2], 'aria-label': x[2] }, svg(ICONS[x[1]])))));
+  const status = h('footer', { class: 'cg-status no-print' }, dot,
+    dekelTag(),
+    ctx.store?.canUndo ? h('span', { class: 'muted' }, `פעולה אחרונה: ${ctx.store.undoLabel}`) : null,
+    h('span', { class: 'cg-sel', id: 'cg-sel' }),
+    h('div', { class: 'spacer' }),
+    h('span', {}, `${pref.dense ? 'צפוף' : 'רגיל'} · ${pref.night ? 'לילה' : 'יום'}`),
+    h('span', {}, 'כיאן הנדסה בע"מ'));
+  return h('div', { class: 'app cg-app' }, bar, rail, main, status);
+}
+// status bar: count / sum of the numbers in the selected table cells (like a spreadsheet)
+document.addEventListener('selectionchange', () => {
+  const out = document.getElementById('cg-sel');
+  if (!out) return;
+  const sel = document.getSelection();
+  const txt = sel && !sel.isCollapsed ? sel.toString() : '';
+  const nums = (txt.match(/-?\d[\d,]*\.?\d*/g) || []).map((x) => Number(x.replace(/,/g, ''))).filter((x) => Number.isFinite(x));
+  out.textContent = nums.length > 1 ? `נבחרו ${nums.length} ערכים · סכום ${nums.reduce((a, b) => a + b, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '';
+});
+
 async function boot() {
   applyTheme();
+  applyUi();
   try {
     ctx.SQL = await globalThis.initSqlJs({ locateFile: (f) => `vendor/${f}` });
     const bytes = await persist.loadData();
