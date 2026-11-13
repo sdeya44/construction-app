@@ -5,7 +5,7 @@ import { STATUS, KIND } from './projects.js';
 import { INDEX_SERIES } from '../schema.js';
 import { loadExcel, exportBill } from '../excel.js';
 import { download } from '../persist.js';
-import { periodTotals } from '../engine.js';
+import { periodTotals, discountLines } from '../engine.js';
 import { extraForm } from './boq.js';
 
 const BASIS = { calc: 'מחושבת', sub: 'מוגשת', appr: 'מאושרת' };
@@ -212,7 +212,7 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
   function patch() {
     const rows = new Map(res.rows.map((x) => [x.itemId, x]));
     const groups = new Map((pv ? PT().groups : res.totals.groups).map((g) => [g.key, g]));
-    for (const [ck, R] of chapRefs) { const g = groups.get(ck); if (!g || !!g.discount !== !!R.disc) return false; }
+    for (const [ck, R] of chapRefs) { const g = groups.get(ck); if (!g || !!g.discount !== !!R.disc || discountLines(g, money).length !== R.lines) return false; }
     const subs = new Map();
     for (const [id, R] of rowRefs) {
       const x = rows.get(id);
@@ -226,7 +226,10 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
       const k = `${R.it.struct}.${R.it.chapter}.${R.it.sub}`; subs.set(k, (subs.get(k) ?? 0) + amtOf(x));
     }
     for (const [k, td] of subRefs) td.textContent = money(subs.get(k) ?? 0);
-    for (const [ck, R] of chapRefs) { const g = groups.get(ck); R.gross.textContent = money(g.gross); if (R.disc) { R.discLabel.textContent = `הנחה ${g.rate}% מסך ${money(g.gross)}`; R.disc.textContent = money(-g.discount); R.net.textContent = money(g.net); } }
+    for (const [ck, R] of chapRefs) {
+      const g = groups.get(ck); R.gross.textContent = money(g.gross);
+      if (R.disc) { discountLines(g, money).forEach((d, i) => { R.discLabel[i].textContent = d.label; R.disc[i].textContent = money(-d.amount); }); R.net.textContent = money(g.net); }
+    }
     return true;
   }
   function draw() {
@@ -242,12 +245,18 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
       closeSub();
       const g = groups.get(chap);
       if (!g) return;
-      const R = { gross: h('td', { class: 'n' }, money(g.gross)) };
+      const R = { gross: h('td', { class: 'n' }, money(g.gross)), lines: discountLines(g, money).length };
       chapRefs.set(chap, R);
       tbody.append(h('tr', { class: 'bn-csum' }, h('td', { colspan: NCOL - 1 }, `סה"כ ${g.chapter} ${g.name}`), R.gross));
       if (g.discount) {
-        Object.assign(R, { discLabel: h('td', { colspan: NCOL - 1 }, `הנחה ${g.rate}% מסך ${money(g.gross)}`), disc: h('td', { class: 'n minus' }, money(-g.discount)), net: h('td', { class: 'n' }, money(g.net)) });
-        tbody.append(h('tr', { class: 'bn-csum' }, R.discLabel, R.disc), h('tr', { class: 'bn-csum' }, h('td', { colspan: NCOL - 1 }, `סה"כ ${g.chapter} (לאחר הנחה)`), R.net));
+        R.disc = []; R.discLabel = [];
+        for (const d of discountLines(g, money)) {
+          const lab = h('td', { colspan: NCOL - 1 }, d.label), val = h('td', { class: 'n minus' }, money(-d.amount));
+          R.discLabel.push(lab); R.disc.push(val);
+          tbody.append(h('tr', { class: 'bn-csum' }, lab, val));
+        }
+        R.net = h('td', { class: 'n' }, money(g.net));
+        tbody.append(h('tr', { class: 'bn-csum' }, h('td', { colspan: NCOL - 1 }, `סה"כ ${g.chapter} (לאחר הנחה)`), R.net));
       }
     };
     for (const it of items) {
@@ -357,7 +366,7 @@ function summaryTab(ctx, b, c, r, editable) {
 
   const groups = h('table', { class: 't' }, h('thead', {}, h('tr', {}, ['מבנה.פרק', 'שם', 'ברוטו', 'הנחה', 'הנחה כללית', 'נטו'].map((x, i) => h('th', { class: i >= 2 ? 'n' : '' }, x)))),
     h('tbody', {}, T.groups.filter((g) => g.gross !== 0).map((g) => h('tr', {}, h('td', { class: 'code' }, g.key), h('td', {}, g.name, g.exempt ? h('span', { class: 'tag', style: { marginInlineStart: '6px' } }, 'מוחרג') : null),
-      h('td', { class: 'n' }, money(g.gross)), h('td', { class: 'n' }, g.discount ? `${money(g.discount)} (${g.rate}%)` : ''), h('td', { class: 'n' }, g.general ? money(g.general) : ''), h('td', { class: 'n' }, money(g.final)))),
+      h('td', { class: 'n' }, money(g.gross)), h('td', { class: 'n', title: discountLines(g, money).map((d) => d.label).join('\n') }, g.discount ? (discountLines(g).length === 1 && g.chapterDisc ? `${money(g.discount)} (${g.rate}%)` : money(g.discount)) : ''), h('td', { class: 'n' }, g.general ? money(g.general) : ''), h('td', { class: 'n' }, money(g.final)))),
     h('tr', { class: 'total' }, h('td', {}, ''), h('td', {}, 'סה"כ'), h('td', { class: 'n' }, money(T.gross)), h('td', { class: 'n' }, money(T.chapterDiscount)), h('td', { class: 'n' }, money(T.general)), h('td', { class: 'n' }, money(T.net)))));
 
   const adjForm = () => formModal('התאמות לחשבון', [

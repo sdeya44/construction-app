@@ -31,7 +31,8 @@ export function contractFields(c, { forConvert = false } = {}) {
     { name: 'party', label: c.kind === 'sub' ? 'קבלן משנה' : 'מזמין / נמען', value: c.party },
   ];
   if (isQuote) {
-    fields.push({ name: 'quote_markup', label: 'תוספת (+) / הנחה (−) כללית מדקל %', value: c.quote_markup ?? '0', numeric: true, hint: 'לדוגמה ‎-12 = הנחה של 12% ממחירון דקל' },
+    fields.push({ name: 'general_discount', label: 'הנחה כללית על כל הפרויקט %', value: c.general_discount ?? '0', numeric: true, hint: 'מופיעה בסוף ההצעה, אחרי הנחות המבנים / הפרקים / תתי-הפרקים' },
+      { name: 'quote_markup', label: 'תמחור מדקל: תוספת (+) / הנחה (−) % למחירי היחידה', value: c.quote_markup ?? '0', numeric: true, hint: 'משנה מחירי יחידה של סעיפים מדקל, לדוגמה ‎-12' },
       { name: 'vat_rate', label: 'מע"מ %', value: c.vat_rate ?? '18', numeric: true });
     return fields;
   }

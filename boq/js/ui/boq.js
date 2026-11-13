@@ -66,10 +66,12 @@ export function extraForm(ctx, contract, struct = '01', after = null) {
 
 function sectionForm(ctx, contract, code, sec) {
   const level = code.split('.').length;
-  const fields = [{ name: 'name', label: ['שם מבנה', 'שם פרק', 'שם תת-פרק'][level - 1], value: sec?.name ?? '', span: true }];
+  const what = ['מבנה', 'פרק', 'תת-פרק'][level - 1];
+  const fields = [{ name: 'name', label: `שם ${what}`, value: sec?.name ?? '', span: true },
+    { name: 'discount', label: `הנחה על כל ה${what} %`, value: sec?.discount ?? '0', numeric: true,
+      hint: `חלה על סכום כל הסעיפים ב${what} (לא על מחירי היחידה), ומופיעה כשורת הנחה בסוף ה${what}. סדר: תת-פרק ← פרק ← מבנה ← הנחה כללית.` }];
   if (level === 2) {
-    if (contract.kind === 'quote') fields.push({ name: 'markup', label: 'תוספת/הנחה לפרק מדקל %', value: sec?.markup ?? '0', numeric: true, hint: 'מצטבר על התוספת הכללית של ההצעה' });
-    else fields.push({ name: 'discount', label: 'הנחה לפרק %', value: sec?.discount ?? '0', numeric: true });
+    if (contract.kind === 'quote') fields.push({ name: 'markup', label: 'תמחור מדקל: תוספת (+) / הנחה (−) % למחירי היחידה', value: sec?.markup ?? '0', numeric: true, hint: 'משנה רק את מחירי היחידה של סעיפים שתומחרו מדקל — בנפרד מההנחה על הסכום' });
     fields.push({ name: 'exempt', label: 'מוחרג מההנחה הכללית', type: 'checkbox', value: sec ? !!sec.exempt : code.endsWith('.99') });
   }
   formModal(`${['מבנה', 'פרק', 'תת-פרק'][level - 1]} ${code}`, fields, (v) => {
@@ -213,7 +215,7 @@ export function boqView(ctx, cid) {
   for (const code of codes) {
     const lvl = code.split('.').length;
     const s = sections.get(code);
-    const extra = lvl === 2 && s && (isQuote ? s.markup !== '0' ? ` (${s.markup}%)` : '' : s.discount !== '0' ? ` (−${s.discount}%)` : '');
+    const extra = s ? [s.discount && s.discount !== '0' ? `−${s.discount}%` : '', isQuote && lvl === 2 && s.markup !== '0' ? `דקל ${s.markup}%` : ''].filter(Boolean).map((x) => ` (${x})`).join('') : '';
     tree.append(node(code, (s?.name || ['מבנה', 'פרק', 'תת-פרק'][lvl - 1] + ' ' + code.split('.').at(-1)) + (extra || ''), `l${lvl}`));
   }
 

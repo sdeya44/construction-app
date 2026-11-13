@@ -56,7 +56,37 @@ export function discountTotals(rows, sectionOf, generalRate, key = 'amount') {
     g.subs[r.sub] = (g.subs[r.sub] ?? 0) + r[key]; // plain object: survives the JSON snapshot
   }
   const list = [...groups.values()].sort((a, b) => a.key.localeCompare(b.key));
-  for (const g of list) { g.discount = pct(g.gross, g.rate); g.net = g.gross - g.discount; }
+  // Discounts on amounts (never on unit prices), compounding from the inside out:
+  // subchapter → chapter → structure → general. A chapter-only discount gives exactly the old figures.
+  for (const g of list) {
+    g.subDiscs = [];
+    for (const [sub, amt] of Object.entries(g.subs).sort()) {
+      const rate = sectionOf(`${g.key}.${sub}`)?.discount ?? '0';
+      const d = pct(amt, rate);
+      if (d) g.subDiscs.push({ sub, rate, base: amt, amount: d });
+    }
+    g.subDiscount = g.subDiscs.reduce((a, x) => a + x.amount, 0);
+    g.chapterBase = g.gross - g.subDiscount;
+    g.chapterDisc = pct(g.chapterBase, g.rate);
+    g.structDisc = 0; g.structRate = '0';
+    g.discount = g.subDiscount + g.chapterDisc;
+    g.net = g.gross - g.discount;
+  }
+  for (const st of [...new Set(list.map((g) => g.struct))]) {
+    const rate = sectionOf(st)?.discount ?? '0';
+    const gs = list.filter((g) => g.struct === st);
+    const base = gs.reduce((a, g) => a + g.net, 0);
+    const total = pct(base, rate);
+    if (!total) continue;
+    // allocate the structure discount to its chapters in proportion to their net; remainder to the last
+    let left = total;
+    gs.forEach((g, i) => {
+      const share = i === gs.length - 1 ? left : (base ? Number(divRound(BigInt(total) * BigInt(g.net), BigInt(base))) : 0);
+      left -= share;
+      Object.assign(g, { structDisc: share, structRate: rate, structBase: base });
+      g.discount += share; g.net -= share;
+    });
+  }
   const beforeGeneral = list.reduce((s, g) => s + g.net, 0);
   const eligibleGroups = list.filter((g) => !g.exempt);
   const eligible = eligibleGroups.reduce((s, g) => s + g.net, 0);
@@ -77,7 +107,11 @@ export function discountTotals(rows, sectionOf, generalRate, key = 'amount') {
     g.catNet.over = g.final - g.catNet.contract - g.catNet.extra;
   }
   const sum = (f) => list.reduce((s, g) => s + f(g), 0);
-  return {
+  const structs = [...new Set(list.map((g) => g.struct))].map((st) => {
+    const gs = list.filter((g) => g.struct === st);
+    return { struct: st, rate: gs[0].structRate, base: gs[0].structBase ?? 0, amount: gs.reduce((a, g) => a + g.structDisc, 0) };
+  }).filter((x) => x.amount);
+  return { structs,
     groups: list, gross: sum((g) => g.gross), chapterDiscount: sum((g) => g.discount), beforeGeneral,
     eligible, exempt: beforeGeneral - eligible, generalRate, general, net: beforeGeneral - general,
     cat: { contract: sum((g) => g.catNet.contract), over: sum((g) => g.catNet.over), extra: sum((g) => g.catNet.extra) },
@@ -217,4 +251,17 @@ export function periodTotals(r, prevSnap, periodic) {
   return { rows, groups,
     T: { ...T, groups, gross: d('gross'), chapterDiscount: d('chapterDiscount'), beforeGeneral: d('beforeGeneral'), eligible: d('eligible'), exempt: d('exempt'), general: d('general'), net: d('net') },
     cat: { contract: T.cat.contract - (P?.cat.contract ?? 0), over: T.cat.over - (P?.cat.over ?? 0), extra: T.cat.extra - (P?.cat.extra ?? 0) } };
+}
+
+/**
+ * Display lines for a chapter's discounts, in the order they were applied. Each: {kind, label, amount}
+ * (amount = positive discount in agorot). `fmt` formats money for the label.
+ */
+export function discountLines(g, fmt = (c) => (c / 100).toFixed(2)) {
+  const r = (x) => String(x).replace(/\.0+$/, '');
+  const out = [];
+  for (const d of g.subDiscs ?? []) out.push({ kind: 'sub', label: `הנחה ${r(d.rate)}% לתת פרק ${g.chapter}.${+d.sub} מסך ${fmt(d.base)}`, amount: d.amount });
+  if (g.chapterDisc ?? g.discount) out.push({ kind: 'chapter', label: `הנחה ${r(g.rate)}% מסך ${fmt(g.chapterBase ?? g.gross)}`, amount: g.chapterDisc ?? g.discount });
+  if (g.structDisc) out.push({ kind: 'struct', label: `חלק הפרק בהנחת מבנה ${+g.struct} (${r(g.structRate)}%)`, amount: g.structDisc });
+  return out;
 }
