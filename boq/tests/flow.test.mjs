@@ -212,3 +212,28 @@ test('price correction in a locked, billed contract settles the difference on ea
   assert.ok(r.warnings.some((w) => w.type === 'price-change'));
   assert.equal(api.bill(b1).snap.rows.find((x) => x.itemId === conc).price, '1000');     // approved bill frozen
 });
+
+test('delete a structure / chapter / subchapter with all its items; blocked when locked or billed; one undo restores', () => {
+  const api = new Api(new Store(SQL, null, () => {})); // a saver turns on undo history, as in the app
+  const p = api.saveProject({ name: 'p' });
+  const q = api.saveContract({ project_id: p, kind: 'quote', name: 'q' });
+  const I = (st, ch, sb, num) => api.saveItem({ contract_id: q, struct: st, chapter: ch, sub: sb, num, description: `${st}.${ch}.${sb}.${num}`, unit: 'מ"ר', qty: '1', price: '10' });
+  I('01', '01', '01', 10); I('01', '02', '01', 10); I('01', '02', '02', 10); I('02', '01', '01', 10);
+  api.saveSection(q, '01.02', { name: 'בטון' }); api.saveSection(q, '01.02.02', { name: 'שלד' });
+  assert.equal(api.deleteSection(q, '01.02.02'), 1);
+  assert.equal(api.items(q).length, 3);
+  assert.equal(api.deleteSection(q, '01.02'), 1);
+  assert.ok(!api.sections(q).some((s) => s.code === '01.02' || s.code.startsWith('01.02.')));
+  assert.equal(api.deleteSection(q, '02'), 1);
+  assert.deepEqual(api.items(q).map((i) => i.description), ['01.01.01.10']);
+  api.s.undo();                                             // one step brings the whole structure back
+  assert.equal(api.items(q).length, 2);
+  // a locked contract, and items billed in an approved bill, cannot be removed
+  const c = api.copyContract(q, { kind: 'client', name: 'c' });
+  assert.throws(() => api.deleteSection(c, '01'), /נעול/);
+  api.unlockContract(c, 'בדיקה');
+  const it = api.items(c).find((i) => i.struct === '02');
+  const b = api.createBill(c, { month: '2026-01' }); api.setLine(b, it.id, { q_sub: '1' }); api.approveBill(b);
+  api.s.run('UPDATE contracts SET locked=0 WHERE id=?', [c]);
+  assert.throws(() => api.deleteSection(c, '02'), /חשבון מאושר/);
+});

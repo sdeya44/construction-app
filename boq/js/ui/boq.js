@@ -77,10 +77,28 @@ function sectionForm(ctx, contract, code, sec) {
     // chapter 99 (extras) is always outside the general and structure discounts — no choice to offer
     if (code.split('.')[1] !== '99') fields.push({ name: 'exempt', label: 'מוחרג מההנחה הכללית', type: 'checkbox', value: sec ? !!sec.exempt : false });
   }
-  formModal(`${['מבנה', 'פרק', 'תת-פרק'][level - 1]} ${code}`, fields, (v) => {
+  const locked = contract.kind !== 'quote' && !!contract.locked;
+  const m = formModal(`${['מבנה', 'פרק', 'תת-פרק'][level - 1]} ${code}`, fields, (v) => {
     ctx.api.saveSection(contract.id, code, { name: v.name, discount: v.discount, markup: v.markup, exempt: level === 2 ? v.exempt : undefined });
     ctx.refresh();
-  });
+  }, { intro: locked ? null : h('div', { style: { display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' } },
+    h('button', { class: 'danger sm', type: 'button', onclick: () => { m.close(); deleteSection(ctx, contract, code); } }, `מחיקת ה${what} וכל הסעיפים שבו…`)) });
+}
+
+/** Delete a structure / chapter / subchapter after confirming what goes (one Ctrl+Z restores it). */
+export async function deleteSection(ctx, contract, code) {
+  const api = ctx.api;
+  const what = ['מבנה', 'פרק', 'תת-פרק'][code.split('.').length - 1];
+  const items = api.sectionScope(contract.id, code);
+  const total = items.filter(isBillable).reduce((t, i) => t + lineCents(i.qty, i.price), 0);
+  const name = api.sections(contract.id).find((s) => s.code === code)?.name ?? '';
+  if (!(await confirmBox(`מחיקת ${what} ${code}`, `למחוק את ה${what} ${code}${name ? ` "${name}"` : ''} עם ${items.length} סעיפים בסך ${money(total)} ₪? אפשר לבטל מיד עם Ctrl+Z.`, { danger: true, ok: 'מחיקה' }))) return;
+  const n = attempt(() => api.deleteSection(contract.id, code));
+  if (n === undefined) return;
+  const sel = loadSel(contract.id);
+  if (sel.code && (sel.code === code || sel.code.startsWith(code + '.'))) saveSel(contract.id, { ...sel, code: 'all', itemId: null });
+  toast(`נמחק ה${what} ${code} — ${n} סעיפים (Ctrl+Z לביטול)`);
+  ctx.refresh();
 }
 
 function parsePaste(text) {
@@ -228,10 +246,17 @@ export function boqView(ctx, cid) {
       e.currentTarget.setAttribute('aria-expanded', String(!folded.has(code)));
     } }) : h('span', { class: 'tw none' });
     return h('div', { class: `node l${lvl} ${sel.code === code ? 'on' : ''}`, onclick: () => { sel.code = code; sel.itemId = null; saveSel(cid, sel); ctx.refresh(); },
-      ondblclick: () => sectionForm(ctx, contract, code, sections.get(code)), title: `${LV[lvl - 1]} ${code} — לחיצה כפולה להגדרות` },
+      ondblclick: () => sectionForm(ctx, contract, code, sections.get(code)), title: `${LV[lvl - 1]} ${code} — לחיצה כפולה להגדרות · לחיצה ימנית לתפריט`,
+      oncontextmenu: (e) => { e.preventDefault(); nodeMenu(code, lvl); } },
     tw, lvl === 1 ? h('span', { class: 'lv' }, `${LV[0]} ${code}`) : h('span', { class: 'c' }, code),
     h('span', { class: 'nm' }, s?.name || (lvl === 1 ? '' : `${LV[lvl - 1]} ${code.split('.').at(-1)}`)), ...tags.map((t) => h('span', { class: 'tt', title: t }, t.replace('הנחה ', '−'))),
     h('span', { class: 'amt' }, amounts.has(code) ? money(amounts.get(code)).replace(/\.\d\d$/, '') : ''));
+  };
+  const nodeMenu = (code, lvl) => {
+    const acts = [[`הגדרות ה${LV[lvl - 1]} (שם, הנחה)`, () => sectionForm(ctx, contract, code, sections.get(code))],
+      ['+ סעיף כאן', () => { const [s0, c0, t0] = code.split('.'); itemForm(ctx, contract, null, { struct: s0, chapter: c0 ?? '01', sub: t0 ?? '01' }); }],
+      boqLocked ? null : [`מחיקת ה${LV[lvl - 1]} וכל הסעיפים שבו…`, () => deleteSection(ctx, contract, code), true]].filter(Boolean);
+    const m = modal(`${LV[lvl - 1]} ${code} ${sections.get(code)?.name ?? ''}`, h('div', { class: 'stack' }, acts.map(([l, f, danger]) => h('button', { class: danger ? 'danger' : '', onclick: () => { m.close(); f(); } }, l))));
   };
   const kids = (pre, lvl) => codes.filter((c) => c.split('.').length === lvl && c.startsWith(pre + '.'));
   const branch = (code, lvl) => {
