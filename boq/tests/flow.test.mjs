@@ -183,3 +183,15 @@ test('monthly (non-cumulative) view: period rows and chapter / discount figures 
   assert.equal(P.groups.find((g) => g.key === '01.02').discount, Math.round(6000 * 100 * 0.03));
   assert.equal(P.groups.find((g) => g.key === '01.01').gross, 0);
 });
+
+test('locked contract: an extra recorded as already approved by the client is billable at once', () => {
+  const { api, c } = setup();
+  const b = api.createBill(c, { month: '2026-01' });
+  const x = api.saveItem({ contract_id: c, struct: '01', chapter: '99', sub: '01', num: 10, unit: 'ש"ע', qty: '40', price: '95', description: 'רג׳י', change_status: 'approved' });
+  assert.equal(api.item(x).kind, 'extra');
+  assert.equal(api.item(x).change_status, 'approved');
+  api.setLine(b, x, { q_sub: '8' });
+  assert.equal(api.calc(b).rows.find((r) => r.itemId === x).amount, 8 * 95 * 100);
+  const y = api.saveItem({ contract_id: c, struct: '01', chapter: '99', sub: '01', num: 20, unit: 'ש"ע', qty: '1', price: '1', description: 'ממתין' });
+  assert.equal(api.item(y).change_status, 'pending');                 // default stays "waiting for approval"
+});

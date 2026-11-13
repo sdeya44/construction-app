@@ -141,7 +141,8 @@ export class Api {
     if (contract.kind === 'quote' && !f.price_manual && f.dekel_price != null) f.price = this.quoteItemPrice(contract, struct, chapter, f.dekel_price);
     const locked = contract.kind !== 'quote' && !!contract.locked;
     // a locked contract accepts new lines only as change items awaiting approval (notes are free)
-    if (locked && !it.id && f.kind !== 'note') { f.kind = 'extra'; f.change_status = 'pending'; }
+    // (the user may record at once that the client already approved it — explicit 'approved' only)
+    if (locked && !it.id && f.kind !== 'note') { f.kind = 'extra'; f.change_status = it.change_status === 'approved' ? 'approved' : 'pending'; }
     try {
     return this.s.tx(() => {
       if (it.id) {

@@ -6,6 +6,7 @@ import { INDEX_SERIES } from '../schema.js';
 import { loadExcel, exportBill } from '../excel.js';
 import { download } from '../persist.js';
 import { periodTotals } from '../engine.js';
+import { extraForm } from './boq.js';
 
 const BASIS = { calc: 'מחושבת', sub: 'מוגשת', appr: 'מאושרת' };
 /** Work status (בהכנה / הוגש / הוחזר לתיקונים / הוגש מחדש / מאושר) + collection status derived from payments. */
@@ -146,7 +147,8 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
   const isMeas = (it) => it.qsrc === 'meas';
   // monthly (non-cumulative) presentation: only this month's quantities and amounts
   const pv = b.doc?.view === 'period';
-  let showAllPv = sessionStorage.getItem('pv-all') === '1';
+  // a monthly bill with nothing entered yet shows every line, so quantities can be typed straight away
+  let showAllPv = sessionStorage.getItem('pv-all') === '1' || !r.rows.some((x) => x.curQ !== '0');
   const prevSnap = pv ? api.prevApproved(c.id, b.number) : null;
   const PT = () => periodTotals(res, prevSnap, periodic);
   let showVersions = !pv && sessionStorage.getItem('exec-versions') === '1';
@@ -173,14 +175,25 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
   const numInput = (value, onCommit, enabled, cls = '') => {
     if (!enabled) return h('td', { class: `n locked ${cls}` }, n2(value));
     const inp = h('input', { class: 'n', value: fmtIn(value), dir: 'ltr', inputmode: 'decimal', 'data-col': cls });
-    inp.addEventListener('change', () => { if (onCommit(inp.value) !== undefined) { res = api.calc(b.id); if (!(filter === 'all' && patch())) draw(); drawSum(); setTimeout(() => focusNext(cls, inp.closest('tr')?.dataset.id, 0), 0); } });
+    inp.addEventListener('change', () => {
+      // the browser also fires "change" when focus leaves after Enter — commit each value once only
+      if (inp.value === inp._committed) return;
+      inp._committed = inp.value;
+      if (onCommit(inp.value) === undefined) return;
+      res = api.calc(b.id);
+      const patched = filter === 'all' && patch();
+      if (!patched) draw();
+      drawSum();
+      // after a full redraw the edited input is gone: put the cursor back on the same row
+      if (!patched && !tbody.contains(document.activeElement)) { const id = inp.closest('tr')?.dataset.id; setTimeout(() => { if (!tbody.contains(document.activeElement)) focusNext(cls, id, 0); }, 0); }
+    });
     inp.addEventListener('keydown', (e) => {
       if (!['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
       e.preventDefault();
       const id = inp.closest('tr').dataset.id;
-      const changed = inp.value !== inp.defaultValue;
-      if (changed) { inp.dispatchEvent(new Event('change')); setTimeout(() => focusNext(cls, id, e.key === 'ArrowUp' ? -1 : 1), 0); }
-      else focusNext(cls, id, e.key === 'ArrowUp' ? -1 : 1);
+      const changed = inp.value !== (inp._committed ?? inp.defaultValue);
+      if (changed) inp.dispatchEvent(new Event('change'));
+      focusNext(cls, id, e.key === 'ArrowUp' ? -1 : 1);
     });
     return h('td', { class: 'edit' }, inp);
   };
@@ -207,7 +220,7 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
       if (R.pct) R.pct.textContent = pctOf(x.cumQ, R.it.qty);
       if (R.prev) R.prev.textContent = n2(x.prevQ);
       R.amt.textContent = money(amtOf(x));
-      const setVal = (td, v) => { const i = td.querySelector('input'); if (i) { if (document.activeElement !== i) { i.value = fmtIn(v); i.defaultValue = i.value; } } else td.lastChild.textContent = n2(v); };
+      const setVal = (td, v) => { const i = td.querySelector('input'); if (i) { if (document.activeElement !== i) { i.value = fmtIn(v); i.defaultValue = i.value; i._committed = i.value; } } else td.lastChild.textContent = n2(v); };
       setVal(R.cur, x.curQ); if (R.cum) setVal(R.cum, x.cumQ);
       R.tr.classList.toggle('over', !!x.cat.over);
       const k = `${R.it.struct}.${R.it.chapter}.${R.it.sub}`; subs.set(k, (subs.get(k) ?? 0) + amtOf(x));
@@ -299,6 +312,7 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
       showVersions ? basisSel : null, pv ? null : filterSel,
       pv ? h('label', { style: { display: 'flex', gap: '4px', alignItems: 'center' }, title: 'בתצוגה חודשית מוצגים רק סעיפים שבוצעו החודש; סמן כדי להזין כמות לסעיף חדש' },
         h('input', { type: 'checkbox', checked: showAllPv, onchange: (e) => { sessionStorage.setItem('pv-all', e.target.checked ? '1' : '0'); ctx.refresh(); } }), 'כל הסעיפים (להזנה)') : null,
+      editable ? h('button', { title: 'הוספת עבודה נוספת לפרק 99 — נכללת בחשבון כשהיא מאושרת', onclick: () => extraForm(ctx, c, items[0]?.struct ?? '01') }, '+ סעיף חריג (99)') : null,
       pv ? null : h('label', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, h('input', { type: 'checkbox', checked: showVersions, onchange: (e) => { sessionStorage.setItem('exec-versions', e.target.checked ? '1' : '0'); ctx.refresh(); } }), 'גרסאות כמות'),
       h('span', { class: 'sep' }),
       showVersions ? copyBtn('q_calc', 'q_sub', 'מחושבת ← מוגשת', editable) : null, showVersions ? copyBtn('q_sub', 'q_appr', 'מוגשת ← מאושרת', apprEditable) : null,
