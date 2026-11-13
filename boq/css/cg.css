@@ -201,3 +201,24 @@ html[data-ui="cg"] .kea .sec-sum .r .u { color: #c4dcd7; }
   .cg-seg { overflow-x: auto; max-width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .cg-app * { transition: none !important; } }
+
+/* open-document tabs and the palette button in the bar; location moves to the status bar */
+.cg-tabs { display: flex; gap: 2px; min-width: 0; overflow: hidden; }
+.cg-tabs a { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 8px; align-items: center; padding: 3px 10px 3px 8px; border-radius: 8px; color: var(--cg-bar-mu); text-decoration: none; max-width: 210px; min-width: 0; }
+.cg-tabs a .tt { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cg-tabs a small { grid-row: 2; font-size: 10.5px; opacity: .7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cg-tabs a .tx { grid-row: 1 / 3; grid-column: 2; border: 0; background: transparent; color: inherit; padding: 0 2px; font-size: 10px; opacity: .55; }
+.cg-tabs a .tx:hover { opacity: 1; background: transparent; }
+.cg-tabs a:hover { color: var(--cg-bar-ink); background: rgba(255, 255, 255, .05); }
+.cg-tabs a.on { color: var(--cg-bar-ink); background: rgba(255, 255, 255, .09); box-shadow: inset 0 -2px 0 var(--cg-patina-hi); }
+.cg-find { display: flex; gap: 14px; align-items: center; border-radius: 999px !important; padding: 4px 8px 4px 14px; color: var(--cg-bar-mu) !important; min-width: 200px; justify-content: space-between; }
+.cg-find kbd { font: 10.5px ui-monospace, monospace; opacity: .8; }
+.cg-status .cg-crumbs { color: var(--muted); font-size: 12px; }
+.cg-status .cg-crumbs a { color: var(--ink-2); }
+.cg-status .cg-crumbs a.cur { color: var(--ink); font-weight: 500; }
+html[data-ui="cg"] .palette { background: var(--surface); border-color: var(--cg-glass-line); }
+html[data-ui="cg"] .palette-veil { background: rgba(20, 18, 15, .38); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+html[data-ui="cg"] .selbar { bottom: 44px; background: rgba(31, 29, 26, .9); }
+html[data-ui="cg"] .selbar button.p { background: var(--cg-patina-hi); color: #10201d; }
+@media screen and (max-width: 1200px) { .cg-tabs a small { display: none; } .cg-find span { display: none; } .cg-find { min-width: 0; } }
+@media screen and (max-width: 900px) { .cg-tabs { display: none; } }
