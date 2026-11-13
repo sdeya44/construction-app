@@ -207,6 +207,29 @@ export class Api {
       throw new Error(`הסעיף ${itemCode(it)} חויב בחשבון מאושר ולא ניתן למחיקה`);
     this.s.tx(() => this.s.run('DELETE FROM items WHERE id=?', [id]), `מחיקת סעיף ${itemCode(it)}`);
   }
+  /** Items + section rows under a structure / chapter / subchapter code ('01', '01.02', '01.02.03'). */
+  sectionScope(contractId, code) {
+    const [st, ch, sb] = code.split('.');
+    const where = ['contract_id=?', 'struct=?'], args = [contractId, st];
+    if (ch) { where.push('chapter=?'); args.push(ch); }
+    if (sb) { where.push('sub=?'); args.push(sb); }
+    return this.s.all(`SELECT * FROM items WHERE ${where.join(' AND ')}`, args);
+  }
+  /** Delete a whole structure / chapter / subchapter with all its items, as one undoable step. */
+  deleteSection(contractId, code) {
+    const c = this.contract(contractId);
+    const what = ['מבנה', 'פרק', 'תת-פרק'][code.split('.').length - 1];
+    if (c.kind !== 'quote' && c.locked) throw new Error(`כתב הכמויות החוזי נעול — לא ניתן למחוק ${what}. אפשר לבטל את הנעילה לפני החשבון הראשון`);
+    const items = this.sectionScope(contractId, code);
+    const billed = items.length ? this.s.get(`SELECT COUNT(DISTINCT l.item_id) n FROM bill_lines l JOIN bills b ON b.id=l.bill_id
+      WHERE b.status='approved' AND l.item_id IN (${items.map(() => '?').join(',')})`, items.map((i) => i.id)).n : 0;
+    if (billed) throw new Error(`ב${what} ${code} יש ${billed} סעיפים שחויבו בחשבון מאושר — לא ניתן למחוק`);
+    this.s.tx(() => {
+      for (const it of items) this.s.run('DELETE FROM items WHERE id=?', [it.id]);
+      this.s.run("DELETE FROM sections WHERE contract_id=? AND (code=? OR code LIKE ? || '.%')", [contractId, code, code]);
+    }, `מחיקת ${what} ${code}`);
+    return items.length;
+  }
   approveChange(id, status = 'approved') {
     this.s.tx(() => this.s.run('UPDATE items SET change_status=? WHERE id=?', [status, id]), status === 'approved' ? 'אישור סעיף חריג' : 'דחיית סעיף חריג');
   }
