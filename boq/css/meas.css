@@ -188,3 +188,18 @@ tr.rgrp-grand td.num{text-align:left}
 }
 
 .kea .stat.locked{color:#5b6472;background:#eceff3;white-space:nowrap}
+
+/* Entry screen follows the application's look (colours, font, theme); the printed sheets keep the
+   original palette above so their output is unchanged. */
+.kea.meas-entry{
+  --ink:inherit; --muted:inherit; --line:inherit; --bg:inherit; --gold:inherit; --shadow:inherit;
+  --navy:var(--accent); --navy2:var(--accent-2); --navy-dk:var(--accent-2);
+  --gold-dk:var(--gold); --gold-lt:var(--accent-weak);
+  --card:var(--surface); --paper:var(--surface-2); --hair:var(--line);
+  --pos:var(--ok); --pos-bg:var(--ok-weak); --neg:var(--bad); --neg-bg:var(--bad-weak); --amber:var(--warn); --amber-bg:var(--warn-weak);
+  --r:var(--radius); --r-lg:var(--radius);
+  font-family:var(--font); color:var(--ink);
+}
+.kea.meas-entry #meas-table th{background:var(--surface-2);color:var(--ink-2)}
+.kea.meas-entry #meas-table input,.kea.meas-entry #meas-table select{background:var(--field)}
+.kea.meas-entry .tbl-wrap{background:var(--surface) !important}

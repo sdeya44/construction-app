@@ -4,14 +4,18 @@ import { SCHEMA, SCHEMA_VERSION } from './schema.js';
 
 export class Store {
   constructor(SQL, bytes, persist = null) {
+    this.SQL = SQL;
     this.db = bytes ? new SQL.Database(bytes) : new SQL.Database();
     this.persist = persist;
+    // undo: the database as it was before each committed change (only when persisting, i.e. in the app)
+    this.undoStack = []; this.redoStack = []; this.lastBytes = null; this.lastLabel = '';
     this.db.run('PRAGMA foreign_keys = ON;');
     this.migrate();
     this.db.exec(SCHEMA);
     this.db.run("INSERT OR REPLACE INTO meta VALUES ('schema', ?)", [String(SCHEMA_VERSION)]);
     this.listeners = new Set();
     this.depth = 0;
+    if (this.persist) this.lastBytes = this.export();
   }
 
   /** Upgrade databases created by older versions, before SCHEMA (CREATE IF NOT EXISTS) runs. */
@@ -77,7 +81,7 @@ export class Store {
   }
 
   /** Atomic unit of work. Nested calls join the outer transaction. */
-  tx(fn, label = '') {
+  tx(fn, label = '', undoLabel = '') {
     if (this.depth > 0) return fn(this);
     this.db.run('BEGIN');
     this.depth++;
@@ -90,13 +94,51 @@ export class Store {
       this.db.run('ROLLBACK');
       throw e;
     } finally { this.depth--; }
-    this.changed();
+    this.changed(label || undoLabel || 'שינוי');
     return result;
   }
 
-  changed() {
-    if (this.persist) this.persist(this.export());
+  changed(label = 'שינוי') {
+    if (this.persist) {
+      const now = this.export();
+      if (this.lastBytes) {
+        this.undoStack.push({ bytes: this.lastBytes, label });
+        // keep the last 30 steps and at most ~80 MB of snapshots
+        let size = this.undoStack.reduce((s, u) => s + u.bytes.length, 0);
+        while (this.undoStack.length > 30 || (size > 80e6 && this.undoStack.length > 1)) size -= this.undoStack.shift().bytes.length;
+        this.redoStack = [];
+      }
+      this.lastBytes = now;
+      this.persist(now);
+    }
     for (const l of this.listeners) l();
+  }
+  get canUndo() { return this.undoStack.length > 0; }
+  get canRedo() { return this.redoStack.length > 0; }
+  get undoLabel() { return this.undoStack.at(-1)?.label ?? ''; }
+  get redoLabel() { return this.redoStack.at(-1)?.label ?? ''; }
+  _restore(bytes) {
+    this.db.close();
+    this.db = new this.SQL.Database(bytes);
+    this.db.run('PRAGMA foreign_keys = ON;');
+    this.lastBytes = bytes;
+    this.persist?.(bytes);
+    for (const l of this.listeners) l();
+  }
+  /** Undo the last committed change; returns its label (or null when there is nothing to undo). */
+  undo() {
+    const u = this.undoStack.pop();
+    if (!u) return null;
+    this.redoStack.push({ bytes: this.lastBytes, label: u.label });
+    this._restore(u.bytes);
+    return u.label;
+  }
+  redo() {
+    const r = this.redoStack.pop();
+    if (!r) return null;
+    this.undoStack.push({ bytes: this.lastBytes, label: r.label });
+    this._restore(r.bytes);
+    return r.label;
   }
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   // sql.js export() closes and reopens the db, resetting pragmas — restore them.

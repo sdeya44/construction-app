@@ -46,3 +46,23 @@ test('bill → xlsx has detail formulas and the payable amount', async () => {
   const due = sum.getRows(1, sum.rowCount).find((r) => r.getCell(1).value === 'סכום לתשלום בחשבון זה');
   assert.equal(due.getCell(2).value, calc.due / 100);
 });
+
+test('monthly bill exports a "this month only" sheet', async () => {
+  const { periodTotals } = await import('../js/engine.js');
+  const api = new Api(new Store(SQL, null));
+  const p = api.saveProject({ name: 'p' });
+  const c = api.saveContract({ project_id: p, kind: 'client', name: 'c', vat_rate: '0' });
+  const a = api.saveItem({ contract_id: c, chapter: '01', sub: '01', num: 10, unit: 'מ"ק', qty: '100', price: '50', description: 'חפירה' });
+  const b2i = api.saveItem({ contract_id: c, chapter: '01', sub: '01', num: 20, unit: 'מ"ר', qty: '10', price: '200', description: 'ריצוף' });
+  const b1 = api.createBill(c, { month: '2026-01' }); api.setLine(b1, a, { q_sub: '40' }); api.approveBill(b1);
+  const b2 = api.createBill(c, { month: '2026-02' }); api.setBillView(b2, 'period'); api.setLine(b2, b2i, { q_sub: '3' });
+  const bill = api.bill(b2), calc = api.calc(b2);
+  const bytes = await exportBill(ExcelJS, { contract: api.contract(c), bill, calc, sections: api.sections(c), period: periodTotals(calc, api.prevApproved(c, 2), false) });
+  const wb = new ExcelJS.Workbook(); await wb.xlsx.load(bytes);
+  const ws = wb.getWorksheet('פירוט חודשי');
+  const vals = []; ws.eachRow((r) => vals.push(r.values.slice(1)));
+  const items = vals.filter((v) => /^01\.1\./.test(String(v[0])));
+  assert.equal(items.length, 1);                                     // only what moved this month
+  assert.equal(items[0][4], 3);
+  assert.ok(wb.getWorksheet('פירוט מצטבר'));
+});

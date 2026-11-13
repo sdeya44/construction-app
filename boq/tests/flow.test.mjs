@@ -134,3 +134,52 @@ test('duplicate item number gives a clear Hebrew message', () => {
   const { api, c } = setup();
   assert.throws(() => api.saveItem({ contract_id: c, struct: '01', chapter: '01', sub: '01', num: 10, unit: 'מ"ק', qty: '1', price: '1', description: 'כפול' }), /כבר קיים/);
 });
+
+test('submit turns the claim into the approved column; return goes back to the claim; next month and reopen reason', () => {
+  const { api, c, vol } = setup();
+  assert.equal(api.nextBillMonth(c).length, 7);
+  const b1 = api.createBill(c, { month: '2026-01' });
+  api.setLine(b1, vol, { q_sub: '40' });
+  api.submitBill(b1);
+  assert.equal(api.bill(b1).basis, 'appr');
+  assert.equal(api.lines(b1).get(vol).q_appr, '40');
+  api.setLine(b1, vol, { q_appr: '35' });                    // reviewer reduces
+  assert.equal(api.calc(b1).rows.find((x) => x.itemId === vol).cumQ, '35');
+  api.returnBill(b1, 'לתקן');
+  assert.equal(api.bill(b1).basis, 'sub');
+  api.setLine(b1, vol, { q_sub: '38' });
+  api.submitBill(b1);
+  assert.equal(api.lines(b1).get(vol).q_appr, '38');          // a new claim restarts the review
+  api.approveBill(b1);
+  assert.equal(api.nextBillMonth(c), '2026-02');
+  assert.equal(api.reopenBlock(b1), null);
+  const b2 = api.createBill(c, { month: api.nextBillMonth(c) });
+  assert.match(api.reopenBlock(b1), /חשבון 2/);
+  // home screen: the open bill and the unpaid approved one are listed
+  const kinds = api.attention().map((a) => a.kind);
+  assert.ok(kinds.includes('draft') && kinds.includes('unpaid'));
+  void b2;
+});
+
+test('monthly (non-cumulative) view: period rows and chapter / discount figures add up to the cumulative bill', async () => {
+  const { periodTotals } = await import('../js/engine.js');
+  const { api, c, vol, conc } = setup();
+  api.saveSection(c, '01.02', { discount: '3' });
+  api.saveContract({ ...api.contract(c), general_discount: '0.5' });
+  const b1 = api.createBill(c, { month: '2026-01' });
+  api.setLine(b1, vol, { q_sub: '40' }); api.setLine(b1, conc, { q_sub: '10' });
+  api.approveBill(b1);
+  const b2 = api.createBill(c, { month: '2026-02' });
+  api.setBillView(b2, 'period');
+  assert.equal(api.bill(b2).doc.view, 'period');
+  api.setLine(b2, conc, { q_sub: '16' });                       // only concrete moved this month
+  const r = api.calc(b2);
+  const P = periodTotals(r, api.prevApproved(c, 2), false);
+  const moved = P.rows.filter((x) => x.curQ !== '0');
+  assert.deepEqual(moved.map((x) => x.itemId), [conc]);
+  assert.equal(moved[0].pAmount, 6 * 1000 * 100);
+  assert.equal(P.T.net, r.periodNet);                          // same money as the cumulative bill
+  assert.equal(P.groups.reduce((s, g) => s + g.final, 0), r.periodNet);
+  assert.equal(P.groups.find((g) => g.key === '01.02').discount, Math.round(6000 * 100 * 0.03));
+  assert.equal(P.groups.find((g) => g.key === '01.01').gross, 0);
+});

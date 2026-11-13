@@ -195,3 +195,26 @@ export function contractValue({ contract, sections, items }) {
   });
   return discountTotals(rows, (k) => secMap.get(k), contract.general_discount ?? '0');
 }
+
+/**
+ * The bill seen as "this month only" (non-cumulative view): each row's period amount, and chapter /
+ * discount / total figures as the difference from the previous approved bill. Same money as the
+ * cumulative bill — Σ period nets = cumNet − prevNet — only presented per month.
+ */
+export function periodTotals(r, prevSnap, periodic) {
+  const rows = r.rows.map((x) => ({ ...x, pAmount: x.periodGross }));
+  if (periodic) return { rows, groups: r.totals.groups, T: r.totals, cat: r.totals.cat };
+  const P = prevSnap?.totals;
+  const prevG = new Map((P?.groups ?? []).map((g) => [g.key, g]));
+  const groups = r.totals.groups.map((g) => {
+    const p = prevG.get(g.key);
+    const subs = { ...g.subs };
+    for (const [k, v] of Object.entries(p?.subs ?? {})) subs[k] = (subs[k] ?? 0) - v;
+    return { ...g, gross: g.gross - (p?.gross ?? 0), discount: g.discount - (p?.discount ?? 0), net: g.net - (p?.net ?? 0),
+      general: (g.general ?? 0) - (p?.general ?? 0), final: g.final - (p?.final ?? 0), subs };
+  });
+  const T = r.totals, d = (k) => (T[k] ?? 0) - (P?.[k] ?? 0);
+  return { rows, groups,
+    T: { ...T, groups, gross: d('gross'), chapterDiscount: d('chapterDiscount'), beforeGeneral: d('beforeGeneral'), eligible: d('eligible'), exempt: d('exempt'), general: d('general'), net: d('net') },
+    cat: { contract: T.cat.contract - (P?.cat.contract ?? 0), over: T.cat.over - (P?.cat.over ?? 0), extra: T.cat.extra - (P?.cat.extra ?? 0) } };
+}

@@ -7,7 +7,10 @@ import { parseSkn, buildSkn } from '../skn.js';
 import { pickFile, download } from '../persist.js';
 import { loadExcel, exportBoq, readSheetRows } from '../excel.js';
 import { readPdf } from '../pdfimport.js';
-import { KIND, contractForm } from './projects.js';
+import { KIND, contractForm, contractFields } from './projects.js';
+import { UNIT_CODES } from '../skn.js';
+
+const UNITS = Object.entries(UNIT_CODES).filter(([k]) => k !== '00').map(([, v]) => v).concat(['מ"א']);
 import { dekelPanel } from './dekel-ui.js';
 import { copyDialog, issueRevisionDialog, revisionsDialog } from './versions.js';
 
@@ -28,7 +31,7 @@ export function itemForm(ctx, contract, it, defaults = {}) {
     { name: 'sub', label: 'תת-פרק', value: v0.sub, numeric: true },
     { name: 'num', label: 'מספר סעיף', value: v0.num, numeric: true },
     { name: 'kind', label: 'סוג', type: 'select', value: v0.kind, options: Object.entries(KINDS) },
-    { name: 'unit', label: 'יחידה', value: v0.unit },
+    { name: 'unit', label: 'יחידה', value: v0.unit, list: UNITS, hint: 'בחר מהרשימה (יחידות בנארית) — קובעת את סוג המדידה בדף החישוב' },
     { name: 'description', label: 'תיאור', type: 'textarea', value: v0.description, span: true, rows: 4 },
     { name: 'qty', label: 'כמות', value: v0.qty ?? '0', numeric: true },
     { name: 'price', label: 'מחיר יחידה', value: v0.price ?? '0', numeric: true },
@@ -39,12 +42,16 @@ export function itemForm(ctx, contract, it, defaults = {}) {
     // a quote line taken from Dekel stays Dekel-priced unless the user typed a different price
     const fromDekel = contract.kind === 'quote' && v0.dekel_price != null && v.price === String(v0.price ?? '');
     const priceManual = fromDekel ? (it?.id ? it.price_manual : 0) : (it?.id && v.price === it.price ? it.price_manual : 1);
+    if (v.kind !== 'note' && v.unit && !UNITS.includes(v.unit.trim()) && !confirm_unit(v.unit)) return false;
     const id = api.saveItem({ ...v0, ...v, contract_id: contract.id, price_manual: priceManual });
     if (!it?.id && contract.kind !== 'quote' && contract.locked && v.kind !== 'note') toast('כתב הכמויות נעול — הסעיף נוסף כסעיף חריג וממתין לאישור');
     ctx._focusItem = id;
     ctx.refresh();
   }, { wide: true, intro: contract.kind !== 'quote' && contract.locked ? h('div', { class: 'alert info' }, '🔒 כתב הכמויות החוזי נעול: אפשר לשנות תיאור והערות. כמות, מחיר, יחידה ומספור משתנים רק בסעיף חריג (פקודת שינוי) עד שהוא מאושר. סעיף חדש נשמר כחריג ממתין לאישור.') : null });
 }
+
+// a unit outside the Binarit list still saves, but SKN export and the measurement type need it mapped
+const confirm_unit = (u) => { toast(`יחידה "${u}" אינה ברשימת יחידות בנארית — נשמרה, אך ייתכן שלא תיוצא ל-SKN ותימדד כ"כמות"`, 'err'); return true; };
 
 function sectionForm(ctx, contract, code, sec) {
   const level = code.split('.').length;
@@ -173,7 +180,7 @@ export function boqView(ctx, cid) {
   const contract = api.contract(cid);
   const project = api.project(contract.project_id);
   const isQuote = contract.kind === 'quote';
-  const sel = { code: 'all', itemId: null, showDekel: !!ctx.dekel, q: '', ...loadSel(cid) };
+  const sel = { code: 'all', itemId: null, showDekel: !!ctx.dekel && contract.kind === 'quote', q: '', ...loadSel(cid) };
   const items = api.items(cid);
   const sections = new Map(api.sections(cid).map((s) => [s.code, s]));
   const billed = new Set(api.s.all(`SELECT DISTINCT l.item_id FROM bill_lines l JOIN bills b ON b.id=l.bill_id WHERE b.contract_id=? AND b.status='approved'`, [cid]).map((r) => r.item_id));
@@ -287,6 +294,35 @@ export function boqView(ctx, cid) {
     tbody.append(tr);
   }
 
+  // ---- quick-add row: type a new line straight into the grid (Enter saves and opens the next) ----
+  {
+    const lastVis = [...visible].reverse().find((i) => i.kind !== 'note');
+    const [s0, c0, t0] = sel.code !== 'all' && sel.code.split('.').length === 3 ? sel.code.split('.')
+      : sel.code !== 'all' && lastVis ? [lastVis.struct, lastVis.chapter, lastVis.sub]
+        : lastVis ? [lastVis.struct, lastVis.chapter, lastVis.sub] : ['01', '01', '01'];
+    const num = api.nextNum(cid, s0, c0, t0);
+    const inp = (k, ph, cls = '') => { const i = h('input', { placeholder: ph, class: cls, dir: cls === 'n' ? 'ltr' : null, inputmode: cls === 'n' ? 'decimal' : null, 'data-new': k }); return i; };
+    const f = { description: inp('description', '+ סעיף חדש — הקלד תיאור ולחץ Enter'), unit: inp('unit', "יח'"), qty: inp('qty', 'כמות', 'n'), price: inp('price', 'מחיר', 'n') };
+    const dl = h('datalist', { id: `units-${cid}` }, UNITS.map((u) => h('option', { value: u })));
+    f.unit.setAttribute('list', dl.id);
+    const commit = () => {
+      if (!f.description.value.trim()) { f.description.focus(); return toast('הקלד תיאור לסעיף', 'err'); }
+      const id = attempt(() => api.saveItem({ contract_id: cid, struct: s0, chapter: c0, sub: t0, num, kind: c0 === '99' ? 'extra' : 'contract',
+        description: f.description.value, unit: f.unit.value.trim(), qty: f.qty.value || '0', price: f.price.value || '0', price_manual: 1 }));
+      if (id === undefined) return;
+      if (boqLocked) toast('כתב הכמויות נעול — הסעיף נוסף כסעיף חריג וממתין לאישור');
+      ctx._focusNewRow = true; ctx._focusItem = id; ctx.refresh();
+    };
+    Object.values(f).forEach((i, k, all) => i.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); if (k < all.length - 1 && !e.ctrlKey) all[k + 1].focus(); else commit(); }
+      if (e.key === 'Escape') { all.forEach((x) => { x.value = ''; }); }
+    }));
+    tbody.append(h('tr', { class: 'new-row no-print' },
+      h('td', { class: 'code muted', title: 'המספר הבא בתת-הפרק — נקבע אוטומטית' }, `${s0}.${c0}.${t0}.${String(num).padStart(4, '0')}`),
+      h('td', { class: 'edit' }, f.description), h('td', { class: 'edit' }, f.unit, dl), h('td', { class: 'edit' }, f.qty), h('td', { class: 'edit' }, f.price),
+      h('td', { class: 'muted', colspan: 3, style: { fontSize: '12px' } }, 'Enter = שדה הבא · Enter במחיר = שמירה')));
+  }
+
   function rowMenu(e, it) {
     e.stopPropagation();
     const acts = [
@@ -302,7 +338,7 @@ export function boqView(ctx, cid) {
     const m = modal(`סעיף ${itemCode(it)}`, h('div', { class: 'stack' }, acts.map(([l, f]) => h('button', { onclick: () => { m.close(); f(); } }, l))));
   }
 
-  const grid = h('div', { class: 'grid-area' }, visible.length ? h('table', { class: 't lines fixed' },
+  const grid = h('div', { class: 'grid-area' }, visible.length || sel.code !== 'all' || !items.length ? h('table', { class: 't lines fixed' },
     h('colgroup', {}, [136, null, 64, 100, 100, 120, 132, 40].map((w) => h('col', { style: w ? { width: `${w}px` } : {} }))),
     h('thead', {}, h('tr', {}, h('th', {}, 'סעיף'), h('th', {}, 'תיאור'), h('th', {}, "יח'"), h('th', { class: 'n' }, isQuote ? 'כמות' : 'כמות מכרז'), h('th', { class: 'n' }, 'מחיר'),
       h('th', { class: 'n' }, 'סה"כ'), h('th', {}, 'דקל / סטייה'), h('th', { class: 'no-print' }, ''))),
@@ -367,6 +403,8 @@ export function boqView(ctx, cid) {
       '-',
       ['מכרזי קבלני משנה', () => ctx.go(`c/${cid}/tenders`)],
     ]),
+    sel.code !== 'all' ? h('button', { title: 'שם, הנחה / תוספת ופטור — לחיצה כפולה על העץ עושה את אותו הדבר', onclick: () => sectionForm(ctx, contract, sel.code, sections.get(sel.code)) },
+      `הגדרות ${['מבנה', 'פרק', 'תת-פרק'][sel.code.split('.').length - 1]} ${sel.code}`) : null,
     h('span', { class: 'sep' }),
     isQuote ? h('button', { onclick: () => issueRevisionDialog(ctx, contract) }, 'הפקת מהדורה') : null,
     isQuote ? h('button', { onclick: () => revisionsDialog(ctx, contract) }, `מהדורות${revCount ? ` (${revCount})` : ''}`) : null,
@@ -403,22 +441,24 @@ export function boqView(ctx, cid) {
   renderSide();
   setTimeout(() => {
     if (ctx._focusItem) { const r = tbody.querySelector(`tr[data-id="${ctx._focusItem}"]`); r?.scrollIntoView({ block: 'center' }); r?.classList.add('sel'); ctx._focusItem = null; }
+    if (ctx._focusNewRow) { ctx._focusNewRow = false; tbody.querySelector('tr.new-row input')?.focus(); }
     if (ctx._keepSearchFocus) { search.focus(); search.setSelectionRange(search.value.length, search.value.length); ctx._keepSearchFocus = false; }
   }, 0);
   return root;
 }
 
 function convertQuote(ctx, q) {
-  formModal('המרת הצעת מחיר לחוזה', [
-    { name: 'name', label: 'שם החוזה', value: q.name, span: true },
-    { name: 'party', label: 'מזמין', value: q.party },
-    { name: 'mode', label: 'שיטת חשבון', type: 'select', value: 'cumulative', options: [['cumulative', 'מצטבר'], ['periodic', 'תקופתי']] },
-  ], (v) => {
+  // 3-step wizard: details → payment terms → indexation, so no contract term is forgotten
+  const base = { kind: 'client', name: `חוזה — ${q.name.replace(/^הצעה\s*[—–-]?\s*/, '')}`, party: q.party, number: '', vat_rate: q.vat_rate, mode: 'cumulative' };
+  formModal('אישור הצעה והמרה לחוזה', contractFields(base, { forConvert: true }), (v) => {
+    if (!v.party?.trim() && !(confirm_party())) return false;
     const id = ctx.api.copyContract(q.id, { kind: 'client', name: v.name, party: v.party });
-    ctx.api.saveContract({ ...ctx.api.contract(id), mode: v.mode });
+    ctx.api.saveContract({ ...ctx.api.contract(id), ...v });
+    toast('נוצר חוזה — כתב הכמויות ננעל');
     ctx.go(`c/${id}`);
-  }, { submit: 'יצירת חוזה', intro: h('p', { class: 'muted' }, 'ההצעה אושרה: נוצר חוזה מזמין עם כל הסעיפים והמחירים הסופיים — אלה כמויות ומחירי המכרז. כתב הכמויות החוזי ננעל מיד; שינויים ייעשו בסעיפים חריגים. ההצעה עצמה נשמרת ללא שינוי.') });
+  }, { wide: true, submit: 'יצירת חוזה', intro: h('p', { class: 'muted' }, 'ההצעה אושרה: נוצר חוזה מזמין עם כל הסעיפים והמחירים — כמויות ומחירי המכרז — וכתב הכמויות ננעל. מלא את שלושת השלבים (אפשר לחזור לכל לשונית); ניתן לשנות תנאים אחר כך בהגדרות החוזה. ההצעה עצמה נשמרת ללא שינוי.') });
 }
+const confirm_party = () => { toast('חסר שם מזמין — הוא מודפס בכל חשבון. מלא אותו בלשונית 1.', 'err'); return false; };
 
 async function importExcel(ctx, contract, sel) {
   const f = await pickFile('.xlsx');
