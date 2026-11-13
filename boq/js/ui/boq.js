@@ -73,7 +73,8 @@ function sectionForm(ctx, contract, code, sec) {
       hint: `חלה על סכום כל הסעיפים ב${what} (לא על מחירי היחידה), ומופיעה כשורת הנחה בסוף ה${what}. סדר: תת-פרק ← פרק ← מבנה ← הנחה כללית.` }];
   if (level === 2) {
     if (contract.kind === 'quote') fields.push({ name: 'markup', label: 'תמחור מדקל: תוספת (+) / הנחה (−) % למחירי היחידה', value: sec?.markup ?? '0', numeric: true, hint: 'משנה רק את מחירי היחידה של סעיפים שתומחרו מדקל — בנפרד מההנחה על הסכום' });
-    fields.push({ name: 'exempt', label: 'מוחרג מההנחה הכללית', type: 'checkbox', value: sec ? !!sec.exempt : code.endsWith('.99') });
+    // chapter 99 (extras) is always outside the general and structure discounts — no choice to offer
+    if (code.split('.')[1] !== '99') fields.push({ name: 'exempt', label: 'מוחרג מההנחה הכללית', type: 'checkbox', value: sec ? !!sec.exempt : false });
   }
   formModal(`${['מבנה', 'פרק', 'תת-פרק'][level - 1]} ${code}`, fields, (v) => {
     ctx.api.saveSection(contract.id, code, { name: v.name, discount: v.discount, markup: v.markup, exempt: level === 2 ? v.exempt : undefined });
