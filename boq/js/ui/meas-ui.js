@@ -84,7 +84,7 @@ export function measView(ctx, itemId) {
   const openBill = api.s.get(`SELECT * FROM bills WHERE contract_id=? AND status!='approved' ORDER BY number DESC LIMIT 1`, [contract.id]);
   const geoLocked = openBill?.status === 'submitted' || contract.status === 'closed';
   let periodOnly = sessionStorage.getItem('meas-period') === '1';
-  const root = h('div', { class: 'kea page' });
+  const root = h('div', { class: 'kea page meas-entry' });
 
   const movementNow = () => {
     const bill = openBill ? api.bill(openBill.id) : { status: 'draft', number: 1e9, id: 0 };

@@ -9,7 +9,8 @@ import { download } from '../persist.js';
 const BASIS = { calc: 'מחושבת', sub: 'מוגשת', appr: 'מאושרת' };
 /** Work status (בהכנה / הוגש / הוחזר לתיקונים / הוגש מחדש / מאושר) + collection status derived from payments. */
 export const billTag = (b) => {
-  const work = b.status === 'draft' && b.returned ? h('span', { class: 'tag warn' }, 'הוחזר לתיקונים')
+  const work = b.reopened ? h('span', { class: 'tag warn', title: 'חשבון שאושר ונפתח מחדש לתיקון' }, 'נפתח מחדש')
+    : b.status === 'draft' && b.returned ? h('span', { class: 'tag warn' }, 'הוחזר לתיקונים')
     : b.status === 'submitted' && b.returned ? h('span', { class: 'tag submitted' }, 'הוגש מחדש')
       : h('span', { class: `tag ${b.status}` }, STATUS[b.status]);
   if (b.status !== 'approved' || !b.snap) return work;
@@ -153,11 +154,11 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
     h('span', {}, 'לתקופה: ', h('b', {}, money(res.periodNet))),
     h('span', {}, 'לתשלום כולל מע"מ: ', h('b', {}, money(res.due))));
 
+  const fmtIn = (value) => (value === '0' || value == null || value === '' ? '' : (/^-?\d+(\.\d{1,2})?$/.test(String(value)) ? Number(value).toFixed(2) : String(value)));
   const numInput = (value, onCommit, enabled, cls = '') => {
     if (!enabled) return h('td', { class: `n locked ${cls}` }, n2(value));
-    const shown = value === '0' || value == null || value === '' ? '' : (/^-?\d+(\.\d{1,2})?$/.test(String(value)) ? Number(value).toFixed(2) : String(value));
-    const inp = h('input', { class: 'n', value: shown, dir: 'ltr', inputmode: 'decimal', 'data-col': cls });
-    inp.addEventListener('change', () => { if (onCommit(inp.value) !== undefined) { res = api.calc(b.id); draw(); drawSum(); setTimeout(() => focusNext(cls, inp.closest('tr')?.dataset.id, 0), 0); } });
+    const inp = h('input', { class: 'n', value: fmtIn(value), dir: 'ltr', inputmode: 'decimal', 'data-col': cls });
+    inp.addEventListener('change', () => { if (onCommit(inp.value) !== undefined) { res = api.calc(b.id); if (!(filter === 'all' && patch())) draw(); drawSum(); setTimeout(() => focusNext(cls, inp.closest('tr')?.dataset.id, 0), 0); } });
     inp.addEventListener('keydown', (e) => {
       if (!['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
       e.preventDefault();
@@ -176,22 +177,47 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
 
   const showClaim = b.status === 'submitted' && !showVersions && c.kind !== 'sub';
   const NCOL = 10 + (showVersions ? 3 : 0) + (showClaim ? 1 : 0);
+  // references to the cells that change, so an edit updates them in place instead of redrawing
+  // thousands of rows (draw() remains the fallback when the layout itself changes)
+  let rowRefs = new Map(), subRefs = new Map(), chapRefs = new Map();
+  function patch() {
+    const rows = new Map(res.rows.map((x) => [x.itemId, x]));
+    const groups = new Map(res.totals.groups.map((g) => [g.key, g]));
+    for (const [ck, R] of chapRefs) { const g = groups.get(ck); if (!g || !!g.discount !== !!R.disc) return false; }
+    const subs = new Map();
+    for (const [id, R] of rowRefs) {
+      const x = rows.get(id);
+      if (!x) return false;
+      R.pct.textContent = pctOf(x.cumQ, R.it.qty); R.prev.textContent = n2(x.prevQ); R.amt.textContent = money(x.amount);
+      const setVal = (td, v) => { const i = td.querySelector('input'); if (i) { if (document.activeElement !== i) { i.value = fmtIn(v); i.defaultValue = i.value; } } else td.lastChild.textContent = n2(v); };
+      setVal(R.cur, x.curQ); setVal(R.cum, x.cumQ);
+      R.tr.classList.toggle('over', !!x.cat.over);
+      const k = `${R.it.struct}.${R.it.chapter}.${R.it.sub}`; subs.set(k, (subs.get(k) ?? 0) + x.amount);
+    }
+    for (const [k, td] of subRefs) td.textContent = money(subs.get(k) ?? 0);
+    for (const [ck, R] of chapRefs) { const g = groups.get(ck); R.gross.textContent = money(g.gross); if (R.disc) { R.discLabel.textContent = `הנחה ${g.rate}% מסך ${money(g.gross)}`; R.disc.textContent = money(-g.discount); R.net.textContent = money(g.net); } }
+    return true;
+  }
   function draw() {
     const rows = new Map(res.rows.map((x) => [x.itemId, x]));
     const lines = api.lines(b.id);
     tbody.replaceChildren();
+    rowRefs = new Map(); subRefs = new Map(); chapRefs = new Map();
     const groups = new Map(res.totals.groups.map((g) => [g.key, g]));
     let chap = null, sub = null, subSum = 0;
-    const closeSub = () => { if (sub != null) tbody.append(h('tr', { class: 'bn-ssum' }, h('td', { colspan: NCOL - 1 }, `סה"כ ${chap.split('.')[1]}.${+sub} ${secName(`${chap}.${sub}`)}`), h('td', { class: 'n' }, money(subSum)))); };
+    const closeSub = () => { if (sub != null) { const td = h('td', { class: 'n' }, money(subSum)); subRefs.set(`${chap}.${sub}`, td); tbody.append(h('tr', { class: 'bn-ssum' }, h('td', { colspan: NCOL - 1 }, `סה"כ ${chap.split('.')[1]}.${+sub} ${secName(`${chap}.${sub}`)}`), td)); } };
     const closeChap = () => {
       if (!chap) return;
       closeSub();
       const g = groups.get(chap);
       if (!g) return;
-      tbody.append(h('tr', { class: 'bn-csum' }, h('td', { colspan: NCOL - 1 }, `סה"כ ${g.chapter} ${g.name}`), h('td', { class: 'n' }, money(g.gross))));
-      if (g.discount) tbody.append(
-        h('tr', { class: 'bn-csum' }, h('td', { colspan: NCOL - 1 }, `הנחה ${g.rate}% מסך ${money(g.gross)}`), h('td', { class: 'n minus' }, money(-g.discount))),
-        h('tr', { class: 'bn-csum' }, h('td', { colspan: NCOL - 1 }, `סה"כ ${g.chapter} (לאחר הנחה)`), h('td', { class: 'n' }, money(g.net))));
+      const R = { gross: h('td', { class: 'n' }, money(g.gross)) };
+      chapRefs.set(chap, R);
+      tbody.append(h('tr', { class: 'bn-csum' }, h('td', { colspan: NCOL - 1 }, `סה"כ ${g.chapter} ${g.name}`), R.gross));
+      if (g.discount) {
+        Object.assign(R, { discLabel: h('td', { colspan: NCOL - 1 }, `הנחה ${g.rate}% מסך ${money(g.gross)}`), disc: h('td', { class: 'n minus' }, money(-g.discount)), net: h('td', { class: 'n' }, money(g.net)) });
+        tbody.append(h('tr', { class: 'bn-csum' }, R.discLabel, R.disc), h('tr', { class: 'bn-csum' }, h('td', { colspan: NCOL - 1 }, `סה"כ ${g.chapter} (לאחר הנחה)`), R.net));
+      }
     };
     for (const it of items) {
       const x = rows.get(it.id);
@@ -212,19 +238,21 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
       const prev = x?.prevQ ?? '0';
       const setCum = (v) => attempt(() => api.setLine(b.id, it.id, { [col]: v === '' ? (periodic ? '0' : prev) : v }));
       const setCur = (v) => attempt(() => api.setLine(b.id, it.id, { [col]: periodic ? (v || '0') : addQ(prev, v || '0') }));
+      const refs = { it, pct: h('td', { class: 'n muted c-pct' }, x ? pctOf(x.cumQ, it.qty) : ''), prev: h('td', { class: 'n muted' }, x ? n2(x.prevQ) : ''),
+        cur: numInput(x?.curQ, setCur, canEdit && !isMeas(it), 'cur'),
+        cum: isMeas(it) ? h('td', { class: 'n locked', title: `הכמות מחושבת מדף החישוב${it.meas_opening != null ? ` (כולל יתרת פתיחה ${n2(it.meas_opening)})` : ''} — לשינוי מקור הכמות פתח את דף החישוב` }, h('a', { href: `#/m/${it.id}` }, '📐 '), document.createTextNode(n2(x?.cumQ))) : numInput(x?.cumQ, setCum, canEdit, 'cum'),
+        amt: h('td', { class: 'n' }, x ? money(x.amount) : '') };
       const tr = h('tr', { class: `${x?.cat.over ? 'over' : ''}`, 'data-id': it.id },
         h('td', { class: 'code' }, code(it), h('a', { class: 'meas-go', href: `#/m/${it.id}`, title: isMeas(it) ? 'דף החישוב של הסעיף' : 'פתיחת דף חישוב לסעיף (הכמות תחושב ממנו)' }, '📐')),
         h('td', { class: 'desc', title: it.description }, it.description.length > 140 ? it.description.slice(0, 140) + '…' : it.description),
         h('td', {}, it.unit),
         h('td', { class: 'n' }, n2(it.qty)),
-        h('td', { class: 'n muted' }, x ? pctOf(x.cumQ, it.qty) : ''),
-        h('td', { class: 'n muted' }, x ? n2(x.prevQ) : ''),
-        numInput(x?.curQ, setCur, canEdit && !isMeas(it), 'cur'),
-        isMeas(it) ? h('td', { class: 'n locked', title: `הכמות מחושבת מדף החישוב${it.meas_opening != null ? ` (כולל יתרת פתיחה ${n2(it.meas_opening)})` : ''} — לשינוי מקור הכמות פתח את דף החישוב` }, h('a', { href: `#/m/${it.id}` }, '📐 '), n2(x?.cumQ)) : numInput(x?.cumQ, setCum, canEdit, 'cum'),
+        refs.pct, refs.prev, refs.cur, refs.cum,
         ...(showClaim ? [h('td', { class: 'n muted', title: 'הכמות שהגשנו — לפני החלטת המפקח' }, n2(L.q_sub ?? x?.cumQ))] : []),
         ...(showVersions ? ['q_calc', 'q_sub', 'q_appr'].map((k) => numInput(L[k], (v) => attempt(() => api.setLine(b.id, it.id, { [k]: v })), k === 'q_appr' ? apprEditable : editable, k)) : []),
         numInput(L.price ?? it.price, (v) => attempt(() => api.setLine(b.id, it.id, { price: v === it.price ? '' : v })), editable, 'price'),
-        h('td', { class: 'n' }, x ? money(x.amount) : ''));
+        refs.amt);
+      refs.tr = tr; rowRefs.set(it.id, refs);
       tbody.append(tr);
     }
     closeChap();
@@ -248,10 +276,10 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
       showVersions ? copyBtn('q_calc', 'q_sub', 'מחושבת ← מוגשת', editable) : null, showVersions ? copyBtn('q_sub', 'q_appr', 'מוגשת ← מאושרת', apprEditable) : null,
       h('div', { class: 'grow' }), h('span', { class: 'muted' }, !canEdit ? 'החשבון נעול לעריכה'
         : b.status === 'submitted' && c.kind !== 'sub' ? 'החשבון הוגש — עדכן את הכמויות שהמפקח אישר (ליד: מה שהוגש) · Enter לשורה הבאה'
-          : 'הזן כמות נוכחית או מצטברת · Enter לשורה הבאה · 📐 פותח דף חישוב')),
+          : 'הזן כמות נוכחית או מצטברת · Enter לשורה הבאה · 📐 פותח דף חישוב', ' · ', h('a', { href: '#/help' }, 'מה זה?'))),
     h('div', { class: 'grid-area' }, h('table', { class: 't exec bn-screen lines fixed' },
-      h('colgroup', {}, [92, null, 58, 90, 78, 94, 98, 98, ...(showClaim ? [96] : []), ...(showVersions ? [90, 90, 90] : []), 96, 116].map((w) => h('col', { style: w ? { width: `${w}px` } : {} }))),
-      h('thead', {}, h('tr', {}, heads.map((x, i) => h('th', { class: i >= 3 ? 'n' : '' }, x)))), tbody)),
+      h('colgroup', {}, [92, null, 58, 90, 78, 94, 98, 98, ...(showClaim ? [96] : []), ...(showVersions ? [90, 90, 90] : []), 96, 116].map((w, i) => h('col', { class: i === 4 ? 'c-pct' : '', style: w ? { width: `${w}px` } : {} }))),
+      h('thead', {}, h('tr', {}, heads.map((x, i) => h('th', { class: `${i >= 3 ? 'n' : ''} ${i === 4 ? 'c-pct' : ''}` }, x)))), tbody)),
     sumBox);
 }
 

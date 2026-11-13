@@ -164,7 +164,7 @@ export class Api {
       const id = this.s.run(`INSERT INTO items (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, [it.contract_id, ...Object.values(f)]).id;
       this.ensureSections(it.contract_id, [f]);
       return id;
-    });
+    }, '', it.id ? `עריכת סעיף ${struct}.${chapter}.${sub}.${String(num).padStart(4, '0')}` : 'הוספת סעיף');
     } catch (e) {
       if (/UNIQUE constraint failed: items/.test(e.message)) throw new Error(`מספר סעיף ${struct}.${chapter}.${sub}.${String(num).padStart(4, '0')} כבר קיים בתת-פרק — בחר מספר אחר`);
       throw e;
@@ -359,6 +359,7 @@ export class Api {
     b.adj = typeof b.adj === 'string' ? JSON.parse(b.adj || '{}') : b.adj;
     b.snap = b.snapshot ? JSON.parse(b.snapshot) : null;
     b.paid = this.s.get('SELECT COALESCE(SUM(amount_cents),0) s FROM payments WHERE bill_id=?', [b.id]).s;
+    b.reopened = b.status !== 'approved' && this.s.get('SELECT status FROM bill_events WHERE bill_id=? ORDER BY id DESC LIMIT 1', [b.id])?.status === 'reopened';
     return b;
   }
   prevApproved(contractId, number) {
@@ -426,7 +427,7 @@ export class Api {
     if ('note' in patch) v.note = text(patch.note, 500);
     this.s.tx(() => this.s.run(`INSERT INTO bill_lines (bill_id, item_id, q_calc, q_sub, q_appr, percent, price, note) VALUES (?,?,?,?,?,?,?,?)
       ON CONFLICT(bill_id, item_id) DO UPDATE SET q_calc=excluded.q_calc, q_sub=excluded.q_sub, q_appr=excluded.q_appr, percent=excluded.percent, price=excluded.price, note=excluded.note`,
-      [billId, itemId, v.q_calc ?? null, v.q_sub ?? null, v.q_appr ?? null, v.percent ?? '100', v.price ?? null, v.note ?? '']));
+      [billId, itemId, v.q_calc ?? null, v.q_sub ?? null, v.q_appr ?? null, v.percent ?? '100', v.price ?? null, v.note ?? '']), '', 'עדכון כמות בחשבון');
   }
   /** Copy one quantity column into another for all lines (e.g. submitted → approved). */
   copyColumn(billId, from, to) {
@@ -553,8 +554,9 @@ export class Api {
     for (const c of contracts) {
       for (const b of this.bills(c.id)) {
         const where = `${c.project_name} · ${c.name} · חשבון ${b.number}`;
-        if (b.status === 'draft') out.push({ kind: b.returned ? 'returned' : 'draft', text: b.returned ? 'הוחזר לתיקונים' : 'בהכנה', where, go: `b/${b.id}` });
-        else if (b.status === 'submitted') out.push({ kind: 'submitted', text: c.kind === 'sub' ? 'ממתין לאישורנו' : 'הוגש — ממתין לאישור המזמין', where, go: `b/${b.id}`, since: this.s.get(`SELECT at FROM bill_events WHERE bill_id=? AND status='submitted' ORDER BY id DESC LIMIT 1`, [b.id])?.at });
+        if (b.reopened) out.push({ kind: 'returned', text: 'נפתח מחדש לתיקון', where, go: `b/${b.id}` });
+        else if (b.status === 'draft') out.push({ kind: b.returned ? 'returned' : 'draft', text: b.returned ? 'הוחזר לתיקונים' : 'בהכנה', where, go: `b/${b.id}` });
+        else if (b.status === 'submitted' && !b.reopened) out.push({ kind: 'submitted', text: c.kind === 'sub' ? 'ממתין לאישורנו' : 'הוגש — ממתין לאישור המזמין', where, go: `b/${b.id}`, since: this.s.get(`SELECT at FROM bill_events WHERE bill_id=? AND status='submitted' ORDER BY id DESC LIMIT 1`, [b.id])?.at });
         else if (b.snap && b.snap.due - b.paid > 0) out.push({ kind: c.kind === 'sub' ? 'topay' : 'unpaid', text: c.kind === 'sub' ? 'לתשלום לקבלן' : 'ממתין לתשלום', where, go: `b/${b.id}/pay`, amount: b.snap.due - b.paid });
         if (b.status !== 'approved') {
           try {
@@ -1007,7 +1009,7 @@ export class Api {
     if ('shape' in patch && patch.shape !== m.shape) for (const k of ['d1', 'd2', 'd3', ...(itemUnitKind(item) !== 'volume' ? ['t'] : [])]) if (!(k in patch)) next[k] = '';
     if (next.approval && approvalIsStale(next, item)) next.approval = { status: 'pending', value: 0, note: 'התביעה שונתה לאחר ההחלטה הקודמת — ממתינה לבדיקה מחדש', claimedAtDecision: calcRow(next, item) };
     this.s.tx(() => this.s.run('UPDATE measurements SET descr=?, area=?, shape=?, d1=?, d2=?, d3=?, t=?, qty=?, sign=?, notes=?, group_label=?, approval=? WHERE id=?',
-      [next.desc, next.area, next.shape, next.d1, next.d2, next.d3, next.t, next.qty, next.sign, next.notes, next.groupLabel, next.approval ? JSON.stringify(next.approval) : null, id]));
+      [next.desc, next.area, next.shape, next.d1, next.d2, next.d3, next.t, next.qty, next.sign, next.notes, next.groupLabel, next.approval ? JSON.stringify(next.approval) : null, id]), '', 'עריכת שורת מדידה');
     return this.meas(id);
   }
   duplicateMeas(id) {
@@ -1047,6 +1049,8 @@ export class Api {
   }
   /** Σ claimed and Σ approved per item (rows rounded to 4 decimals, summed exactly). */
   measTotals(contractId) {
+    // fast path: most contracts / items have no calculation sheets
+    if (!this.s.get(`SELECT 1 x FROM measurements WHERE contract_id=? UNION ALL SELECT 1 FROM items WHERE contract_id=? AND qsrc='meas' AND meas_opening IS NOT NULL LIMIT 1`, [contractId, contractId])) return new Map();
     const items = new Map(this.items(contractId).map((i) => [i.id, i]));
     const out = new Map();
     for (const m of this.measRows(contractId)) {

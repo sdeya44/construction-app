@@ -294,6 +294,35 @@ export function boqView(ctx, cid) {
     tbody.append(tr);
   }
 
+  // ---- quick-add row: type a new line straight into the grid (Enter saves and opens the next) ----
+  {
+    const lastVis = [...visible].reverse().find((i) => i.kind !== 'note');
+    const [s0, c0, t0] = sel.code !== 'all' && sel.code.split('.').length === 3 ? sel.code.split('.')
+      : sel.code !== 'all' && lastVis ? [lastVis.struct, lastVis.chapter, lastVis.sub]
+        : lastVis ? [lastVis.struct, lastVis.chapter, lastVis.sub] : ['01', '01', '01'];
+    const num = api.nextNum(cid, s0, c0, t0);
+    const inp = (k, ph, cls = '') => { const i = h('input', { placeholder: ph, class: cls, dir: cls === 'n' ? 'ltr' : null, inputmode: cls === 'n' ? 'decimal' : null, 'data-new': k }); return i; };
+    const f = { description: inp('description', '+ סעיף חדש — הקלד תיאור ולחץ Enter'), unit: inp('unit', "יח'"), qty: inp('qty', 'כמות', 'n'), price: inp('price', 'מחיר', 'n') };
+    const dl = h('datalist', { id: `units-${cid}` }, UNITS.map((u) => h('option', { value: u })));
+    f.unit.setAttribute('list', dl.id);
+    const commit = () => {
+      if (!f.description.value.trim()) { f.description.focus(); return toast('הקלד תיאור לסעיף', 'err'); }
+      const id = attempt(() => api.saveItem({ contract_id: cid, struct: s0, chapter: c0, sub: t0, num, kind: c0 === '99' ? 'extra' : 'contract',
+        description: f.description.value, unit: f.unit.value.trim(), qty: f.qty.value || '0', price: f.price.value || '0', price_manual: 1 }));
+      if (id === undefined) return;
+      if (boqLocked) toast('כתב הכמויות נעול — הסעיף נוסף כסעיף חריג וממתין לאישור');
+      ctx._focusNewRow = true; ctx._focusItem = id; ctx.refresh();
+    };
+    Object.values(f).forEach((i, k, all) => i.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); if (k < all.length - 1 && !e.ctrlKey) all[k + 1].focus(); else commit(); }
+      if (e.key === 'Escape') { all.forEach((x) => { x.value = ''; }); }
+    }));
+    tbody.append(h('tr', { class: 'new-row no-print' },
+      h('td', { class: 'code muted', title: 'המספר הבא בתת-הפרק — נקבע אוטומטית' }, `${s0}.${c0}.${t0}.${String(num).padStart(4, '0')}`),
+      h('td', { class: 'edit' }, f.description), h('td', { class: 'edit' }, f.unit, dl), h('td', { class: 'edit' }, f.qty), h('td', { class: 'edit' }, f.price),
+      h('td', { class: 'muted', colspan: 3, style: { fontSize: '12px' } }, 'Enter = שדה הבא · Enter במחיר = שמירה')));
+  }
+
   function rowMenu(e, it) {
     e.stopPropagation();
     const acts = [
@@ -309,7 +338,7 @@ export function boqView(ctx, cid) {
     const m = modal(`סעיף ${itemCode(it)}`, h('div', { class: 'stack' }, acts.map(([l, f]) => h('button', { onclick: () => { m.close(); f(); } }, l))));
   }
 
-  const grid = h('div', { class: 'grid-area' }, visible.length ? h('table', { class: 't lines fixed' },
+  const grid = h('div', { class: 'grid-area' }, visible.length || sel.code !== 'all' || !items.length ? h('table', { class: 't lines fixed' },
     h('colgroup', {}, [136, null, 64, 100, 100, 120, 132, 40].map((w) => h('col', { style: w ? { width: `${w}px` } : {} }))),
     h('thead', {}, h('tr', {}, h('th', {}, 'סעיף'), h('th', {}, 'תיאור'), h('th', {}, "יח'"), h('th', { class: 'n' }, isQuote ? 'כמות' : 'כמות מכרז'), h('th', { class: 'n' }, 'מחיר'),
       h('th', { class: 'n' }, 'סה"כ'), h('th', {}, 'דקל / סטייה'), h('th', { class: 'no-print' }, ''))),
@@ -412,6 +441,7 @@ export function boqView(ctx, cid) {
   renderSide();
   setTimeout(() => {
     if (ctx._focusItem) { const r = tbody.querySelector(`tr[data-id="${ctx._focusItem}"]`); r?.scrollIntoView({ block: 'center' }); r?.classList.add('sel'); ctx._focusItem = null; }
+    if (ctx._focusNewRow) { ctx._focusNewRow = false; tbody.querySelector('tr.new-row input')?.focus(); }
     if (ctx._keepSearchFocus) { search.focus(); search.setSelectionRange(search.value.length, search.value.length); ctx._keepSearchFocus = false; }
   }, 0);
   return root;

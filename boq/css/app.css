@@ -298,3 +298,31 @@ table.t tr.note td { padding-top: 2px; padding-bottom: 2px; }
 .attn .amt { font-variant-numeric: tabular-nums; font-weight: 600; }
 td.code a.meas-go { text-decoration: none; opacity: .35; margin-inline-start: 4px; }
 tr:hover td.code a.meas-go { opacity: 1; }
+
+.undo-btns { display: inline-flex; gap: 2px; }
+.undo-btns button { color: var(--bar-ink); }
+
+table.t tr.new-row td { background: var(--surface-2); border-top: 1px dashed var(--line-2); }
+table.t tr.new-row input { width: 100%; border: 1px solid transparent; background: transparent; padding: 7px 8px; }
+table.t tr.new-row input:focus { outline: none; border-color: var(--accent); background: var(--field); }
+table.t tr.new-row input::placeholder { color: var(--accent); opacity: .75; }
+
+/* narrower screens: the bill grid drops "% ביצוע" so descriptions keep their room */
+@media (max-width: 1280px) { table.exec col.c-pct { width: 0 !important; } table.exec .c-pct { padding: 0 !important; font-size: 0; border: 0 !important; } }
+/* top bar never forces the page wider than the window */
+.topbar { min-width: 0; overflow: hidden; }
+.topbar .crumbs { flex: 0 1 auto; min-width: 0; }
+.topbar > * { flex-shrink: 0; }
+.topbar .crumbs, .topbar .spacer { flex-shrink: 1; }
+@media (max-width: 1360px) {
+  .topbar { gap: 10px; padding: 0 12px; }
+  .topnav a { padding: 6px 7px; }
+  .topbar .save-dot { font-size: 0; gap: 0; }
+  .theme-btn { font-size: 0; gap: 0; padding: 4px 6px; }
+  .theme-btn .dots { font-size: 13px; }
+  .topbar > .tag { display: none; }
+}
+@media (max-width: 1180px) { .topnav a[href="#/status"], .topnav a[href="#/indices"] { display: none; } }
+.kea.meas-entry .sel-sec { max-width: 100%; min-width: 0; }
+.kea.meas-entry .meas-tools { min-width: 0; }
+.page { min-width: 0; }

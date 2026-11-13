@@ -16,6 +16,7 @@ import { tendersView, tenderView, cashflowView, managementView } from './stage3.
 import { measView, sheetsView } from './meas-ui.js';
 import { themeButton, applyTheme, currentTheme } from './theme.js';
 import { compareView } from './versions.js';
+import { helpView } from './help.js';
 
 const ctx = {
   SQL: null, store: null, api: null, dekel: null,
@@ -51,6 +52,7 @@ const ROUTES = [
   [/^b\/(\d+)(?:\/(\w+))?$/, (m) => (m[2] === 'print' ? billPrintRoute(ctx, +m[1]) : billView(ctx, +m[1], m[2] || 'exec'))],
   [/^indices$/, () => indicesView(ctx)],
   [/^settings$/, () => settingsView(ctx)],
+  [/^help$/, () => helpView()],
 ];
 
 function crumbsFor(path) {
@@ -72,6 +74,7 @@ function crumbsFor(path) {
     else if (path === 'mgmt') out.push(['דוחות מנהלים', 'mgmt']);
     else if ((m = path.match(/^t\/(\d+)/))) { const t = api.tender(+m[1]); addContract(t.contract_id); out.push([`מכרז: ${t.name}`, `t/${t.id}`]); }
     else if (path === 'settings') out.push(['הגדרות', 'settings']);
+    else if (path === 'help') out.push(['עזרה', 'help']);
   } catch { /* stale link */ }
   return out;
 }
@@ -88,10 +91,30 @@ function topbar(path) {
     h('div', { class: 'spacer' }),
     h('nav', { class: 'topnav' }, NAV.map(([p, l]) => h('a', { href: '#/' + p, class: path === p ? 'on' : '' }, l))),
     dekelTag(),
+    undoButtons(),
     themeButton(render),
     dot);
 }
-const NAV = [['', 'פרויקטים'], ['mgmt', 'דוחות מנהלים'], ['cashflow', 'תזרים'], ['status', 'מצב לתאריך'], ['indices', 'מדדים'], ['settings', 'הגדרות']];
+/** ↶ / ↷ — whole-database undo of the last saved changes (also Ctrl+Z / Ctrl+Y outside text fields). */
+function undoButtons() {
+  const s = ctx.store;
+  if (!s) return null;
+  return h('span', { class: 'undo-btns' },
+    h('button', { class: 'sm ghost', disabled: !s.canUndo, title: s.canUndo ? `ביטול: ${s.undoLabel} (Ctrl+Z)` : 'אין מה לבטל', onclick: doUndo }, '↶ ביטול'),
+    h('button', { class: 'sm ghost', disabled: !s.canRedo, title: s.canRedo ? `חזרה: ${s.redoLabel} (Ctrl+Y)` : 'אין מה להחזיר', onclick: doRedo }, '↷'));
+}
+function doUndo() { const l = ctx.store.undo(); if (l) { toast(`בוטל: ${l}`); render(); } }
+function doRedo() { const l = ctx.store.redo(); if (l) { toast(`הוחזר: ${l}`); render(); } }
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const el = document.activeElement;
+  if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return; // native text undo
+  if (document.querySelector('.backdrop')) return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' && !e.shiftKey) { e.preventDefault(); doUndo(); }
+  else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); doRedo(); }
+});
+const NAV = [['', 'פרויקטים'], ['mgmt', 'דוחות מנהלים'], ['cashflow', 'תזרים'], ['status', 'מצב לתאריך'], ['indices', 'מדדים'], ['settings', 'הגדרות'], ['help', 'עזרה']];
 const dekelTag = () => h('span', { class: `tag ${ctx.dekel ? 'ok' : 'warn'}`, title: ctx.dekel ? `${ctx.dekel.items.length.toLocaleString()} סעיפים` : 'טען מחירון בהגדרות' }, ctx.dekel ? `דקל ${ctx.dekel.label || ''}`.trim() : 'דקל לא נטען');
 function sidenav(path) {
   const sect = path.split('/')[0];
