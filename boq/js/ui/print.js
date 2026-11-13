@@ -84,17 +84,19 @@ function head({ issuer, contact, title, project, recipient, number, date, extra 
 }
 
 // ------------------------------------------------------------------------------------------
-export function boqPrintView(ctx, cid) {
+export function boqPrintView(ctx, cid, revId = null) {
   const api = ctx.api;
-  const c = api.contract(cid);
+  // a revision prints the frozen copy that was sent, not the live quote
+  const rev = revId ? api.revision(+revId) : null;
+  const c = rev ? rev.snapshot.contract : api.contract(cid);
   const p = api.project(c.project_id);
   const co = api.company();
   const isQuote = c.kind === 'quote';
-  const secs = new Map(api.sections(cid).map((s) => [s.code, s]));
-  const items = api.items(cid).filter((i) => i.kind === 'note' || i.change_status !== 'rejected');
-  const D = { issuer: co.name, contact: [co.phone, co.email, co.vat_id && `ח.פ ${co.vat_id}`].filter(Boolean).join(' · '), recipient: c.party,
-    project: p.name, number: isQuote ? `הצעה ${c.number || ''}`.trim() : `חוזה ${c.number || ''}`.trim(), date: new Date().toISOString().slice(0, 10) };
-  const title = isQuote ? `הצעת מחיר — ${c.name}` : `כתב כמויות — ${c.name}`;
+  const secs = new Map((rev ? rev.snapshot.sections : api.sections(cid)).map((s) => [s.code, s]));
+  const items = (rev ? rev.snapshot.items : api.items(cid)).filter((i) => i.kind === 'note' || i.change_status !== 'rejected');
+  const D = { issuer: co.name, contact: [co.phone, co.email, co.vat_id && `ח.פ ${co.vat_id}`].filter(Boolean).join(' · '), recipient: rev?.recipient || c.party,
+    project: p.name, number: (isQuote ? `הצעה ${c.number || ''}` : `חוזה ${c.number || ''}`).trim() + (rev ? ` · מהדורה ${rev.rev}` : ''), date: (rev ? rev.created_at : new Date().toISOString()).slice(0, 10) };
+  const title = (isQuote ? `הצעת מחיר — ${c.name}` : `כתב כמויות — ${c.name}`) + (rev ? ` (מהדורה ${rev.rev})` : '');
   const { root, wrap } = docShell(title, () => ctx.go(`c/${cid}`), `${title}.pdf`);
   const foot = () => h('div', { class: 's-foot' }, h('span', {}, `${D.issuer}  ${D.contact}`), h('span', {}, isQuote ? 'המחירים אינם כוללים מע"מ' : ''));
   const COLS = ['סעיף', 'תאור', 'יחידה', 'כמות', 'מחיר יחידה', 'סה"כ'];

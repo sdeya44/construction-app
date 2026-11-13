@@ -15,6 +15,7 @@ import { profitView, statusView, defectsView } from './reports.js';
 import { tendersView, tenderView, cashflowView, managementView } from './stage3.js';
 import { measView, sheetsView } from './meas-ui.js';
 import { themeButton, applyTheme, currentTheme } from './theme.js';
+import { compareView } from './versions.js';
 
 const ctx = {
   SQL: null, store: null, api: null, dekel: null,
@@ -43,7 +44,8 @@ const ROUTES = [
   [/^t\/(\d+)$/, (m) => tenderView(ctx, +m[1])],
   [/^cashflow$/, () => cashflowView(ctx)],
   [/^mgmt$/, () => managementView(ctx)],
-  [/^c\/(\d+)\/print$/, (m) => boqPrintView(ctx, +m[1])],
+  [/^c\/(\d+)\/print$/, (m) => boqPrintView(ctx, +m[1], new URLSearchParams(location.hash.split('?')[1] || '').get('rev'))],
+  [/^c\/(\d+)\/compare$/, (m) => compareView(ctx, +m[1])],
   [/^m\/(\d+)$/, (m) => measView(ctx, +m[1])],
   [/^b\/(\d+)\/sheets$/, (m) => sheetsView(ctx, +m[1], new URLSearchParams(location.hash.split('?')[1] || '').get('item'))],
   [/^b\/(\d+)(?:\/(\w+))?$/, (m) => (m[2] === 'print' ? billPrintRoute(ctx, +m[1]) : billView(ctx, +m[1], m[2] || 'exec'))],

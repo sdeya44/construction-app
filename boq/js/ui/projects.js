@@ -73,21 +73,57 @@ export function projectsView(ctx) {
     body);
 }
 
-function contractRow(ctx, c) {
+function contractRow(ctx, c, all) {
   const api = ctx.api;
   const v = api.contractValue(c.id);
-  const bills = c.kind === 'quote' ? [] : api.bills(c.id);
+  const isQuote = c.kind === 'quote';
+  const bills = isQuote ? [] : api.bills(c.id);
   const last = [...bills].reverse().find((b) => b.status === 'approved');
   const open = bills.find((b) => b.status !== 'approved');
   const paid = bills.reduce((s, b) => s + b.paid, 0);
+  const revs = isQuote ? api.revisions(c.id) : [];
+  const converted = isQuote ? all.find((x) => x.kind === 'client' && x.origin_id === c.id) : null;
+  const origin = !isQuote && c.origin_id ? all.find((x) => x.id === c.origin_id) : null;
+  const openLabel = open ? (open.status === 'draft' && open.returned ? 'הוחזר לתיקונים' : open.status === 'submitted' && open.returned ? 'הוגש מחדש' : STATUS[open.status]) : '';
   return h('tr', { class: 'click', onclick: () => ctx.go(`c/${c.id}`) },
-    h('td', {}, h('b', {}, c.name), c.number ? h('span', { class: 'muted' }, `  ${c.number}`) : null),
+    h('td', {}, h('b', {}, c.name), c.number ? h('span', { class: 'muted' }, `  ${c.number}`) : null,
+      h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '3px' } },
+        c.version_label ? h('span', { class: 'tag' }, `גרסה: ${c.version_label}`) : null,
+        !isQuote && c.locked ? h('span', { class: 'tag', title: 'כמויות ומחירי המכרז קפואים' }, '🔒 נעול') : null,
+        converted ? h('span', { class: 'tag ok' }, `אושרה ← ${converted.name}`) : null,
+        origin ? h('span', { class: 'tag' }, `מקור: ${origin.name}`) : null)),
     h('td', {}, c.party),
     h('td', { class: 'n' }, money(v.net)),
-    h('td', { class: 'n' }, last ? money(last.snap.cumNet) : '—'),
-    h('td', {}, last ? `${last.number} · ${monthLabel(last.month)}` : '—'),
-    h('td', {}, open ? h('span', { class: `tag ${open.status}` }, `${open.number} ${STATUS[open.status]}`) : (c.status === 'closed' ? h('span', { class: 'tag' }, 'סגור') : '')),
-    h('td', { class: 'n' }, c.kind === 'quote' ? '' : money(paid)));
+    h('td', { class: 'n' }, isQuote ? (revs.length ? `מהדורה ${revs[0].rev}` : '—') : last ? money(last.snap.cumNet) : '—'),
+    h('td', {}, isQuote ? (revs.length ? `נשלחה ${revs[0].created_at.slice(8, 10)}/${revs[0].created_at.slice(5, 7)}` : 'טרם נשלחה') : last ? `${last.number} · ${monthLabel(last.month)}` : '—'),
+    h('td', {}, open ? h('span', { class: `tag ${open.returned && open.status === 'draft' ? 'warn' : open.status}` }, `${open.number} ${openLabel}`) : (c.status === 'closed' ? h('span', { class: 'tag' }, 'סגור') : '')),
+    h('td', { class: 'n' }, isQuote ? '' : money(paid)));
+}
+
+/** The project's flow at a glance: quote(s) → client contract → bills. */
+function pipeline(ctx, all) {
+  const api = ctx.api;
+  const quotes = all.filter((c) => c.kind === 'quote');
+  const client = all.find((c) => c.kind === 'client');
+  const bills = client ? api.bills(client.id) : [];
+  const lastA = [...bills].reverse().find((b) => b.status === 'approved');
+  const open = bills.find((b) => b.status !== 'approved');
+  const owed = bills.filter((b) => b.status === 'approved').reduce((s, b) => s + b.snap.due - b.paid, 0);
+  const lastQ = quotes.at(-1);
+  const revs = lastQ ? api.revisions(lastQ.id) : [];
+  const step = (k, title, lines, go, empty) => h('button', { class: `pstep ${empty ? 'empty-step' : ''}`, onclick: go }, h('span', { class: 'k' }, k), h('b', {}, title), ...lines.filter(Boolean).map((l) => h('span', { class: 'v' }, l)));
+  return h('div', { class: 'pipeline' },
+    step('1 · הצעת מחיר', quotes.length ? `${quotes.length} ${quotes.length === 1 ? 'הצעה' : 'הצעות / גרסאות'}` : 'אין עדיין',
+      [lastQ && `${lastQ.name}: ${money(api.contractValue(lastQ.id).net)}`, lastQ && (revs.length ? `מהדורה ${revs[0].rev} נשלחה` : 'טרם הופקה מהדורה')],
+      () => (lastQ ? ctx.go(`c/${lastQ.id}`) : null), !quotes.length),
+    h('span', { class: 'arrow' }, '‹'),
+    step('2 · חוזה (כמויות מכרז)', client ? client.name : 'טרם אושרה הצעה',
+      [client && `היקף: ${money(client.planned_cents || api.contractValue(client.id).net)}`, client && (client.locked ? '🔒 כתב הכמויות נעול' : 'פתוח לעריכה')],
+      () => (client ? ctx.go(`c/${client.id}`) : null), !client),
+    h('span', { class: 'arrow' }, '‹'),
+    step('3 · חשבונות', client ? `${bills.length} חשבונות` : '—',
+      [lastA && `מצטבר מאושר: ${money(lastA.snap.cumNet)}`, open && `חשבון ${open.number}: ${open.status === 'draft' && open.returned ? 'הוחזר לתיקונים' : STATUS[open.status]}`, owed > 0 && `יתרה לגבייה: ${money(owed)}`],
+      () => (client ? ctx.go(`c/${client.id}/bills`) : null), !client));
 }
 
 export function projectView(ctx, id) {
@@ -98,11 +134,13 @@ export function projectView(ctx, id) {
     const list = all.filter((c) => c.kind === kind);
     return h('div', { class: 'card' },
       h('header', {}, h('h2', {}, title), h('span', { class: 'muted' }, hint),
-        h('div', { class: 'actions' }, h('button', { class: kind === 'client' ? 'primary' : '', onclick: () => newContract(kind) }, `+ ${KIND[kind]}`))),
+        h('div', { class: 'actions' },
+          kind !== 'sub' ? h('button', { onclick: async () => { const { copyDialog } = await import('./versions.js'); copyDialog(ctx, { mode: 'copy', projectId: id, kind }); } }, 'העתקה מכתב כמויות קיים') : null,
+          h('button', { class: kind === 'quote' && !all.some((c) => c.kind === 'quote') ? 'primary' : '', onclick: () => newContract(kind) }, `+ ${KIND[kind]}`))),
       list.length ? h('div', { class: 'table-wrap' }, h('table', { class: 't' },
         h('thead', {}, h('tr', {}, h('th', {}, 'שם'), h('th', {}, kind === 'sub' ? 'קבלן' : 'צד'), h('th', { class: 'n' }, kind === 'quote' ? 'סה"כ הצעה' : 'היקף חוזה'),
-          h('th', { class: 'n' }, 'מצטבר מאושר'), h('th', {}, 'חשבון אחרון'), h('th', {}, 'פתוח'), h('th', { class: 'n' }, kind === 'quote' ? '' : 'שולם'))),
-        h('tbody', {}, list.map((c) => contractRow(ctx, c)))))
+          h('th', { class: 'n' }, kind === 'quote' ? 'מהדורה' : 'מצטבר מאושר'), h('th', {}, kind === 'quote' ? 'נשלחה' : 'חשבון אחרון'), h('th', {}, 'פתוח'), h('th', { class: 'n' }, kind === 'quote' ? '' : 'שולם'))),
+        h('tbody', {}, list.map((c) => contractRow(ctx, c, all)))))
         : h('div', { class: 'empty' }, 'אין עדיין'));
   };
   const newContract = (kind) => {
@@ -129,8 +167,9 @@ export function projectView(ctx, id) {
           if (await confirmBox('מחיקת פרויקט', `למחוק את "${p.name}" וכל החוזים שבו?`, { danger: true, ok: 'מחיקה' }))
             attempt(() => { api.deleteProject(id); ctx.go(''); }, 'הפרויקט נמחק');
         } }, 'מחיקה'))),
+    pipeline(ctx, all),
     h('div', { class: 'stack' },
-      section('client', 'חוזי מזמין', 'חשבונות שאנו מגישים'),
-      section('sub', 'קבלני משנה', 'חשבונות שאנו מאשרים'),
-      section('quote', 'הצעות מחיר', 'מבוססות מחירון דקל')));
+      section('quote', 'הצעות מחיר וגרסאות', 'בונים, מתמחרים ושולחים; אישור הופך הצעה לחוזה'),
+      section('client', 'חוזה מזמין', 'כמויות ומחירי מכרז · חשבונות שאנו מגישים'),
+      section('sub', 'קבלני משנה', 'חשבונות שאנו מאשרים')));
 }

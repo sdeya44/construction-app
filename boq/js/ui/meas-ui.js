@@ -39,7 +39,9 @@ export function itemMovement(api, contract, item, bill, calc) {
       balance: contractQty - cum, completionPct: contractQty > 0 ? cum / contractQty * 100 : (Math.abs(cum) > 1e-9 ? 100 : 0), unitPrice,
       amount: (row?.cumGross ?? 0) / 100, previousAmount: (row?.prevGross ?? 0) / 100, periodAmount: (row?.periodGross ?? 0) / 100, pendingCount: 0, rows: [] };
   }
-  let previousCumulative = 0, addition = 0, correction = 0, claimedPrevious = 0, claimedAddition = 0, claimedCorrection = 0, pendingCount = 0;
+  // quantity billed manually before the sheet was opened (carried as an opening balance)
+  const opening = item.qsrc === 'meas' && item.meas_opening != null ? Number(item.meas_opening) : 0;
+  let previousCumulative = opening, addition = 0, correction = 0, claimedPrevious = opening, claimedAddition = 0, claimedCorrection = 0, pendingCount = 0;
   const seen = new Set();
   for (const r of curRows) {
     seen.add(r.id);
@@ -67,7 +69,7 @@ export function itemMovement(api, contract, item, bill, calc) {
   return { measured: true, previousCumulative, addition, correction, currentCumulative, claimedCurrentCumulative, contractQty,
     balance: contractQty - currentCumulative, completionPct: contractQty > 0 ? currentCumulative / contractQty * 100 : (Math.abs(currentCumulative) > 1e-9 ? 100 : 0),
     unitPrice, amount: (row?.cumGross ?? 0) / 100, previousAmount: (row?.prevGross ?? 0) / 100, periodAmount: (row?.periodGross ?? 0) / 100,
-    pendingCount, rows: curRows, movementRows, isDraft };
+    pendingCount, rows: curRows, movementRows, isDraft, opening };
 }
 
 // =============================================================================================
@@ -115,7 +117,8 @@ export function measView(ctx, itemId) {
   const save = (id, patch) => attempt(() => api.saveMeas(id, patch));
 
   function rowEl(m, n) {
-    const ro = geoLocked || m.cancelled ? 'disabled' : '';
+    const lockedIn = api.measLockedIn(m);
+    const ro = geoLocked || m.cancelled || lockedIn ? 'disabled' : '';
     if (m.isGroup) {
       const span = headers().length - 3;
       const tr = html(`<tr class="grp-row" data-row-id="${m.id}" style="background:#F0F4F9"><td colspan="2"><input value="${esc(m.groupLabel)}" style="font-weight:700;color:var(--navy)" ${ro}></td>
@@ -139,12 +142,13 @@ export function measView(ctx, itemId) {
     cells += `<td class="formula">${formulaHTML(m)}</td>`;
     cells += `<td><span class="sign-pill ${m.sign === -1 ? 'n' : 'p'}" title="תוספת / הפחתה">${m.sign === -1 ? '－' : '＋'}</span></td>`;
     cells += `<td class="res ${v < 0 ? 'n' : 'p'}">${fn(v)}</td>`;
-    cells += `<td><button class="stat ${b.cls} ap-btn" style="border:none;cursor:pointer" title="קביעת סטטוס אישור">${esc(b.label)}</button></td>`;
-    cells += `<td><span class="stat ${ROW_STATUS_CLASS[status]}">${ROW_STATUS_LABEL[status]}</span></td>`;
-    cells += `<td><input data-k="notes" value="${esc(m.notes)}" style="min-width:80px" ${ro}></td>`;
+    cells += `<td><button class="stat ${b.cls} ap-btn" style="border:none;cursor:${lockedIn ? 'default' : 'pointer'}" title="${lockedIn ? 'ההחלטה אושרה בחשבון ונעולה' : 'קביעת סטטוס אישור'}" ${lockedIn ? 'disabled' : ''}>${esc(b.label)}</button></td>`;
+    cells += `<td>${lockedIn ? `<span class="stat locked" title="אושרה בחשבון ${lockedIn} — לא ניתנת לשינוי">🔒 אושר בח׳ ${lockedIn}</span>` : `<span class="stat ${ROW_STATUS_CLASS[status]}">${ROW_STATUS_LABEL[status]}</span>`}</td>`;
+    cells += `<td><input data-k="notes" value="${esc(m.notes)}" style="min-width:80px" ${geoLocked || m.cancelled ? 'disabled' : ''}></td>`;
     cells += `<td><span class="actions" style="display:flex;gap:3px;justify-content:center">${m.cancelled
-      ? '<button class="icon-btn act-restore" title="שחזור">↺</button>'
-      : '<button class="icon-btn act-dup" title="שכפול">⧉</button><button class="icon-btn act-hist" title="היסטוריה">🕓</button><button class="icon-btn act-copy" title="העתק לסעיף אחר">⇥</button><button class="icon-btn del act-del" title="מחיקה">🗑</button>'}</span></td>`;
+      ? '<button class="icon-btn act-restore" title="שחזור">↺</button><button class="icon-btn act-hist" title="היסטוריה">🕓</button>'
+      : `<button class="icon-btn act-dup" title="שכפול">⧉</button><button class="icon-btn act-hist" title="היסטוריה">🕓</button><button class="icon-btn act-copy" title="העתק לסעיף אחר">⇥</button>${lockedIn
+        ? '<button class="icon-btn act-fix" title="תיקון שורה שאושרה (נשמרת היסטוריה)">✎</button>' : '<button class="icon-btn del act-del" title="מחיקה">🗑</button>'}`}</span></td>`;
     const tr = html(`<tr data-row-id="${m.id}" class="${m.cancelled ? 'cancelled-row' : ''} ${m.sign === -1 ? 'ded-row' : ''}">${cells}</tr>`).firstChild;
     const repaint = (nm) => { tr.replaceWith(rowEl(nm, n)); stats(); };
     tr.querySelectorAll('[data-k]').forEach((el) => {
@@ -169,8 +173,13 @@ export function measView(ctx, itemId) {
         stats();
       });
     });
-    tr.querySelector('.sign-pill').onclick = () => { if (geoLocked) return toast('החשבון הוגש — לא ניתן לשנות מדידות', 'err'); const nm = save(m.id, { sign: m.sign === -1 ? 1 : -1 }); if (nm) repaint(nm); };
-    tr.querySelector('.ap-btn').onclick = () => approvalDialog(m);
+    tr.querySelector('.sign-pill').onclick = () => { if (geoLocked) return toast('החשבון הוגש — לא ניתן לשנות מדידות', 'err'); if (lockedIn) return toast(`השורה אושרה בחשבון ${lockedIn} — לתיקון לחץ ✎`, 'err'); const nm = save(m.id, { sign: m.sign === -1 ? 1 : -1 }); if (nm) repaint(nm); };
+    tr.querySelector('.ap-btn').onclick = () => { if (!lockedIn) approvalDialog(m); };
+    tr.querySelector('.act-fix')?.addEventListener('click', () => formModal(`תיקון שורה שאושרה בחשבון ${lockedIn}`, [
+      { name: 'reason', label: 'סיבת התיקון', type: 'textarea', span: true, required: true },
+    ], (v) => { const nid = api.correctMeas(m.id, v.reason); toast('נוצרה שורת תיקון — ערוך בה את המידות'); ctx._measFocusRow = nid; ctx.refresh(); }, {
+      submit: 'יצירת שורת תיקון',
+      intro: h('p', { class: 'muted' }, 'כמות שאושרה אינה משתנה. השורה המקורית תסומן כמבוטלת (נשארת בהיסטוריה), ותיווצר שורה זהה שאפשר לערוך. בחשבון הבא ההפרש יופיע כתיקון גלוי, עם הסיבה.') }));
     tr.querySelector('.act-dup')?.addEventListener('click', () => attempt(() => { api.duplicateMeas(m.id); ctx.refresh(); }));
     tr.querySelector('.act-hist')?.addEventListener('click', () => historyDialog(m));
     tr.querySelector('.act-copy')?.addEventListener('click', () => copyDialog([m.id]));
@@ -254,8 +263,10 @@ export function measView(ctx, itemId) {
   const items = api.items(contract.id).filter((i) => i.kind !== 'note');
   const counts = new Map(api.s.all('SELECT item_id, COUNT(*) n FROM measurements WHERE contract_id=? AND is_group=0 AND cancelled=0 GROUP BY item_id', [contract.id]).map((r) => [r.item_id, r.n]));
   const sel = h('select', { class: 'sel-sec', onchange: (e) => ctx.go(`m/${e.target.value}`) }, items.map((i) => h('option', { value: i.id, selected: i.id === item.id }, `${fullCode(i)} — ${i.description.slice(0, 70) || 'ללא תיאור'}${counts.get(i.id) ? `  📐${counts.get(i.id)}` : ''}`)));
-  root.append(
-    h('div', { class: 'meas-tools no-print' }, sel,
+  const srcSel = h('select', { title: 'מאיפה מגיעה הכמות לחשבון', onchange: (e) => attempt(() => { api.setQtySource(item.id, e.target.value); ctx.refresh(); }, e.target.value === 'meas' ? 'הכמות לחשבון תחושב מדף החישוב' : 'הכמות לחשבון תוקלד ידנית בחשבון') },
+    h('option', { value: 'meas', selected: item.qsrc === 'meas' }, 'מקור כמות: דף חישוב'), h('option', { value: 'manual', selected: item.qsrc !== 'meas' }, 'מקור כמות: הקלדה בחשבון'));
+  root.append(...[
+    h('div', { class: 'meas-tools no-print' }, sel, srcSel,
       h('label', { class: 'field check' }, h('input', { type: 'checkbox', checked: periodOnly, onchange: (e) => { sessionStorage.setItem('meas-period', e.target.checked ? '1' : '0'); ctx.refresh(); } }), h('span', {}, 'רק שינויים בחשבון הפתוח')),
       h('label', { class: 'field check' }, h('input', { type: 'checkbox', checked: useAreas, onchange: (e) => attempt(() => { api.saveContract({ ...contract, meas_areas: e.target.checked }); ctx.refresh(); }) }), h('span', {}, 'קיבוץ לפי אזור')),
       h('div', { style: { flex: 1 } }),
@@ -264,12 +275,15 @@ export function measView(ctx, itemId) {
       h('button', { class: 'primary', onclick: () => { const b = openBill ?? api.s.get(`SELECT * FROM bills WHERE contract_id=? ORDER BY number DESC LIMIT 1`, [contract.id]); if (!b) return toast('אין חשבון — פתח חשבון כדי להדפיס דף חישוב', 'err'); ctx.go(`b/${b.id}/sheets?item=${item.id}`); } }, '🖨 דף חישוב')),
     h('div', { class: 'item-context' }, h('div', {}, h('div', { class: 'ic-code' }, fullCode(item)), h('div', { class: 'ic-name' }, item.description)), statsHost),
     geoLocked ? h('div', { class: 'alert' }, `חשבון ${openBill?.number ?? ''} הוגש — ניתן לקבוע סטטוס אישור לשורות, אך לא לשנות מידות. להחזרה להכנה עבור לחשבון.`) : null,
+    item.qsrc !== 'meas' ? h('div', { class: 'alert' }, 'מקור הכמות של סעיף זה הוא הקלדה בחשבון — שורות המדידה כאן אינן נכנסות לחשבון. לשינוי בחר "מקור כמות: דף חישוב".') : null,
+    item.qsrc === 'meas' && item.meas_opening != null ? h('div', { class: 'alert info' }, `יתרת פתיחה: ${fn(Number(item.meas_opening), 4)} ${item.unit} — כמות שחויבה ידנית לפני פתיחת דף החישוב. היא נכללת במצטבר, כך שהמצטבר לא יורד כשמוסיפים מדידות.`) : null,
     html(`<div class="formula-hint">⌨ <span class="kbd">Enter</span> שדה הבא / שורה חדשה בסוף &nbsp; <span class="kbd">↑↓</span> ניווט &nbsp; <b>יחידת הסעיף: ${esc(item.unit)} (${KIND_LABEL[kind]})</b> — רק צורות וחישובים תואמים ליחידה זו זמינים</div>`),
     h('div', { class: 'tbl-wrap', style: { overflow: 'auto', background: '#fff', border: '1px solid var(--line)', borderRadius: '10px' } }, table),
     h('div', { class: 'boq-actions-row', style: { marginTop: '10px' } },
       h('button', { class: 'primary', disabled: geoLocked, onclick: addRow }, '＋ שורת מדידה'),
       h('button', { disabled: geoLocked, onclick: () => attempt(() => { api.addMeas(contract.id, item.id, { isGroup: true }); ctx.refresh(); }) }, '＋ קבוצה')),
-    h('div', { class: 'sec-sum' }, h('div', { class: 'l' }, h('span', { class: 'code' }, fullCode(item)), ` — ${item.description.slice(0, 90)}`), sumHost));
+    h('div', { class: 'sec-sum' }, h('div', { class: 'l' }, h('span', { class: 'code' }, fullCode(item)), ` — ${item.description.slice(0, 90)}`), sumHost)].filter(Boolean));
+  if (ctx._measFocusRow) { const id = ctx._measFocusRow; ctx._measFocusRow = null; setTimeout(() => table.querySelector(`tr[data-row-id="${id}"] input.dim-in`)?.focus(), 30); }
   if (ctx._measFocusLast) { ctx._measFocusLast = false; setTimeout(() => { const rows = table.querySelectorAll('tbody tr[data-row-id]'); rows[rows.length - 1]?.querySelector('input,select,textarea')?.focus(); }, 30); }
   return root;
 }

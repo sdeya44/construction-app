@@ -257,3 +257,24 @@ table.tender th .muted { font-weight: 400; font-size: 11px; }
 .cf-bar.out .a { background: var(--bad); } .cf-bar.out .e { background: #e8aaa6; }
 table.cf tr.cf-past td { color: var(--ink-2); }
 .topnav a { white-space: nowrap; }
+/* dropdown menus, chapter picker, pipeline, lock */
+.menu-pop { position: fixed; z-index: 70; min-width: 210px; background: var(--surface); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 14px 40px rgba(0,0,0,.18); padding: 6px; display: grid; gap: 2px; }
+.menu-pop button { text-align: start; border: 0; background: transparent; padding: 8px 10px; border-radius: 7px; }
+.menu-pop button:hover:not(:disabled), .menu-pop button:focus-visible { background: var(--accent-weak); color: var(--accent); outline: none; }
+.menu-pop hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
+.chap-pick { display: grid; gap: 2px; max-height: 46vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.chap-row { display: grid; grid-template-columns: auto 64px 1fr auto 120px; gap: 10px; align-items: center; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+.chap-row:hover { background: var(--surface-2); }
+.chap-row .code { font-variant-numeric: tabular-nums; color: var(--ink-2); direction: ltr; text-align: right; }
+.chap-row .n { font-variant-numeric: tabular-nums; direction: ltr; text-align: left; }
+.pipeline { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; align-items: stretch; margin-bottom: 18px; }
+.pipeline .arrow { align-self: center; color: var(--line-2); font-size: 22px; }
+.pstep { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: grid; gap: 4px; cursor: pointer; text-align: start; }
+.pstep:hover { border-color: var(--accent); }
+.pstep .k { font-size: 11.5px; color: var(--muted); letter-spacing: .06em; }
+.pstep b { font-size: 15px; }
+.pstep .v { font-variant-numeric: tabular-nums; }
+.pstep.empty-step { border-style: dashed; color: var(--muted); }
+.lock-chip { display: inline-flex; align-items: center; gap: 6px; }
+td.locked-boq { color: var(--ink-2); background: var(--surface-2); }
+@media (max-width: 900px) { .pipeline { grid-template-columns: 1fr; } .pipeline .arrow { display: none; } .chap-row { grid-template-columns: auto 54px 1fr; } .chap-row .muted, .chap-row .n { display: none; } }

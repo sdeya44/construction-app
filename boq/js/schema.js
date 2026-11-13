@@ -1,5 +1,5 @@
 // Database schema. Decimal values are TEXT (exact), money is INTEGER agorot.
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -32,7 +32,11 @@ CREATE TABLE IF NOT EXISTS contracts (
   quote_markup TEXT NOT NULL DEFAULT '0', planned_cents INTEGER NOT NULL DEFAULT 0,
   end_month TEXT DEFAULT '', pay_terms INTEGER NOT NULL DEFAULT 60, meas_areas INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','closed')),
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  -- locked = contract quantities/prices frozen (set on quote conversion / first bill); changes go through change items
+  locked INTEGER NOT NULL DEFAULT 0,
+  -- versions: contracts sharing version_group are versions of one BOQ; origin_id = the contract it was copied from
+  version_group INTEGER DEFAULT NULL, version_label TEXT DEFAULT '', origin_id INTEGER DEFAULT NULL
 );
 
 -- Titles of structures (SS), chapters (SS.CC) and subchapters (SS.CC.TT).
@@ -52,7 +56,10 @@ CREATE TABLE IF NOT EXISTS items (
   kind TEXT NOT NULL DEFAULT 'contract' CHECK (kind IN ('contract','extra','note')),
   change_status TEXT NOT NULL DEFAULT 'approved' CHECK (change_status IN ('approved','pending','rejected')),
   dekel_code TEXT DEFAULT NULL, dekel_price TEXT DEFAULT NULL, price_manual INTEGER NOT NULL DEFAULT 1,
-  source_item_id INTEGER DEFAULT NULL, notes TEXT DEFAULT ''
+  source_item_id INTEGER DEFAULT NULL, notes TEXT DEFAULT '',
+  -- where the bill quantity comes from: typed in the bill ('manual') or the calculation sheet ('meas');
+  -- meas_opening = quantity billed manually before the sheet was opened (counted as approved)
+  qsrc TEXT NOT NULL DEFAULT 'manual', meas_opening TEXT DEFAULT NULL
 );
 -- item numbers are unique per subchapter; notes may repeat a number (Binarit does this)
 CREATE UNIQUE INDEX IF NOT EXISTS items_unique ON items(contract_id, struct, chapter, sub, num) WHERE kind != 'note';
@@ -66,7 +73,21 @@ CREATE TABLE IF NOT EXISTS bills (
   basis TEXT NOT NULL DEFAULT 'sub' CHECK (basis IN ('calc','sub','appr')),
   doc TEXT NOT NULL DEFAULT '{}', adj TEXT NOT NULL DEFAULT '{}', snapshot TEXT DEFAULT NULL,
   created_at TEXT NOT NULL, approved_at TEXT DEFAULT NULL,
+  returned INTEGER NOT NULL DEFAULT 0,
   UNIQUE (contract_id, number)
+);
+-- status history of a bill (prepared / submitted / returned for corrections / approved / reopened)
+CREATE TABLE IF NOT EXISTS bill_events (
+  id INTEGER PRIMARY KEY, bill_id INTEGER NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+  at TEXT NOT NULL, status TEXT NOT NULL, note TEXT DEFAULT ''
+);
+
+-- Issued quote revisions (מהדורות): a frozen copy of the quote as it was sent.
+CREATE TABLE IF NOT EXISTS quote_revisions (
+  id INTEGER PRIMARY KEY, contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+  rev INTEGER NOT NULL, created_at TEXT NOT NULL, recipient TEXT DEFAULT '', note TEXT DEFAULT '',
+  total_cents INTEGER NOT NULL DEFAULT 0, snapshot TEXT NOT NULL,
+  UNIQUE (contract_id, rev)
 );
 
 -- Quantities: cumulative in cumulative contracts, period quantities in periodic ones.

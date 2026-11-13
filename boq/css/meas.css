@@ -186,3 +186,5 @@ tr.rgrp-grand td.num{text-align:left}
   .kea .rtbl tr,.kea .rbal,.kea .rsigns,.kea .rsum{break-inside:avoid}
   .kea .rtbl thead{display:table-header-group}
 }
+
+.kea .stat.locked{color:#5b6472;background:#eceff3;white-space:nowrap}

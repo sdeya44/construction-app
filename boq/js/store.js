@@ -45,6 +45,20 @@ export class Store {
         COMMIT;`);
       this.db.run('PRAGMA foreign_keys = ON;');
     }
+    // v6: quantity source per item, contract lock & versions, returned bills
+    if (!cols('items').includes('qsrc')) {
+      this.db.run("ALTER TABLE items ADD COLUMN qsrc TEXT NOT NULL DEFAULT 'manual'");
+      this.db.run('ALTER TABLE items ADD COLUMN meas_opening TEXT DEFAULT NULL');
+      if (has('measurements')) this.db.run("UPDATE items SET qsrc='meas' WHERE id IN (SELECT item_id FROM measurements WHERE is_group=0)");
+    }
+    if (!cols('contracts').includes('locked')) {
+      this.db.run('ALTER TABLE contracts ADD COLUMN locked INTEGER NOT NULL DEFAULT 0');
+      this.db.run('ALTER TABLE contracts ADD COLUMN version_group INTEGER DEFAULT NULL');
+      this.db.run("ALTER TABLE contracts ADD COLUMN version_label TEXT DEFAULT ''");
+      this.db.run('ALTER TABLE contracts ADD COLUMN origin_id INTEGER DEFAULT NULL');
+      if (has('bills')) this.db.run("UPDATE contracts SET locked=1 WHERE kind!='quote' AND id IN (SELECT contract_id FROM bills)");
+    }
+    if (has('bills') && !cols('bills').includes('returned')) this.db.run('ALTER TABLE bills ADD COLUMN returned INTEGER NOT NULL DEFAULT 0');
   }
 
   all(sql, params = []) {

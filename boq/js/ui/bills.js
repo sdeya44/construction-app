@@ -7,10 +7,18 @@ import { loadExcel, exportBill } from '../excel.js';
 import { download } from '../persist.js';
 
 const BASIS = { calc: 'מחושבת', sub: 'מוגשת', appr: 'מאושרת' };
-const billTag = (b) => {
-  const paid = b.status === 'approved' && b.snap && b.paid >= b.snap.due && b.snap.due > 0;
-  return h('span', { class: `tag ${paid ? 'paid' : b.status}` }, paid ? 'נפרע' : STATUS[b.status]);
+/** Work status (בהכנה / הוגש / הוחזר לתיקונים / הוגש מחדש / מאושר) + collection status derived from payments. */
+export const billTag = (b) => {
+  const work = b.status === 'draft' && b.returned ? h('span', { class: 'tag warn' }, 'הוחזר לתיקונים')
+    : b.status === 'submitted' && b.returned ? h('span', { class: 'tag submitted' }, 'הוגש מחדש')
+      : h('span', { class: `tag ${b.status}` }, STATUS[b.status]);
+  if (b.status !== 'approved' || !b.snap) return work;
+  const due = b.snap.due;
+  const pay = due <= 0 ? null : b.paid >= due ? h('span', { class: 'tag paid' }, 'שולם') : b.paid > 0 ? h('span', { class: 'tag warn' }, 'שולם חלקית') : h('span', { class: 'tag' }, 'ממתין לתשלום');
+  return h('span', { style: { display: 'inline-flex', gap: '4px' } }, work, pay);
 };
+const EVENT = { draft: 'נפתח', submitted: 'הוגש', returned: 'הוחזר לתיקונים', approved: 'אושר', reopened: 'נפתח מחדש' };
+const decreaseText = (r) => r.warnings.filter((w) => w.type === 'decrease' || w.type === 'negative').map((w) => `• ${w.text}`);
 
 export function billsView(ctx, cid) {
   const api = ctx.api;
@@ -71,11 +79,19 @@ export function billView(ctx, bid, tab) {
   const head = h('div', { class: 'toolbar', style: { borderBottom: '1px solid var(--line)' } },
     h('h2', {}, `חשבון ${b.type === 'final' ? 'סופי' : 'חלקי'} ${b.number}`), h('span', { class: 'muted' }, `ביצוע ${monthLabel(b.month)} · ${c.name}`), billTag(b),
     h('div', { class: 'grow' }),
-    editable ? h('button', { onclick: () => attempt(() => { api.submitBill(bid); ctx.refresh(); }, 'החשבון הוגש') }, 'הגשה') : null,
-    b.status === 'submitted' ? h('button', { onclick: () => attempt(() => { api.returnBill(bid); ctx.refresh(); }) }, 'החזרה להכנה') : null,
+    editable ? h('button', { onclick: async () => {
+      const neg = decreaseText(r);
+      if (neg.length && !(await confirmBox('כמויות שליליות בחשבון', `בסעיפים הבאים המצטבר ירד מהחשבון הקודם:\n${neg.slice(0, 12).join('\n')}${neg.length > 12 ? `\n…ועוד ${neg.length - 12}` : ''}\n\nלהגיש בכל זאת?`, { ok: 'הגשה' }))) return;
+      attempt(() => { api.submitBill(bid); ctx.refresh(); }, b.returned ? 'החשבון הוגש מחדש' : 'החשבון הוגש');
+    } }, b.returned ? 'הגשה מחדש' : 'הגשה') : null,
+    b.status === 'submitted' ? h('button', { onclick: () => formModal(`החזרת חשבון ${b.number} לתיקונים`, [
+      { name: 'note', label: 'מה צריך לתקן (נרשם במהלך החשבון)', type: 'textarea', span: true },
+    ], (v) => { api.returnBill(bid, v.note); ctx.refresh(); }, { submit: 'החזרה לתיקונים' }) }, 'הוחזר לתיקונים') : null,
     b.status !== 'approved' ? h('button', { class: 'primary', onclick: async () => {
       const basisWarn = b.basis !== 'appr' ? `\n\nשים לב: החשבון מחושב לפי כמות ${BASIS[b.basis]}. אם המזמין אישר כמויות אחרות — עבור לבסיס "מאושרת" לפני האישור.` : '';
-      if (await confirmBox('אישור חשבון', `לאשר ולנעול את חשבון ${b.number}?\nלתשלום: ${money(r.due)} ₪\nלאחר האישור לא ניתן לערוך.${basisWarn}`, { ok: 'אישור ונעילה' }))
+      const neg = decreaseText(r);
+      const negWarn = neg.length ? `\n\nכמויות שליליות (המצטבר ירד):\n${neg.slice(0, 8).join('\n')}` : '';
+      if (await confirmBox('אישור חשבון', `לאשר ולנעול את חשבון ${b.number}?\nלתשלום: ${money(r.due)} ₪\nלאחר האישור לא ניתן לערוך.${basisWarn}${negWarn}`, { ok: 'אישור ונעילה' }))
         attempt(() => { api.approveBill(bid); ctx.refresh(); }, 'החשבון אושר ונעול');
     } }, 'אישור ונעילה') : null,
     b.status !== 'approved' ? h('button', { class: 'danger ghost', onclick: async () => {
@@ -112,6 +128,7 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
   const sections = new Map(api.sections(c.id).map((s) => [s.code, s]));
   const secName = (k) => sections.get(k)?.name ?? '';
   const measured = api.measTotals(c.id);
+  const isMeas = (it) => it.qsrc === 'meas';
   let showVersions = sessionStorage.getItem('exec-versions') === '1';
   let filter = sessionStorage.getItem('exec-filter') || 'all';
   const tbody = h('tbody');
@@ -193,8 +210,8 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
         h('td', { class: 'n' }, n2(it.qty)),
         h('td', { class: 'n muted' }, x ? pctOf(x.cumQ, it.qty) : ''),
         h('td', { class: 'n muted' }, x ? n2(x.prevQ) : ''),
-        numInput(x?.curQ, setCur, canEdit && !measured.has(it.id), 'cur'),
-        measured.has(it.id) ? h('td', { class: 'n locked', title: 'הכמות מחושבת מדף החישוב' }, h('a', { href: `#/m/${it.id}` }, '📐 '), n2(x?.cumQ)) : numInput(x?.cumQ, setCum, canEdit, 'cum'),
+        numInput(x?.curQ, setCur, canEdit && !isMeas(it), 'cur'),
+        isMeas(it) ? h('td', { class: 'n locked', title: `הכמות מחושבת מדף החישוב${it.meas_opening != null ? ` (כולל יתרת פתיחה ${n2(it.meas_opening)})` : ''} — לשינוי מקור הכמות פתח את דף החישוב` }, h('a', { href: `#/m/${it.id}` }, '📐 '), n2(x?.cumQ)) : numInput(x?.cumQ, setCum, canEdit, 'cum'),
         ...(showVersions ? ['q_calc', 'q_sub', 'q_appr'].map((k) => numInput(L[k], (v) => attempt(() => api.setLine(b.id, it.id, { [k]: v })), k === 'q_appr' ? apprEditable : editable, k)) : []),
         numInput(L.price ?? it.price, (v) => attempt(() => api.setLine(b.id, it.id, { price: v === it.price ? '' : v })), editable, 'price'),
         h('td', { class: 'n' }, x ? money(x.amount) : ''));
@@ -245,7 +262,12 @@ function summaryTab(ctx, b, c, r, editable) {
     r.other ? line(r.otherLabel, -r.other, 'minus') : null,
     line('סה"כ לפני מע"מ', r.beforeVat, 'strong'),
     line(`מע"מ ${r.vatRate}%`, r.vat),
-    line('סכום לתשלום בחשבון זה', r.due, 'grand')));
+    line('סכום לתשלום בחשבון זה', r.due, 'grand'),
+    ...(() => {
+      const owed = api.outstandingBefore(c.id, b.number);
+      if (!owed) return [];
+      return [line('יתרת חוב מחשבונות קודמים', owed, '', 'אושרו וטרם שולמו במלואם'), line('סה"כ לגבייה', r.due + owed, 'grand')];
+    })()));
 
   const groups = h('table', { class: 't' }, h('thead', {}, h('tr', {}, ['מבנה.פרק', 'שם', 'ברוטו', 'הנחה', 'הנחה כללית', 'נטו'].map((x, i) => h('th', { class: i >= 2 ? 'n' : '' }, x)))),
     h('tbody', {}, T.groups.filter((g) => g.gross !== 0).map((g) => h('tr', {}, h('td', { class: 'code' }, g.key), h('td', {}, g.name, g.exempt ? h('span', { class: 'tag', style: { marginInlineStart: '6px' } }, 'מוחרג') : null),
@@ -307,7 +329,11 @@ function paymentsTab(ctx, b, r) {
       pays.length ? h('table', { class: 't' }, h('thead', {}, h('tr', {}, ['תאריך', 'סכום', 'אמצעי', 'אסמכתא', 'הערה', ''].map((x, i) => h('th', { class: i === 1 ? 'n' : '' }, x)))),
         h('tbody', {}, pays.map((p) => h('tr', {}, h('td', {}, dateLabel(p.date)), h('td', { class: 'n' }, money(p.amount_cents)), h('td', {}, p.method), h('td', {}, p.ref), h('td', {}, p.note),
           h('td', {}, h('button', { class: 'ghost sm danger', onclick: async () => { if (await confirmBox('מחיקת תשלום', 'למחוק?', { danger: true })) attempt(() => { api.deletePayment(p.id); ctx.refresh(); }); } }, 'מחיקה'))))))
-        : h('div', { class: 'empty' }, 'לא נרשמו תשלומים'))));
+        : h('div', { class: 'empty' }, 'לא נרשמו תשלומים')),
+    h('div', { class: 'card', style: { marginTop: '16px' } }, h('header', {}, h('h2', {}, 'מהלך החשבון')),
+      h('table', { class: 't' }, h('tbody', {}, api.billEvents(b.id).map((e) => h('tr', {},
+        h('td', { class: 'muted', style: { whiteSpace: 'nowrap', width: '150px' } }, new Date(e.at).toLocaleString('he-IL')),
+        h('td', { style: { width: '140px' } }, h('b', {}, EVENT[e.status] ?? e.status)), h('td', {}, e.note))))))));
 }
 
 // ---------------------------------------------------------------------------------------------
