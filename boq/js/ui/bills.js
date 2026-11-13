@@ -85,6 +85,7 @@ export function billView(ctx, bid, tab) {
       { name: 'reason', label: 'סיבה (נרשמת ביומן הפעולות)', type: 'textarea', span: true, required: true },
     ], (v) => { api.reopenBill(bid, v.reason); ctx.refresh(); }, { submit: 'פתיחה מחדש', intro: h('p', { class: 'muted' }, 'אפשרי רק לחשבון המאושר האחרון וללא תשלומים רשומים. החשבון יחזור למצב "הוגש" ויחושב מחדש.') }) }, 'פתיחה מחדש') : null,
     h('button', { onclick: async () => { try { download(`${c.name} - חשבון ${b.doc.displayNumber || b.number}.xlsx`.replace(/[\\/:*?"<>|]/g, '_'), await exportBill(await loadExcel(), { contract: c, bill: b, calc: r, sections: api.sections(c.id) }), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); } catch (e) { toast(e.message, 'err'); } } }, 'ייצוא Excel'),
+    h('button', { onclick: () => ctx.go(`b/${bid}/sheets`) }, '📐 דפי חישוב'),
     h('button', { onclick: () => ctx.go(`b/${bid}/print`) }, 'הפקת חשבון / PDF'));
 
   const tabs = h('nav', { class: 'tabs no-print' }, [['exec', 'כמויות ביצוע'], ['summary', 'סיכום והתאמות'], ['pay', 'תשלומים']].map(([k, l]) =>
@@ -110,6 +111,7 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
   const items = api.items(c.id).filter((i) => i.kind !== 'note' && (i.kind === 'contract' || i.change_status === 'approved'));
   const sections = new Map(api.sections(c.id).map((s) => [s.code, s]));
   const secName = (k) => sections.get(k)?.name ?? '';
+  const measured = api.measTotals(c.id);
   let showVersions = sessionStorage.getItem('exec-versions') === '1';
   let filter = sessionStorage.getItem('exec-filter') || 'all';
   const tbody = h('tbody');
@@ -191,8 +193,8 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
         h('td', { class: 'n' }, n2(it.qty)),
         h('td', { class: 'n muted' }, x ? pctOf(x.cumQ, it.qty) : ''),
         h('td', { class: 'n muted' }, x ? n2(x.prevQ) : ''),
-        numInput(x?.curQ, setCur, canEdit, 'cur'),
-        numInput(x?.cumQ, setCum, canEdit, 'cum'),
+        numInput(x?.curQ, setCur, canEdit && !measured.has(it.id), 'cur'),
+        measured.has(it.id) ? h('td', { class: 'n locked', title: 'הכמות מחושבת מדף החישוב' }, h('a', { href: `#/m/${it.id}` }, '📐 '), n2(x?.cumQ)) : numInput(x?.cumQ, setCum, canEdit, 'cum'),
         ...(showVersions ? ['q_calc', 'q_sub', 'q_appr'].map((k) => numInput(L[k], (v) => attempt(() => api.setLine(b.id, it.id, { [k]: v })), k === 'q_appr' ? apprEditable : editable, k)) : []),
         numInput(L.price ?? it.price, (v) => attempt(() => api.setLine(b.id, it.id, { price: v === it.price ? '' : v })), editable, 'price'),
         h('td', { class: 'n' }, x ? money(x.amount) : ''));

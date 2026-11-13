@@ -13,6 +13,7 @@ import { billPrintRoute } from './print-bill.js';
 import { dekelReportView } from './dekel-ui.js';
 import { profitView, statusView, defectsView } from './reports.js';
 import { tendersView, tenderView, cashflowView, managementView } from './stage3.js';
+import { measView, sheetsView } from './meas-ui.js';
 
 const ctx = {
   SQL: null, store: null, api: null, dekel: null,
@@ -42,6 +43,8 @@ const ROUTES = [
   [/^cashflow$/, () => cashflowView(ctx)],
   [/^mgmt$/, () => managementView(ctx)],
   [/^c\/(\d+)\/print$/, (m) => boqPrintView(ctx, +m[1])],
+  [/^m\/(\d+)$/, (m) => measView(ctx, +m[1])],
+  [/^b\/(\d+)\/sheets$/, (m) => sheetsView(ctx, +m[1], new URLSearchParams(location.hash.split('?')[1] || '').get('item'))],
   [/^b\/(\d+)(?:\/(\w+))?$/, (m) => (m[2] === 'print' ? billPrintRoute(ctx, +m[1]) : billView(ctx, +m[1], m[2] || 'exec'))],
   [/^indices$/, () => indicesView(ctx)],
   [/^settings$/, () => settingsView(ctx)],
@@ -58,6 +61,7 @@ function crumbsFor(path) {
     let m;
     if ((m = path.match(/^p\/(\d+)/))) { const p = api.project(+m[1]); out.push([p.name, `p/${p.id}`]); }
     else if ((m = path.match(/^c\/(\d+)/))) addContract(+m[1]);
+    else if ((m = path.match(/^m\/(\d+)/))) { const it = api.item(+m[1]); addContract(it.contract_id); out.push([`דף חישוב ${it.chapter}.${it.sub}.${it.num}`, `m/${it.id}`]); }
     else if ((m = path.match(/^b\/(\d+)/))) { const b = api.bill(+m[1]); addContract(b.contract_id); out.push([`חשבון ${b.number}`, `b/${b.id}`]); }
     else if (path === 'indices') out.push(['מדדים', 'indices']);
     else if (path === 'status') out.push(['מצב לתאריך', 'status']);

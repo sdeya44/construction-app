@@ -51,7 +51,14 @@ export function settingsView(ctx) {
         { name: 'name', label: 'שם', value: co.name, span: true }, { name: 'vat_id', label: 'ח.פ / ע.מ', value: co.vat_id },
         { name: 'phone', label: 'טלפון', value: co.phone }, { name: 'email', label: 'דוא"ל', value: co.email }, { name: 'address', label: 'כתובת', value: co.address, span: true },
       ], (v) => { api.saveCompany(v); ctx.refresh(); }) }, 'עריכה'))),
-      h('div', { class: 'card-body' }, h('b', {}, co.name), h('div', { class: 'muted' }, [co.vat_id && `ח.פ ${co.vat_id}`, co.address, co.phone, co.email].filter(Boolean).join(' · ')))),
+      h('div', { class: 'card-body' }, h('b', {}, co.name), h('div', { class: 'muted' }, [co.vat_id && `ח.פ ${co.vat_id}`, co.address, co.phone, co.email].filter(Boolean).join(' · ')),
+        h('div', { style: { marginTop: '12px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' } },
+          h('img', { src: co.logo || 'assets/kayan-logo.jpg', alt: 'לוגו', style: { maxHeight: '48px', maxWidth: '260px', border: '1px solid var(--line)', borderRadius: '6px', background: '#fff' } }),
+          h('button', { class: 'sm', onclick: async () => { const f = await pickFile('.png,.jpg,.jpeg,.webp'); if (!f) return; const type = /\.png$/i.test(f.name) ? 'png' : /\.webp$/i.test(f.name) ? 'webp' : 'jpeg';
+            let bin = ''; f.bytes.forEach((b) => { bin += String.fromCharCode(b); }); attempt(() => { api.saveCompany({ ...co, logo: `data:image/${type};base64,${btoa(bin)}` }); ctx.refresh(); }, 'הלוגו עודכן'); } }, 'החלפת לוגו'),
+          co.logo ? h('button', { class: 'sm ghost', onclick: () => attempt(() => { api.saveCompany({ ...co, logo: null }); ctx.refresh(); }) }, 'לוגו ברירת מחדל') : null,
+          h('select', { onchange: (e) => attempt(() => { api.saveCompany({ ...co, logo_mode: e.target.value }); }, 'נשמר') },
+            h('option', { value: 'wide', selected: co.logo_mode !== 'corner' }, 'לוגו רחב בראש הדף'), h('option', { value: 'corner', selected: co.logo_mode === 'corner' }, 'לוגו בפינה + פרטי חברה'))))),
 
       h('div', { class: 'card' }, h('header', {}, h('h2', {}, 'מחירון דקל'), h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: loadDekel }, ctx.dekel ? 'החלפת מחירון' : 'טעינת מחירון'))),
         h('div', { class: 'card-body' }, ctx.dekel
