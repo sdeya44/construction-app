@@ -5,6 +5,7 @@ import { h, dateLabel, toast } from './dom.js';
 import { money, fixed, divRound, dec } from '../money.js';
 import { INDEX_SERIES } from '../schema.js';
 import { printPdf } from '../persist.js';
+import { periodTotals } from '../engine.js';
 
 const n2 = (v) => { const x = Number(v); return x ? x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; };
 const q2 = (v) => (Number(v) ? n2(v) : '');
@@ -14,6 +15,8 @@ const pageNo = (i) => String(i).padStart(3, '0');
 const execPct = (cum, cq) => { const c = fixed(cq); if (c <= 0n) return ''; return n2(dec(divRound(fixed(cum) * 1000000n, c))); };
 
 const DETAIL_COLS = [['סעיף', 6.3], ['תאור', 26.7], ['יחידה', 5], ['כמות חוזה', 8.6], ['% ביצוע', 5.8], ['מצטבר קודם', 10.4], ['כמות נוכחית', 8.6], ['כמות\nמצטברת', 8.6], ['מחיר יחידה', 9.6], ['סה"כ מצטבר', 10.4]];
+// monthly (non-cumulative) bill: only this month's quantity and amount
+const DETAIL_COLS_P = [['סעיף', 6.3], ['תאור', 43.7], ['יחידה', 5], ['כמות חוזה', 9], ['כמות החודש', 10], ['מחיר יחידה', 11], ['סה"כ לחודש', 15]];
 const CONC_COLS = [['', 45], ['סכום מצטבר\nתת פרק', 18.3], ['סכום מצטבר\nפרק', 18.3], ['סכום מצטבר\nמבנה', 18.4]];
 
 export function billPrintView(ctx, bid, mount) {
@@ -23,13 +26,18 @@ export function billPrintView(ctx, bid, mount) {
   const p = api.project(c.project_id);
   const co = api.company();
   const r = api.calc(bid);
+  const pv = b.doc?.view === 'period';
+  const V = pv ? periodTotals(r, api.prevApproved(c.id, b.number), c.mode === 'periodic') : null;
+  const COLS = pv ? DETAIL_COLS_P : DETAIL_COLS;
+  const ROWS = pv ? V.rows.filter((x) => x.curQ !== '0').map((x) => ({ ...x, amount: x.pAmount })) : r.rows;
+  const GROUPS = pv ? V.groups : r.totals.groups;
   const secs = new Map((r.frozen?.sections ?? api.sections(c.id)).map((s) => [s.code, s]));
   const secName = (k) => secs.get(k)?.name ?? '';
   const D = {
     issuer: b.doc.issuer || (c.kind === 'sub' ? c.party : co.name),
     contact: b.doc.contact || [co.email, co.phone && `נייד: ${co.phone}`].filter(Boolean).join(' '),
     project: b.doc.projectTitle || p.name,
-    title: `${b.type === 'final' ? 'חשבון סופי' : 'חשבון חלקי'} מס. ${b.doc.displayNumber || b.number}`,
+    title: `${b.type === 'final' ? 'חשבון סופי' : 'חשבון חלקי'} מס. ${b.doc.displayNumber || b.number}${pv ? ' — חודשי' : ''}`,
     date: dateLabel(b.doc.date || b.created_at.slice(0, 10)),
     file: p.name.split(' ')[0],
   };
@@ -79,22 +87,22 @@ export function billPrintView(ctx, bid, mount) {
   };
 
   // ---------------- detail pages ----------------
-  const NC = DETAIL_COLS.length;
+  const NC = COLS.length;
   const span = (label, amount, cls) => h('tr', { class: cls }, h('td', { colspan: NC - 1, class: 'lab' }, label), h('td', { class: 'nm' }, amount == null ? '' : cash(amount)));
   const head = (t) => h('tr', { class: 'bn-h' }, h('td'), h('td', {}, h('span', {}, t)), ...Array.from({ length: NC - 2 }, () => h('td')));
   const rowsBy = new Map();
-  for (const x of r.rows) {
-    if (x.amount === 0 && x.cumQ === '0' && x.prevQ === '0') continue;
+  for (const x of ROWS) {
+    if (!pv && x.amount === 0 && x.cumQ === '0' && x.prevQ === '0') continue;
     const k = `${x.struct}.${x.chapter}`;
     if (!rowsBy.has(k)) rowsBy.set(k, []);
     rowsBy.get(k).push(x);
   }
-  for (const g of r.totals.groups) {
+  for (const g of GROUPS) {
     const list = rowsBy.get(g.key);
     if (!list?.length) continue;
     const sub = [`מבנה ${+g.struct} ${secName(g.struct)}`, `פרק ${g.chapter} ${g.name}`];
     let pg = sheet({ first: pageCount === 0, issuer: pageCount === 0, sub });
-    let tb = table(DETAIL_COLS, pg.body);
+    let tb = table(COLS, pg.body);
     let running = 0;
     let open = false; // inside a subchapter whose subtotal has not been printed yet
     const add = (el, keepWithNext = false) => {
@@ -114,7 +122,7 @@ export function billPrintView(ctx, bid, mount) {
       if (carry) tb.append(carry);
       stretch(pg, tb, carry, NC);
       pg = sheet({ sub });
-      tb = table(DETAIL_COLS, pg.body);
+      tb = table(COLS, pg.body);
       if (carrying) tb.append(h('tr', { class: 'bn-from' }, h('td'), h('td', {}, 'מהעברה'), ...Array.from({ length: NC - 3 }, () => h('td')), h('td', { class: 'nm' }, cash(running))));
       moving.forEach((m) => tb.append(m));
     };
@@ -127,11 +135,15 @@ export function billPrintView(ctx, bid, mount) {
         const hd = head(`תת פרק ${g.chapter}.${+cur} ${secName(`${g.key}.${cur}`)}`); hd._startsSub = true;
         add(hd, true); open = true;
       }
-      const tr = h('tr', { class: 'bn-item' },
+      const tr = pv ? h('tr', { class: 'bn-item' },
         h('td', { class: 'cd' }, code(x)), h('td', { class: 'ds' }, x.description), h('td', { class: 'un' }, x.unit),
-        h('td', { class: 'nm' }, q2(x.contractQty)), h('td', { class: 'nm' }, execPct(x.cumQ, x.contractQty)),
-        h('td', { class: 'nm' }, q2(x.prevQ)), h('td', { class: 'nm' }, q2(x.curQ)), h('td', { class: 'nm' }, q2(x.cumQ)),
-        h('td', { class: 'nm' }, n2(x.price)), h('td', { class: 'nm' }, cash(x.amount)));
+        h('td', { class: 'nm' }, q2(x.contractQty)), h('td', { class: 'nm' }, q2(x.curQ)),
+        h('td', { class: 'nm' }, n2(x.price)), h('td', { class: 'nm' }, cash(x.amount)))
+        : h('tr', { class: 'bn-item' },
+          h('td', { class: 'cd' }, code(x)), h('td', { class: 'ds' }, x.description), h('td', { class: 'un' }, x.unit),
+          h('td', { class: 'nm' }, q2(x.contractQty)), h('td', { class: 'nm' }, execPct(x.cumQ, x.contractQty)),
+          h('td', { class: 'nm' }, q2(x.prevQ)), h('td', { class: 'nm' }, q2(x.curQ)), h('td', { class: 'nm' }, q2(x.cumQ)),
+          h('td', { class: 'nm' }, n2(x.price)), h('td', { class: 'nm' }, cash(x.amount)));
       add(tr);
       running += x.amount; subSum += x.amount;
     }
@@ -144,7 +156,7 @@ export function billPrintView(ctx, bid, mount) {
     if (!fits(pg)) {
       end.forEach((e) => e.remove());
       stretch(pg, tb, null, NC);
-      pg = sheet({ sub }); tb = table(DETAIL_COLS, pg.body);
+      pg = sheet({ sub }); tb = table(COLS, pg.body);
       end.forEach((e) => tb.append(e));
     }
     stretch(pg, tb, end[0], NC);
@@ -152,7 +164,7 @@ export function billPrintView(ctx, bid, mount) {
   }
 
   // ---------------- concentration (ריכוז) ----------------
-  const T = r.totals;
+  const T = pv ? V.T : r.totals;
   const cRow = (label, col, amount, cls = '') => h('tr', { class: cls }, h('td', { class: 'lab' }, label),
     ...[1, 2, 3].map((i) => h('td', { class: 'nm' }, i === col ? cash(amount) : '')));
   const concRows = [];
@@ -174,12 +186,12 @@ export function billPrintView(ctx, bid, mount) {
   }
   {
     let pg = sheet({ first: true, conc: true });
-    let tb = table(CONC_COLS, pg.body);
+    let tb = table(pv ? CONC_COLS.map(([l, w]) => [l.replace('מצטבר', 'לחודש'), w]) : CONC_COLS, pg.body);
     for (const el of concRows) {
       tb.append(el);
       if (!fits(pg) && tb.children.length > 1) {
         el.remove(); stretch(pg, tb, null, 4); pg.company.textContent = companyLine;
-        pg = sheet({}); tb = table(CONC_COLS, pg.body); tb.append(el);
+        pg = sheet({}); tb = table(pv ? CONC_COLS.map(([l, w]) => [l.replace('מצטבר', 'לחודש'), w]) : CONC_COLS, pg.body); tb.append(el);
       }
     }
     stretch(pg, tb, null, 4);
@@ -197,7 +209,7 @@ export function billPrintView(ctx, bid, mount) {
       rows.push(g('סכום לחישוב הנחה/תוספת', T.beforeGeneral), g(`הנחה כללית ${n2(T.generalRate).replace(/0$/, '')}%`, -T.general), g('סה"כ כללי', T.net, 'bn-g-total'));
     }
     pg.body.append(h('table', { class: 'bn-gen' }, h('colgroup', {}, h('col', { style: { width: '57%' } }), h('col', { style: { width: '43%' } })),
-      h('thead', {}, h('tr', {}, h('th'), h('th', {}, 'סה"כ מצטבר'))), h('tbody', {}, rows)));
+      h('thead', {}, h('tr', {}, h('th'), h('th', {}, pv ? 'סה"כ לחודש' : 'סה"כ מצטבר'))), h('tbody', {}, rows)));
     pg.body.classList.add('bn-short');
     pg.company.textContent = companyLine;
     pg.body.after(pg.company);
@@ -210,9 +222,12 @@ export function billPrintView(ctx, bid, mount) {
     const ix = r.indexation;
     const L = (label, v, sign = '', cls = '') => h('tr', { class: cls }, h('td', { class: 'lab' }, label), h('td', { class: 'nm' }, cash(v)), h('td', { class: 'sg' }, sign));
     const rows = [
-      r.totals.cat.extra || r.totals.cat.over ? [L('עבודות לפי כמות חוזה', T.cat.contract), L('עבודות מעל כמות חוזה', T.cat.over), L('עבודות נוספות', T.cat.extra)] : null,
-      L('מצטבר מחושב במחירי בסיס', r.cumNet),
-      L('פחות חשבון קודם', r.prevNet, '(-)', 'ul'),
+      ...(pv ? [
+        V.cat.extra || V.cat.over ? [L('עבודות לפי כמות חוזה (החודש)', V.cat.contract), L('עבודות מעל כמות חוזה (החודש)', V.cat.over), L('עבודות נוספות (החודש)', V.cat.extra)] : null,
+        L('ביצוע בחודש זה במחירי בסיס', r.periodNet, '', 'ul')] : [
+        r.totals.cat.extra || r.totals.cat.over ? [L('עבודות לפי כמות חוזה', T.cat.contract), L('עבודות מעל כמות חוזה', T.cat.over), L('עבודות נוספות', T.cat.extra)] : null,
+        L('מצטבר מחושב במחירי בסיס', r.cumNet),
+        L('פחות חשבון קודם', r.prevNet, '(-)', 'ul')]),
       ix.amount ? L(`התייקרות${ix.current ? ` (${INDEX_SERIES[c.index_series]} ${ix.current}/${ix.base})` : ''}`, ix.amount, '(+)') : null,
       r.retention ? L(`עיכבון ${n2(r.retentionRate)}%`, r.retention, '(-)') : null,
       r.release ? L('שחרור עיכבון', r.release, '(+)') : null,

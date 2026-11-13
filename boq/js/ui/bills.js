@@ -5,6 +5,7 @@ import { STATUS, KIND } from './projects.js';
 import { INDEX_SERIES } from '../schema.js';
 import { loadExcel, exportBill } from '../excel.js';
 import { download } from '../persist.js';
+import { periodTotals } from '../engine.js';
 
 const BASIS = { calc: 'מחושבת', sub: 'מוגשת', appr: 'מאושרת' };
 /** Work status (בהכנה / הוגש / הוחזר לתיקונים / הוגש מחדש / מאושר) + collection status derived from payments. */
@@ -60,11 +61,16 @@ export function billsView(ctx, cid) {
 
 export function newBillForm(ctx, c) {
   const api = ctx.api;
-  const lastAppr = [...api.bills(c.id)].reverse().find((b) => b.status === 'approved');
+  const all = api.bills(c.id);
+  const lastAppr = [...all].reverse().find((b) => b.status === 'approved');
+  const lastDoc = all.at(-1)?.doc ?? {};
   formModal('פתיחת חשבון', [
     { name: 'month', label: 'חודש ביצוע', type: 'month', value: api.nextBillMonth(c.id), required: true, hint: 'מוצע החודש שאחרי החשבון הקודם' },
     { name: 'type', label: 'סוג', type: 'select', value: 'partial', options: [['partial', 'חשבון חלקי'], ['final', 'חשבון סופי']] },
-  ], (val) => { const id = api.createBill(c.id, val); ctx.go(`b/${id}`); }, {
+    { name: 'view', label: 'הצגת החשבון', type: 'select', value: lastDoc.view ?? 'cumulative', span: true,
+      options: [['cumulative', 'מצטבר — כמויות מצטברות וניכוי חשבון קודם (כמו בנארית)'], ['period', 'חודשי — רק הכמויות שנוספו בחודש הזה']],
+      hint: 'החישוב והסכום לתשלום זהים בשתי הצורות; משתנה רק מה שמוצג ומודפס. אפשר להחליף גם אחר כך.' },
+  ], (val) => { const id = api.createBill(c.id, val); api.setBillView(id, val.view); ctx.go(`b/${id}`); }, {
     intro: c.mode === 'cumulative' && lastAppr ? h('p', { class: 'muted' }, `הכמויות ייפתחו מהמצטבר של חשבון ${lastAppr.number}. עדכן רק סעיפים שהתקדמו.`) : null,
   });
 }
@@ -109,7 +115,7 @@ export function billView(ctx, bid, tab) {
     b.status === 'approved' && !api.reopenBlock(bid) ? h('button', { class: 'ghost', onclick: () => formModal(`פתיחה מחדש של חשבון ${b.number}`, [
       { name: 'reason', label: 'סיבה (נרשמת ביומן הפעולות)', type: 'textarea', span: true, required: true },
     ], (v) => { api.reopenBill(bid, v.reason); ctx.refresh(); }, { submit: 'פתיחה מחדש', intro: h('p', { class: 'muted' }, 'אפשרי רק לחשבון המאושר האחרון וללא תשלומים רשומים. החשבון יחזור למצב "הוגש" ויחושב מחדש.') }) }, 'פתיחה מחדש') : null,
-    h('button', { onclick: async () => { try { download(`${c.name} - חשבון ${b.doc.displayNumber || b.number}.xlsx`.replace(/[\\/:*?"<>|]/g, '_'), await exportBill(await loadExcel(), { contract: c, bill: b, calc: r, sections: api.sections(c.id) }), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); } catch (e) { toast(e.message, 'err'); } } }, 'ייצוא Excel'),
+    h('button', { onclick: async () => { try { download(`${c.name} - חשבון ${b.doc.displayNumber || b.number}.xlsx`.replace(/[\\/:*?"<>|]/g, '_'), await exportBill(await loadExcel(), { contract: c, bill: b, calc: r, sections: api.sections(c.id), period: b.doc?.view === 'period' ? periodTotals(r, api.prevApproved(c.id, b.number), c.mode === 'periodic') : null }), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); } catch (e) { toast(e.message, 'err'); } } }, 'ייצוא Excel'),
     h('button', { onclick: () => ctx.go(`b/${bid}/sheets`) }, '📐 דפי חישוב'),
     h('button', { onclick: () => ctx.go(`b/${bid}/print`) }, 'הפקת חשבון / PDF'));
 
@@ -138,7 +144,12 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
   const secName = (k) => sections.get(k)?.name ?? '';
   const measured = api.measTotals(c.id);
   const isMeas = (it) => it.qsrc === 'meas';
-  let showVersions = sessionStorage.getItem('exec-versions') === '1';
+  // monthly (non-cumulative) presentation: only this month's quantities and amounts
+  const pv = b.doc?.view === 'period';
+  let showAllPv = sessionStorage.getItem('pv-all') === '1';
+  const prevSnap = pv ? api.prevApproved(c.id, b.number) : null;
+  const PT = () => periodTotals(res, prevSnap, periodic);
+  let showVersions = !pv && sessionStorage.getItem('exec-versions') === '1';
   let filter = sessionStorage.getItem('exec-filter') || 'all';
   const tbody = h('tbody');
   const sumBox = h('div', { class: 'statusbar' });
@@ -147,12 +158,16 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
   const code = (it) => `${it.chapter}.${+it.sub}.${String(it.num).padStart(3, '0')}`;
   let res = r;
 
-  const drawSum = () => sumBox.replaceChildren(
+  const drawSum = () => sumBox.replaceChildren(...(pv ? [
+    h('span', {}, h('b', {}, 'חשבון חודשי')),
+    h('span', {}, 'ביצוע החודש ברוטו: ', h('b', {}, money(PT().T.gross))),
+    h('span', {}, 'ביצוע החודש נטו: ', h('b', {}, money(res.periodNet))),
+    h('span', {}, 'לתשלום כולל מע"מ: ', h('b', {}, money(res.due)))] : [
     h('span', {}, 'חישוב לפי: ', h('b', {}, `כמות ${BASIS[b.basis]}`)),
     h('span', {}, 'מצטבר נטו: ', h('b', {}, money(res.cumNet))),
     h('span', {}, 'קודם: ', h('b', {}, money(res.prevNet))),
     h('span', {}, 'לתקופה: ', h('b', {}, money(res.periodNet))),
-    h('span', {}, 'לתשלום כולל מע"מ: ', h('b', {}, money(res.due))));
+    h('span', {}, 'לתשלום כולל מע"מ: ', h('b', {}, money(res.due)))]));
 
   const fmtIn = (value) => (value === '0' || value == null || value === '' ? '' : (/^-?\d+(\.\d{1,2})?$/.test(String(value)) ? Number(value).toFixed(2) : String(value)));
   const numInput = (value, onCommit, enabled, cls = '') => {
@@ -176,23 +191,26 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
   };
 
   const showClaim = b.status === 'submitted' && !showVersions && c.kind !== 'sub';
-  const NCOL = 10 + (showVersions ? 3 : 0) + (showClaim ? 1 : 0);
+  const NCOL = pv ? 7 + (showClaim ? 1 : 0) : 10 + (showVersions ? 3 : 0) + (showClaim ? 1 : 0);
+  const amtOf = (x) => (pv ? x?.periodGross ?? 0 : x?.amount ?? 0);
   // references to the cells that change, so an edit updates them in place instead of redrawing
   // thousands of rows (draw() remains the fallback when the layout itself changes)
   let rowRefs = new Map(), subRefs = new Map(), chapRefs = new Map();
   function patch() {
     const rows = new Map(res.rows.map((x) => [x.itemId, x]));
-    const groups = new Map(res.totals.groups.map((g) => [g.key, g]));
+    const groups = new Map((pv ? PT().groups : res.totals.groups).map((g) => [g.key, g]));
     for (const [ck, R] of chapRefs) { const g = groups.get(ck); if (!g || !!g.discount !== !!R.disc) return false; }
     const subs = new Map();
     for (const [id, R] of rowRefs) {
       const x = rows.get(id);
       if (!x) return false;
-      R.pct.textContent = pctOf(x.cumQ, R.it.qty); R.prev.textContent = n2(x.prevQ); R.amt.textContent = money(x.amount);
+      if (R.pct) R.pct.textContent = pctOf(x.cumQ, R.it.qty);
+      if (R.prev) R.prev.textContent = n2(x.prevQ);
+      R.amt.textContent = money(amtOf(x));
       const setVal = (td, v) => { const i = td.querySelector('input'); if (i) { if (document.activeElement !== i) { i.value = fmtIn(v); i.defaultValue = i.value; } } else td.lastChild.textContent = n2(v); };
-      setVal(R.cur, x.curQ); setVal(R.cum, x.cumQ);
+      setVal(R.cur, x.curQ); if (R.cum) setVal(R.cum, x.cumQ);
       R.tr.classList.toggle('over', !!x.cat.over);
-      const k = `${R.it.struct}.${R.it.chapter}.${R.it.sub}`; subs.set(k, (subs.get(k) ?? 0) + x.amount);
+      const k = `${R.it.struct}.${R.it.chapter}.${R.it.sub}`; subs.set(k, (subs.get(k) ?? 0) + amtOf(x));
     }
     for (const [k, td] of subRefs) td.textContent = money(subs.get(k) ?? 0);
     for (const [ck, R] of chapRefs) { const g = groups.get(ck); R.gross.textContent = money(g.gross); if (R.disc) { R.discLabel.textContent = `הנחה ${g.rate}% מסך ${money(g.gross)}`; R.disc.textContent = money(-g.discount); R.net.textContent = money(g.net); } }
@@ -203,7 +221,7 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
     const lines = api.lines(b.id);
     tbody.replaceChildren();
     rowRefs = new Map(); subRefs = new Map(); chapRefs = new Map();
-    const groups = new Map(res.totals.groups.map((g) => [g.key, g]));
+    const groups = new Map((pv ? PT().groups : res.totals.groups).map((g) => [g.key, g]));
     let chap = null, sub = null, subSum = 0;
     const closeSub = () => { if (sub != null) { const td = h('td', { class: 'n' }, money(subSum)); subRefs.set(`${chap}.${sub}`, td); tbody.append(h('tr', { class: 'bn-ssum' }, h('td', { colspan: NCOL - 1 }, `סה"כ ${chap.split('.')[1]}.${+sub} ${secName(`${chap}.${sub}`)}`), td)); } };
     const closeChap = () => {
@@ -224,6 +242,7 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
       if (filter === 'active' && x && x.cumQ === '0' && x.prevQ === '0') continue;
       if (filter === 'period' && x && x.curQ === '0') continue;
       if (filter === 'over' && x && x.cat.over === 0) continue;
+      if (pv && !showAllPv && (!x || x.curQ === '0')) continue;
       const ck = `${it.struct}.${it.chapter}`;
       if (ck !== chap) {
         closeChap(); chap = ck; sub = null;
@@ -233,7 +252,7 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
         closeSub(); sub = it.sub; subSum = 0;
         tbody.append(h('tr', { class: 'bn-shead' }, h('td'), h('td', { colspan: NCOL - 1 }, `תת פרק ${it.chapter}.${+it.sub} ${secName(`${ck}.${it.sub}`)}`)));
       }
-      subSum += x?.amount ?? 0;
+      subSum += amtOf(x);
       const L = lines.get(it.id) ?? {};
       const prev = x?.prevQ ?? '0';
       const setCum = (v) => attempt(() => api.setLine(b.id, it.id, { [col]: v === '' ? (periodic ? '0' : prev) : v }));
@@ -241,14 +260,16 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
       const refs = { it, pct: h('td', { class: 'n muted c-pct' }, x ? pctOf(x.cumQ, it.qty) : ''), prev: h('td', { class: 'n muted' }, x ? n2(x.prevQ) : ''),
         cur: numInput(x?.curQ, setCur, canEdit && !isMeas(it), 'cur'),
         cum: isMeas(it) ? h('td', { class: 'n locked', title: `הכמות מחושבת מדף החישוב${it.meas_opening != null ? ` (כולל יתרת פתיחה ${n2(it.meas_opening)})` : ''} — לשינוי מקור הכמות פתח את דף החישוב` }, h('a', { href: `#/m/${it.id}` }, '📐 '), document.createTextNode(n2(x?.cumQ))) : numInput(x?.cumQ, setCum, canEdit, 'cum'),
-        amt: h('td', { class: 'n' }, x ? money(x.amount) : '') };
+        amt: h('td', { class: 'n' }, x ? money(amtOf(x)) : '') };
+      if (pv) { delete refs.pct; delete refs.prev; delete refs.cum; }
       const tr = h('tr', { class: `${x?.cat.over ? 'over' : ''}`, 'data-id': it.id },
         h('td', { class: 'code' }, code(it), h('a', { class: 'meas-go', href: `#/m/${it.id}`, title: isMeas(it) ? 'דף החישוב של הסעיף' : 'פתיחת דף חישוב לסעיף (הכמות תחושב ממנו)' }, '📐')),
         h('td', { class: 'desc', title: it.description }, it.description.length > 140 ? it.description.slice(0, 140) + '…' : it.description),
         h('td', {}, it.unit),
         h('td', { class: 'n' }, n2(it.qty)),
-        refs.pct, refs.prev, refs.cur, refs.cum,
-        ...(showClaim ? [h('td', { class: 'n muted', title: 'הכמות שהגשנו — לפני החלטת המפקח' }, n2(L.q_sub ?? x?.cumQ))] : []),
+        ...(pv ? [refs.cur] : [refs.pct, refs.prev, refs.cur, refs.cum]),
+        ...(showClaim ? [h('td', { class: 'n muted', title: 'הכמות שהגשנו — לפני החלטת המפקח' },
+          pv ? n2(periodic ? (L.q_sub ?? x?.curQ) : Number(L.q_sub ?? x?.cumQ ?? 0) - Number(x?.prevQ ?? 0)) : n2(L.q_sub ?? x?.cumQ))] : []),
         ...(showVersions ? ['q_calc', 'q_sub', 'q_appr'].map((k) => numInput(L[k], (v) => attempt(() => api.setLine(b.id, it.id, { [k]: v })), k === 'q_appr' ? apprEditable : editable, k)) : []),
         numInput(L.price ?? it.price, (v) => attempt(() => api.setLine(b.id, it.id, { price: v === it.price ? '' : v })), editable, 'price'),
         refs.amt);
@@ -267,25 +288,34 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
     if (await confirmBox('העתקת כמויות', `להעתיק את כל ${label}?`)) attempt(() => { api.copyColumn(b.id, from, to); ctx.refresh(); });
   } }, label);
   const approving = b.basis === 'appr' && c.kind !== 'sub';
-  const heads = ['סעיף', 'תאור', 'יחידה', 'כמות חוזה', '% ביצוע', 'מצטבר קודם', approving ? 'נוכחית מאושרת' : 'כמות נוכחית', approving ? 'מצטבר מאושר' : 'כמות מצטברת',
-    ...(showClaim ? [periodic ? 'הוגש לתקופה' : 'מצטבר שהוגש'] : []), ...(showVersions ? ['מחושבת', 'מוגשת', 'מאושרת'] : []), 'מחיר יחידה', periodic ? 'סה"כ לתקופה' : 'סה"כ מצטבר'];
+  const heads = pv ? ['סעיף', 'תאור', 'יחידה', 'כמות חוזה', approving ? 'מאושר החודש' : 'כמות החודש', ...(showClaim ? ['הוגש החודש'] : []), 'מחיר יחידה', 'סה"כ לחודש']
+    : ['סעיף', 'תאור', 'יחידה', 'כמות חוזה', '% ביצוע', 'מצטבר קודם', approving ? 'נוכחית מאושרת' : 'כמות נוכחית', approving ? 'מצטבר מאושר' : 'כמות מצטברת',
+      ...(showClaim ? [periodic ? 'הוגש לתקופה' : 'מצטבר שהוגש'] : []), ...(showVersions ? ['מחושבת', 'מוגשת', 'מאושרת'] : []), 'מחיר יחידה', periodic ? 'סה"כ לתקופה' : 'סה"כ מצטבר'];
+  const widths = pv ? [92, null, 58, 96, 116, ...(showClaim ? [110] : []), 104, 140] : [92, null, 58, 90, 78, 94, 98, 98, ...(showClaim ? [96] : []), ...(showVersions ? [90, 90, 90] : []), 96, 116];
   return h('div', { style: { display: 'grid', gridTemplateRows: 'auto 1fr auto', minHeight: 0 } },
-    h('div', { class: 'toolbar no-print' }, showVersions ? basisSel : null, filterSel,
-      h('label', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, h('input', { type: 'checkbox', checked: showVersions, onchange: (e) => { sessionStorage.setItem('exec-versions', e.target.checked ? '1' : '0'); ctx.refresh(); } }), 'גרסאות כמות'),
+    h('div', { class: 'toolbar no-print' },
+      h('select', { title: 'מצטבר — כמו בנארית; חודשי — רק מה שבוצע בחודש הזה', onchange: (e) => attempt(() => { api.setBillView(b.id, e.target.value); ctx.refresh(); }) },
+        h('option', { value: 'cumulative', selected: !pv }, 'תצוגה: מצטבר'), h('option', { value: 'period', selected: pv }, 'תצוגה: חודשי (רק החודש)')),
+      showVersions ? basisSel : null, pv ? null : filterSel,
+      pv ? h('label', { style: { display: 'flex', gap: '4px', alignItems: 'center' }, title: 'בתצוגה חודשית מוצגים רק סעיפים שבוצעו החודש; סמן כדי להזין כמות לסעיף חדש' },
+        h('input', { type: 'checkbox', checked: showAllPv, onchange: (e) => { sessionStorage.setItem('pv-all', e.target.checked ? '1' : '0'); ctx.refresh(); } }), 'כל הסעיפים (להזנה)') : null,
+      pv ? null : h('label', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, h('input', { type: 'checkbox', checked: showVersions, onchange: (e) => { sessionStorage.setItem('exec-versions', e.target.checked ? '1' : '0'); ctx.refresh(); } }), 'גרסאות כמות'),
       h('span', { class: 'sep' }),
       showVersions ? copyBtn('q_calc', 'q_sub', 'מחושבת ← מוגשת', editable) : null, showVersions ? copyBtn('q_sub', 'q_appr', 'מוגשת ← מאושרת', apprEditable) : null,
       h('div', { class: 'grow' }), h('span', { class: 'muted' }, !canEdit ? 'החשבון נעול לעריכה'
         : b.status === 'submitted' && c.kind !== 'sub' ? 'החשבון הוגש — עדכן את הכמויות שהמפקח אישר (ליד: מה שהוגש) · Enter לשורה הבאה'
           : 'הזן כמות נוכחית או מצטברת · Enter לשורה הבאה · 📐 פותח דף חישוב', ' · ', h('a', { href: '#/help' }, 'מה זה?'))),
     h('div', { class: 'grid-area' }, h('table', { class: 't exec bn-screen lines fixed' },
-      h('colgroup', {}, [92, null, 58, 90, 78, 94, 98, 98, ...(showClaim ? [96] : []), ...(showVersions ? [90, 90, 90] : []), 96, 116].map((w, i) => h('col', { class: i === 4 ? 'c-pct' : '', style: w ? { width: `${w}px` } : {} }))),
-      h('thead', {}, h('tr', {}, heads.map((x, i) => h('th', { class: `${i >= 3 ? 'n' : ''} ${i === 4 ? 'c-pct' : ''}` }, x)))), tbody)),
+      h('colgroup', {}, widths.map((w, i) => h('col', { class: i === 4 && !pv ? 'c-pct' : '', style: w ? { width: `${w}px` } : {} }))),
+      h('thead', {}, h('tr', {}, heads.map((x, i) => h('th', { class: `${i >= 3 ? 'n' : ''} ${i === 4 && !pv ? 'c-pct' : ''}` }, x)))), tbody)),
     sumBox);
 }
 
 function summaryTab(ctx, b, c, r, editable) {
   const api = ctx.api;
-  const T = r.totals;
+  const pv = b.doc?.view === 'period';
+  const P = pv ? periodTotals(r, api.prevApproved(c.id, b.number), c.mode === 'periodic') : null;
+  const T = pv ? { ...P.T, cat: P.cat } : r.totals;
   const line = (label, v, cls = '', note = '') => h('tr', { class: cls }, h('td', { class: 'lab' }, label, note ? h('small', {}, note) : null), h('td', {}, money(v)));
   const ledger = h('table', { class: 'ledger' }, h('tbody', {},
     line('עבודות לפי כמות חוזה', T.cat.contract),
@@ -293,9 +323,9 @@ function summaryTab(ctx, b, c, r, editable) {
     line('עבודות נוספות / חריגים', T.cat.extra),
     T.chapterDiscount ? line('כלול: הנחות פרקים', -T.chapterDiscount, 'minus') : null,
     T.general ? line(`כלול: הנחה כללית ${T.generalRate}%`, -T.general, 'minus', `על ${money(T.eligible)}`) : null,
-    line(c.mode === 'periodic' ? 'סה"כ לתקופה (נטו)' : 'מצטבר מחושב במחירי בסיס', c.mode === 'periodic' ? r.periodNet : r.cumNet, 'strong'),
-    c.mode === 'cumulative' ? line('פחות חשבון קודם', -r.prevNet, 'minus') : null,
-    line('ביצוע לתקופה', r.periodNet, 'strong'),
+    !pv ? line(c.mode === 'periodic' ? 'סה"כ לתקופה (נטו)' : 'מצטבר מחושב במחירי בסיס', c.mode === 'periodic' ? r.periodNet : r.cumNet, 'strong') : null,
+    !pv && c.mode === 'cumulative' ? line('פחות חשבון קודם', -r.prevNet, 'minus') : null,
+    line(pv ? 'ביצוע בחודש זה (נטו)' : 'ביצוע לתקופה', r.periodNet, 'strong'),
     c.index_rule !== 'none' ? line('התייקרות', r.indexation.amount, '', r.indexation.current ? `${INDEX_SERIES[c.index_series]}: ${r.indexation.current} / בסיס ${r.indexation.base} (${monthLabel(r.indexation.month)})` : '') : null,
     r.retention ? line(`עיכבון ${r.retentionRate}%`, -r.retention, 'minus') : null,
     r.release ? line('שחרור עיכבון', r.release) : null,

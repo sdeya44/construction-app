@@ -160,3 +160,26 @@ test('submit turns the claim into the approved column; return goes back to the c
   assert.ok(kinds.includes('draft') && kinds.includes('unpaid'));
   void b2;
 });
+
+test('monthly (non-cumulative) view: period rows and chapter / discount figures add up to the cumulative bill', async () => {
+  const { periodTotals } = await import('../js/engine.js');
+  const { api, c, vol, conc } = setup();
+  api.saveSection(c, '01.02', { discount: '3' });
+  api.saveContract({ ...api.contract(c), general_discount: '0.5' });
+  const b1 = api.createBill(c, { month: '2026-01' });
+  api.setLine(b1, vol, { q_sub: '40' }); api.setLine(b1, conc, { q_sub: '10' });
+  api.approveBill(b1);
+  const b2 = api.createBill(c, { month: '2026-02' });
+  api.setBillView(b2, 'period');
+  assert.equal(api.bill(b2).doc.view, 'period');
+  api.setLine(b2, conc, { q_sub: '16' });                       // only concrete moved this month
+  const r = api.calc(b2);
+  const P = periodTotals(r, api.prevApproved(c, 2), false);
+  const moved = P.rows.filter((x) => x.curQ !== '0');
+  assert.deepEqual(moved.map((x) => x.itemId), [conc]);
+  assert.equal(moved[0].pAmount, 6 * 1000 * 100);
+  assert.equal(P.T.net, r.periodNet);                          // same money as the cumulative bill
+  assert.equal(P.groups.reduce((s, g) => s + g.final, 0), r.periodNet);
+  assert.equal(P.groups.find((g) => g.key === '01.02').discount, Math.round(6000 * 100 * 0.03));
+  assert.equal(P.groups.find((g) => g.key === '01.01').gross, 0);
+});

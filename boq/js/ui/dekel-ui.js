@@ -23,6 +23,34 @@ function dkRow(dk, { item, isQuote, contract, onLink, onAdd, threshold }) {
       h('button', { class: 'sm', onclick: () => onAdd(dk) }, 'הוסף כסעיף חדש')));
 }
 
+/**
+ * A family of near-identical Dekel lines (depth / diameter / grade / thickness / quantity range):
+ * one card with a picker per changing value; the card always shows the exact line and its price.
+ */
+function dkFamily(dk, fam, start, opts) {
+  const box = h('div', { class: 'dk-fam' });
+  let cur = fam.items.find((x) => x.it === start) ?? fam.items[0];
+  const pick = (slotIdx, value) => {
+    const want = cur.vals.map((v, i) => (i === slotIdx ? value : v));
+    // exact combination, else the closest line that has the chosen value (fewest other changes)
+    const cands = fam.items.filter((x) => x.vals[slotIdx] === value);
+    cur = cands.find((x) => x.vals.every((v, i) => v === want[i]))
+      ?? cands.sort((a, b) => a.vals.filter((v, i) => v !== want[i]).length - b.vals.filter((v, i) => v !== want[i]).length)[0];
+    draw();
+  };
+  const draw = () => {
+    const pickers = h('div', { class: 'dk-pick' }, fam.slots.map((sl) => {
+      // values that exist together with the other current choices come first; the rest are still selectable
+      const fits = new Set(fam.items.filter((x) => fam.slots.every((o) => o === sl || x.vals[o.index] === cur.vals[o.index])).map((x) => x.vals[sl.index]));
+      return h('label', {}, h('span', {}, sl.label),
+        h('select', { onchange: (e) => pick(sl.index, e.target.value) }, sl.values.map((v) => h('option', { value: v, selected: v === cur.vals[sl.index] }, fits.has(v) ? v : `${v} *`))));
+    }));
+    box.replaceChildren(h('div', { class: 'dk-fam-head' }, `${fam.items.length} גרסאות — בחר:`), pickers, dkRow(cur.it, opts));
+  };
+  draw();
+  return box;
+}
+
 export function dekelPanel(ctx, { contract, item, threshold, defaultChapter, onLink, onAdd, onClose }) {
   const isQuote = contract.kind === 'quote';
   const head = h('header', {}, h('h2', {}, 'מחירון דקל'), h('span', { class: 'muted' }, ctx.dekel?.label ?? ''),
@@ -41,8 +69,11 @@ export function dekelPanel(ctx, { contract, item, threshold, defaultChapter, onL
     const text = q.value.trim();
     if (!text) { showSuggest(); return; }
     const exact = dk.get(text);
-    const list = exact ? [exact] : dk.search(text, { chapter: chapters.value, limit: 80 });
-    results.replaceChildren(h('h3', { style: { margin: '10px 0 0' } }, `${list.length}${list.length === 80 ? '+' : ''} תוצאות`), ...list.map((x) => dkRow(x, opts)));
+    const list = exact ? [{ item: exact, family: dk.family(exact.code) }] : dk.searchGrouped(text, { chapter: chapters.value, limit: 80 });
+    const variants = list.reduce((a, x) => a + (x.family ? x.family.items.length : 1), 0);
+    results.replaceChildren(h('h3', { style: { margin: '10px 0 0' } }, `${list.length}${list.length === 80 ? '+' : ''} תוצאות`),
+      variants > list.length ? h('p', { class: 'muted', style: { fontSize: '12px', margin: '2px 0 6px' } }, `סעיפים שנבדלים רק בעומק / קוטר / סוג בטון / עובי / כמות אוחדו (${variants} שורות דקל). בחר גרסה בכרטיס — המחיר מתעדכן.`) : null,
+      ...list.map((x) => (x.family ? dkFamily(dk, x.family, x.item, opts) : dkRow(x.item, opts))));
   };
   const showSuggest = () => {
     if (!item || item.kind === 'note' || !item.description) {
@@ -50,12 +81,14 @@ export function dekelPanel(ctx, { contract, item, threshold, defaultChapter, onL
       return;
     }
     const linked = item.dekel_code ? dk.get(item.dekel_code) : null;
-    const sug = dk.suggest(item.description, item.unit, 12).filter((x) => x.code !== item.dekel_code);
+    const seenFam = new Set(linked ? [dk.family(linked.code)?.id] : []);
+    const sug = dk.suggest(item.description, item.unit, 40).filter((x) => x.code !== item.dekel_code)
+      .filter((x) => { const f = dk.family(x.code); if (!f) return true; if (seenFam.has(f.id)) return false; seenFam.add(f.id); return true; }).slice(0, 12);
     results.replaceChildren(...[
-      linked ? h('div', {}, h('h3', { style: { margin: '10px 0 0' } }, 'מקושר כעת'), dkRow(linked, opts)) : null,
+      linked ? h('div', {}, h('h3', { style: { margin: '10px 0 0' } }, 'מקושר כעת'), dk.family(linked.code) ? dkFamily(dk, dk.family(linked.code), linked, opts) : dkRow(linked, opts)) : null,
       h('h3', { style: { margin: '12px 0 0' } }, 'הצעות התאמה'),
       h('p', { class: 'muted', style: { fontSize: '12px', margin: '2px 0 0' } }, 'סעיפי דקל רבים נבדלים רק בטווח כמות/עומק/עובי — בחר את הסעיף המדויק.'),
-      ...sug.map((x) => dkRow(x, opts))].filter(Boolean));
+      ...sug.map((x) => { const f = dk.family(x.code); return f ? dkFamily(dk, f, dk.get(x.code), opts) : dkRow(x, opts); })].filter(Boolean));
   };
   q.addEventListener('input', () => { clearTimeout(q._t); q._t = setTimeout(runSearch, 200); });
   chapters.addEventListener('change', runSearch);

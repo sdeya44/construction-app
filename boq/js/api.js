@@ -449,6 +449,12 @@ export class Api {
       [JSON.stringify(A), JSON.stringify(D), ['calc', 'sub', 'appr'].includes(basis) ? basis : b.basis,
         type === 'final' || type === 'partial' ? type : b.type, m ? month(m) : b.month, billId]));
   }
+  /** Presentation of a bill: 'cumulative' (Binarit) or 'period' (this month only). Allowed in any status. */
+  setBillView(id, view) {
+    const b = this.bill(id);
+    const doc = { ...b.doc, view: view === 'period' ? 'period' : 'cumulative' };
+    this.s.tx(() => this.s.run('UPDATE bills SET doc=? WHERE id=?', [JSON.stringify(doc), id]), '', view === 'period' ? 'הצגת חשבון חודשי' : 'הצגת חשבון מצטבר');
+  }
   submitBill(id, note = '') {
     const b = this.bill(id); this.assertEditable(b);
     this.s.tx(() => {

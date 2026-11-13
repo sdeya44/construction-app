@@ -80,10 +80,11 @@ export async function exportBoq(ExcelJS, { contract, sections, items }) {
 }
 
 /** Bill → xlsx bytes: detail sheet in the Binarit column order + summary sheet. */
-export async function exportBill(ExcelJS, { contract, bill, calc, sections }) {
+export async function exportBill(ExcelJS, { contract, bill, calc, sections, period = null }) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'KAYAN BOQ';
-  const ws = wb.addWorksheet('פירוט');
+  if (period) monthlySheet(wb, { calc, sections, period });
+  const ws = wb.addWorksheet(period ? 'פירוט מצטבר' : 'פירוט');
   sheetSetup(ws, [12, 60, 8, 12, 9, 12, 12, 12, 12, 15]);
   ws.pageSetup.orientation = 'landscape';
   header(ws, ['סעיף', 'תאור', 'יחידה', 'כמות חוזה', '% ביצוע', 'מצטבר קודם', 'כמות נוכחית', 'כמות מצטברת', 'מחיר יחידה', calc.mode === 'periodic' ? 'סה"כ לתקופה' : 'סה"כ מצטבר']);
@@ -189,4 +190,32 @@ export async function readBidForm(ExcelJS, bytes) {
   const [sheet] = await readSheetRows(ExcelJS, bytes);
   if (!sheet) return [];
   return sheet.rows.filter((r) => /^\d{2}\.\d{2}\.\d{2}\.\d{4}$/.test(r[0] ?? '')).map((r) => ({ code: r[0], price: (r[4] ?? '').trim() }));
+}
+
+
+/** Monthly (non-cumulative) detail: only the quantities and amounts of this bill's month. */
+function monthlySheet(wb, { sections, period }) {
+  const ws = wb.addWorksheet('פירוט חודשי');
+  sheetSetup(ws, [12, 64, 8, 12, 13, 12, 15]);
+  ws.pageSetup.orientation = 'landscape';
+  header(ws, ['סעיף', 'תאור', 'יחידה', 'כמות חוזה', 'כמות החודש', 'מחיר יחידה', 'סה"כ לחודש']);
+  const sec = new Map(sections.map((s) => [s.code, s.name]));
+  for (const g of period.groups) {
+    const rows = period.rows.filter((r) => `${r.struct}.${r.chapter}` === g.key && r.curQ !== '0');
+    if (!rows.length) continue;
+    bold(ws.addRow([g.key, `מבנה ${+g.struct} ${sec.get(g.struct) ?? ''} · פרק ${g.chapter} ${g.name}`]));
+    for (const r of rows) {
+      const row = ws.addRow([`${r.chapter}.${+r.sub}.${String(r.num).padStart(3, '0')}`, r.description, r.unit, n(r.contractQty), n(r.curQ), n(r.price), r.pAmount / 100]);
+      if (String(r.percent ?? '100') === '100') row.getCell(7).value = { formula: `ROUND(E${row.number}*F${row.number},2)`, result: r.pAmount / 100 };
+      row.getCell(2).alignment = { wrapText: true, vertical: 'top' };
+      [4, 5].forEach((c) => { row.getCell(c).numFmt = QTY; });
+      row.getCell(6).numFmt = MONEY; row.getCell(7).numFmt = MONEY;
+    }
+    const t = bold(ws.addRow(['', `סה"כ פרק ${g.chapter} ${g.name} — לחודש`, '', '', '', '', g.gross / 100])); t.getCell(7).numFmt = MONEY;
+    if (g.discount) {
+      const d = ws.addRow(['', `הנחה ${g.rate}%`, '', '', '', '', -g.discount / 100]); d.getCell(7).numFmt = MONEY;
+      const a = bold(ws.addRow(['', `סה"כ פרק ${g.chapter} לאחר הנחה — לחודש`, '', '', '', '', g.net / 100])); a.getCell(7).numFmt = MONEY;
+    }
+    ws.addRow([]);
+  }
 }
