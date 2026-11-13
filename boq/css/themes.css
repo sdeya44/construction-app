@@ -1,0 +1,173 @@
+/* KAYAN BOQ — display themes. Selected by data-theme on <html>; screen only (printed sheets stay black on white).
+   1 classic  · פטרול וזהב (ברירת מחדל, מוגדר ב-app.css)
+   2 onyx     · שחור וזהב
+   3 navy     · נייבי אדריכלי (תפריט צד)
+   4 graphite · גרפיט לילה (מצב כהה, תפריט צד)
+   5 copper   · בטון ונחושת */
+
+/* ---------- theme picker (all themes) ---------- */
+.theme-btn { display: inline-flex; align-items: center; gap: 6px; background: transparent; border-color: var(--bar-line); color: var(--bar-ink); }
+.theme-btn:hover { border-color: var(--bar-brand); }
+.theme-btn .dots { display: inline-flex; }
+.theme-btn .dots i { width: 9px; height: 9px; border-radius: 50%; margin-inline-start: -3px; border: 1px solid rgba(255,255,255,.6); }
+.theme-pop { position: fixed; z-index: 60; inset-block-start: 58px; inset-inline-end: 16px; width: min(420px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.22); padding: 10px; }
+.theme-pop h3 { padding: 4px 6px 8px; color: var(--muted); font-size: 11.5px; letter-spacing: .08em; }
+.theme-opt { display: grid; grid-template-columns: 74px 1fr auto; gap: 12px; align-items: center; width: 100%; text-align: start; padding: 8px; border-radius: 9px; border: 1px solid transparent; background: transparent; white-space: normal; }
+.theme-opt:hover { background: var(--surface-2); border-color: var(--line); }
+.theme-opt.on { border-color: var(--accent); background: var(--accent-weak); }
+.theme-opt b { display: block; font-size: 14px; }
+.theme-opt small { color: var(--muted); font-size: 12px; line-height: 1.35; display: block; }
+.theme-opt .code { font: 600 12px/1 var(--font); color: var(--muted); direction: ltr; }
+.theme-mini { height: 48px; border-radius: 6px; overflow: hidden; display: grid; grid-template-rows: 11px 1fr; border: 1px solid rgba(0,0,0,.12); }
+.theme-mini.side { grid-template-rows: 1fr; grid-template-columns: 1fr 18px; }
+.theme-mini .mb { display: block; }
+.theme-mini .mc { display: grid; gap: 4px; padding: 6px; align-content: start; }
+.theme-mini .mc i { display: block; height: 5px; border-radius: 2px; }
+.theme-mini .mc i:nth-child(2) { width: 70%; }
+.theme-mini .mc i:nth-child(3) { width: 40%; height: 7px; }
+
+/* ---------- side-menu layout (themes 3, 4) ---------- */
+.app.side-layout { grid-template-rows: none; grid-template-columns: 228px minmax(0, 1fr); }
+.app-main { display: grid; grid-template-rows: auto 1fr; min-width: 0; min-height: 0; height: 100vh; }
+.sidenav { background: var(--side-bg); color: var(--side-ink); display: flex; flex-direction: column; gap: 2px; padding: 18px 12px; overflow: auto; border-inline-end: 1px solid var(--side-line); }
+.sidenav .brand { padding: 4px 10px 18px; font-size: 18px; color: var(--side-brand); }
+.sidenav .brand small { color: var(--side-muted); }
+.sidenav h4 { margin: 14px 10px 6px; font-size: 10.5px; font-weight: 600; letter-spacing: .14em; color: var(--side-muted); }
+.sidenav a.nav { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--side-ink); text-decoration: none; font-size: 14px; }
+.sidenav a.nav::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--side-muted); opacity: .5; }
+.sidenav a.nav:hover { background: var(--side-hover); }
+.sidenav a.nav.on { background: var(--side-on); color: var(--side-on-ink); font-weight: 600; }
+.sidenav a.nav.on::before { background: var(--side-brand); opacity: 1; }
+.sidenav .foot { margin-top: auto; padding: 14px 10px 0; display: grid; gap: 8px; font-size: 12px; color: var(--side-muted); border-top: 1px solid var(--side-line); }
+.side-layout .topbar .brand, .side-layout .topbar .topnav { display: none; }
+.side-layout .topbar .tag { display: none; }
+@media (max-width: 900px) {
+  .app.side-layout { grid-template-columns: 1fr; }
+  .sidenav { display: none; }
+  .side-layout .topbar .brand { display: flex; }
+}
+@media print { .sidenav, .theme-pop { display: none !important; } .app.side-layout, .app-main { display: block; height: auto; } }
+
+@media screen {
+/* ---------- 2 · onyx — שחור וזהב ---------- */
+[data-theme="onyx"] {
+  --bg: #f4f1ea; --surface: #fffdf8; --surface-2: #f8f5ee;
+  --ink: #15130f; --ink-2: #4b463d; --muted: #8b8478;
+  --line: #e7e1d4; --line-2: #d3cbb9;
+  --accent: #1a1814; --accent-2: #2e2a23; --accent-weak: #f0e9da;
+  --gold: #a9874b;
+  --radius: 3px; --btn-radius: 2px;
+  --font-head: "Frank Ruehl CLM", "David", "Narkisim", "Times New Roman", serif;
+  --row-hover: #faf6ec; --sum-bg: #efe7d6;
+  --bar-bg: #13120f; --bar-ink: #d8cfbd; --bar-brand: #c9a564; --bar-line: #13120f;
+  --shadow: 0 1px 0 rgba(0,0,0,.03);
+}
+[data-theme="onyx"] .topbar { height: 60px; }
+[data-theme="onyx"] .brand { letter-spacing: .28em; font-weight: 600; }
+[data-theme="onyx"] .brand small { color: #8f7b55; }
+[data-theme="onyx"] .crumbs a { color: #d8cfbd; }
+[data-theme="onyx"] .crumbs .sep { color: #5a5345; }
+[data-theme="onyx"] .topnav a { color: #b9b0a0; border-radius: 0; border-bottom: 1px solid transparent; }
+[data-theme="onyx"] .topnav a:hover, [data-theme="onyx"] .topnav a.on { background: transparent; color: #c9a564; border-bottom-color: #c9a564; }
+[data-theme="onyx"] .save-dot { color: #8b8478; }
+[data-theme="onyx"] h1 { font-size: 26px; font-weight: 500; }
+[data-theme="onyx"] h2 { font-weight: 500; font-size: 17px; }
+[data-theme="onyx"] .card > header { border-bottom-color: #c9a564; }
+[data-theme="onyx"] .kpi { border-top: 2px solid #c9a564; }
+[data-theme="onyx"] .kpi .v { font-family: var(--font-head); font-weight: 500; font-size: 21px; }
+[data-theme="onyx"] table.t th { background: #1a1814; color: #e3d8c2; font-weight: 500; letter-spacing: .03em; border-bottom: 0; }
+[data-theme="onyx"] table.t tr.group td { color: #8a6b35; }
+[data-theme="onyx"] .ledger tr.grand td { color: #8a6b35; }
+[data-theme="onyx"] button.primary { background: #1a1814; border-color: #1a1814; color: #e9d9b5; letter-spacing: .04em; }
+[data-theme="onyx"] button.primary:hover { background: #8a6b35; border-color: #8a6b35; color: #fff; }
+[data-theme="onyx"] .tabs a.on { color: #8a6b35; border-bottom-color: #c9a564; }
+[data-theme="onyx"] .tree .node.on { background: #f0e9da; color: #15130f; border-inline-start-color: #c9a564; }
+
+/* ---------- 3 · navy — נייבי אדריכלי ---------- */
+[data-theme="navy"] {
+  --bg: #f3f4f7; --surface: #ffffff; --surface-2: #f7f8fa;
+  --ink: #1a222e; --ink-2: #445063; --muted: #7d8796;
+  --line: #e4e7ee; --line-2: #d2d7e1;
+  --accent: #1e3a5c; --accent-2: #142b45; --accent-weak: #e9eef5;
+  --gold: #b08d3e;
+  --radius: 12px; --btn-radius: 8px;
+  --row-hover: #f7f9fc; --sum-bg: #e9eef5;
+  --bar-bg: #ffffff; --bar-ink: #445063; --bar-brand: #1e3a5c; --bar-line: #e4e7ee;
+  --side-bg: #142b45; --side-ink: #c8d3e2; --side-muted: #7f93ad; --side-brand: #d9b866; --side-line: #1f3a5a;
+  --side-hover: rgba(255,255,255,.06); --side-on: rgba(217,184,102,.14); --side-on-ink: #ffffff;
+  --shadow: 0 1px 2px rgba(20,43,69,.05), 0 8px 24px rgba(20,43,69,.06);
+}
+[data-theme="navy"] .kpi { border: 0; box-shadow: var(--shadow); border-radius: 12px; }
+[data-theme="navy"] .kpi .v { color: #142b45; }
+[data-theme="navy"] .kpi.accent { background: linear-gradient(110deg, #142b45, #1e3a5c); }
+[data-theme="navy"] .kpi.accent .l { color: #b9c7d9; }
+[data-theme="navy"] .kpi.accent .v { color: #fff; }
+[data-theme="navy"] .card { border-color: transparent; }
+[data-theme="navy"] table.t th { background: #f3f4f7; color: #1e3a5c; }
+[data-theme="navy"] button.primary { background: #b08d3e; border-color: #b08d3e; }
+[data-theme="navy"] button.primary:hover { background: #957530; }
+
+/* ---------- 4 · graphite — גרפיט לילה ---------- */
+[data-theme="graphite"] {
+  color-scheme: dark;
+  --bg: #111316; --surface: #191c20; --surface-2: #1f2328;
+  --ink: #ece7de; --ink-2: #b8b2a7; --muted: #7f7a71;
+  --line: #2a2e34; --line-2: #3a3f47;
+  --accent: #c9a96e; --accent-2: #d8bb84; --accent-weak: rgba(201,169,110,.13);
+  --gold: #c9a96e;
+  --ok: #6fbf8f; --ok-weak: rgba(111,191,143,.12);
+  --warn: #e0a85a; --warn-weak: rgba(224,168,90,.12);
+  --bad: #ec7d72; --bad-weak: rgba(236,125,114,.12);
+  --radius: 10px; --btn-radius: 7px;
+  --field: #14171a; --row-hover: #1d2126; --on-accent: #17130b; --sum-bg: #252a30;
+  --bar-bg: #15181b; --bar-ink: #b8b2a7; --bar-brand: #c9a96e; --bar-line: #23272c;
+  --side-bg: #0d0f11; --side-ink: #b8b2a7; --side-muted: #6c675f; --side-brand: #c9a96e; --side-line: #1d2024;
+  --side-hover: rgba(255,255,255,.04); --side-on: rgba(201,169,110,.12); --side-on-ink: #f1e6cf;
+  --shadow: 0 1px 2px rgba(0,0,0,.4);
+}
+[data-theme="graphite"] .tag { border-color: transparent; }
+[data-theme="graphite"] .tag.draft { background: #262a30; }
+[data-theme="graphite"] .alert { border-color: transparent; color: var(--warn); }
+[data-theme="graphite"] .alert.err { color: var(--bad); }
+[data-theme="graphite"] .alert.info { color: var(--accent); }
+[data-theme="graphite"] button.danger { border-color: #5a3330; }
+[data-theme="graphite"] .toast { background: #2a2f36; color: var(--ink); }
+[data-theme="graphite"] .toast.err { background: #6b2a25; color: #fff; }
+[data-theme="graphite"] .backdrop { background: rgba(0,0,0,.6); }
+[data-theme="graphite"] .kpi .v { color: var(--ink); }
+[data-theme="graphite"] .kpi.accent .v { color: var(--accent); }
+[data-theme="graphite"] table.cf .cf-bar.in .e { background: #3d6b50; }
+[data-theme="graphite"] table.cf .cf-bar.out .e { background: #7a4440; }
+/* measurement sheets (own palette) */
+[data-theme="graphite"] .kea { --bg: #111316; --card: #191c20; --paper: #191c20; --ink: #ece7de; --muted: #8a847a; --line: #2f343b; --hair: #262a30; --navy: #c9a96e; --navy2: #b8975c; --pos-bg: rgba(111,191,143,.12); --neg-bg: rgba(236,125,114,.12); --amber-bg: rgba(224,168,90,.12); --blue-bg: rgba(110,150,210,.12); color: var(--ink); }
+[data-theme="graphite"] .kea input, [data-theme="graphite"] .kea select, [data-theme="graphite"] .kea textarea { background: #14171a !important; color: #ece7de; }
+[data-theme="graphite"] .kea #meas-table th { background: #1f2328; }
+[data-theme="graphite"] .kea .item-context, [data-theme="graphite"] .kea .sec-sum { background: #23272d; }
+
+/* ---------- 5 · copper — בטון ונחושת ---------- */
+[data-theme="copper"] {
+  --bg: #ecebe8; --surface: #ffffff; --surface-2: #f6f5f3;
+  --ink: #1f1f1f; --ink-2: #4d4d4b; --muted: #8c8b87;
+  --line: #e2e0dc; --line-2: #c9c6c0;
+  --accent: #9a4c27; --accent-2: #7e3d1f; --accent-weak: #f5ebe4;
+  --gold: #9a4c27;
+  --radius: 0px; --btn-radius: 0px;
+  --row-hover: #faf8f6; --sum-bg: #eeeae5;
+  --bar-bg: #ffffff; --bar-ink: #4d4d4b; --bar-brand: #1f1f1f; --bar-line: #1f1f1f;
+  --shadow: none;
+}
+[data-theme="copper"] .topbar { border-bottom-width: 2px; }
+[data-theme="copper"] .brand { letter-spacing: .18em; }
+[data-theme="copper"] .brand small { color: #9a4c27; }
+[data-theme="copper"] .topnav a { border-radius: 0; text-transform: none; }
+[data-theme="copper"] .topnav a:hover, [data-theme="copper"] .topnav a.on { background: #1f1f1f; color: #fff; }
+[data-theme="copper"] h1 { font-size: 28px; font-weight: 300; letter-spacing: -.02em; }
+[data-theme="copper"] h2 { font-weight: 600; font-size: 13px; letter-spacing: .1em; }
+[data-theme="copper"] .card { border-color: #d6d3ce; }
+[data-theme="copper"] .kpi { border: 0; border-inline-start: 3px solid #9a4c27; background: var(--surface); }
+[data-theme="copper"] .kpi .v { font-weight: 300; font-size: 24px; }
+[data-theme="copper"] table.t th { background: #ffffff; color: #1f1f1f; border-bottom: 2px solid #1f1f1f; text-transform: none; letter-spacing: .04em; }
+[data-theme="copper"] .tag { border-radius: 0; }
+[data-theme="copper"] .modal { border-radius: 0; }
+[data-theme="copper"] .field input, [data-theme="copper"] .field select, [data-theme="copper"] .field textarea { border-radius: 0; }
+}
