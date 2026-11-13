@@ -30,7 +30,8 @@ export function itemForm(ctx, contract, it, defaults = {}) {
     { name: 'chapter', label: 'פרק', value: v0.chapter, numeric: true },
     { name: 'sub', label: 'תת-פרק', value: v0.sub, numeric: true },
     { name: 'num', label: 'מספר סעיף', value: v0.num, numeric: true },
-    { name: 'kind', label: 'סוג', type: 'select', value: v0.kind, options: Object.entries(KINDS) },
+    // a quote has no change orders: extra (ch. 99) lines and their approval belong to contracts / bills
+    { name: 'kind', label: 'סוג', type: 'select', value: v0.kind, options: Object.entries(KINDS).filter(([k]) => contract.kind !== 'quote' || k !== 'extra' || v0.kind === 'extra') },
     { name: 'unit', label: 'יחידה', value: v0.unit, list: UNITS, hint: 'בחר מהרשימה (יחידות בנארית) — קובעת את סוג המדידה בדף החישוב' },
     { name: 'description', label: 'תיאור', type: 'textarea', value: v0.description, span: true, rows: 4 },
     { name: 'qty', label: 'כמות', value: v0.qty ?? '0', numeric: true },
@@ -72,7 +73,8 @@ function sectionForm(ctx, contract, code, sec) {
       hint: `חלה על סכום כל הסעיפים ב${what} (לא על מחירי היחידה), ומופיעה כשורת הנחה בסוף ה${what}. סדר: תת-פרק ← פרק ← מבנה ← הנחה כללית.` }];
   if (level === 2) {
     if (contract.kind === 'quote') fields.push({ name: 'markup', label: 'תמחור מדקל: תוספת (+) / הנחה (−) % למחירי היחידה', value: sec?.markup ?? '0', numeric: true, hint: 'משנה רק את מחירי היחידה של סעיפים שתומחרו מדקל — בנפרד מההנחה על הסכום' });
-    fields.push({ name: 'exempt', label: 'מוחרג מההנחה הכללית', type: 'checkbox', value: sec ? !!sec.exempt : code.endsWith('.99') });
+    // chapter 99 (extras) is always outside the general and structure discounts — no choice to offer
+    if (code.split('.')[1] !== '99') fields.push({ name: 'exempt', label: 'מוחרג מההנחה הכללית', type: 'checkbox', value: sec ? !!sec.exempt : false });
   }
   formModal(`${['מבנה', 'פרק', 'תת-פרק'][level - 1]} ${code}`, fields, (v) => {
     ctx.api.saveSection(contract.id, code, { name: v.name, discount: v.discount, markup: v.markup, exempt: level === 2 ? v.exempt : undefined });
@@ -206,18 +208,43 @@ export function boqView(ctx, cid) {
     const a = lineCents(it.qty, it.price);
     for (const k of [it.struct, `${it.struct}.${it.chapter}`, `${it.struct}.${it.chapter}.${it.sub}`, 'all']) amounts.set(k, (amounts.get(k) ?? 0) + a);
   }
+  // Hierarchy reads at a glance: structure = shaded band with a level badge, chapter = indented
+  // under a guide line with its full code, subchapter = smaller row under a second guide line.
+  // Every level folds (▾/▸); the fold state is kept per contract for the session.
   const tree = h('nav', { class: 'tree', 'aria-label': 'מבנים ופרקים' });
   const codes = [...new Set(items.flatMap((i) => [i.struct, `${i.struct}.${i.chapter}`, `${i.struct}.${i.chapter}.${i.sub}`]))].sort();
-  const node = (code, label, cls) => h('div', { class: `node ${cls} ${sel.code === code ? 'on' : ''}`, onclick: () => { sel.code = code; sel.itemId = null; saveSel(cid, sel); ctx.refresh(); },
-    ondblclick: code === 'all' ? null : () => sectionForm(ctx, contract, code, sections.get(code)), title: code === 'all' ? '' : 'לחיצה כפולה לעריכה' },
-  h('span', { class: 'c' }, code === 'all' ? '' : code.split('.').at(-1)), h('span', {}, label), h('span', { class: 'amt' }, amounts.has(code) ? money(amounts.get(code)).replace(/\.\d\d$/, '') : ''));
-  tree.append(h('h3', {}, 'כתב כמויות'), node('all', 'הכל', 'l1'));
-  for (const code of codes) {
-    const lvl = code.split('.').length;
+  const folded = new Set(sel.folded ?? []);
+  const LV = ['מבנה', 'פרק', 'תת-פרק'];
+  const node = (code, lvl, hasKids) => {
     const s = sections.get(code);
-    const extra = s ? [s.discount && s.discount !== '0' ? `−${s.discount}%` : '', isQuote && lvl === 2 && s.markup !== '0' ? `דקל ${s.markup}%` : ''].filter(Boolean).map((x) => ` (${x})`).join('') : '';
-    tree.append(node(code, (s?.name || ['מבנה', 'פרק', 'תת-פרק'][lvl - 1] + ' ' + code.split('.').at(-1)) + (extra || ''), `l${lvl}`));
-  }
+    const tags = s ? [s.discount && s.discount !== '0' ? `הנחה ${s.discount}%` : '', isQuote && lvl === 2 && s.markup && s.markup !== '0' ? `דקל ${s.markup}%` : ''].filter(Boolean) : [];
+    const tw = hasKids ? h('button', { class: 'tw', 'aria-label': 'קיפול / פתיחה', 'aria-expanded': String(!folded.has(code)), onclick: (e) => {
+      e.stopPropagation();
+      folded.has(code) ? folded.delete(code) : folded.add(code);
+      sel.folded = [...folded]; saveSel(cid, sel);
+      const g = e.currentTarget.closest('.tg');
+      g.classList.toggle('folded', folded.has(code));
+      e.currentTarget.setAttribute('aria-expanded', String(!folded.has(code)));
+    } }) : h('span', { class: 'tw none' });
+    return h('div', { class: `node l${lvl} ${sel.code === code ? 'on' : ''}`, onclick: () => { sel.code = code; sel.itemId = null; saveSel(cid, sel); ctx.refresh(); },
+      ondblclick: () => sectionForm(ctx, contract, code, sections.get(code)), title: `${LV[lvl - 1]} ${code} — לחיצה כפולה להגדרות` },
+    tw, lvl === 1 ? h('span', { class: 'lv' }, `${LV[0]} ${code}`) : h('span', { class: 'c' }, code),
+    h('span', { class: 'nm' }, s?.name || (lvl === 1 ? '' : `${LV[lvl - 1]} ${code.split('.').at(-1)}`)), ...tags.map((t) => h('span', { class: 'tt', title: t }, t.replace('הנחה ', '−'))),
+    h('span', { class: 'amt' }, amounts.has(code) ? money(amounts.get(code)).replace(/\.\d\d$/, '') : ''));
+  };
+  const kids = (pre, lvl) => codes.filter((c) => c.split('.').length === lvl && c.startsWith(pre + '.'));
+  const branch = (code, lvl) => {
+    const ch = lvl < 3 ? kids(code, lvl + 1) : [];
+    return h('div', { class: `tg tg${lvl} ${folded.has(code) ? 'folded' : ''}` }, node(code, lvl, ch.length > 0),
+      ch.length ? h('div', { class: 'tk' }, ch.map((c) => branch(c, lvl + 1))) : null);
+  };
+  const setAll = (fold) => { sel.folded = fold ? codes.filter((c) => c.split('.').length < 3) : []; saveSel(cid, sel); ctx.refresh(); };
+  tree.append(h('div', { class: 'tree-hd' }, h('h3', {}, 'כתב כמויות'),
+    h('button', { class: 'sm ghost', title: 'קיפול הכל — מבנים ופרקים בלבד', onclick: () => setAll(true) }, '⊟'),
+    h('button', { class: 'sm ghost', title: 'פתיחת הכל', onclick: () => setAll(false) }, '⊞')),
+  h('div', { class: `node all ${sel.code === 'all' ? 'on' : ''}`, onclick: () => { sel.code = 'all'; sel.itemId = null; saveSel(cid, sel); ctx.refresh(); } },
+    h('span', { class: 'nm' }, 'כל כתב הכמויות'), h('span', { class: 'amt' }, amounts.has('all') ? money(amounts.get('all')).replace(/\.\d\d$/, '') : '')),
+  ...codes.filter((c) => !c.includes('.')).map((c) => branch(c, 1)));
 
   // ---- grid ----
   const visible = items.filter((it) => (sel.code === 'all' || itemCode(it).startsWith(sel.code + '.'))
@@ -283,14 +310,20 @@ export function boqView(ctx, cid) {
     return h('td', { class: multi ? 'edit desc' : 'edit' }, inp);
   };
 
-  let lastGroup = '';
+  // one heading row per level (structure / chapter / subchapter), each styled by level, instead of
+  // a single "01.02.03 a · b · c" line — the grid shows the same hierarchy as the tree
+  const seen = new Set();
+  const lvlName = (code, lvl) => sections.get(code)?.name || `${['מבנה', 'פרק', 'תת-פרק'][lvl - 1]} ${code.split('.').at(-1)}`;
+  const selDepth = sel.code === 'all' ? 0 : sel.code.split('.').length;
   for (const it of visible) {
-    const g = `${it.struct}.${it.chapter}.${it.sub}`;
-    if (g !== lastGroup && sel.code.split('.').length < 3) {
-      lastGroup = g;
-      const names = [sections.get(it.struct)?.name, sections.get(`${it.struct}.${it.chapter}`)?.name, sections.get(g)?.name].filter(Boolean);
-      tbody.append(h('tr', { class: 'group' }, h('td', { class: 'code' }, g), h('td', { colspan: 7 }, names.join(' · '))));
-    }
+    const path = [it.struct, `${it.struct}.${it.chapter}`, `${it.struct}.${it.chapter}.${it.sub}`];
+    path.forEach((code, i) => {
+      if (i < selDepth || seen.has(code)) return;
+      seen.add(code);
+      const amt = amounts.get(code);
+      tbody.append(h('tr', { class: `group g${i + 1}` }, h('td', { class: 'code' }, code), h('td', { class: 'gname' }, sections.get(code)?.name ? `${['מבנה', 'פרק', 'תת-פרק'][i]}: ${sections.get(code).name}` : lvlName(code, i + 1)),
+        h('td'), h('td'), h('td'), h('td', { class: 'n' }, amt ? money(amt) : ''), h('td'), h('td')));
+    });
     const tc = h('td', { class: 'n' }, isBillable(it) ? money(lineCents(it.qty, it.price)) : '');
     totalCell.set(it.id, tc);
     const dc = devCell(it); dc.classList.add('dev');
@@ -298,7 +331,7 @@ export function boqView(ctx, cid) {
       : it.kind === 'note' ? h('span', { class: 'tag' }, 'הערה') : null;
     const tr = h('tr', { class: `${it.kind === 'note' ? 'note' : ''} ${sel.itemId === it.id ? 'sel' : ''}`, 'data-id': it.id },
       h('td', { class: 'code', ondblclick: () => itemForm(ctx, contract, it), title: 'לחיצה כפולה לעריכה מלאה', style: { cursor: 'pointer' } }, itemCode(it),
-        measured.has(it.id) ? h('a', { href: `#/m/${it.id}`, class: 'meas-link', title: `דף חישוב: ${measured.get(it.id)} שורות`, onclick: (e) => e.stopPropagation() }, ` 📐${measured.get(it.id)}`) : null,
+        !isQuote && measured.has(it.id) ? h('a', { href: `#/m/${it.id}`, class: 'meas-link', title: `דף חישוב: ${measured.get(it.id)} שורות`, onclick: (e) => e.stopPropagation() }, ` 📐${measured.get(it.id)}`) : null,
         tagKind || (isQuote && it.dekel_price && !it.price_manual) ? h('div', { style: { marginTop: '4px', display: 'flex', gap: '4px', justifyContent: 'flex-end' } }, tagKind,
           isQuote && it.dekel_price && !it.price_manual ? h('span', { class: 'tag', title: 'המחיר נגזר מדקל' }, 'דקל') : null) : null),
       cellInput(it, 'description'),
@@ -325,7 +358,7 @@ export function boqView(ctx, cid) {
     f.unit.setAttribute('list', dl.id);
     const commit = () => {
       if (!f.description.value.trim()) { f.description.focus(); return toast('הקלד תיאור לסעיף', 'err'); }
-      const id = attempt(() => api.saveItem({ contract_id: cid, struct: s0, chapter: c0, sub: t0, num, kind: c0 === '99' ? 'extra' : 'contract',
+      const id = attempt(() => api.saveItem({ contract_id: cid, struct: s0, chapter: c0, sub: t0, num, kind: c0 === '99' && !isQuote ? 'extra' : 'contract',
         description: f.description.value, unit: f.unit.value.trim(), qty: f.qty.value || '0', price: f.price.value || '0', price_manual: 1 }));
       if (id === undefined) return;
       if (boqLocked) toast('כתב הכמויות נעול — הסעיף נוסף כסעיף חריג וממתין לאישור');
@@ -344,7 +377,7 @@ export function boqView(ctx, cid) {
   function rowMenu(e, it) {
     e.stopPropagation();
     const acts = [
-      ['📐 דף חישוב כמויות', () => ctx.go(`m/${it.id}`)],
+      isQuote ? null : ['📐 דף חישוב כמויות', () => ctx.go(`m/${it.id}`)],
       ['עריכה מלאה', () => itemForm(ctx, contract, it)],
       ['שכפול סעיף', () => itemForm(ctx, contract, { ...it, id: null, num: api.nextNum(cid, it.struct, it.chapter, it.sub) })],
       it.kind === 'extra' && it.change_status !== 'approved' && !isQuote ? ['אישור סעיף חריג', () => attempt(() => { api.approveChange(it.id); ctx.refresh(); }, 'אושר')] : null,
@@ -401,7 +434,8 @@ export function boqView(ctx, cid) {
   const tb = h('div', { class: 'toolbar no-print' },
     h('button', { class: 'primary', onclick: () => itemForm(ctx, contract, null, curSub()) }, '+ סעיף'),
     h('button', { onclick: () => itemForm(ctx, contract, null, { ...curSub(), kind: 'note' }) }, '+ הערה'),
-    h('button', { title: 'עבודה נוספת / חריגה — פרק 99 של המבנה הנבחר', onclick: () => extraForm(ctx, contract, curSub().struct) }, '+ סעיף חריג (99)'),
+    // extras and calculation sheets exist only once there is a contract to bill against
+    isQuote ? null : h('button', { title: 'עבודה נוספת / חריגה — פרק 99 של המבנה הנבחר', onclick: () => extraForm(ctx, contract, curSub().struct) }, '+ סעיף חריג (99)'),
     h('span', { class: 'sep' }),
     menuButton('ייבוא', [
       ['קובץ SKN (בנארית)', () => importSkn(ctx, contract), boqLocked && 'כתב הכמויות נעול'],
@@ -418,7 +452,7 @@ export function boqView(ctx, cid) {
     ]),
     h('span', { class: 'sep' }),
     h('button', { class: sel.showDekel ? 'primary' : '', onclick: () => { sel.showDekel = !sel.showDekel; saveSel(cid, sel); renderSide(); ctx.refresh(); } }, 'דקל'),
-    h('button', { onclick: () => { const id = sel.itemId ?? items.find((i) => i.kind !== 'note')?.id; if (id) ctx.go(`m/${id}`); else toast('אין סעיפים', 'err'); } }, '📐 דפי חישוב'),
+    isQuote ? null : h('button', { onclick: () => { const id = sel.itemId ?? items.find((i) => i.kind !== 'note')?.id; if (id) ctx.go(`m/${id}`); else toast('אין סעיפים', 'err'); } }, '📐 דפי חישוב'),
     menuButton('כלים', [
       ['בדיקת תמחור מול דקל', () => ctx.go(`c/${cid}/dekel`)],
       ['גרסה חדשה (מלאה או לפי פרקים)…', () => copyDialog(ctx, { src: cid, mode: 'version' })],

@@ -45,6 +45,20 @@ test('bill → xlsx has detail formulas and the payable amount', async () => {
   const sum = wb.getWorksheet('סיכום');
   const due = sum.getRows(1, sum.rowCount).find((r) => r.getCell(1).value === 'סכום לתשלום בחשבון זה');
   assert.equal(due.getCell(2).value, calc.due / 100);
+  // laid out like the PDF: document head, bordered table with column rules, headings and subtotals
+  assert.match(String(det.getCell('A3').value), /חשבון חלקי מס\. 1/);
+  assert.equal(det.getCell('A5').value, 'סעיף');
+  assert.equal(det.getCell('A5').border.bottom.style, 'medium');
+  for (const col of [3, 4, 9, 10]) assert.equal(row.getCell(col).border.left.style, 'thin');
+  assert.equal(row.getCell(10).alignment.vertical, 'bottom');
+  assert.equal(row.getCell(2).alignment.wrapText, true);
+  const labels = det.getRows(1, det.rowCount).map((r) => String(r.getCell(2).value ?? ''));
+  assert.ok(labels.some((l) => l.startsWith('תת פרק 01.1')) && labels.some((l) => l.startsWith('סה"כ 01.1')));
+  assert.equal(det.pageSetup.orientation, 'landscape');
+  const conc = wb.getWorksheet('ריכוז');
+  assert.ok(conc, 'concentration sheet');
+  const net = conc.getRows(1, conc.rowCount).find((r) => r.getCell(1).value === 'סה"כ כללי');
+  assert.equal(net.getCell(4).value, calc.totals.net / 100);
 });
 
 test('monthly bill exports a "this month only" sheet', async () => {

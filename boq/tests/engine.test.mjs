@@ -118,3 +118,19 @@ test('discounts on amounts at subchapter, chapter and structure level compound b
   assert.equal(d.net, (afterChap - Math.round(afterChap * 0.02)) - Math.round((afterChap - Math.round(afterChap * 0.02)) * 0.01));
   assert.equal(d.structs[0].amount, 6755);
 });
+
+test('extras (chapter 99) take neither the structure discount nor the general discount', () => {
+  const row = (ch, amount) => ({ struct: '01', chapter: ch, sub: '01', amount, cat: { contract: ch === '99' ? 0 : amount, over: 0, extra: ch === '99' ? amount : 0 } });
+  // a section row for 99 marked "not exempt" must not pull extras back under the general discount
+  const sec = { '01': { discount: '10' }, '01.99': { exempt: 0 } };
+  const d = discountTotals([row('02', 100000), row('99', 50000)], (k) => sec[k] ?? null, '5');
+  const g99 = d.groups.find((g) => g.chapter === '99'), g02 = d.groups.find((g) => g.chapter === '02');
+  assert.equal(g02.structDisc, 10000);            // 10% of the contract work only
+  assert.equal(g99.structDisc, 0);
+  assert.equal(g99.general, 0);
+  assert.equal(d.general, 4500);                  // 5% of 90,000 — extras outside
+  assert.equal(d.net, 100000 - 10000 - 4500 + 50000);
+  // a discount set on chapter 99 itself still applies
+  const d2 = discountTotals([row('99', 50000)], (k) => ({ '01.99': { discount: '2' } })[k] ?? null, '5');
+  assert.equal(d2.net, 49000);
+});

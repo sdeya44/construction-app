@@ -48,7 +48,8 @@ export function discountTotals(rows, sectionOf, generalRate, key = 'amount') {
     if (!g) {
       const s = sectionOf(k);
       g = { key: k, struct: r.struct, chapter: r.chapter, name: s?.name ?? '', rate: s?.discount ?? '0',
-            exempt: s ? !!s.exempt : r.chapter === '99', gross: 0, cat: { contract: 0, over: 0, extra: 0 }, subs: {} };
+            // extras (ch. 99) never take the general discount, whatever the section flag says
+            exempt: r.chapter === '99' || !!s?.exempt, gross: 0, cat: { contract: 0, over: 0, extra: 0 }, subs: {} };
       groups.set(k, g);
     }
     g.gross += r[key];
@@ -74,7 +75,8 @@ export function discountTotals(rows, sectionOf, generalRate, key = 'amount') {
   }
   for (const st of [...new Set(list.map((g) => g.struct))]) {
     const rate = sectionOf(st)?.discount ?? '0';
-    const gs = list.filter((g) => g.struct === st);
+    // a structure discount covers the contract work of the structure, not its extras (ch. 99)
+    const gs = list.filter((g) => g.struct === st && g.chapter !== '99');
     const base = gs.reduce((a, g) => a + g.net, 0);
     const total = pct(base, rate);
     if (!total) continue;
@@ -108,7 +110,8 @@ export function discountTotals(rows, sectionOf, generalRate, key = 'amount') {
   }
   const sum = (f) => list.reduce((s, g) => s + f(g), 0);
   const structs = [...new Set(list.map((g) => g.struct))].map((st) => {
-    const gs = list.filter((g) => g.struct === st);
+    const gs = list.filter((g) => g.struct === st && g.chapter !== '99');
+    if (!gs.length) return { struct: st, rate: '0', base: 0, amount: 0 };
     return { struct: st, rate: gs[0].structRate, base: gs[0].structBase ?? 0, amount: gs.reduce((a, g) => a + g.structDisc, 0) };
   }).filter((x) => x.amount);
   return { structs,

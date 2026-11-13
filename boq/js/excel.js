@@ -80,65 +80,245 @@ export async function exportBoq(ExcelJS, { contract, sections, items }) {
 }
 
 /** Bill → xlsx bytes: detail sheet in the Binarit column order + summary sheet. */
-export async function exportBill(ExcelJS, { contract, bill, calc, sections, period = null }) {
+// ---------------------------------------------------------------------------------------------
+// Bill workbook laid out like the printed bill: document head (issuer, project, title, date),
+// a bordered table with column rules running the full height, structure / chapter / subchapter
+// heading rows, subchapter and chapter totals, discount lines, a concentration (ריכוז) sheet and
+// a payment-summary sheet. Live formulas stay in the item rows so the sheet remains checkable.
+const BLK = { argb: 'FF000000' };
+const THIN = { style: 'thin', color: BLK }, MED = { style: 'medium', color: BLK }, DBL = { style: 'double', color: BLK };
+const BLUE = { argb: 'FF0B3CD6' };
+const FILL = (argb) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+const HEAD_FILL = 'FFE9ECEF', SUM_FILL = 'FFF3F4F6', CHAP_FILL = 'FFE2E6EA';
+const colLetter = (i) => String.fromCharCode(64 + i);
+
+function billDoc(ws, ncols, D, { landscape }) {
+  ws.views = [{ rightToLeft: true, state: 'frozen', ySplit: 5 }];
+  ws.pageSetup = { paperSize: 9, orientation: landscape ? 'landscape' : 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+    margins: { left: 0.35, right: 0.35, top: 0.45, bottom: 0.55, header: 0.2, footer: 0.25 }, printTitlesRow: '5:5', horizontalCentered: true };
+  ws.headerFooter = { oddFooter: `&R&8${(D.company || '').replace(/&/g, '&&')}&L&8&P / &N` };
+  const last = colLetter(ncols);
+  if (ncols < 4) {
+    // narrow sheet (payment summary): every head line spans the full width
+    const line = (r, v, font, align = 'right') => { ws.mergeCells(`A${r}:${last}${r}`); const c = ws.getCell(`A${r}`); c.value = v; c.font = font; c.alignment = { horizontal: align, vertical: 'middle' }; };
+    line(1, D.issuer, { bold: true, italic: true, size: 12 });
+    line(2, `${D.project}    ·    ${D.date}`, { bold: true, color: BLUE });
+    line(3, D.title, { size: 16, color: BLUE }, 'center'); ws.getRow(3).height = 26;
+    line(4, D.sub || '', { size: 10, italic: true }, 'center');
+    return;
+  }
+  const half = Math.max(2, Math.floor(ncols / 2));
+  ws.mergeCells(`A1:${colLetter(half)}1`); ws.mergeCells(`${colLetter(half + 1)}1:${last}1`);
+  ws.getCell('A1').value = D.issuer; ws.getCell('A1').font = { bold: true, italic: true, size: 12 };
+  ws.getCell(`${colLetter(half + 1)}1`).value = D.date; ws.getCell(`${colLetter(half + 1)}1`).alignment = { horizontal: 'left' };
+  ws.mergeCells(`A2:${colLetter(half)}2`); ws.mergeCells(`${colLetter(half + 1)}2:${last}2`);
+  ws.getCell('A2').value = D.contact || ''; ws.getCell('A2').font = { size: 9, color: { argb: 'FF444444' } };
+  ws.getCell(`${colLetter(half + 1)}2`).value = D.project; ws.getCell(`${colLetter(half + 1)}2`).font = { color: BLUE, bold: true };
+  ws.getCell(`${colLetter(half + 1)}2`).alignment = { horizontal: 'left' };
+  ws.mergeCells(`A3:${last}3`);
+  ws.getCell('A3').value = D.title; ws.getCell('A3').font = { size: 16, color: BLUE };
+  ws.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(3).height = 26;
+  ws.mergeCells(`A4:${last}4`);
+  ws.getCell('A4').value = D.sub || ''; ws.getCell('A4').font = { size: 10, italic: true }; ws.getCell('A4').alignment = { horizontal: 'center' };
+}
+function billHeader(ws, labels) {
+  const r = ws.getRow(5);
+  r.values = labels;
+  r.height = 30;
+  r.eachCell((c) => {
+    c.font = { bold: true, italic: true, size: 10 };
+    c.alignment = { horizontal: 'center', vertical: 'bottom', wrapText: true };
+    c.fill = FILL(HEAD_FILL);
+    c.border = { top: THIN, bottom: MED, left: THIN, right: THIN };
+  });
+}
+/** Every table row: vertical rules on all columns; code / description top, numbers bottom. */
+function tableRow(ws, values, ncols, { kind = 'item', top, bottom, fill, numFmts = {} } = {}) {
+  const r = ws.addRow(values);
+  for (let i = 1; i <= ncols; i++) {
+    const c = r.getCell(i);
+    c.border = { left: THIN, right: THIN, ...(top ? { top } : {}), ...(bottom ? { bottom } : {}) };
+    if (fill) c.fill = FILL(fill);
+    c.alignment = i === 2 ? { wrapText: true, vertical: 'top', horizontal: 'right' } : i === 1 ? { vertical: 'top', horizontal: 'right' } : { vertical: 'bottom' };
+    if (numFmts[i]) c.numFmt = numFmts[i];
+    if (kind === 'head') c.font = { bold: true, underline: i === 2 };
+    else if (kind === 'sum') c.font = { bold: true };
+    else if (kind === 'note') c.font = { italic: true, color: { argb: 'FF333333' } };
+  }
+  return r;
+}
+function closeTable(ws, ncols) { const r = ws.lastRow; for (let i = 1; i <= ncols; i++) r.getCell(i).border = { ...r.getCell(i).border, bottom: MED }; }
+
+function docInfo({ contract, bill, company, project, period }) {
+  const title = `${bill.type === 'final' ? 'חשבון סופי' : 'חשבון חלקי'} מס. ${bill.doc?.displayNumber || bill.number}`;
+  return {
+    issuer: bill.doc?.issuer || (contract.kind === 'sub' ? contract.party : company?.name) || '',
+    contact: bill.doc?.contact || [company?.email, company?.phone].filter(Boolean).join('  '),
+    company: company?.name || '',
+    project: bill.doc?.projectTitle || project?.name || contract.name,
+    date: bill.doc?.date || (bill.created_at || '').slice(0, 10),
+    title, period,
+    sub: [contract.name, contract.party && `לכבוד: ${contract.party}`, bill.month && `חודש ${bill.month.slice(5, 7)}/${bill.month.slice(0, 4)}`].filter(Boolean).join('   ·   '),
+  };
+}
+
+export async function exportBill(ExcelJS, { contract, bill, calc, sections, period = null, company = null, project = null }) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'KAYAN BOQ';
-  if (period) monthlySheet(wb, { calc, sections, period });
-  const ws = wb.addWorksheet(period ? 'פירוט מצטבר' : 'פירוט');
-  sheetSetup(ws, [12, 60, 8, 12, 9, 12, 12, 12, 12, 15]);
-  ws.pageSetup.orientation = 'landscape';
-  header(ws, ['סעיף', 'תאור', 'יחידה', 'כמות חוזה', '% ביצוע', 'מצטבר קודם', 'כמות נוכחית', 'כמות מצטברת', 'מחיר יחידה', calc.mode === 'periodic' ? 'סה"כ לתקופה' : 'סה"כ מצטבר']);
+  const D = docInfo({ contract, bill, company, project, period });
   const sec = new Map(sections.map((s) => [s.code, s.name]));
+  if (period) monthlySheet(wb, { sec, period, D });
+  const ws = wb.addWorksheet(period ? 'פירוט מצטבר' : 'פירוט');
+  const NC = 10;
+  ws.columns = [10, 52, 8, 11, 8, 12, 12, 12, 12, 15].map((w) => ({ width: w }));
+  billDoc(ws, NC, { ...D, title: period ? `${D.title} — פירוט מצטבר` : D.title }, { landscape: true });
+  billHeader(ws, ['סעיף', 'תאור', 'יחידה', 'כמות חוזה', '% ביצוע', 'מצטבר קודם', 'כמות נוכחית', 'כמות\nמצטברת', 'מחיר יחידה', calc.mode === 'periodic' ? 'סה"כ לתקופה' : 'סה"כ מצטבר']);
+  const FM = { 4: QTY, 5: '0.00%', 6: QTY, 7: QTY, 8: QTY, 9: MONEY, 10: MONEY };
+  let lastStruct = null;
   for (const g of calc.totals.groups) {
     const rows = calc.rows.filter((r) => `${r.struct}.${r.chapter}` === g.key && (r.amount || r.cumQ !== '0' || r.prevQ !== '0'));
     if (!rows.length) continue;
-    bold(ws.addRow([g.key, `מבנה ${+g.struct} ${sec.get(g.struct) ?? ''} · פרק ${g.chapter} ${g.name}`]));
-    const first = ws.rowCount + 1;
+    if (g.struct !== lastStruct) { lastStruct = g.struct; tableRow(ws, ['', `מבנה ${+g.struct} ${sec.get(g.struct) ?? ''}`], NC, { kind: 'head', top: MED, fill: SUM_FILL }); }
+    tableRow(ws, [g.chapter, `פרק ${g.chapter} ${g.name}`], NC, { kind: 'head' });
+    const subRows = [];
+    let cur = null, first = 0;
+    const closeSub = () => {
+      if (cur == null) return;
+      const t = tableRow(ws, ['', `סה"כ ${g.chapter}.${+cur} ${sec.get(`${g.key}.${cur}`) ?? ''}`], NC, { kind: 'sum', top: THIN, bottom: THIN, fill: SUM_FILL, numFmts: FM });
+      t.getCell(10).value = { formula: `SUM(J${first}:J${t.number - 1})`, result: (g.subs?.[cur] ?? 0) / 100 };
+      subRows.push(t.number);
+    };
     for (const r of rows) {
-      const row = ws.addRow([`${r.chapter}.${+r.sub}.${String(r.num).padStart(3, '0')}`, r.description, r.unit, n(r.contractQty), null, n(r.prevQ), null, n(r.cumQ), n(r.price)]);
+      if (r.sub !== cur) {
+        closeSub(); cur = r.sub;
+        tableRow(ws, [`${g.chapter}.${+cur}`, `תת פרק ${g.chapter}.${+cur} ${sec.get(`${g.key}.${cur}`) ?? ''}`], NC, { kind: 'head' });
+        first = ws.rowCount + 1;
+      }
+      const row = tableRow(ws, [`${r.chapter}.${+r.sub}.${String(r.num).padStart(3, '0')}`, r.description, r.unit, n(r.contractQty), null, n(r.prevQ), null, n(r.cumQ), n(r.price)], NC, { numFmts: FM });
       const k = row.number;
       row.getCell(5).value = { formula: `IF(D${k}=0,"",H${k}/D${k})`, result: n(r.contractQty) ? n(r.cumQ) / n(r.contractQty) : '' };
       row.getCell(7).value = { formula: `H${k}-F${k}`, result: n(r.curQ) };
       row.getCell(10).value = { formula: calc.mode === 'periodic' ? `G${k}*I${k}` : `H${k}*I${k}`, result: r.amount / 100 };
-      row.getCell(2).alignment = { wrapText: true, vertical: 'top' };
-      [4, 6, 7, 8].forEach((c) => { row.getCell(c).numFmt = QTY; });
-      row.getCell(5).numFmt = '0.00%'; row.getCell(9).numFmt = MONEY; row.getCell(10).numFmt = MONEY;
     }
-    const last = ws.rowCount;
-    const t = bold(ws.addRow(['', `סה"כ פרק ${g.chapter} ${g.name}`]));
-    t.getCell(10).value = { formula: `SUM(J${first}:J${last})`, result: g.gross / 100 }; t.getCell(10).numFmt = MONEY;
+    closeSub();
+    const t = tableRow(ws, ['', `סה"כ ${g.chapter} ${g.name}`], NC, { kind: 'sum', top: MED, fill: CHAP_FILL, numFmts: FM });
+    t.getCell(10).value = { formula: subRows.map((x) => `J${x}`).join('+') || '0', result: g.gross / 100 };
     if (g.discount) {
       const lines = discountLines(g, (c) => (c / 100).toFixed(2));
-      const first = ws.rowCount + 1;
+      const dFirst = ws.rowCount + 1;
       for (const L of lines) {
-        const d = ws.addRow(['', L.label]);
+        const d = tableRow(ws, ['', L.label], NC, { kind: 'sum', fill: CHAP_FILL, numFmts: FM });
         // a lone chapter discount keeps its live formula; layered discounts are written as values
         d.getCell(10).value = lines.length === 1 && L.kind === 'chapter' ? { formula: `-ROUND(J${t.number}*${n(g.rate) / 100},2)`, result: -L.amount / 100 } : -L.amount / 100;
-        d.getCell(10).numFmt = MONEY;
       }
-      const a = bold(ws.addRow(['', `סה"כ פרק ${g.chapter} לאחר הנחה`]));
-      a.getCell(10).value = { formula: `J${t.number}+SUM(J${first}:J${ws.rowCount - 1})`, result: g.net / 100 }; a.getCell(10).numFmt = MONEY;
+      const a = tableRow(ws, ['', `סה"כ ${g.chapter} לאחר הנחה`], NC, { kind: 'sum', fill: CHAP_FILL, numFmts: FM });
+      a.getCell(10).value = { formula: `J${t.number}+SUM(J${dFirst}:J${a.number - 1})`, result: g.net / 100 };
     }
-    ws.addRow([]);
+    closeTable(ws, NC);
   }
-  const sm = wb.addWorksheet('סיכום');
-  sheetSetup(sm, [42, 18]);
-  header(sm, [`${bill.type === 'final' ? 'חשבון סופי' : 'חשבון חלקי'} ${bill.doc?.displayNumber || bill.number} — ${contract.name}`, '₪']);
-  const T = calc.totals;
-  const lines = [
-    ['סה"כ ברוטו', T.gross], ['הנחות פרקים', -T.chapterDiscount], [`הנחה כללית ${T.generalRate}%`, -T.general],
-    ['מצטבר מחושב במחירי בסיס', calc.cumNet], ['פחות חשבון קודם', -calc.prevNet], ['ביצוע לתקופה', calc.periodNet],
-    ['התייקרות', calc.indexation.amount], ['עיכבון', -calc.retention], ['שחרור עיכבון', calc.release], ['קיזוז מקדמה', -calc.advance],
-    ['קיזוז חומרים / רכש', -calc.materials], [calc.otherLabel, -calc.other], ['סה"כ לפני מע"מ', calc.beforeVat], [`מע"מ ${calc.vatRate}%`, calc.vat],
-    ['סכום לתשלום בחשבון זה', calc.due],
-  ];
-  for (const [l, v] of lines) {
-    if (!v && !['מצטבר מחושב במחירי בסיס', 'סה"כ לפני מע"מ', 'סכום לתשלום בחשבון זה'].includes(l)) continue;
-    const r = sm.addRow([l, v / 100]);
-    r.getCell(2).numFmt = MONEY;
-    if (/מצטבר מחושב|לפני מע"מ|לתשלום/.test(l)) r.font = { bold: true };
-  }
+  concentrationSheet(wb, { sec, T: period ? period.T : calc.totals, D, period });
+  summarySheet(wb, { calc, D, period });
   return new Uint8Array(await wb.xlsx.writeBuffer());
+}
+
+/** Monthly (non-cumulative) detail: only this month's quantities and amounts — portrait, as printed. */
+function monthlySheet(wb, { sec, period, D }) {
+  const ws = wb.addWorksheet('פירוט חודשי');
+  const NC = 7;
+  ws.columns = [10, 56, 8, 12, 12, 12, 15].map((w) => ({ width: w }));
+  billDoc(ws, NC, { ...D, title: `${D.title} — חודשי` }, { landscape: false });
+  billHeader(ws, ['סעיף', 'תאור', 'יחידה', 'כמות חוזה', 'כמות החודש', 'מחיר יחידה', 'סה"כ לחודש']);
+  const FM = { 4: QTY, 5: QTY, 6: MONEY, 7: MONEY };
+  let lastStruct = null;
+  for (const g of period.groups) {
+    const rows = period.rows.filter((r) => `${r.struct}.${r.chapter}` === g.key && r.curQ !== '0');
+    if (!rows.length) continue;
+    if (g.struct !== lastStruct) { lastStruct = g.struct; tableRow(ws, ['', `מבנה ${+g.struct} ${sec.get(g.struct) ?? ''}`], NC, { kind: 'head', top: MED, fill: SUM_FILL }); }
+    tableRow(ws, [g.chapter, `פרק ${g.chapter} ${g.name}`], NC, { kind: 'head' });
+    let cur = null;
+    for (const r of rows) {
+      if (r.sub !== cur) { cur = r.sub; tableRow(ws, [`${g.chapter}.${+cur}`, `תת פרק ${g.chapter}.${+cur} ${sec.get(`${g.key}.${cur}`) ?? ''}`], NC, { kind: 'head' }); }
+      const row = tableRow(ws, [`${r.chapter}.${+r.sub}.${String(r.num).padStart(3, '0')}`, r.description, r.unit, n(r.contractQty), n(r.curQ), n(r.price), r.pAmount / 100], NC, { numFmts: FM });
+      if (String(r.percent ?? '100') === '100') row.getCell(7).value = { formula: `ROUND(E${row.number}*F${row.number},2)`, result: r.pAmount / 100 };
+    }
+    tableRow(ws, ['', `סה"כ ${g.chapter} ${g.name} — לחודש`, '', '', '', '', g.gross / 100], NC, { kind: 'sum', top: MED, fill: CHAP_FILL, numFmts: FM });
+    if (g.discount) {
+      for (const L of discountLines(g, (c) => (c / 100).toFixed(2))) tableRow(ws, ['', L.label, '', '', '', '', -L.amount / 100], NC, { kind: 'sum', fill: CHAP_FILL, numFmts: FM });
+      tableRow(ws, ['', `סה"כ ${g.chapter} לאחר הנחה — לחודש`, '', '', '', '', g.net / 100], NC, { kind: 'sum', fill: CHAP_FILL, numFmts: FM });
+    }
+    closeTable(ws, NC);
+  }
+}
+
+/** ריכוז: subchapter / chapter / structure amounts in their own columns, then the general discount. */
+function concentrationSheet(wb, { sec, T, D, period }) {
+  const ws = wb.addWorksheet('ריכוז');
+  const NC = 4;
+  ws.columns = [56, 18, 18, 18].map((w) => ({ width: w }));
+  billDoc(ws, NC, { ...D, title: `${D.title}  (ריכוז)` }, { landscape: false });
+  const w = period ? 'לחודש' : 'מצטבר';
+  billHeader(ws, ['', `סכום ${w}\nתת פרק`, `סכום ${w}\nפרק`, `סכום ${w}\nמבנה`]);
+  const FM = { 2: MONEY, 3: MONEY, 4: MONEY };
+  const put = (label, col, amount, o = {}) => { const v = ['', null, null, null]; v[0] = label; if (col) v[col] = amount / 100; return tableRow(ws, v, NC, { numFmts: FM, ...o }); };
+  for (const s of [...new Set(T.groups.map((g) => g.struct))]) {
+    const gs = T.groups.filter((g) => g.struct === s && g.gross !== 0);
+    if (!gs.length) continue;
+    put(`מבנה ${+s} ${sec.get(s) ?? ''}`, 0, 0, { kind: 'head' });
+    let total = 0;
+    for (const g of gs) {
+      put(`פרק ${g.chapter} ${g.name}`, 0, 0, { kind: 'head' });
+      for (const [sub, amt] of Object.entries(g.subs ?? {}).sort()) if (amt) put(`   תת פרק ${g.chapter}.${+sub} ${sec.get(`${g.key}.${sub}`) ?? ''}`, 1, amt);
+      put(g.discount ? `סה"כ ${g.chapter} לאחר הנחות מסך ${(g.gross / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : `סה"כ ${g.chapter} ${g.name}`, 2, g.net, { kind: 'sum', top: THIN, bottom: MED });
+      total += g.net;
+    }
+    put(`סה"כ מבנה ${+s} ${sec.get(s) ?? ''}`, 3, total, { kind: 'sum', top: THIN, bottom: MED, fill: SUM_FILL });
+  }
+  closeTable(ws, NC);
+  ws.addRow([]);
+  const G = (label, v, o = {}) => { const r = ws.addRow([label, null, null, v / 100]); r.getCell(4).numFmt = MONEY; [1, 4].forEach((i) => { r.getCell(i).border = { top: THIN, bottom: o.bottom ?? THIN, left: THIN, right: THIN }; r.getCell(i).font = { bold: !!o.bold }; if (o.fill) r.getCell(i).fill = FILL(o.fill); }); return r; };
+  if (T.exempt) {
+    G('סכום לחישוב הנחה כללית', T.eligible); if (T.general) G(`הנחה כללית ${n(T.generalRate)}%`, -T.general); G('ועוד סכום ללא הנחה', T.exempt);
+  } else { G('סכום לחישוב הנחה / תוספת', T.beforeGeneral); if (T.general) G(`הנחה כללית ${n(T.generalRate)}%`, -T.general); }
+  G(period ? 'סה"כ כללי לחודש' : 'סה"כ כללי', T.net, { bold: true, bottom: DBL, fill: CHAP_FILL });
+}
+
+/** Payment summary, laid out like the printed one: label · amount · sign, the payable amount boxed. */
+function summarySheet(wb, { calc, D, period }) {
+  const sm = wb.addWorksheet('סיכום');
+  sm.columns = [46, 18, 6].map((w) => ({ width: w }));
+  billDoc(sm, 3, D, { landscape: false });
+  billHeader(sm, ['', 'סכום ₪', '']);
+  const T = calc.totals;
+  const L = (label, v, sign = '', o = {}) => ({ label, v, sign, ...o });
+  const lines = [
+    T.cat?.extra || T.cat?.over ? L('עבודות לפי כמות חוזה', T.cat.contract) : null,
+    T.cat?.over ? L('עבודות מעל כמות חוזה', T.cat.over) : null,
+    T.cat?.extra ? L('עבודות נוספות', T.cat.extra) : null,
+    L('סה"כ ברוטו', T.gross), T.chapterDiscount ? L('הנחות מבנים / פרקים / תתי-פרקים', -T.chapterDiscount, '(-)') : null,
+    T.general ? L(`הנחה כללית ${n(T.generalRate)}%`, -T.general, '(-)') : null,
+    L('מצטבר מחושב במחירי בסיס', calc.cumNet, '', { bold: true }), L('פחות חשבון קודם', -calc.prevNet, '(-)', { rule: true }),
+    L(period ? 'ביצוע בחודש זה' : 'ביצוע לתקופה', calc.periodNet, '', { bold: true }),
+    calc.indexation.amount ? L('התייקרות', calc.indexation.amount, '(+)') : null, calc.retention ? L('עיכבון', -calc.retention, '(-)') : null,
+    calc.release ? L('שחרור עיכבון', calc.release, '(+)') : null, calc.advance ? L('קיזוז מקדמה', -calc.advance, '(-)') : null,
+    calc.materials ? L('קיזוז חומרים / רכש', -calc.materials, '(-)') : null, calc.other ? L(calc.otherLabel, -calc.other, '(-)') : null,
+    L('סה"כ לפני מע"מ', calc.beforeVat, '', { bold: true }), L(`מע"מ ${calc.vatRate}%`, calc.vat, '(+)', { rule: true }),
+    L('סכום לתשלום בחשבון זה', calc.due, '', { bold: true, due: true }),
+  ].filter(Boolean);
+  for (const x of lines) {
+    const r = sm.addRow([x.label, x.v / 100, x.sign]);
+    r.getCell(2).numFmt = MONEY;
+    r.height = x.due ? 22 : 18;
+    for (let i = 1; i <= 3; i++) {
+      const c = r.getCell(i);
+      c.border = { left: THIN, right: THIN, bottom: x.due ? DBL : x.rule ? THIN : { style: 'hair', color: { argb: 'FF999999' } }, ...(x.due ? { top: MED } : {}) };
+      c.font = { bold: !!x.bold, size: x.due ? 13 : 11 };
+      c.alignment = { vertical: 'middle', horizontal: i === 3 ? 'center' : undefined };
+      if (x.due) c.fill = FILL(CHAP_FILL);
+    }
+  }
+  const nb = sm.addRow([]); nb.height = 30;
+  sm.addRow(['שם, חתימה וחותמת הקבלן', 'תאריך']).eachCell((c) => { c.border = { top: THIN }; c.alignment = { horizontal: 'center' }; });
 }
 
 /** First (or chosen) worksheet → rows of trimmed strings, for the column-mapping dialog. */
@@ -196,32 +376,4 @@ export async function readBidForm(ExcelJS, bytes) {
   const [sheet] = await readSheetRows(ExcelJS, bytes);
   if (!sheet) return [];
   return sheet.rows.filter((r) => /^\d{2}\.\d{2}\.\d{2}\.\d{4}$/.test(r[0] ?? '')).map((r) => ({ code: r[0], price: (r[4] ?? '').trim() }));
-}
-
-
-/** Monthly (non-cumulative) detail: only the quantities and amounts of this bill's month. */
-function monthlySheet(wb, { sections, period }) {
-  const ws = wb.addWorksheet('פירוט חודשי');
-  sheetSetup(ws, [12, 64, 8, 12, 13, 12, 15]);
-  ws.pageSetup.orientation = 'landscape';
-  header(ws, ['סעיף', 'תאור', 'יחידה', 'כמות חוזה', 'כמות החודש', 'מחיר יחידה', 'סה"כ לחודש']);
-  const sec = new Map(sections.map((s) => [s.code, s.name]));
-  for (const g of period.groups) {
-    const rows = period.rows.filter((r) => `${r.struct}.${r.chapter}` === g.key && r.curQ !== '0');
-    if (!rows.length) continue;
-    bold(ws.addRow([g.key, `מבנה ${+g.struct} ${sec.get(g.struct) ?? ''} · פרק ${g.chapter} ${g.name}`]));
-    for (const r of rows) {
-      const row = ws.addRow([`${r.chapter}.${+r.sub}.${String(r.num).padStart(3, '0')}`, r.description, r.unit, n(r.contractQty), n(r.curQ), n(r.price), r.pAmount / 100]);
-      if (String(r.percent ?? '100') === '100') row.getCell(7).value = { formula: `ROUND(E${row.number}*F${row.number},2)`, result: r.pAmount / 100 };
-      row.getCell(2).alignment = { wrapText: true, vertical: 'top' };
-      [4, 5].forEach((c) => { row.getCell(c).numFmt = QTY; });
-      row.getCell(6).numFmt = MONEY; row.getCell(7).numFmt = MONEY;
-    }
-    const t = bold(ws.addRow(['', `סה"כ פרק ${g.chapter} ${g.name} — לחודש`, '', '', '', '', g.gross / 100])); t.getCell(7).numFmt = MONEY;
-    if (g.discount) {
-      for (const L of discountLines(g, (c) => (c / 100).toFixed(2))) { const d = ws.addRow(['', L.label, '', '', '', '', -L.amount / 100]); d.getCell(7).numFmt = MONEY; }
-      const a = bold(ws.addRow(['', `סה"כ פרק ${g.chapter} לאחר הנחה — לחודש`, '', '', '', '', g.net / 100])); a.getCell(7).numFmt = MONEY;
-    }
-    ws.addRow([]);
-  }
 }

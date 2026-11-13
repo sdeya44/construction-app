@@ -148,8 +148,9 @@ tr.rgrp-grand td.num{text-align:left}
   .report{box-shadow:none;border-radius:0;max-width:none;padding:8mm 6mm}
   .rsec{break-inside:avoid}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .rsec-pagebreak{break-before:page;page-break-before:always}
-  @page{size:A4 landscape;margin:10mm}
-  @page portrait-page{size:A4 portrait;margin:14mm}
+}
+/* named pages only — a global @page here used to turn every printout (quotes too) landscape */
+@page portrait-page{size:A4 portrait;margin:14mm}
 
 .kea{font-family:Heebo,"Segoe UI",Arial,sans-serif}
 .kea .num{direction:ltr;font-variant-numeric:tabular-nums;unicode-bidi:isolate}

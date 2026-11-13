@@ -2,6 +2,8 @@
    paginated in the DOM so carry-forward rows (מהעברה / להעברה) are exact. */
 @page land { size: A4 landscape; margin: 0; }
 @page port { size: A4 portrait; margin: 0; }
+/* default for anything not on a named page: portrait (only the cumulative bill is landscape) */
+@page { size: A4 portrait; margin: 0; }
 .print-root { background: #9aa0a6; padding: 18px 0 40px; min-height: 100%; }
 .print-bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; align-items: center; justify-content: center; padding: 10px; background: var(--surface); border-bottom: 1px solid var(--line); margin: -18px 0 18px; }
 .sheet { background: #fff; color: #000; margin: 0 auto 18px; box-shadow: 0 2px 10px rgba(0, 0, 0, .25); display: flex; flex-direction: column; padding: 9mm 10mm 7mm; font: 10.5px/1.35 var(--font); direction: rtl; overflow: hidden; }
@@ -19,7 +21,11 @@
 .sheet .s-foot { border-top: 1px solid #000; padding-top: 2mm; margin-top: 2mm; display: flex; justify-content: space-between; font-size: 9.5px; color: #333; }
 .sheet table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .sheet th { border: 1px solid #000; background: #e9ecef; padding: 1.2mm 1mm; font-weight: 700; font-size: 9.8px; text-align: center; }
-.sheet td { border-inline: 1px solid #000; padding: 1mm 1.2mm; vertical-align: top; }
+.sheet td { border-inline: 1px solid #000; padding: 1mm 1.2mm; vertical-align: bottom; }
+/* code and description start at the top; unit / qty / price / total sit on the last text line */
+.sheet td.cd, .sheet td.ds { vertical-align: top; }
+.sheet td.ds { white-space: pre-wrap; overflow-wrap: anywhere; }
+.sheet td.un { white-space: nowrap; text-align: center; }
 .sheet tbody tr:last-child td { border-bottom: 1px solid #000; }
 .sheet td.nm { text-align: left; direction: ltr; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sheet td.cd { direction: ltr; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -39,6 +45,9 @@
   body, .print-root { background: #fff !important; padding: 0 !important; }
   .print-bar { display: none !important; }
   .sheet { margin: 0 !important; box-shadow: none !important; break-after: page; }
+  /* a sheet exactly as tall as the paper can round up by a pixel and spill a blank page */
+  .sheet.land { height: 209.4mm; } .sheet.port { height: 296.4mm; }
+  html, body { margin: 0 !important; padding: 0 !important; }
   .sheet:last-child { break-after: auto; }
 }
 
