@@ -1,19 +1,20 @@
 // Database schema. Decimal values are TEXT (exact), money is INTEGER agorot.
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS company (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   name TEXT NOT NULL DEFAULT 'כיאן הנדסה בע"מ', address TEXT DEFAULT '', phone TEXT DEFAULT '',
-  email TEXT DEFAULT '', vat_id TEXT DEFAULT ''
+  email TEXT DEFAULT '', vat_id TEXT DEFAULT '', logo TEXT DEFAULT NULL, logo_mode TEXT DEFAULT 'wide'
 );
 INSERT OR IGNORE INTO company (id) VALUES (1);
 
 CREATE TABLE IF NOT EXISTS projects (
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, client TEXT DEFAULT '', location TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','closed')),
-  dekel_threshold TEXT NOT NULL DEFAULT '15', notes TEXT DEFAULT '', created_at TEXT NOT NULL
+  dekel_threshold TEXT NOT NULL DEFAULT '15', notes TEXT DEFAULT '', created_at TEXT NOT NULL,
+  supervisor TEXT DEFAULT '', manager TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS contracts (
@@ -29,7 +30,7 @@ CREATE TABLE IF NOT EXISTS contracts (
   index_series TEXT NOT NULL DEFAULT 'residential', index_base_month TEXT DEFAULT '',
   index_lag INTEGER NOT NULL DEFAULT 0, index_threshold TEXT NOT NULL DEFAULT '0', index_share TEXT NOT NULL DEFAULT '100',
   quote_markup TEXT NOT NULL DEFAULT '0', planned_cents INTEGER NOT NULL DEFAULT 0,
-  end_month TEXT DEFAULT '', pay_terms INTEGER NOT NULL DEFAULT 60,
+  end_month TEXT DEFAULT '', pay_terms INTEGER NOT NULL DEFAULT 60, meas_areas INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','closed')),
   created_at TEXT NOT NULL
 );
@@ -115,6 +116,22 @@ CREATE TABLE IF NOT EXISTS bid_prices (
   item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
   price TEXT NOT NULL,
   PRIMARY KEY (bidder_id, item_id)
+);
+
+-- Quantity calculation (דפי חישוב): measurement rows per item. Rows persist across bills; each
+-- approval appends to meas_history (append-only) and freezes the rows into the bill snapshot.
+CREATE TABLE IF NOT EXISTS measurements (
+  id INTEGER PRIMARY KEY, contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+  item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE, sort REAL NOT NULL DEFAULT 0,
+  is_group INTEGER NOT NULL DEFAULT 0, group_label TEXT DEFAULT '', descr TEXT DEFAULT '', area TEXT DEFAULT '',
+  shape TEXT DEFAULT 'מלבן', d1 TEXT DEFAULT '', d2 TEXT DEFAULT '', d3 TEXT DEFAULT '', t TEXT DEFAULT '', qty TEXT DEFAULT '',
+  sign INTEGER NOT NULL DEFAULT 1, notes TEXT DEFAULT '', cancelled INTEGER NOT NULL DEFAULT 0, approval TEXT DEFAULT NULL
+);
+CREATE INDEX IF NOT EXISTS meas_item ON measurements(contract_id, item_id, sort);
+CREATE TABLE IF NOT EXISTS meas_history (
+  id INTEGER PRIMARY KEY, meas_id INTEGER NOT NULL REFERENCES measurements(id) ON DELETE CASCADE,
+  bill_id INTEGER NOT NULL REFERENCES bills(id) ON DELETE CASCADE, bill_number INTEGER NOT NULL,
+  action TEXT NOT NULL, value TEXT NOT NULL, prev_value TEXT NOT NULL DEFAULT '0', claimed TEXT, approval_status TEXT, approval_note TEXT DEFAULT '', date TEXT NOT NULL
 );
 
 -- Defects (ליקויים), linked to a project and optionally to a contract item.

@@ -10,6 +10,8 @@ export function projectForm(ctx, p = {}) {
     { name: 'name', label: 'שם הפרויקט', value: p.name, required: true, span: true },
     { name: 'client', label: 'מזמין', value: p.client },
     { name: 'location', label: 'מיקום', value: p.location },
+    { name: 'supervisor', label: 'מפקח', value: p.supervisor },
+    { name: 'manager', label: 'מנהל פרויקט', value: p.manager },
     { name: 'dekel_threshold', label: 'סף סטייה מדקל (%)', value: p.dekel_threshold ?? '15', numeric: true, hint: 'סעיף שמחירו חורג מדקל מעבר לסף יסומן' },
     { name: 'status', label: 'סטטוס', type: 'select', value: p.status ?? 'active', options: [['active', 'פעיל'], ['closed', 'סגור']] },
     { name: 'notes', label: 'הערות', type: 'textarea', value: p.notes, span: true },

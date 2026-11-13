@@ -176,6 +176,7 @@ export function boqView(ctx, cid) {
   const sections = new Map(api.sections(cid).map((s) => [s.code, s]));
   const billed = new Set(api.s.all(`SELECT DISTINCT l.item_id FROM bill_lines l JOIN bills b ON b.id=l.bill_id WHERE b.contract_id=? AND b.status='approved'`, [cid]).map((r) => r.item_id));
   const thr = project.dekel_threshold;
+  const measured = new Map(api.s.all('SELECT item_id, COUNT(*) n FROM measurements WHERE contract_id=? AND is_group=0 AND cancelled=0 GROUP BY item_id', [cid]).map((r) => [r.item_id, r.n]));
 
   // ---- tree ----
   const amounts = new Map();
@@ -267,6 +268,7 @@ export function boqView(ctx, cid) {
       : it.kind === 'note' ? h('span', { class: 'tag' }, 'הערה') : null;
     const tr = h('tr', { class: `${it.kind === 'note' ? 'note' : ''} ${sel.itemId === it.id ? 'sel' : ''}`, 'data-id': it.id },
       h('td', { class: 'code', ondblclick: () => itemForm(ctx, contract, it), title: 'לחיצה כפולה לעריכה מלאה', style: { cursor: 'pointer' } }, itemCode(it),
+        measured.has(it.id) ? h('a', { href: `#/m/${it.id}`, class: 'meas-link', title: `דף חישוב: ${measured.get(it.id)} שורות`, onclick: (e) => e.stopPropagation() }, ` 📐${measured.get(it.id)}`) : null,
         tagKind || (isQuote && it.dekel_price && !it.price_manual) ? h('div', { style: { marginTop: '4px', display: 'flex', gap: '4px', justifyContent: 'flex-end' } }, tagKind,
           isQuote && it.dekel_price && !it.price_manual ? h('span', { class: 'tag', title: 'המחיר נגזר מדקל' }, 'דקל') : null) : null),
       cellInput(it, 'description'),
@@ -283,6 +285,7 @@ export function boqView(ctx, cid) {
   function rowMenu(e, it) {
     e.stopPropagation();
     const acts = [
+      ['📐 דף חישוב כמויות', () => ctx.go(`m/${it.id}`)],
       ['עריכה מלאה', () => itemForm(ctx, contract, it)],
       ['שכפול סעיף', () => itemForm(ctx, contract, { ...it, id: null, num: api.nextNum(cid, it.struct, it.chapter, it.sub) })],
       it.kind === 'extra' && it.change_status !== 'approved' && !isQuote ? ['אישור סעיף חריג', () => attempt(() => { api.approveChange(it.id); ctx.refresh(); }, 'אושר')] : null,
@@ -343,6 +346,7 @@ export function boqView(ctx, cid) {
     h('button', { class: sel.showDekel ? 'primary' : '', onclick: () => { sel.showDekel = !sel.showDekel; saveSel(cid, sel); renderSide(); ctx.refresh(); } }, 'דקל'),
     h('button', { onclick: () => ctx.go(`c/${cid}/dekel`) }, 'בדיקת תמחור מול דקל'),
     h('button', { onclick: () => ctx.go(`c/${cid}/tenders`) }, 'מכרזים'),
+    h('button', { onclick: () => { const id = sel.itemId ?? items.find((i) => i.kind !== 'note')?.id; if (id) ctx.go(`m/${id}`); else toast('אין סעיפים', 'err'); } }, '📐 דפי חישוב'),
     h('span', { class: 'sep' }),
     !isQuote ? h('button', { onclick: () => ctx.go(`c/${cid}/bills`) }, 'חשבונות') : h('button', { onclick: () => convertQuote(ctx, contract) }, 'המרה לחוזה'),
     h('button', { onclick: () => ctx.go(`c/${cid}/print`) }, isQuote ? 'הדפסת הצעה' : 'הדפסה'),
