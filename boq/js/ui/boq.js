@@ -36,7 +36,8 @@ export function itemForm(ctx, contract, it, defaults = {}) {
     { name: 'qty', label: 'כמות', value: v0.qty ?? '0', numeric: true },
     { name: 'price', label: 'מחיר יחידה', value: v0.price ?? '0', numeric: true },
   ];
-  if (contract.kind !== 'quote') fields.push({ name: 'change_status', label: 'סטטוס סעיף חריג', type: 'select', value: v0.change_status ?? 'pending', options: Object.entries(CHG), hint: 'סעיף חריג מחויב רק לאחר אישור' });
+  if (contract.kind !== 'quote') fields.push({ name: 'change_status', label: 'סטטוס סעיף חריג', type: 'select', value: v0.change_status ?? 'pending',
+    options: [['pending', 'ממתין לאישור המזמין'], ['approved', 'אושר על ידי המזמין — לחייב בחשבון'], ['rejected', 'נדחה']], hint: 'סעיף חריג נכלל בחשבון רק כשהוא מאושר' });
   fields.push({ name: 'notes', label: 'הערה פנימית', value: v0.notes, span: true });
   formModal(it?.id ? `עריכת סעיף ${itemCode(it)}` : 'סעיף חדש', fields, (v) => {
     // a quote line taken from Dekel stays Dekel-priced unless the user typed a different price
@@ -44,8 +45,9 @@ export function itemForm(ctx, contract, it, defaults = {}) {
     const priceManual = fromDekel ? (it?.id ? it.price_manual : 0) : (it?.id && v.price === it.price ? it.price_manual : 1);
     if (v.kind !== 'note' && v.unit && !UNITS.includes(v.unit.trim()) && !confirm_unit(v.unit)) return false;
     const id = api.saveItem({ ...v0, ...v, contract_id: contract.id, price_manual: priceManual });
-    if (!it?.id && contract.kind !== 'quote' && contract.locked && v.kind !== 'note') toast('כתב הכמויות נעול — הסעיף נוסף כסעיף חריג וממתין לאישור');
+    if (!it?.id && contract.kind !== 'quote' && contract.locked && v.kind !== 'note') toast(v.change_status === 'approved' ? 'נוסף סעיף חריג מאושר — הוא נכלל בחשבון' : 'כתב הכמויות נעול — הסעיף נוסף כסעיף חריג וממתין לאישור (⋯ ← אישור סעיף חריג)');
     ctx._focusItem = id;
+    if (ctx._afterItemSave) { const f = ctx._afterItemSave; ctx._afterItemSave = null; f(id); }
     ctx.refresh();
   }, { wide: true, intro: contract.kind !== 'quote' && contract.locked ? h('div', { class: 'alert info' }, '🔒 כתב הכמויות החוזי נעול: אפשר לשנות תיאור והערות. כמות, מחיר, יחידה ומספור משתנים רק בסעיף חריג (פקודת שינוי) עד שהוא מאושר. סעיף חדש נשמר כחריג ממתין לאישור.') : null });
 }
@@ -53,12 +55,23 @@ export function itemForm(ctx, contract, it, defaults = {}) {
 // a unit outside the Binarit list still saves, but SKN export and the measurement type need it mapped
 const confirm_unit = (u) => { toast(`יחידה "${u}" אינה ברשימת יחידות בנארית — נשמרה, אך ייתכן שלא תיוצא ל-SKN ותימדד כ"כמות"`, 'err'); return true; };
 
+/** A change / extra-work line in chapter 99 of a structure, numbered automatically. */
+export function extraForm(ctx, contract, struct = '01', after = null) {
+  const api = ctx.api;
+  const num = api.nextNum(contract.id, struct, '99', '01');
+  if (!api.sections(contract.id).some((s) => s.code === `${struct}.99`)) attempt(() => api.saveSection(contract.id, `${struct}.99`, { name: 'עבודות נוספות / חריגים' }));
+  ctx._afterItemSave = after;
+  itemForm(ctx, contract, null, { struct, chapter: '99', sub: '01', num, kind: 'extra', change_status: contract.kind === 'quote' ? 'approved' : 'pending' });
+}
+
 function sectionForm(ctx, contract, code, sec) {
   const level = code.split('.').length;
-  const fields = [{ name: 'name', label: ['שם מבנה', 'שם פרק', 'שם תת-פרק'][level - 1], value: sec?.name ?? '', span: true }];
+  const what = ['מבנה', 'פרק', 'תת-פרק'][level - 1];
+  const fields = [{ name: 'name', label: `שם ${what}`, value: sec?.name ?? '', span: true },
+    { name: 'discount', label: `הנחה על כל ה${what} %`, value: sec?.discount ?? '0', numeric: true,
+      hint: `חלה על סכום כל הסעיפים ב${what} (לא על מחירי היחידה), ומופיעה כשורת הנחה בסוף ה${what}. סדר: תת-פרק ← פרק ← מבנה ← הנחה כללית.` }];
   if (level === 2) {
-    if (contract.kind === 'quote') fields.push({ name: 'markup', label: 'תוספת/הנחה לפרק מדקל %', value: sec?.markup ?? '0', numeric: true, hint: 'מצטבר על התוספת הכללית של ההצעה' });
-    else fields.push({ name: 'discount', label: 'הנחה לפרק %', value: sec?.discount ?? '0', numeric: true });
+    if (contract.kind === 'quote') fields.push({ name: 'markup', label: 'תמחור מדקל: תוספת (+) / הנחה (−) % למחירי היחידה', value: sec?.markup ?? '0', numeric: true, hint: 'משנה רק את מחירי היחידה של סעיפים שתומחרו מדקל — בנפרד מההנחה על הסכום' });
     fields.push({ name: 'exempt', label: 'מוחרג מההנחה הכללית', type: 'checkbox', value: sec ? !!sec.exempt : code.endsWith('.99') });
   }
   formModal(`${['מבנה', 'פרק', 'תת-פרק'][level - 1]} ${code}`, fields, (v) => {
@@ -202,7 +215,7 @@ export function boqView(ctx, cid) {
   for (const code of codes) {
     const lvl = code.split('.').length;
     const s = sections.get(code);
-    const extra = lvl === 2 && s && (isQuote ? s.markup !== '0' ? ` (${s.markup}%)` : '' : s.discount !== '0' ? ` (−${s.discount}%)` : '');
+    const extra = s ? [s.discount && s.discount !== '0' ? `−${s.discount}%` : '', isQuote && lvl === 2 && s.markup !== '0' ? `דקל ${s.markup}%` : ''].filter(Boolean).map((x) => ` (${x})`).join('') : '';
     tree.append(node(code, (s?.name || ['מבנה', 'פרק', 'תת-פרק'][lvl - 1] + ' ' + code.split('.').at(-1)) + (extra || ''), `l${lvl}`));
   }
 
@@ -213,9 +226,14 @@ export function boqView(ctx, cid) {
   const totalCell = new Map();
   const statusTotal = h('b');
   const visTotal = h('b');
+  const netTotal = h('b'), vatTotal = h('b');
   const recomputeTotals = () => {
     const all = api.items(cid).filter(isBillable).reduce((s, i) => s + lineCents(i.qty, i.price), 0);
     statusTotal.textContent = money(all);
+    // totals after discounts / with VAT follow every inline edit (they were computed once at render)
+    const vv = api.contractValue(cid);
+    netTotal.textContent = money(vv.net);
+    vatTotal.textContent = money(vv.net + Math.round(vv.net * Number(contract.vat_rate) / 100));
     const ids = new Set(visible.map((v) => v.id));
     visTotal.textContent = money(api.items(cid).filter((i) => ids.has(i.id) && isBillable(i)).reduce((s, i) => s + lineCents(i.qty, i.price), 0));
   };
@@ -331,6 +349,11 @@ export function boqView(ctx, cid) {
       ['שכפול סעיף', () => itemForm(ctx, contract, { ...it, id: null, num: api.nextNum(cid, it.struct, it.chapter, it.sub) })],
       it.kind === 'extra' && it.change_status !== 'approved' && !isQuote ? ['אישור סעיף חריג', () => attempt(() => { api.approveChange(it.id); ctx.refresh(); }, 'אושר')] : null,
       it.kind === 'extra' && it.change_status === 'pending' && !isQuote ? ['דחיית סעיף חריג', () => attempt(() => { api.approveChange(it.id, 'rejected'); ctx.refresh(); })] : null,
+      !isQuote && (contract.locked || billed.has(it.id)) && it.kind !== 'note' ? ['תיקון מחיר (טעות בכתב הכמויות)…', () => formModal(`תיקון מחיר — ${itemCode(it)}`, [
+        { name: 'price', label: `מחיר נכון (כעת ${qty(it.price)})`, value: it.price, numeric: true, required: true },
+        { name: 'reason', label: 'סיבה (נרשמת בסעיף וביומן)', type: 'textarea', span: true, required: true },
+      ], (v) => { api.correctItemPrice(it.id, v.price, v.reason); toast('המחיר תוקן — החשבון הבא יחושב לפיו, כולל ההפרש על כמויות שחויבו קודם'); ctx.refresh(); }, {
+        submit: 'תיקון מחיר', intro: h('p', { class: 'muted' }, 'לתיקון טעות במחיר (לא לשינוי מוסכם — לזה משמשים סעיפים חריגים). חשבונות שאושרו לא משתנים; החשבון הפתוח / הבא מחשב את כל הכמות המצטברת במחיר המתוקן, ולכן כולל את ההפרש על מה שחויב קודם.') })] : null,
       it.dekel_code ? ['ניתוק מדקל', () => attempt(() => { api.linkDekel(it.id, null); ctx.refresh(); })] : null,
       isQuote && it.price_manual && it.dekel_price ? ['החזרת מחיר מחושב מדקל', () => attempt(() => { api.saveItem({ ...api.item(it.id), price_manual: 0 }); ctx.refresh(); })] : null,
       ['מחיקה', async () => { if (await confirmBox('מחיקת סעיף', `למחוק את ${itemCode(it)}?`, { danger: true, ok: 'מחיקה' })) attempt(() => { api.deleteItem(it.id); ctx.refresh(); }); }],
@@ -378,6 +401,7 @@ export function boqView(ctx, cid) {
   const tb = h('div', { class: 'toolbar no-print' },
     h('button', { class: 'primary', onclick: () => itemForm(ctx, contract, null, curSub()) }, '+ סעיף'),
     h('button', { onclick: () => itemForm(ctx, contract, null, { ...curSub(), kind: 'note' }) }, '+ הערה'),
+    h('button', { title: 'עבודה נוספת / חריגה — פרק 99 של המבנה הנבחר', onclick: () => extraForm(ctx, contract, curSub().struct) }, '+ סעיף חריג (99)'),
     h('span', { class: 'sep' }),
     menuButton('ייבוא', [
       ['קובץ SKN (בנארית)', () => importSkn(ctx, contract), boqLocked && 'כתב הכמויות נעול'],
@@ -427,8 +451,8 @@ export function boqView(ctx, cid) {
     h('span', {}, 'סעיפים: ', h('b', {}, items.filter((i) => i.kind !== 'note').length)),
     h('span', {}, 'בתצוגה: ', visTotal),
     h('span', {}, 'סה"כ ברוטו: ', statusTotal),
-    v.chapterDiscount + v.general ? h('span', {}, 'אחרי הנחות: ', h('b', {}, money(v.net))) : null,
-    isQuote ? h('span', {}, 'כולל מע"מ: ', h('b', {}, money(v.net + Math.round(v.net * Number(contract.vat_rate) / 100)))) : null);
+    v.chapterDiscount + v.general ? h('span', {}, 'אחרי הנחות: ', netTotal) : null,
+    isQuote ? h('span', {}, 'כולל מע"מ: ', vatTotal) : null);
   recomputeTotals();
 
   const center = h('section', { class: 'center' },

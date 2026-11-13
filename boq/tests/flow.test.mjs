@@ -183,3 +183,32 @@ test('monthly (non-cumulative) view: period rows and chapter / discount figures 
   assert.equal(P.groups.find((g) => g.key === '01.02').discount, Math.round(6000 * 100 * 0.03));
   assert.equal(P.groups.find((g) => g.key === '01.01').gross, 0);
 });
+
+test('locked contract: an extra recorded as already approved by the client is billable at once', () => {
+  const { api, c } = setup();
+  const b = api.createBill(c, { month: '2026-01' });
+  const x = api.saveItem({ contract_id: c, struct: '01', chapter: '99', sub: '01', num: 10, unit: 'ש"ע', qty: '40', price: '95', description: 'רג׳י', change_status: 'approved' });
+  assert.equal(api.item(x).kind, 'extra');
+  assert.equal(api.item(x).change_status, 'approved');
+  api.setLine(b, x, { q_sub: '8' });
+  assert.equal(api.calc(b).rows.find((r) => r.itemId === x).amount, 8 * 95 * 100);
+  const y = api.saveItem({ contract_id: c, struct: '01', chapter: '99', sub: '01', num: 20, unit: 'ש"ע', qty: '1', price: '1', description: 'ממתין' });
+  assert.equal(api.item(y).change_status, 'pending');                 // default stays "waiting for approval"
+});
+
+test('price correction in a locked, billed contract settles the difference on earlier quantities in the next bill', () => {
+  const { api, c, conc } = setup();
+  const b1 = api.createBill(c, { month: '2026-01' });
+  api.setLine(b1, conc, { q_sub: '40' }); api.approveBill(b1);
+  assert.throws(() => api.saveItem({ ...api.item(conc), price: '900' }), /חויב|נעול/);      // normal edit stays blocked
+  assert.throws(() => api.correctItemPrice(conc, '900', ''), /סיבה/);
+  const b2 = api.createBill(c, { month: '2026-02' });
+  api.correctItemPrice(conc, '900', 'טעות הקלדה');
+  assert.equal(api.item(conc).price, '900');
+  assert.match(api.item(conc).notes, /1000 ← 900/);
+  api.setLine(b2, conc, { q_sub: '50' });
+  const r = api.calc(b2);
+  assert.equal(r.rows.find((x) => x.itemId === conc).periodGross, 50 * 90000 - 40 * 100000);
+  assert.ok(r.warnings.some((w) => w.type === 'price-change'));
+  assert.equal(api.bill(b1).snap.rows.find((x) => x.itemId === conc).price, '1000');     // approved bill frozen
+});

@@ -1,6 +1,6 @@
 // Excel import/export (ExcelJS, loaded on demand). Exports keep live formulas so the sheet
 // stays checkable in Excel; cached results are written too, so totals show without recalculation.
-import { itemCode, isBillable } from './engine.js';
+import { itemCode, isBillable, discountLines } from './engine.js';
 import { lineCents } from './money.js';
 
 let loading = null;
@@ -108,10 +108,16 @@ export async function exportBill(ExcelJS, { contract, bill, calc, sections, peri
     const t = bold(ws.addRow(['', `סה"כ פרק ${g.chapter} ${g.name}`]));
     t.getCell(10).value = { formula: `SUM(J${first}:J${last})`, result: g.gross / 100 }; t.getCell(10).numFmt = MONEY;
     if (g.discount) {
-      const d = ws.addRow(['', `הנחה ${g.rate}%`]);
-      d.getCell(10).value = { formula: `-ROUND(J${t.number}*${n(g.rate) / 100},2)`, result: -g.discount / 100 }; d.getCell(10).numFmt = MONEY;
+      const lines = discountLines(g, (c) => (c / 100).toFixed(2));
+      const first = ws.rowCount + 1;
+      for (const L of lines) {
+        const d = ws.addRow(['', L.label]);
+        // a lone chapter discount keeps its live formula; layered discounts are written as values
+        d.getCell(10).value = lines.length === 1 && L.kind === 'chapter' ? { formula: `-ROUND(J${t.number}*${n(g.rate) / 100},2)`, result: -L.amount / 100 } : -L.amount / 100;
+        d.getCell(10).numFmt = MONEY;
+      }
       const a = bold(ws.addRow(['', `סה"כ פרק ${g.chapter} לאחר הנחה`]));
-      a.getCell(10).value = { formula: `J${t.number}+J${d.number}`, result: g.net / 100 }; a.getCell(10).numFmt = MONEY;
+      a.getCell(10).value = { formula: `J${t.number}+SUM(J${first}:J${ws.rowCount - 1})`, result: g.net / 100 }; a.getCell(10).numFmt = MONEY;
     }
     ws.addRow([]);
   }
@@ -213,7 +219,7 @@ function monthlySheet(wb, { sections, period }) {
     }
     const t = bold(ws.addRow(['', `סה"כ פרק ${g.chapter} ${g.name} — לחודש`, '', '', '', '', g.gross / 100])); t.getCell(7).numFmt = MONEY;
     if (g.discount) {
-      const d = ws.addRow(['', `הנחה ${g.rate}%`, '', '', '', '', -g.discount / 100]); d.getCell(7).numFmt = MONEY;
+      for (const L of discountLines(g, (c) => (c / 100).toFixed(2))) { const d = ws.addRow(['', L.label, '', '', '', '', -L.amount / 100]); d.getCell(7).numFmt = MONEY; }
       const a = bold(ws.addRow(['', `סה"כ פרק ${g.chapter} לאחר הנחה — לחודש`, '', '', '', '', g.net / 100])); a.getCell(7).numFmt = MONEY;
     }
     ws.addRow([]);

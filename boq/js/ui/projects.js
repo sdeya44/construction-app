@@ -31,7 +31,8 @@ export function contractFields(c, { forConvert = false } = {}) {
     { name: 'party', label: c.kind === 'sub' ? 'קבלן משנה' : 'מזמין / נמען', value: c.party },
   ];
   if (isQuote) {
-    fields.push({ name: 'quote_markup', label: 'תוספת (+) / הנחה (−) כללית מדקל %', value: c.quote_markup ?? '0', numeric: true, hint: 'לדוגמה ‎-12 = הנחה של 12% ממחירון דקל' },
+    fields.push({ name: 'general_discount', label: 'הנחה כללית על כל הפרויקט %', value: c.general_discount ?? '0', numeric: true, hint: 'מופיעה בסוף ההצעה, אחרי הנחות המבנים / הפרקים / תתי-הפרקים' },
+      { name: 'quote_markup', label: 'תמחור מדקל: תוספת (+) / הנחה (−) % למחירי היחידה', value: c.quote_markup ?? '0', numeric: true, hint: 'משנה מחירי יחידה של סעיפים מדקל, לדוגמה ‎-12' },
       { name: 'vat_rate', label: 'מע"מ %', value: c.vat_rate ?? '18', numeric: true });
     return fields;
   }
@@ -153,7 +154,8 @@ export function projectView(ctx, id) {
       h('header', {}, h('h2', {}, title), h('span', { class: 'muted' }, hint),
         h('div', { class: 'actions' },
           kind !== 'sub' ? h('button', { onclick: async () => { const { copyDialog } = await import('./versions.js'); copyDialog(ctx, { mode: 'copy', projectId: id, kind }); } }, 'העתקה מכתב כמויות קיים') : null,
-          h('button', { class: kind === 'quote' && !all.some((c) => c.kind === 'quote') ? 'primary' : '', onclick: () => newContract(kind) }, `+ ${KIND[kind]}`))),
+          h('button', { class: kind === 'quote' && !all.some((c) => c.kind === 'quote') ? 'primary' : '', title: kind === 'quote' ? 'תמחור כתב כמויות — מכרז של מזמין או הצעה שלך' : '', onclick: () => newContract(kind) }, kind === 'quote' ? '+ הצעת מחיר / מכרז' : `+ ${KIND[kind]}`),
+          kind === 'sub' ? h('button', { title: 'השוואת הצעות של קבלני משנה על כתב הכמויות של החוזה', onclick: () => { const cl = all.find((c) => c.kind === 'client'); if (cl) ctx.go(`c/${cl.id}/tenders`); else attempt(() => { throw new Error('קודם צריך חוזה מזמין — מכרז קבלני משנה נבנה מכתב הכמויות שלו'); }); } }, 'מכרז קבלני משנה') : null)),
       list.length ? h('div', { class: 'table-wrap' }, h('table', { class: 't' },
         h('thead', {}, h('tr', {}, h('th', {}, 'שם'), h('th', {}, kind === 'sub' ? 'קבלן' : 'צד'), h('th', { class: 'n' }, kind === 'quote' ? 'סה"כ הצעה' : 'היקף חוזה'),
           h('th', { class: 'n' }, kind === 'quote' ? 'מהדורה' : 'מצטבר מאושר'), h('th', {}, kind === 'quote' ? 'נשלחה' : 'חשבון אחרון'), h('th', {}, 'פתוח'), h('th', { class: 'n' }, kind === 'quote' ? '' : 'שולם'))),
@@ -186,7 +188,7 @@ export function projectView(ctx, id) {
         } }, 'מחיקה'))),
     pipeline(ctx, all),
     h('div', { class: 'stack' },
-      section('quote', 'הצעות מחיר וגרסאות', 'בונים, מתמחרים ושולחים; אישור הופך הצעה לחוזה'),
+      section('quote', 'הצעות מחיר / מכרזים', 'בונים או קולטים כתב כמויות, מתמחרים ושולחים; אישור הופך אותו לחוזה'),
       section('client', 'חוזה מזמין', 'כמויות ומחירי מכרז · חשבונות שאנו מגישים'),
       section('sub', 'קבלני משנה', 'חשבונות שאנו מאשרים')));
 }

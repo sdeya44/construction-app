@@ -5,7 +5,7 @@ import { h, dateLabel, toast } from './dom.js';
 import { money, fixed, divRound, dec } from '../money.js';
 import { INDEX_SERIES } from '../schema.js';
 import { printPdf } from '../persist.js';
-import { periodTotals } from '../engine.js';
+import { periodTotals, discountLines } from '../engine.js';
 
 const n2 = (v) => { const x = Number(v); return x ? x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; };
 const q2 = (v) => (Number(v) ? n2(v) : '');
@@ -150,8 +150,13 @@ export function billPrintView(ctx, bid, mount) {
     closeSub();
     // chapter total block pinned to the bottom of the page
     const end = [span(`סה"כ ${g.chapter} ${g.name}`, g.gross, 'bn-end bn-end-first')];
-    if (g.discount) end.push(span(h('span', {}, `הנחה  ${n2(g.rate).replace(/\.00$/, '')}%  מסך `, h('b', {}, cash(g.gross))), -g.discount, 'bn-end'),
-      span(`סה"כ ${g.chapter} (לאחר הנחה)`, g.net, 'bn-end'));
+    if (g.discount) {
+      // a chapter-only discount prints exactly as Binarit does; sub / structure discounts add their own lines
+      for (const d of discountLines(g, cash)) end.push(d.kind === 'chapter'
+        ? span(h('span', {}, `הנחה  ${n2(g.rate).replace(/\.00$/, '')}%  מסך `, h('b', {}, cash(g.chapterBase ?? g.gross))), -d.amount, 'bn-end')
+        : span(d.label, -d.amount, 'bn-end'));
+      end.push(span(`סה"כ ${g.chapter} (לאחר הנחה)`, g.net, 'bn-end'));
+    }
     end.forEach((e) => tb.append(e));
     if (!fits(pg)) {
       end.forEach((e) => e.remove());
@@ -178,7 +183,9 @@ export function billPrintView(ctx, bid, mount) {
       concRows.push(cRow(`פרק ${g.chapter} ${g.name}`, 0, 0, 'bn-c-gap'));
       for (const [subCode, amt] of Object.entries(g.subs).sort()) if (amt) concRows.push(cRow(` תת פרק ${g.chapter}.${+subCode} ${secName(`${g.key}.${subCode}`)}`, 1, amt, 'bn-c-gap'));
       concRows.push(g.discount
-        ? cRow(h('span', {}, `סה"כ ${g.chapter}  לאחר הנחה  ${n2(g.rate).replace(/\.00$/, '')}%  מסך  ${cash(g.gross)}`), 2, g.net, 'bn-c-chap')
+        ? (discountLines(g).length === 1 && g.chapterDisc
+          ? cRow(h('span', {}, `סה"כ ${g.chapter}  לאחר הנחה  ${n2(g.rate).replace(/\.00$/, '')}%  מסך  ${cash(g.gross)}`), 2, g.net, 'bn-c-chap')
+          : cRow(`סה"כ ${g.chapter}  לאחר הנחות (${discountLines(g, cash).map((d) => d.kind === 'chapter' ? `פרק ${n2(g.rate).replace(/\.00$/, '')}%` : d.kind === 'sub' ? 'תת פרק' : `מבנה ${n2(g.structRate).replace(/\.00$/, '')}%`).join(', ')})  מסך  ${cash(g.gross)}`, 2, g.net, 'bn-c-chap'))
         : cRow(`סה"כ ${g.chapter} ${g.name}`, 2, g.net, 'bn-c-chap'));
       sTotal += g.net;
     }

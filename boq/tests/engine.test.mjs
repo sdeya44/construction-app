@@ -34,7 +34,7 @@ test('account 8 (חנתון) printed totals reconcile', () => {
 
 test('chapter discount precedes general discount (1,462,607.75 − 3% − 0.5%)', () => {
   const d = discountTotals([{ struct: '04', chapter: '02', sub: '01', amount: 146260775, cat: { contract: 146260775, over: 0, extra: 0 } }],
-    () => ({ discount: '3', exempt: 0 }), '0.5');
+    (k) => (k === '04.02' ? { discount: '3', exempt: 0 } : null), '0.5');
   assert.equal(d.groups[0].discount, 4387823);
   assert.equal(d.groups[0].net, 141872952);
   assert.equal(d.general, 709365);
@@ -104,4 +104,17 @@ test('pending change item is not billed; notes ignored', () => {
   const items = [item(1), item(2, { kind: 'extra', change_status: 'pending' }), item(3, { kind: 'note' })];
   const r = calcBill({ contract: C(), sections: [], items, bill: bill(), lines: lines({ 1: { q_appr: '1' }, 2: { q_appr: '5' } }), prev: null });
   assert.equal(r.rows.length, 1);
+});
+
+test('discounts on amounts at subchapter, chapter and structure level compound before the general discount', () => {
+  const row = (chapter, sub, amount) => ({ struct: '01', chapter, sub, amount, cat: { contract: amount, over: 0, extra: 0 } });
+  const sec = { '01.02.03': { discount: '10' }, '01.02': { discount: '5' }, '01': { discount: '2' } };
+  const d = discountTotals([row('02', '01', 100000), row('02', '03', 50000), row('05', '01', 200000)], (k) => sec[k] ?? null, '1');
+  const g2 = d.groups.find((g) => g.key === '01.02'), g5 = d.groups.find((g) => g.key === '01.05');
+  assert.equal(g2.subDiscount, 5000);                 // 10% of subchapter 03 only
+  assert.equal(g2.chapterDisc, 7250);                 // 5% of (150,000 − 5,000)
+  const afterChap = 150000 - 5000 - 7250 + 200000;    // 337,750 before the structure discount
+  assert.equal(g2.structDisc + g5.structDisc, Math.round(afterChap * 0.02));
+  assert.equal(d.net, (afterChap - Math.round(afterChap * 0.02)) - Math.round((afterChap - Math.round(afterChap * 0.02)) * 0.01));
+  assert.equal(d.structs[0].amount, 6755);
 });
