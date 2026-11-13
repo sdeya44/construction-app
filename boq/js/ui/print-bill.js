@@ -56,7 +56,8 @@ export function billPrintView(ctx, bid, mount) {
   const sheet = ({ first = false, issuer = false, conc = false, sub = [] } = {}) => {
     pageCount++;
     const pg = h('div', { class: 'bn-pg' });
-    const s = h('section', { class: 'sheet land bn-sheet' },
+    // only the cumulative bill is landscape; the monthly bill has 7 columns and prints portrait
+    const s = h('section', { class: `sheet ${pv ? 'port' : 'land'} bn-sheet` },
       h('header', { class: `bn-head ${issuer ? '' : 'noiss'}` },
         h('div', { class: 'bn-left' }, h('div', {}, D.date), h('div', { class: 'bn-pgl' }, h('span', {}, "דף מס':"), pg)),
         h('div', { class: 'bn-right' },

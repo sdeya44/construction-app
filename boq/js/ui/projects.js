@@ -66,29 +66,57 @@ export function contractForm(ctx, c) {
   }, { wide: !isQuote });
 }
 
-export function projectsView(ctx) {
+/** Home attention list ("דורש טיפול"), shown when no project is selected. */
+function attentionList(ctx) {
   const api = ctx.api;
-  const list = api.projects();
-  const body = list.length
-    ? h('div', { class: 'card' }, h('div', { class: 'table-wrap' }, h('table', { class: 't' },
-      h('thead', {}, h('tr', {}, h('th', {}, 'פרויקט'), h('th', {}, 'מזמין'), h('th', {}, 'מיקום'), h('th', { class: 'n' }, 'חוזים'), h('th', {}, 'סטטוס'), h('th', {}, 'נוצר'))),
-      h('tbody', {}, list.map((p) => h('tr', { class: 'click', onclick: () => ctx.go(`p/${p.id}`) },
-        h('td', {}, h('b', {}, p.name)), h('td', {}, p.client), h('td', {}, p.location), h('td', { class: 'n' }, p.contracts),
-        h('td', {}, h('span', { class: `tag ${p.status === 'active' ? 'ok' : ''}` }, p.status === 'active' ? 'פעיל' : 'סגור')), h('td', { class: 'muted' }, dateLabel(p.created_at))))))))
-    : h('div', { class: 'card empty' }, h('b', {}, 'עדיין אין פרויקטים'), 'צור פרויקט, ובתוכו חוזה מזמין, חוזי קבלני משנה או הצעות מחיר.');
   const COLORS = { returned: 'var(--bad)', index: 'var(--bad)', draft: 'var(--muted)', submitted: 'var(--warn)', meas: 'var(--warn)', change: 'var(--warn)', unpaid: 'var(--accent)', topay: 'var(--gold)' };
   const ORDER = ['returned', 'index', 'submitted', 'meas', 'change', 'draft', 'topay', 'unpaid'];
   const items = api.attention().sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
   const days = (iso) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 864e5) : null);
-  const attn = items.length ? h('section', {}, h('h2', { style: { margin: '0 0 10px' } }, `דורש טיפול (${items.length})`),
+  return items.length ? h('section', {}, h('h2', { style: { margin: '0 0 10px' } }, `דורש טיפול (${items.length})`),
     h('div', { class: 'attn' }, items.slice(0, 18).map((x) => h('a', { href: `#/${x.go}` },
       h('span', { class: 'dot', style: { background: COLORS[x.kind] } }), h('b', {}, x.text, x.since && days(x.since) > 0 ? h('span', { class: 'muted', style: { fontWeight: 400 } }, ` · ${days(x.since)} ימים`) : null),
       x.amount ? h('span', { class: 'amt' }, money(x.amount)) : h('span'), h('small', {}, x.where)))),
     items.length > 18 ? h('div', { class: 'muted', style: { margin: '-8px 0 16px' } }, `ועוד ${items.length - 18}…`) : null) : null;
-  return h('div', { class: 'page' },
-    h('div', { class: 'page-head' }, h('div', {}, h('h1', {}, 'פרויקטים'), h('div', { class: 'sub' }, 'כתבי כמויות, הצעות מחיר וחשבונות')),
-      h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: () => projectForm(ctx) }, '+ פרויקט חדש'))),
-    attn, body);
+}
+
+const LIST_SCROLL = 'proj-list-scroll';
+/**
+ * Projects screen, split in two: the project list on the right; the selected project's files
+ * (its quotes / BOQs, client contracts and subcontracts — a project often has several, e.g.
+ * electrical, finishes, plumbing) on the left. With nothing selected the left side shows what
+ * needs attention across all projects.
+ */
+export function projectsView(ctx, selectedId = null) {
+  const api = ctx.api;
+  const list = api.projects();
+  const q = sessionStorage.getItem('proj-q') ?? '';
+  const ul = h('div', { class: 'pl-items', role: 'listbox', 'aria-label': 'פרויקטים' });
+  const fill = (term) => {
+    const t = term.trim();
+    const shown = list.filter((p) => !t || `${p.name} ${p.client ?? ''} ${p.location ?? ''}`.includes(t));
+    ul.replaceChildren(...(shown.length ? shown.map((p) => h('button', { class: `pl-item ${p.id === selectedId ? 'on' : ''} ${p.status === 'active' ? '' : 'closed'}`, role: 'option', 'aria-selected': String(p.id === selectedId),
+      onclick: () => { try { sessionStorage.setItem(LIST_SCROLL, String(ul.scrollTop)); } catch { /* */ } ctx.go(`p/${p.id}`); } },
+    h('span', { class: 'pl-name' }, p.name),
+    h('span', { class: 'pl-meta' }, [p.client, p.location].filter(Boolean).join(' · ') || '—'),
+    h('span', { class: 'pl-count' }, p.contracts ? `${p.contracts} ${p.contracts === 1 ? 'קובץ' : 'קבצים'}` : 'ריק', p.status === 'active' ? null : h('span', { class: 'tag' }, 'סגור'))))
+      : [h('div', { class: 'empty' }, list.length ? 'לא נמצא פרויקט' : 'עדיין אין פרויקטים')]));
+  };
+  fill(q);
+  const search = h('input', { type: 'search', class: 'pl-search', placeholder: 'חיפוש פרויקט / מזמין…', value: q,
+    oninput: (e) => { try { sessionStorage.setItem('proj-q', e.target.value); } catch { /* */ } fill(e.target.value); } });
+  const aside = h('aside', { class: 'pl' },
+    h('div', { class: 'pl-head' }, h('h1', {}, 'פרויקטים'), h('button', { class: 'primary sm', onclick: () => projectForm(ctx) }, '+ פרויקט חדש')),
+    list.length > 6 ? search : null, ul);
+  requestAnimationFrame(() => { const y = +sessionStorage.getItem(LIST_SCROLL) || 0; ul.scrollTop = y; ul.querySelector('.pl-item.on')?.scrollIntoView({ block: 'nearest' }); });
+  let detail;
+  if (selectedId != null) detail = projectDetail(ctx, selectedId);
+  else detail = h('div', { class: 'pd' },
+    attentionList(ctx),
+    h('div', { class: 'card empty' }, list.length
+      ? [h('b', {}, '← בחר פרויקט מהרשימה'), 'יוצגו כאן כל הקבצים שלו: הצעות מחיר וכתבי כמויות (חשמל, גמרים, אינסטלציה…), חוזים, קבלני משנה וחשבונות.']
+      : [h('b', {}, 'עדיין אין פרויקטים'), 'צור פרויקט, ובתוכו כתבי כמויות / הצעות מחיר, חוזה מזמין וחוזי קבלני משנה.']));
+  return h('div', { class: 'page full' }, h('div', { class: 'split' }, aside, h('div', { class: 'split-main' }, detail)));
 }
 
 function contractRow(ctx, c, all) {
@@ -122,7 +150,8 @@ function contractRow(ctx, c, all) {
 function pipeline(ctx, all) {
   const api = ctx.api;
   const quotes = all.filter((c) => c.kind === 'quote');
-  const client = all.find((c) => c.kind === 'client');
+  const clients = all.filter((c) => c.kind === 'client');
+  const client = clients[0];
   const bills = client ? api.bills(client.id) : [];
   const lastA = [...bills].reverse().find((b) => b.status === 'approved');
   const open = bills.find((b) => b.status !== 'approved');
@@ -135,7 +164,10 @@ function pipeline(ctx, all) {
       [lastQ && `${lastQ.name}: ${money(api.contractValue(lastQ.id).net)}`, lastQ && (revs.length ? `מהדורה ${revs[0].rev} נשלחה` : 'טרם הופקה מהדורה')],
       () => (lastQ ? ctx.go(`c/${lastQ.id}`) : null), !quotes.length),
     h('span', { class: 'arrow' }, '‹'),
-    step('2 · חוזה (כמויות מכרז)', client ? client.name : 'טרם אושרה הצעה',
+    clients.length > 1
+      ? step('2 · חוזים (כמויות מכרז)', `${clients.length} חוזי מזמין`, [`היקף כולל: ${money(clients.reduce((t, c) => t + (c.planned_cents || api.contractValue(c.id).net), 0))}`, clients.map((c) => c.name).join(' · ')],
+        () => ctx.go(`c/${client.id}`), false)
+      : step('2 · חוזה (כמויות מכרז)', client ? client.name : 'טרם אושרה הצעה',
       [client && `היקף: ${money(client.planned_cents || api.contractValue(client.id).net)}`, client && (client.locked ? '🔒 כתב הכמויות נעול' : 'פתוח לעריכה')],
       () => (client ? ctx.go(`c/${client.id}`) : null), !client),
     h('span', { class: 'arrow' }, '‹'),
@@ -144,7 +176,9 @@ function pipeline(ctx, all) {
       () => (client ? ctx.go(`c/${client.id}/bills`) : null), !client));
 }
 
-export function projectView(ctx, id) {
+export function projectView(ctx, id) { return projectsView(ctx, id); }
+
+function projectDetail(ctx, id) {
   const api = ctx.api;
   const p = api.project(id);
   const all = api.contracts(id);
@@ -176,7 +210,7 @@ export function projectView(ctx, id) {
       });
     } else contractForm(ctx, { project_id: id, kind, party: p.client ?? '' });
   };
-  return h('div', { class: 'page' },
+  return h('div', { class: 'pd' },
     h('div', { class: 'page-head' },
       h('div', {}, h('h1', {}, p.name), h('div', { class: 'sub' }, [p.client, p.location].filter(Boolean).join(' · '), `  ·  סף דקל ${p.dekel_threshold}%`)),
       h('div', { class: 'actions' },
@@ -188,7 +222,7 @@ export function projectView(ctx, id) {
         } }, 'מחיקה'))),
     pipeline(ctx, all),
     h('div', { class: 'stack' },
-      section('quote', 'הצעות מחיר / מכרזים', 'בונים או קולטים כתב כמויות, מתמחרים ושולחים; אישור הופך אותו לחוזה'),
-      section('client', 'חוזה מזמין', 'כמויות ומחירי מכרז · חשבונות שאנו מגישים'),
+      section('quote', 'הצעות מחיר / כתבי כמויות', 'כתב כמויות לכל תחום (חשמל, גמרים, אינסטלציה…) · מתמחרים ושולחים; אישור הופך אותו לחוזה'),
+      section('client', 'חוזי מזמין', 'כמויות ומחירי מכרז · חשבונות שאנו מגישים · אפשר כמה חוזים בפרויקט (חשמל, גמרים, אינסטלציה…)'),
       section('sub', 'קבלני משנה', 'חשבונות שאנו מאשרים')));
 }

@@ -140,18 +140,38 @@ td.locked { color: var(--ink-2); }
 .alert.info { border-color: #c7dce1; background: var(--accent-weak); color: var(--accent); }
 
 /* ---------- workspace (tree + grid + side) ---------- */
-.ws { display: grid; grid-template-columns: 250px minmax(0, 1fr); height: 100%; }
-.ws.with-side { grid-template-columns: 230px minmax(0, 1fr) 340px; }
-.tree { border-inline-end: 1px solid var(--line); background: var(--surface); overflow: auto; padding: 10px 0; }
-.tree .node { display: flex; gap: 6px; align-items: baseline; padding: 5px 14px; cursor: pointer; color: var(--ink-2); border-inline-start: 3px solid transparent; }
+.ws { display: grid; grid-template-columns: 290px minmax(0, 1fr); height: 100%; }
+.ws.with-side { grid-template-columns: 260px minmax(0, 1fr) 340px; }
+.tree { border-inline-end: 1px solid var(--line); background: var(--surface); overflow: auto; padding: 6px 0 14px; }
+.tree .tree-hd { display: flex; align-items: center; gap: 2px; padding: 4px 10px 6px 8px; }
+.tree .tree-hd h3 { flex: 1; padding: 4px 4px; margin: 0; color: var(--muted); font-size: 11px; letter-spacing: .06em; }
+.tree .tree-hd button { padding: 0 6px; font-size: 15px; line-height: 1.4; color: var(--muted); }
+.tree .node { display: flex; gap: 6px; align-items: center; padding: 5px 10px 5px 12px; cursor: pointer; color: var(--ink-2); border-inline-start: 3px solid transparent; min-height: 30px; }
 .tree .node:hover { background: var(--surface-2); }
-.tree .node.on { background: var(--accent-weak); color: var(--accent); border-inline-start-color: var(--accent); font-weight: 600; }
-.tree .node .c { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 34px; direction: ltr; text-align: right; }
-.tree .node .amt { margin-inline-start: auto; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.tree .l1 { font-weight: 650; color: var(--ink); }
-.tree .l2 { padding-inline-start: 24px; }
-.tree .l3 { padding-inline-start: 38px; font-size: 13px; }
-.tree h3 { padding: 8px 14px 4px; color: var(--muted); font-size: 11px; letter-spacing: .06em; }
+.tree .node.on { background: var(--accent-weak) !important; color: var(--accent); border-inline-start-color: var(--accent); }
+.tree .node .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree .node .tt { flex: none; direction: ltr; font-size: 10.5px; padding: 0 5px; border-radius: 4px; background: var(--warn-weak); color: var(--warn); font-weight: 600; }
+.tree .node .amt { margin-inline-start: auto; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tree .node .c { font-variant-numeric: tabular-nums; direction: ltr; text-align: right; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.tree .tw { width: 18px; height: 18px; flex: none; border: 0; background: transparent; padding: 0; color: var(--muted); border-radius: 4px; display: grid; place-items: center; }
+.tree .tw::before { content: '▾'; font-size: 12px; }
+.tree .tg.folded > .node .tw::before { content: '◂'; }
+.tree .tw:hover { background: var(--line); color: var(--ink); }
+.tree .tw.none::before { content: '·'; }
+.tree .tg.folded > .tk { display: none; }
+/* level 0: whole BOQ */
+.tree .node.all { font-weight: 650; color: var(--ink); border-bottom: 1px solid var(--line); margin-bottom: 4px; padding-inline-start: 34px; }
+/* level 1: structure = shaded band with a badge */
+.tree .tg1 { margin-top: 4px; }
+.tree .node.l1 { background: var(--surface-2); font-weight: 700; color: var(--ink); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.tree .node.l1 .lv { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: var(--ink); color: var(--surface); white-space: nowrap; direction: rtl; }
+/* level 2 / 3: indented under vertical guide lines */
+.tree .tg1 > .tk { margin-inline-start: 20px; border-inline-start: 1px solid var(--line-2); }
+.tree .tg2 > .tk { margin-inline-start: 18px; border-inline-start: 1px dashed var(--line-2); }
+.tree .node.l2 { font-weight: 600; color: var(--ink); padding-inline-start: 6px; position: relative; }
+.tree .node.l2::before, .tree .node.l3::before { content: ''; position: absolute; inset-inline-start: -1px; top: 50%; width: 7px; border-top: 1px solid var(--line-2); }
+.tree .node.l3 { font-size: 12.5px; padding-inline-start: 6px; position: relative; min-height: 26px; }
+.tree .node.l3 .c { font-size: 11px; }
 .center { display: grid; grid-template-rows: auto auto 1fr auto; min-width: 0; min-height: 0; background: var(--surface); }
 .toolbar { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .toolbar .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
@@ -220,7 +240,7 @@ td.locked { color: var(--ink-2); }
 table.t tr.over td { background: var(--warn-weak); }
 table.exec td.desc { max-width: 380px; font-size: 13px; }
 .dk-search { width: 100%; border: 1px solid var(--line-2); border-radius: 6px; padding: 6px 10px; background: var(--field); }
-table.t td.desc textarea { min-width: 260px; field-sizing: content; max-height: 140px; }
+table.t td.desc textarea { min-width: 260px; field-sizing: content; }
 table.t td.edit.desc { min-width: 240px; width: 30%; }
 table.t td.edit input.n { min-width: 92px; }
 table.t td.edit.desc textarea { width: 100%; min-width: 0; line-height: 1.4; }
@@ -283,11 +303,22 @@ td.locked-boq { color: var(--ink-2); background: var(--surface-2); }
 .form-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 0 14px; }
 .form-tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 8px 14px; color: var(--ink-2); margin-bottom: -1px; }
 .form-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-/* compact BOQ grid: long descriptions and notes take two lines until focused */
-table.t td.edit.desc textarea { max-height: 2.9em; overflow: hidden; }
-table.t td.edit.desc textarea:focus { max-height: 260px; overflow: auto; }
-table.t tr.note td.edit.desc textarea { max-height: 1.5em; color: var(--muted); }
-table.t tr.note td.edit.desc textarea:focus { max-height: 260px; color: var(--ink); }
+/* row height follows the text: the description box grows to all its lines (no clamp, no scroll) */
+table.t td.desc textarea, table.t td.edit.desc textarea { field-sizing: content; max-height: none; overflow: hidden; resize: none; min-height: 0; }
+table.t tr.note td.edit.desc textarea { color: var(--muted); }
+table.t tr.note td.edit.desc textarea:focus { color: var(--ink); }
+/* multi-line description: unit / qty / price / total sit on its last line (as in the printout) */
+table.t.lines td { vertical-align: bottom; }
+table.t.lines td.code, table.t.lines td.desc, table.t.lines td.edit.desc, table.t.lines td.gname { vertical-align: top; }
+table.t.lines td.edit input, table.t.lines td.edit textarea { display: block; }
+/* grid heading rows per level */
+table.t tr.group td { border-inline-start-color: transparent !important; }
+table.t tr.group.g1 td { background: var(--surface-2); color: var(--ink); font-weight: 750; border-top: 2px solid var(--line-2); font-size: 14px; }
+table.t tr.group.g2 td { background: var(--accent-weak); color: var(--accent); font-weight: 700; }
+table.t tr.group.g2 td.gname { padding-inline-start: 22px; }
+table.t tr.group.g3 td { background: var(--surface); color: var(--ink-2); font-weight: 650; font-size: 13px; border-bottom: 1px solid var(--line-2); }
+table.t tr.group.g3 td.gname { padding-inline-start: 40px; }
+table.t tr.group td.n { font-variant-numeric: tabular-nums; }
 table.t tr.note td { padding-top: 2px; padding-bottom: 2px; }
 /* home: attention list */
 .attn { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; margin-bottom: 18px; }
@@ -334,3 +365,30 @@ table.t tr.new-row input::placeholder { color: var(--accent); opacity: .75; }
 .dk-pick { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 6px; }
 .dk-pick label { display: grid; gap: 2px; font-size: 11.5px; color: var(--ink-2); }
 .dk-pick select { min-width: 84px; padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--field); font-variant-numeric: tabular-nums; direction: ltr; }
+
+/* projects: list on the right, the selected project's files on the left */
+.split { display: grid; grid-template-columns: 320px minmax(0, 1fr); height: 100%; min-height: 0; }
+.pl { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-inline-end: 1px solid var(--line); }
+.pl-head { display: flex; align-items: center; gap: 8px; padding: 16px 16px 10px; }
+.pl-head h1 { flex: 1; margin: 0; font-size: 20px; }
+.pl-search { margin: 0 12px 8px; border: 1px solid var(--line-2); border-radius: 6px; padding: 7px 10px; background: var(--field); }
+.pl-items { flex: 1; overflow: auto; padding: 0 8px 16px; display: grid; align-content: start; gap: 2px; }
+.pl-item { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; text-align: start; border: 1px solid transparent; border-inline-start: 3px solid transparent; background: transparent; border-radius: 8px; padding: 9px 10px; cursor: pointer; }
+.pl-item:hover { background: var(--surface-2); }
+.pl-item.on { background: var(--accent-weak); border-color: var(--line); border-inline-start-color: var(--accent); }
+.pl-item.closed .pl-name { color: var(--muted); }
+.pl-name { font-weight: 650; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-item.on .pl-name { color: var(--accent); }
+.pl-meta { grid-column: 1; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-count { grid-column: 2; grid-row: 1 / 3; align-self: center; font-size: 11.5px; color: var(--ink-2); white-space: nowrap; display: flex; gap: 4px; align-items: center; }
+.split-main { overflow: auto; min-width: 0; }
+.pd { max-width: 1180px; margin: 0 auto; padding: 22px 24px 64px; }
+@media (max-width: 900px) {
+  .split { grid-template-columns: 1fr; height: auto; }
+  .pl { border-inline-end: none; border-bottom: 1px solid var(--line); }
+  .pl-items { max-height: 38vh; }
+  .pd { padding: 16px; }
+}
+/* the row-menu button must not make one-line rows taller than the text, or top / bottom alignment drift apart */
+table.t.lines tr[data-id] > td.no-print { padding-top: 2px; padding-bottom: 2px; }
+table.t.lines tr[data-id] > td.no-print button { padding-top: 2px; padding-bottom: 2px; }

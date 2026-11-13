@@ -116,7 +116,7 @@ export function billView(ctx, bid, tab) {
     b.status === 'approved' && !api.reopenBlock(bid) ? h('button', { class: 'ghost', onclick: () => formModal(`פתיחה מחדש של חשבון ${b.number}`, [
       { name: 'reason', label: 'סיבה (נרשמת ביומן הפעולות)', type: 'textarea', span: true, required: true },
     ], (v) => { api.reopenBill(bid, v.reason); ctx.refresh(); }, { submit: 'פתיחה מחדש', intro: h('p', { class: 'muted' }, 'אפשרי רק לחשבון המאושר האחרון וללא תשלומים רשומים. החשבון יחזור למצב "הוגש" ויחושב מחדש.') }) }, 'פתיחה מחדש') : null,
-    h('button', { onclick: async () => { try { download(`${c.name} - חשבון ${b.doc.displayNumber || b.number}.xlsx`.replace(/[\\/:*?"<>|]/g, '_'), await exportBill(await loadExcel(), { contract: c, bill: b, calc: r, sections: api.sections(c.id), period: b.doc?.view === 'period' ? periodTotals(r, api.prevApproved(c.id, b.number), c.mode === 'periodic') : null }), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); } catch (e) { toast(e.message, 'err'); } } }, 'ייצוא Excel'),
+    h('button', { onclick: async () => { try { download(`${c.name} - חשבון ${b.doc.displayNumber || b.number}.xlsx`.replace(/[\\/:*?"<>|]/g, '_'), await exportBill(await loadExcel(), { contract: c, bill: b, calc: r, sections: api.sections(c.id), company: api.company(), project: api.project(c.project_id), period: b.doc?.view === 'period' ? periodTotals(r, api.prevApproved(c.id, b.number), c.mode === 'periodic') : null }), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); } catch (e) { toast(e.message, 'err'); } } }, 'ייצוא Excel'),
     h('button', { onclick: () => ctx.go(`b/${bid}/sheets`) }, '📐 דפי חישוב'),
     h('button', { onclick: () => ctx.go(`b/${bid}/print`) }, 'הפקת חשבון / PDF'));
 

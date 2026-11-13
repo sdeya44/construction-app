@@ -7,6 +7,7 @@ import { itemCode, isBillable, contractValue } from '../engine.js';
 import { printPdf } from '../persist.js';
 
 const cash = (c) => money(c);
+const blanks = (n) => Array.from({ length: Math.max(0, n) }, () => h('td'));
 
 /**
  * Lay out row descriptors onto sheets.
@@ -20,7 +21,8 @@ function paginate(root, mkSheet, rows, carryCols, totalCols, groupKey = () => ''
   // divided between pages — the first part of the text here, the rest with the numbers next page.
   let page = mkSheet(rows[0]), running = 0, group = null;
   root.append(page.sheet);
-  const carryRow = (label, v) => h('tr', { class: 'carry' }, h('td', { colspan: carryCols }, label), h('td', { class: 'nm' }, cash(v)), totalCols > carryCols + 1 ? h('td', { colspan: totalCols - carryCols - 1 }) : null);
+  // label over code+description only, so the unit/qty/price column rules run through the row
+  const carryRow = (label, v) => h('tr', { class: 'carry' }, h('td', { colspan: 2 }, label), ...blanks(carryCols - 2), h('td', { class: 'nm' }, cash(v)), ...blanks(totalCols - carryCols - 1));
   const fits = () => page.tbody.closest('table').offsetHeight <= page.body.clientHeight + 1;
   const fitsWithCarry = () => { const pr = carryRow('להעברה', running); page.tbody.append(pr); const ok = fits(); pr.remove(); return ok; };
   const newPage = (r, el) => {
@@ -116,27 +118,27 @@ export function boqPrintView(ctx, cid, revId = null) {
     const [st, ch] = key.split('.');
     if (st !== lastStruct) {
       lastStruct = st;
-      rows.push({ el: h('tr', { class: 'sh st' }, h('td', { class: 'cd' }, st), h('td', { colspan: 5 }, `מבנה ${+st} ${secs.get(st)?.name ?? ''}`)), struct: st, chapter: ch, keep: true });
+      rows.push({ el: h('tr', { class: 'sh st' }, h('td', { class: 'cd' }, st), h('td', { class: 'ds' }, `מבנה ${+st} ${secs.get(st)?.name ?? ''}`), ...blanks(4)), struct: st, chapter: ch, keep: true });
     }
     let sub = null, subSum = 0, chSum = 0, first = true;
-    const pushSub = () => { if (sub != null) rows.push({ el: h('tr', { class: 'sum' }, h('td', { colspan: 5 }, `סה"כ ${sub} ${secs.get(`${key}.${sub}`)?.name ?? ''}`), h('td', { class: 'nm' }, cash(subSum))), struct: st, chapter: ch, reset: true }); };
+    const pushSub = () => { if (sub != null) rows.push({ el: h('tr', { class: 'sum' }, h('td', { colspan: 2 }, `סה"כ ${sub} ${secs.get(`${key}.${sub}`)?.name ?? ''}`), ...blanks(3), h('td', { class: 'nm' }, cash(subSum))), struct: st, chapter: ch, reset: true }); };
     for (const it of items.filter((i) => i.struct === st && i.chapter === ch)) {
       if (it.sub !== sub) {
         pushSub(); sub = it.sub; subSum = 0;
-        rows.push({ el: h('tr', { class: 'sh' }, h('td', { class: 'cd' }, `${ch}.${it.sub}`), h('td', { colspan: 5 }, secs.get(`${key}.${it.sub}`)?.name ?? '')), struct: st, chapter: ch, keep: true });
+        rows.push({ el: h('tr', { class: 'sh' }, h('td', { class: 'cd' }, `${ch}.${it.sub}`), h('td', { class: 'ds' }, secs.get(`${key}.${it.sub}`)?.name ?? ''), ...blanks(4)), struct: st, chapter: ch, keep: true });
         first = false;
       }
       const a = isBillable(it) ? lineCents(it.qty, it.price) : 0;
       subSum += a; chSum += a;
       const mkRow = (text, full) => (it.kind === 'note'
-        ? h('tr', { class: 'note' }, h('td', {}), h('td', { colspan: 5 }, text))
-        : h('tr', {}, h('td', { class: 'cd' }, full === 'first' || full === undefined ? itemCode(it).slice(3) : ''), h('td', {}, text), h('td', {}, full !== false ? it.unit : ''),
+        ? h('tr', { class: 'note' }, h('td'), h('td', { class: 'ds' }, text), ...blanks(4)) // the note stays inside the description column
+        : h('tr', {}, h('td', { class: 'cd' }, full === 'first' || full === undefined ? itemCode(it).slice(3) : ''), h('td', { class: 'ds' }, text), h('td', { class: 'un' }, full !== false ? it.unit : ''),
           h('td', { class: 'nm' }, full !== false ? qty(it.qty) : ''), h('td', { class: 'nm' }, full !== false ? qty(it.price) : ''), h('td', { class: 'nm' }, full !== false ? cash(a) : '')));
       rows.push({ el: mkRow(it.description), amount: a, struct: st, chapter: ch, words: it.description.split(' '),
         split: (text, isLast) => { const r = mkRow(text, isLast ? true : false); if (!isLast) r.querySelector('td.cd') && (r.querySelector('td.cd').textContent = itemCode(it).slice(3)); return r; } });
     }
     pushSub();
-    rows.push({ el: h('tr', { class: 'sum chap' }, h('td', { colspan: 5 }, `סה"כ פרק ${ch} ${secs.get(key)?.name ?? ''}`), h('td', { class: 'nm' }, cash(chSum))), struct: st, chapter: ch, reset: true });
+    rows.push({ el: h('tr', { class: 'sum chap' }, h('td', { colspan: 2 }, `סה"כ פרק ${ch} ${secs.get(key)?.name ?? ''}`), ...blanks(3), h('td', { class: 'nm' }, cash(chSum))), struct: st, chapter: ch, reset: true });
   }
   const v = contractValue({ contract: c, sections: [...secs.values()], items });
   const vat = pct(v.net, c.vat_rate);
