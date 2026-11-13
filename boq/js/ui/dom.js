@@ -68,22 +68,40 @@ export function confirmBox(title, text, { danger = false, ok = 'אישור' } = 
 export function formModal(title, fields, onSubmit, { submit = 'שמירה', wide = false, intro = null } = {}) {
   const form = h('form', { class: 'form-grid', onsubmit: (e) => { e.preventDefault(); go(); } });
   const inputs = {};
+  // fields may be grouped into tabs ({type:'tab', label}) — shown one group at a time
+  const tabs = [];
+  let curTab = null;
   for (const f of fields) {
-    if (f.type === 'section') { form.append(h('h3', { class: 'span2 form-section' }, f.label)); continue; }
+    if (f.type === 'tab') { curTab = tabs.length; tabs.push(f.label); continue; }
+    if (f.type === 'section') { const el = h('h3', { class: 'span2 form-section' }, f.label); el.dataset.tab = curTab ?? ''; form.append(el); continue; }
     let input;
     if (f.type === 'select') input = h('select', { name: f.name }, f.options.map(([v, l]) => h('option', { value: v, selected: String(v) === String(f.value ?? '') }, l)));
     else if (f.type === 'textarea') input = h('textarea', { name: f.name, rows: f.rows ?? 3 }, f.value ?? '');
     else if (f.type === 'checkbox') input = h('input', { type: 'checkbox', name: f.name, checked: !!f.value });
     else input = h('input', { name: f.name, type: f.type ?? 'text', value: f.value ?? '', inputmode: f.numeric ? 'decimal' : null, required: f.required, placeholder: f.placeholder ?? '', dir: f.numeric ? 'ltr' : null });
+    let dl = null;
+    if (f.list) { dl = h('datalist', { id: `dl-${f.name}-${Math.random().toString(36).slice(2, 8)}` }, f.list.map((o) => h('option', { value: o }))); input.setAttribute('list', dl.id); }
     inputs[f.name] = input;
-    form.append(h('label', { class: `field ${f.span ? 'span2' : ''} ${f.type === 'checkbox' ? 'check' : ''}` },
-      h('span', {}, f.label), input, f.hint ? h('small', {}, f.hint) : null));
+    const lab = h('label', { class: `field ${f.span ? 'span2' : ''} ${f.type === 'checkbox' ? 'check' : ''}` },
+      h('span', {}, f.label), input, dl, f.hint ? h('small', {}, f.hint) : null);
+    lab.dataset.tab = curTab ?? '';
+    form.append(lab);
+  }
+  let tabNav = null;
+  if (tabs.length) {
+    const show = (i) => {
+      form.querySelectorAll('[data-tab]').forEach((el) => { el.hidden = el.dataset.tab !== '' && Number(el.dataset.tab) !== i; });
+      tabNav.querySelectorAll('button').forEach((b, k) => b.classList.toggle('on', k === i));
+    };
+    tabNav = h('div', { class: 'form-tabs', role: 'tablist' }, tabs.map((t, i) => h('button', { type: 'button', role: 'tab', onclick: () => show(i) }, t)));
+    setTimeout(() => show(0), 0);
+    form.addEventListener('invalid', (e) => { const t = e.target.closest('[data-tab]')?.dataset.tab; if (t !== '' && t != null) show(Number(t)); }, true);
   }
   form.append(h('button', { type: 'submit', hidden: true }));
   const values = () => Object.fromEntries(Object.entries(inputs).map(([k, i]) => [k, i.type === 'checkbox' ? i.checked : i.value]));
   let m;
   const go = () => { try { if (onSubmit(values(), m.close) !== false) m.close(); } catch (e) { toast(e.message, 'err'); } };
-  m = modal(title, [intro, form], { wide, actions: [{ label: 'ביטול' }, { label: submit, primary: true, onClick: () => { go(); return false; } }] });
+  m = modal(title, [intro, tabNav, form], { wide, actions: [{ label: 'ביטול' }, { label: submit, primary: true, onClick: () => { go(); return false; } }] });
   return { ...m, inputs };
 }
 

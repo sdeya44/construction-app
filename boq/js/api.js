@@ -451,6 +451,12 @@ export class Api {
   submitBill(id, note = '') {
     const b = this.bill(id); this.assertEditable(b);
     this.s.tx(() => {
+      // what we claimed becomes the starting point of the reviewer's approved quantities; from now on
+      // the bill is calculated on the approved column, so no manual "basis" switch is needed
+      if (b.basis !== 'appr') {
+        this.s.run(`UPDATE bill_lines SET q_appr=${b.basis === 'calc' ? 'q_calc' : 'q_sub'} WHERE bill_id=? AND ${b.basis === 'calc' ? 'q_calc' : 'q_sub'} IS NOT NULL`, [id]);
+        this.s.run(`UPDATE bills SET basis='appr' WHERE id=?`, [id]);
+      }
       this.s.run(`UPDATE bills SET status='submitted' WHERE id=?`, [id]);
       this.billEvent(id, 'submitted', text(note, 300) || (b.returned ? 'הוגש מחדש לאחר תיקונים' : 'הוגש'));
     }, `הגשת חשבון ${b.number}`);
@@ -460,7 +466,8 @@ export class Api {
     const b = this.bill(id);
     if (b.status !== 'submitted') throw new Error('רק חשבון שהוגש ניתן להחזיר לתיקונים');
     this.s.tx(() => {
-      this.s.run(`UPDATE bills SET status='draft', returned=1 WHERE id=?`, [id]);
+      // back to editing our claim (sub contracts are always entered as approved quantities)
+      this.s.run(`UPDATE bills SET status='draft', returned=1, basis=? WHERE id=?`, [this.contract(b.contract_id).kind === 'sub' ? 'appr' : 'sub', id]);
       this.billEvent(id, 'returned', text(note, 300) || 'הוחזר לתיקונים');
     }, `החזרת חשבון ${b.number} לתיקונים`);
   }
@@ -523,6 +530,46 @@ export class Api {
   deleteIndex(series, m) { this.s.tx(() => this.s.run('DELETE FROM indices WHERE series=? AND month=?', [series, m])); }
 
   // ---------------- stage 2: reopen, payment allocation, purchases, cut-off, profit, defects ----------------
+  /** Why an approved bill cannot be reopened right now (null = it can). */
+  reopenBlock(id) {
+    const b = this.bill(id);
+    if (b.status !== 'approved') return 'רק חשבון מאושר ניתן לפתיחה מחדש';
+    const later = this.s.get('SELECT number FROM bills WHERE contract_id=? AND number>? ORDER BY number LIMIT 1', [b.contract_id, b.number]);
+    if (later) return `קיים חשבון ${later.number} אחריו — אפשר לפתוח מחדש רק את החשבון האחרון. תיקון כמויות נעשה בחשבון ${later.number} (המצטבר מתקן את הקודם), או מחק את חשבון ${later.number} אם הוא עדיין בהכנה.`;
+    if (b.paid > 0) return 'לחשבון נרשמו תשלומים — מחק אותם בלשונית "תשלומים" לפני פתיחה מחדש';
+    return null;
+  }
+  /** Month after the last bill (default for a new bill). */
+  nextBillMonth(contractId) {
+    const last = this.s.get('SELECT month FROM bills WHERE contract_id=? ORDER BY number DESC LIMIT 1', [contractId]);
+    if (!last) return today().slice(0, 7);
+    const [y, m] = last.month.split('-').map(Number);
+    return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+  }
+  /** Everything waiting for the user across all projects (home screen). */
+  attention() {
+    const out = [];
+    const contracts = this.s.all(`SELECT c.*, p.name AS project_name FROM contracts c JOIN projects p ON p.id=c.project_id WHERE p.status='active' AND c.kind!='quote'`);
+    for (const c of contracts) {
+      for (const b of this.bills(c.id)) {
+        const where = `${c.project_name} · ${c.name} · חשבון ${b.number}`;
+        if (b.status === 'draft') out.push({ kind: b.returned ? 'returned' : 'draft', text: b.returned ? 'הוחזר לתיקונים' : 'בהכנה', where, go: `b/${b.id}` });
+        else if (b.status === 'submitted') out.push({ kind: 'submitted', text: c.kind === 'sub' ? 'ממתין לאישורנו' : 'הוגש — ממתין לאישור המזמין', where, go: `b/${b.id}`, since: this.s.get(`SELECT at FROM bill_events WHERE bill_id=? AND status='submitted' ORDER BY id DESC LIMIT 1`, [b.id])?.at });
+        else if (b.snap && b.snap.due - b.paid > 0) out.push({ kind: c.kind === 'sub' ? 'topay' : 'unpaid', text: c.kind === 'sub' ? 'לתשלום לקבלן' : 'ממתין לתשלום', where, go: `b/${b.id}/pay`, amount: b.snap.due - b.paid });
+        if (b.status !== 'approved') {
+          try {
+            const r = this.calc(b.id);
+            if (r.indexation.missing.length) out.push({ kind: 'index', text: `חסר ערך מדד (${r.indexation.missing.join(', ')})`, where, go: 'indices' });
+            const pend = r.warnings.find((w) => w.type === 'meas-pending');
+            if (pend) out.push({ kind: 'meas', text: pend.text, where, go: `b/${b.id}/sheets` });
+          } catch { /* incomplete bill */ }
+        }
+      }
+      const changes = this.s.get(`SELECT COUNT(*) n FROM items WHERE contract_id=? AND kind='extra' AND change_status='pending'`, [c.id]).n;
+      if (changes) out.push({ kind: 'change', text: `${changes} סעיפים חריגים ממתינים לאישור`, where: `${c.project_name} · ${c.name}`, go: `c/${c.id}` });
+    }
+    return out;
+  }
   /** Reopen the last approved bill (no later bills, no payments). Requires a reason; audited. */
   reopenBill(id, reason) {
     const b = this.bill(id);

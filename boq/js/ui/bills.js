@@ -29,16 +29,7 @@ export function billsView(ctx, cid) {
   const lastAppr = [...bills].reverse().find((b) => b.status === 'approved');
   const paid = bills.reduce((s, b) => s + b.paid, 0);
   const dueAll = bills.filter((b) => b.status === 'approved').reduce((s, b) => s + b.snap.due, 0);
-  const newBill = () => {
-    const last = bills.at(-1);
-    const nextMonth = last ? last.month : new Date().toISOString().slice(0, 7);
-    formModal('פתיחת חשבון', [
-      { name: 'month', label: 'חודש ביצוע', type: 'month', value: nextMonth, required: true },
-      { name: 'type', label: 'סוג', type: 'select', value: 'partial', options: [['partial', 'חשבון חלקי'], ['final', 'חשבון סופי']] },
-    ], (val) => { const id = api.createBill(cid, val); ctx.go(`b/${id}`); }, {
-      intro: c.mode === 'cumulative' && lastAppr ? h('p', { class: 'muted' }, `הכמויות ייפתחו מהמצטבר של חשבון ${lastAppr.number}. עדכן רק סעיפים שהתקדמו.`) : null,
-    });
-  };
+  const newBill = () => newBillForm(ctx, c);
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' },
       h('div', {}, h('h1', {}, `חשבונות — ${c.name}`), h('div', { class: 'sub' }, [KIND[c.kind], c.party, c.mode === 'periodic' ? 'תקופתי' : 'מצטבר'].filter(Boolean).join(' · '))),
@@ -66,6 +57,17 @@ export function billsView(ctx, cid) {
       })))) : h('div', { class: 'empty' }, h('b', {}, 'אין חשבונות'), c.status === 'closed' ? 'החוזה סגור.' : 'פתח חשבון חלקי ראשון.')));
 }
 
+export function newBillForm(ctx, c) {
+  const api = ctx.api;
+  const lastAppr = [...api.bills(c.id)].reverse().find((b) => b.status === 'approved');
+  formModal('פתיחת חשבון', [
+    { name: 'month', label: 'חודש ביצוע', type: 'month', value: api.nextBillMonth(c.id), required: true, hint: 'מוצע החודש שאחרי החשבון הקודם' },
+    { name: 'type', label: 'סוג', type: 'select', value: 'partial', options: [['partial', 'חשבון חלקי'], ['final', 'חשבון סופי']] },
+  ], (val) => { const id = api.createBill(c.id, val); ctx.go(`b/${id}`); }, {
+    intro: c.mode === 'cumulative' && lastAppr ? h('p', { class: 'muted' }, `הכמויות ייפתחו מהמצטבר של חשבון ${lastAppr.number}. עדכן רק סעיפים שהתקדמו.`) : null,
+  });
+}
+
 // ---------------------------------------------------------------------------------------------
 export function billView(ctx, bid, tab) {
   const api = ctx.api;
@@ -88,7 +90,7 @@ export function billView(ctx, bid, tab) {
       { name: 'note', label: 'מה צריך לתקן (נרשם במהלך החשבון)', type: 'textarea', span: true },
     ], (v) => { api.returnBill(bid, v.note); ctx.refresh(); }, { submit: 'החזרה לתיקונים' }) }, 'הוחזר לתיקונים') : null,
     b.status !== 'approved' ? h('button', { class: 'primary', onclick: async () => {
-      const basisWarn = b.basis !== 'appr' ? `\n\nשים לב: החשבון מחושב לפי כמות ${BASIS[b.basis]}. אם המזמין אישר כמויות אחרות — עבור לבסיס "מאושרת" לפני האישור.` : '';
+      const basisWarn = b.basis !== 'appr' && c.kind === 'sub' ? `\n\nשים לב: החשבון מחושב לפי כמות ${BASIS[b.basis]}. אם המזמין אישר כמויות אחרות — עבור לבסיס "מאושרת" לפני האישור.` : '';
       const neg = decreaseText(r);
       const negWarn = neg.length ? `\n\nכמויות שליליות (המצטבר ירד):\n${neg.slice(0, 8).join('\n')}` : '';
       if (await confirmBox('אישור חשבון', `לאשר ולנעול את חשבון ${b.number}?\nלתשלום: ${money(r.due)} ₪\nלאחר האישור לא ניתן לערוך.${basisWarn}${negWarn}`, { ok: 'אישור ונעילה' }))
@@ -97,7 +99,13 @@ export function billView(ctx, bid, tab) {
     b.status !== 'approved' ? h('button', { class: 'danger ghost', onclick: async () => {
       if (await confirmBox('מחיקת חשבון', `למחוק את חשבון ${b.number}?`, { danger: true, ok: 'מחיקה' })) attempt(() => { api.deleteBill(bid); ctx.go(`c/${c.id}/bills`); });
     } }, 'מחיקה') : null,
-    b.status === 'approved' ? h('button', { class: 'ghost', onclick: () => formModal(`פתיחה מחדש של חשבון ${b.number}`, [
+    ...(() => {
+      if (b.status !== 'approved') return [];
+      const hasLater = api.s.get('SELECT 1 x FROM bills WHERE contract_id=? AND number>?', [c.id, b.number]);
+      return [!hasLater && b.type !== 'final' && c.status !== 'closed' ? h('button', { class: 'primary', onclick: () => newBillForm(ctx, c) }, `+ פתיחת חשבון ${b.number + 1}`) : null];
+    })(),
+    b.status === 'approved' && api.reopenBlock(bid) ? h('button', { class: 'ghost', title: api.reopenBlock(bid), onclick: () => modal('פתיחה מחדש אינה אפשרית כרגע', h('p', { class: 'pre' }, api.reopenBlock(bid)), { actions: [{ label: 'הבנתי', primary: true }] }) }, 'פתיחה מחדש…') : null,
+    b.status === 'approved' && !api.reopenBlock(bid) ? h('button', { class: 'ghost', onclick: () => formModal(`פתיחה מחדש של חשבון ${b.number}`, [
       { name: 'reason', label: 'סיבה (נרשמת ביומן הפעולות)', type: 'textarea', span: true, required: true },
     ], (v) => { api.reopenBill(bid, v.reason); ctx.refresh(); }, { submit: 'פתיחה מחדש', intro: h('p', { class: 'muted' }, 'אפשרי רק לחשבון המאושר האחרון וללא תשלומים רשומים. החשבון יחזור למצב "הוגש" ויחושב מחדש.') }) }, 'פתיחה מחדש') : null,
     h('button', { onclick: async () => { try { download(`${c.name} - חשבון ${b.doc.displayNumber || b.number}.xlsx`.replace(/[\\/:*?"<>|]/g, '_'), await exportBill(await loadExcel(), { contract: c, bill: b, calc: r, sections: api.sections(c.id) }), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); } catch (e) { toast(e.message, 'err'); } } }, 'ייצוא Excel'),
@@ -166,7 +174,8 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
     all[i + step]?.focus(); all[i + step]?.select();
   };
 
-  const NCOL = 10 + (showVersions ? 3 : 0);
+  const showClaim = b.status === 'submitted' && !showVersions && c.kind !== 'sub';
+  const NCOL = 10 + (showVersions ? 3 : 0) + (showClaim ? 1 : 0);
   function draw() {
     const rows = new Map(res.rows.map((x) => [x.itemId, x]));
     const lines = api.lines(b.id);
@@ -204,7 +213,7 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
       const setCum = (v) => attempt(() => api.setLine(b.id, it.id, { [col]: v === '' ? (periodic ? '0' : prev) : v }));
       const setCur = (v) => attempt(() => api.setLine(b.id, it.id, { [col]: periodic ? (v || '0') : addQ(prev, v || '0') }));
       const tr = h('tr', { class: `${x?.cat.over ? 'over' : ''}`, 'data-id': it.id },
-        h('td', { class: 'code' }, code(it)),
+        h('td', { class: 'code' }, code(it), h('a', { class: 'meas-go', href: `#/m/${it.id}`, title: isMeas(it) ? 'דף החישוב של הסעיף' : 'פתיחת דף חישוב לסעיף (הכמות תחושב ממנו)' }, '📐')),
         h('td', { class: 'desc', title: it.description }, it.description.length > 140 ? it.description.slice(0, 140) + '…' : it.description),
         h('td', {}, it.unit),
         h('td', { class: 'n' }, n2(it.qty)),
@@ -212,6 +221,7 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
         h('td', { class: 'n muted' }, x ? n2(x.prevQ) : ''),
         numInput(x?.curQ, setCur, canEdit && !isMeas(it), 'cur'),
         isMeas(it) ? h('td', { class: 'n locked', title: `הכמות מחושבת מדף החישוב${it.meas_opening != null ? ` (כולל יתרת פתיחה ${n2(it.meas_opening)})` : ''} — לשינוי מקור הכמות פתח את דף החישוב` }, h('a', { href: `#/m/${it.id}` }, '📐 '), n2(x?.cumQ)) : numInput(x?.cumQ, setCum, canEdit, 'cum'),
+        ...(showClaim ? [h('td', { class: 'n muted', title: 'הכמות שהגשנו — לפני החלטת המפקח' }, n2(L.q_sub ?? x?.cumQ))] : []),
         ...(showVersions ? ['q_calc', 'q_sub', 'q_appr'].map((k) => numInput(L[k], (v) => attempt(() => api.setLine(b.id, it.id, { [k]: v })), k === 'q_appr' ? apprEditable : editable, k)) : []),
         numInput(L.price ?? it.price, (v) => attempt(() => api.setLine(b.id, it.id, { price: v === it.price ? '' : v })), editable, 'price'),
         h('td', { class: 'n' }, x ? money(x.amount) : ''));
@@ -228,15 +238,19 @@ function execTab(ctx, b, c, r, editable, apprEditable) {
   const copyBtn = (from, to, label, enabled) => h('button', { disabled: !enabled, onclick: async () => {
     if (await confirmBox('העתקת כמויות', `להעתיק את כל ${label}?`)) attempt(() => { api.copyColumn(b.id, from, to); ctx.refresh(); });
   } }, label);
-  const heads = ['סעיף', 'תאור', 'יחידה', 'כמות חוזה', '% ביצוע', 'מצטבר קודם', 'כמות נוכחית', 'כמות מצטברת', ...(showVersions ? ['מחושבת', 'מוגשת', 'מאושרת'] : []), 'מחיר יחידה', periodic ? 'סה"כ לתקופה' : 'סה"כ מצטבר'];
+  const approving = b.basis === 'appr' && c.kind !== 'sub';
+  const heads = ['סעיף', 'תאור', 'יחידה', 'כמות חוזה', '% ביצוע', 'מצטבר קודם', approving ? 'נוכחית מאושרת' : 'כמות נוכחית', approving ? 'מצטבר מאושר' : 'כמות מצטברת',
+    ...(showClaim ? [periodic ? 'הוגש לתקופה' : 'מצטבר שהוגש'] : []), ...(showVersions ? ['מחושבת', 'מוגשת', 'מאושרת'] : []), 'מחיר יחידה', periodic ? 'סה"כ לתקופה' : 'סה"כ מצטבר'];
   return h('div', { style: { display: 'grid', gridTemplateRows: 'auto 1fr auto', minHeight: 0 } },
-    h('div', { class: 'toolbar no-print' }, basisSel, filterSel,
+    h('div', { class: 'toolbar no-print' }, showVersions ? basisSel : null, filterSel,
       h('label', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, h('input', { type: 'checkbox', checked: showVersions, onchange: (e) => { sessionStorage.setItem('exec-versions', e.target.checked ? '1' : '0'); ctx.refresh(); } }), 'גרסאות כמות'),
       h('span', { class: 'sep' }),
-      copyBtn('q_calc', 'q_sub', 'מחושבת ← מוגשת', editable), copyBtn('q_sub', 'q_appr', 'מוגשת ← מאושרת', apprEditable),
-      h('div', { class: 'grow' }), h('span', { class: 'muted' }, canEdit ? 'הזן כמות נוכחית או מצטברת · Enter לשורה הבאה' : 'החשבון נעול לעריכה')),
+      showVersions ? copyBtn('q_calc', 'q_sub', 'מחושבת ← מוגשת', editable) : null, showVersions ? copyBtn('q_sub', 'q_appr', 'מוגשת ← מאושרת', apprEditable) : null,
+      h('div', { class: 'grow' }), h('span', { class: 'muted' }, !canEdit ? 'החשבון נעול לעריכה'
+        : b.status === 'submitted' && c.kind !== 'sub' ? 'החשבון הוגש — עדכן את הכמויות שהמפקח אישר (ליד: מה שהוגש) · Enter לשורה הבאה'
+          : 'הזן כמות נוכחית או מצטברת · Enter לשורה הבאה · 📐 פותח דף חישוב')),
     h('div', { class: 'grid-area' }, h('table', { class: 't exec bn-screen lines fixed' },
-      h('colgroup', {}, [92, null, 58, 90, 78, 94, 98, 98, ...(showVersions ? [90, 90, 90] : []), 96, 116].map((w) => h('col', { style: w ? { width: `${w}px` } : {} }))),
+      h('colgroup', {}, [92, null, 58, 90, 78, 94, 98, 98, ...(showClaim ? [96] : []), ...(showVersions ? [90, 90, 90] : []), 96, 116].map((w) => h('col', { style: w ? { width: `${w}px` } : {} }))),
       h('thead', {}, h('tr', {}, heads.map((x, i) => h('th', { class: i >= 3 ? 'n' : '' }, x)))), tbody)),
     sumBox);
 }

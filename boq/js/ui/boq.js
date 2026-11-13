@@ -7,7 +7,10 @@ import { parseSkn, buildSkn } from '../skn.js';
 import { pickFile, download } from '../persist.js';
 import { loadExcel, exportBoq, readSheetRows } from '../excel.js';
 import { readPdf } from '../pdfimport.js';
-import { KIND, contractForm } from './projects.js';
+import { KIND, contractForm, contractFields } from './projects.js';
+import { UNIT_CODES } from '../skn.js';
+
+const UNITS = Object.entries(UNIT_CODES).filter(([k]) => k !== '00').map(([, v]) => v).concat(['מ"א']);
 import { dekelPanel } from './dekel-ui.js';
 import { copyDialog, issueRevisionDialog, revisionsDialog } from './versions.js';
 
@@ -28,7 +31,7 @@ export function itemForm(ctx, contract, it, defaults = {}) {
     { name: 'sub', label: 'תת-פרק', value: v0.sub, numeric: true },
     { name: 'num', label: 'מספר סעיף', value: v0.num, numeric: true },
     { name: 'kind', label: 'סוג', type: 'select', value: v0.kind, options: Object.entries(KINDS) },
-    { name: 'unit', label: 'יחידה', value: v0.unit },
+    { name: 'unit', label: 'יחידה', value: v0.unit, list: UNITS, hint: 'בחר מהרשימה (יחידות בנארית) — קובעת את סוג המדידה בדף החישוב' },
     { name: 'description', label: 'תיאור', type: 'textarea', value: v0.description, span: true, rows: 4 },
     { name: 'qty', label: 'כמות', value: v0.qty ?? '0', numeric: true },
     { name: 'price', label: 'מחיר יחידה', value: v0.price ?? '0', numeric: true },
@@ -39,12 +42,16 @@ export function itemForm(ctx, contract, it, defaults = {}) {
     // a quote line taken from Dekel stays Dekel-priced unless the user typed a different price
     const fromDekel = contract.kind === 'quote' && v0.dekel_price != null && v.price === String(v0.price ?? '');
     const priceManual = fromDekel ? (it?.id ? it.price_manual : 0) : (it?.id && v.price === it.price ? it.price_manual : 1);
+    if (v.kind !== 'note' && v.unit && !UNITS.includes(v.unit.trim()) && !confirm_unit(v.unit)) return false;
     const id = api.saveItem({ ...v0, ...v, contract_id: contract.id, price_manual: priceManual });
     if (!it?.id && contract.kind !== 'quote' && contract.locked && v.kind !== 'note') toast('כתב הכמויות נעול — הסעיף נוסף כסעיף חריג וממתין לאישור');
     ctx._focusItem = id;
     ctx.refresh();
   }, { wide: true, intro: contract.kind !== 'quote' && contract.locked ? h('div', { class: 'alert info' }, '🔒 כתב הכמויות החוזי נעול: אפשר לשנות תיאור והערות. כמות, מחיר, יחידה ומספור משתנים רק בסעיף חריג (פקודת שינוי) עד שהוא מאושר. סעיף חדש נשמר כחריג ממתין לאישור.') : null });
 }
+
+// a unit outside the Binarit list still saves, but SKN export and the measurement type need it mapped
+const confirm_unit = (u) => { toast(`יחידה "${u}" אינה ברשימת יחידות בנארית — נשמרה, אך ייתכן שלא תיוצא ל-SKN ותימדד כ"כמות"`, 'err'); return true; };
 
 function sectionForm(ctx, contract, code, sec) {
   const level = code.split('.').length;
@@ -173,7 +180,7 @@ export function boqView(ctx, cid) {
   const contract = api.contract(cid);
   const project = api.project(contract.project_id);
   const isQuote = contract.kind === 'quote';
-  const sel = { code: 'all', itemId: null, showDekel: !!ctx.dekel, q: '', ...loadSel(cid) };
+  const sel = { code: 'all', itemId: null, showDekel: !!ctx.dekel && contract.kind === 'quote', q: '', ...loadSel(cid) };
   const items = api.items(cid);
   const sections = new Map(api.sections(cid).map((s) => [s.code, s]));
   const billed = new Set(api.s.all(`SELECT DISTINCT l.item_id FROM bill_lines l JOIN bills b ON b.id=l.bill_id WHERE b.contract_id=? AND b.status='approved'`, [cid]).map((r) => r.item_id));
@@ -367,6 +374,8 @@ export function boqView(ctx, cid) {
       '-',
       ['מכרזי קבלני משנה', () => ctx.go(`c/${cid}/tenders`)],
     ]),
+    sel.code !== 'all' ? h('button', { title: 'שם, הנחה / תוספת ופטור — לחיצה כפולה על העץ עושה את אותו הדבר', onclick: () => sectionForm(ctx, contract, sel.code, sections.get(sel.code)) },
+      `הגדרות ${['מבנה', 'פרק', 'תת-פרק'][sel.code.split('.').length - 1]} ${sel.code}`) : null,
     h('span', { class: 'sep' }),
     isQuote ? h('button', { onclick: () => issueRevisionDialog(ctx, contract) }, 'הפקת מהדורה') : null,
     isQuote ? h('button', { onclick: () => revisionsDialog(ctx, contract) }, `מהדורות${revCount ? ` (${revCount})` : ''}`) : null,
@@ -409,16 +418,17 @@ export function boqView(ctx, cid) {
 }
 
 function convertQuote(ctx, q) {
-  formModal('המרת הצעת מחיר לחוזה', [
-    { name: 'name', label: 'שם החוזה', value: q.name, span: true },
-    { name: 'party', label: 'מזמין', value: q.party },
-    { name: 'mode', label: 'שיטת חשבון', type: 'select', value: 'cumulative', options: [['cumulative', 'מצטבר'], ['periodic', 'תקופתי']] },
-  ], (v) => {
+  // 3-step wizard: details → payment terms → indexation, so no contract term is forgotten
+  const base = { kind: 'client', name: `חוזה — ${q.name.replace(/^הצעה\s*[—–-]?\s*/, '')}`, party: q.party, number: '', vat_rate: q.vat_rate, mode: 'cumulative' };
+  formModal('אישור הצעה והמרה לחוזה', contractFields(base, { forConvert: true }), (v) => {
+    if (!v.party?.trim() && !(confirm_party())) return false;
     const id = ctx.api.copyContract(q.id, { kind: 'client', name: v.name, party: v.party });
-    ctx.api.saveContract({ ...ctx.api.contract(id), mode: v.mode });
+    ctx.api.saveContract({ ...ctx.api.contract(id), ...v });
+    toast('נוצר חוזה — כתב הכמויות ננעל');
     ctx.go(`c/${id}`);
-  }, { submit: 'יצירת חוזה', intro: h('p', { class: 'muted' }, 'ההצעה אושרה: נוצר חוזה מזמין עם כל הסעיפים והמחירים הסופיים — אלה כמויות ומחירי המכרז. כתב הכמויות החוזי ננעל מיד; שינויים ייעשו בסעיפים חריגים. ההצעה עצמה נשמרת ללא שינוי.') });
+  }, { wide: true, submit: 'יצירת חוזה', intro: h('p', { class: 'muted' }, 'ההצעה אושרה: נוצר חוזה מזמין עם כל הסעיפים והמחירים — כמויות ומחירי המכרז — וכתב הכמויות ננעל. מלא את שלושת השלבים (אפשר לחזור לכל לשונית); ניתן לשנות תנאים אחר כך בהגדרות החוזה. ההצעה עצמה נשמרת ללא שינוי.') });
 }
+const confirm_party = () => { toast('חסר שם מזמין — הוא מודפס בכל חשבון. מלא אותו בלשונית 1.', 'err'); return false; };
 
 async function importExcel(ctx, contract, sel) {
   const f = await pickFile('.xlsx');

@@ -38,7 +38,7 @@ export function billPrintView(ctx, bid, mount) {
   const root = h('div', { class: 'print-root bn' });
   const wrap = h('div', {},
     h('div', { class: 'print-bar no-print' },
-      h('button', { onclick: () => ctx.go(`b/${bid}/summary`) }, '→ חזרה'),
+      h('button', { onclick: () => ctx.go(`b/${bid}`) }, '→ חזרה'),
       h('button', { class: 'primary', onclick: async () => { try { await printPdf(`${D.project} - ${D.title}.pdf`); } catch (e) { toast(e.message, 'err'); } } }, 'שמירה כ-PDF / הדפסה'),
       h('span', { class: 'muted' }, `${D.title} · ${b.status === 'approved' ? 'מאושר' : 'טיוטה — טרם אושר'}`)),
     root);

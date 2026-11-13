@@ -278,3 +278,23 @@ table.cf tr.cf-past td { color: var(--ink-2); }
 .lock-chip { display: inline-flex; align-items: center; gap: 6px; }
 td.locked-boq { color: var(--ink-2); background: var(--surface-2); }
 @media (max-width: 900px) { .pipeline { grid-template-columns: 1fr; } .pipeline .arrow { display: none; } .chap-row { grid-template-columns: auto 54px 1fr; } .chap-row .muted, .chap-row .n { display: none; } }
+
+/* form tabs */
+.form-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 0 14px; }
+.form-tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 8px 14px; color: var(--ink-2); margin-bottom: -1px; }
+.form-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+/* compact BOQ grid: long descriptions and notes take two lines until focused */
+table.t td.edit.desc textarea { max-height: 2.9em; overflow: hidden; }
+table.t td.edit.desc textarea:focus { max-height: 260px; overflow: auto; }
+table.t tr.note td.edit.desc textarea { max-height: 1.5em; color: var(--muted); }
+table.t tr.note td.edit.desc textarea:focus { max-height: 260px; color: var(--ink); }
+table.t tr.note td { padding-top: 2px; padding-bottom: 2px; }
+/* home: attention list */
+.attn { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.attn a { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); text-decoration: none; color: var(--ink); }
+.attn a:hover { border-color: var(--accent); }
+.attn .dot { width: 10px; height: 10px; border-radius: 50%; grid-row: span 2; }
+.attn small { color: var(--muted); grid-column: 2 / 4; }
+.attn .amt { font-variant-numeric: tabular-nums; font-weight: 600; }
+td.code a.meas-go { text-decoration: none; opacity: .35; margin-inline-start: 4px; }
+tr:hover td.code a.meas-go { opacity: 1; }

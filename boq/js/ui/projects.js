@@ -21,9 +21,11 @@ export function projectForm(ctx, p = {}) {
   });
 }
 
-export function contractForm(ctx, c) {
+/** Contract fields grouped into tabs: details / payment terms / indexation. */
+export function contractFields(c, { forConvert = false } = {}) {
   const isQuote = c.kind === 'quote';
   const fields = [
+    { type: 'tab', label: forConvert ? '1 · פרטי החוזה' : 'פרטים' },
     { name: 'name', label: isQuote ? 'שם ההצעה' : 'שם החוזה', value: c.name, required: true, span: true },
     { name: 'number', label: isQuote ? 'מספר הצעה' : 'מספר חוזה', value: c.number },
     { name: 'party', label: c.kind === 'sub' ? 'קבלן משנה' : 'מזמין / נמען', value: c.party },
@@ -31,27 +33,33 @@ export function contractForm(ctx, c) {
   if (isQuote) {
     fields.push({ name: 'quote_markup', label: 'תוספת (+) / הנחה (−) כללית מדקל %', value: c.quote_markup ?? '0', numeric: true, hint: 'לדוגמה ‎-12 = הנחה של 12% ממחירון דקל' },
       { name: 'vat_rate', label: 'מע"מ %', value: c.vat_rate ?? '18', numeric: true });
-  } else {
-    fields.push(
-      { name: 'mode', label: 'שיטת חשבון', type: 'select', value: c.mode ?? 'cumulative', options: [['cumulative', 'מצטבר (כמות מצטברת, ניכוי חשבון קודם)'], ['periodic', 'תקופתי (כמויות לתקופה)']] },
-      { name: 'vat_rate', label: 'מע"מ %', value: c.vat_rate ?? '18', numeric: true },
-      { name: 'general_discount', label: 'הנחה כללית %', value: c.general_discount ?? '0', numeric: true, hint: 'לאחר הנחות פרקים; פרק 99 מוחרג כברירת מחדל' },
-      { name: 'retention_rate', label: 'עיכבון %', value: c.retention_rate ?? '0', numeric: true },
-      { name: 'advance', label: 'מקדמה ששולמה (₪)', value: String((c.advance_cents ?? 0) / 100), numeric: true },
-      { name: 'advance_rate', label: 'קיזוז מקדמה מכל חשבון %', value: c.advance_rate ?? '0', numeric: true },
-      { name: 'end_month', label: 'חודש סיום צפוי (לתזרים)', type: 'month', value: c.end_month },
-      { name: 'pay_terms', label: 'תנאי תשלום — שוטף + ימים', value: c.pay_terms ?? 60, numeric: true },
-      { name: 'planned', label: 'סכום חוזה חתום (₪)', value: String((c.planned_cents ?? 0) / 100), numeric: true, hint: 'מודפס כ"היקף עבודה מתוכנן" בסיכום החשבון; 0 = מחושב מכתב הכמויות' },
-      { name: 'opening', label: 'יתרת פתיחה — מצטבר קודם מאושר (₪)', value: String((c.opening_cents ?? 0) / 100), numeric: true, hint: 'רק להעברת חוזה קיים באמצע ביצוע' },
-      { type: 'section', label: 'הצמדה למדד' },
-      { name: 'index_rule', label: 'כלל הצמדה', type: 'select', value: c.index_rule ?? 'none', options: [['none', 'ללא'], ['full', 'מלאה'], ['threshold', 'מעל סף'], ['partial', 'חלקית (% מהעלייה)'], ['manual', 'סכום ידני בכל חשבון']] },
-      { name: 'index_series', label: 'מדד', type: 'select', value: c.index_series ?? 'residential', options: Object.entries(INDEX_SERIES) },
-      { name: 'index_base_month', label: 'חודש מדד בסיס', type: 'month', value: c.index_base_month },
-      { name: 'index_lag', label: 'מדד קובע', type: 'select', value: c.index_lag ?? 0, options: [[0, 'מדד חודש הביצוע'], [1, 'מדד החודש שקדם לביצוע'], [2, 'שני חודשים לפני']] },
-      { name: 'index_threshold', label: 'סף (%) — בכלל "מעל סף"', value: c.index_threshold ?? '0', numeric: true },
-      { name: 'index_share', label: 'שיעור הצמדה (%) — בכלל "חלקית"', value: c.index_share ?? '100', numeric: true });
+    return fields;
   }
-  formModal(c.id ? 'הגדרות ' + KIND[c.kind] : KIND[c.kind] + ' חדש', fields, (v) => {
+  fields.push(
+    { name: 'mode', label: 'שיטת חשבון', type: 'select', value: c.mode ?? 'cumulative', options: [['cumulative', 'מצטבר (כמות מצטברת, ניכוי חשבון קודם)'], ['periodic', 'תקופתי (כמויות לתקופה)']] },
+    { name: 'planned', label: 'סכום חוזה חתום (₪)', value: String((c.planned_cents ?? 0) / 100), numeric: true, hint: 'מודפס כ"היקף עבודה מתוכנן" בסיכום החשבון; 0 = מחושב מכתב הכמויות' },
+    { name: 'end_month', label: 'חודש סיום צפוי (לתזרים)', type: 'month', value: c.end_month },
+    { type: 'tab', label: forConvert ? '2 · תנאי תשלום' : 'תשלומים והנחות' },
+    { name: 'general_discount', label: 'הנחה כללית %', value: c.general_discount ?? '0', numeric: true, hint: 'לאחר הנחות פרקים; פרק 99 מוחרג כברירת מחדל' },
+    { name: 'retention_rate', label: 'עיכבון %', value: c.retention_rate ?? '0', numeric: true },
+    { name: 'advance', label: 'מקדמה ששולמה (₪)', value: String((c.advance_cents ?? 0) / 100), numeric: true },
+    { name: 'advance_rate', label: 'קיזוז מקדמה מכל חשבון %', value: c.advance_rate ?? '0', numeric: true },
+    { name: 'vat_rate', label: 'מע"מ %', value: c.vat_rate ?? '18', numeric: true },
+    { name: 'pay_terms', label: 'תנאי תשלום — שוטף + ימים', value: c.pay_terms ?? 60, numeric: true },
+    ...(forConvert ? [] : [{ name: 'opening', label: 'יתרת פתיחה — מצטבר קודם מאושר (₪)', value: String((c.opening_cents ?? 0) / 100), numeric: true, hint: 'רק להעברת חוזה קיים באמצע ביצוע' }]),
+    { type: 'tab', label: forConvert ? '3 · הצמדה למדד' : 'הצמדה למדד' },
+    { name: 'index_rule', label: 'כלל הצמדה', type: 'select', value: c.index_rule ?? 'none', options: [['none', 'ללא'], ['full', 'מלאה'], ['threshold', 'מעל סף'], ['partial', 'חלקית (% מהעלייה)'], ['manual', 'סכום ידני בכל חשבון']] },
+    { name: 'index_series', label: 'מדד', type: 'select', value: c.index_series ?? 'residential', options: Object.entries(INDEX_SERIES) },
+    { name: 'index_base_month', label: 'חודש מדד בסיס', type: 'month', value: c.index_base_month },
+    { name: 'index_lag', label: 'מדד קובע', type: 'select', value: c.index_lag ?? 0, options: [[0, 'מדד חודש הביצוע'], [1, 'מדד החודש שקדם לביצוע'], [2, 'שני חודשים לפני']] },
+    { name: 'index_threshold', label: 'סף (%) — בכלל "מעל סף"', value: c.index_threshold ?? '0', numeric: true },
+    { name: 'index_share', label: 'שיעור הצמדה (%) — בכלל "חלקית"', value: c.index_share ?? '100', numeric: true });
+  return fields;
+}
+
+export function contractForm(ctx, c) {
+  const isQuote = c.kind === 'quote';
+  formModal(c.id ? 'הגדרות ' + KIND[c.kind] : KIND[c.kind] + ' חדש', contractFields(c), (v) => {
     const id = ctx.api.saveContract({ ...c, ...v });
     c.id ? ctx.refresh() : ctx.go(`c/${id}`);
   }, { wide: !isQuote });
@@ -67,10 +75,19 @@ export function projectsView(ctx) {
         h('td', {}, h('b', {}, p.name)), h('td', {}, p.client), h('td', {}, p.location), h('td', { class: 'n' }, p.contracts),
         h('td', {}, h('span', { class: `tag ${p.status === 'active' ? 'ok' : ''}` }, p.status === 'active' ? 'פעיל' : 'סגור')), h('td', { class: 'muted' }, dateLabel(p.created_at))))))))
     : h('div', { class: 'card empty' }, h('b', {}, 'עדיין אין פרויקטים'), 'צור פרויקט, ובתוכו חוזה מזמין, חוזי קבלני משנה או הצעות מחיר.');
+  const COLORS = { returned: 'var(--bad)', index: 'var(--bad)', draft: 'var(--muted)', submitted: 'var(--warn)', meas: 'var(--warn)', change: 'var(--warn)', unpaid: 'var(--accent)', topay: 'var(--gold)' };
+  const ORDER = ['returned', 'index', 'submitted', 'meas', 'change', 'draft', 'topay', 'unpaid'];
+  const items = api.attention().sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
+  const days = (iso) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 864e5) : null);
+  const attn = items.length ? h('section', {}, h('h2', { style: { margin: '0 0 10px' } }, `דורש טיפול (${items.length})`),
+    h('div', { class: 'attn' }, items.slice(0, 18).map((x) => h('a', { href: `#/${x.go}` },
+      h('span', { class: 'dot', style: { background: COLORS[x.kind] } }), h('b', {}, x.text, x.since && days(x.since) > 0 ? h('span', { class: 'muted', style: { fontWeight: 400 } }, ` · ${days(x.since)} ימים`) : null),
+      x.amount ? h('span', { class: 'amt' }, money(x.amount)) : h('span'), h('small', {}, x.where)))),
+    items.length > 18 ? h('div', { class: 'muted', style: { margin: '-8px 0 16px' } }, `ועוד ${items.length - 18}…`) : null) : null;
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('div', {}, h('h1', {}, 'פרויקטים'), h('div', { class: 'sub' }, 'כתבי כמויות, הצעות מחיר וחשבונות')),
       h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: () => projectForm(ctx) }, '+ פרויקט חדש'))),
-    body);
+    attn, body);
 }
 
 function contractRow(ctx, c, all) {
@@ -155,7 +172,7 @@ export function projectView(ctx, id) {
           : api.saveContract({ project_id: id, kind: 'sub', name: v.name, party: v.party });
         ctx.go(`c/${nid}`);
       });
-    } else contractForm(ctx, { project_id: id, kind, party: kind === 'client' ? p.client : '' });
+    } else contractForm(ctx, { project_id: id, kind, party: p.client ?? '' });
   };
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' },
