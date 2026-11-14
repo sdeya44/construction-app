@@ -17,8 +17,9 @@
 | R5.2 | בחירה, קדימות, בחירה מאחור, גרירה≠בחירה | `viewport.ts` | GEO-03, MOB-01 | ✅ |
 | R5.3 | Move/Copy/Rotate/Mirror/Delete/Measure/Snap/Hide/Isolate | `commands.ts`, `Dialogs.tsx` | e2e | ✅ (Rotate/Mirror/Copy — בדיקת e2e חסרה, unit חסר) |
 | R6 | ספריית חתכים | `profiles/` | unit | 🟡 IPE/HEA/HEB/HEM/INP/UPN/UPE/SHS/RHS/CHS/L/C/Z/PL — לא מאומת |
-| R7 | מכלולים, חלקי ייצור, חיבורי המשך | — | BEAM-01 | ⬜ M2 |
-| R8 | מערכת פטות | — | ROOF/PURL/SPL | ⬜ M2 |
+| R7 | מכלולים, חלקי ייצור, חיבורי המשך | `geometry/parts.ts`, `SpliceEditor` | BEAM-01 | ✅ חלוקה ומיקום · ⬜ סימון חלקים (M5) |
+| R8 | מערכת פטות | `geometry/purlins.ts`, `RoofPanel` | ROOF-01…05, PURL-01…03, SPL-01/02 | ✅ |
+| R8.1 | נקודות תמיכה מזוהות | `buildPurlins` | יחידה | ✅ (התומכים עצמם — M3) |
 | R8.6 | תומכי L | — | CLEAT | ⬜ M3 |
 | R9 | חיבורים | — | CONN-01 | ⬜ M3 |
 | R10 | שרטוטים | — | DRAW-01 | ⬜ M4 |

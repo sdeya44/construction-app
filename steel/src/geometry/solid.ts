@@ -4,6 +4,7 @@ import { getProfile } from '../profiles/library';
 import type { P2 } from '../profiles/section';
 import type { Member } from '../model/types';
 import { localFrame } from './frame';
+import { webCenterU } from './purlins';
 
 export interface Solid {
   /** משולשים (לא ממופתחים): 9 מספרים למשולש, בקואורדינטות עולם mm */
@@ -23,13 +24,16 @@ export function memberSolid(m: Member): Solid {
   const prof = getProfile(m.profile);
   const f = localFrame(m);
   const vTop = Math.max(...prof.outline.outer.map((p) => p.v));
-  const dv = m.anchor === 'top' ? -vTop : 0;
+  const vBot = Math.min(...prof.outline.outer.map((p) => p.v));
+  // top: פני עליון על הקו · purlin: פני תחתון על הקו וציר הווב על הקו (מגע 0 מ"מ עם האגף העליון של הקורה)
+  const dv = m.anchor === 'top' ? -vTop : m.anchor === 'purlin' ? -vBot : 0;
+  const du = m.anchor === 'purlin' ? -webCenterU(m.profile) : 0;
 
   const startPlane: Plane = m.startCut ?? { point: m.start, normal: f.ex };
   const endPlane: Plane = m.endCut ?? { point: m.end, normal: f.ex };
 
   const place = (p: P2, base: Vec3, plane: Plane): Vec3 => {
-    const q = add(base, add(scale(f.u, p.u), scale(f.v, p.v + dv)));
+    const q = add(base, add(scale(f.u, p.u + du), scale(f.v, p.v + dv)));
     const t = linePlaneT(q, f.ex, plane);
     return t === null ? q : add(q, scale(f.ex, t));
   };

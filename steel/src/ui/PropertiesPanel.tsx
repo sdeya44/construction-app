@@ -7,6 +7,7 @@ import { getMaterial, MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
 import { NumField, TextField } from './fields';
 import { KIND_LABEL } from './TreePanel';
+import { SpliceEditor } from './SpliceEditor';
 
 const f1 = (n: number, d = 1) => n.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
 
@@ -75,6 +76,7 @@ export function PropertiesPanel() {
             <div><button className="btn small" style={{ marginTop: 4 }} onClick={() => store.exec(resetOverrides([m.id]))}>החזר לפרמטרי</button></div></div>
         </div>
       )}
+      {m.purlin && <PurlinInfoBlock id={m.id} />}
       <div className="panel-title">חתך וחומר</div>
       <div className="field"><label>חתך</label><TextField ltr list="profiles" testId="prop-profile" value={m.profile} onCommit={(v) => store.exec(setMemberProps([m.id], { profile: v.toUpperCase().replace(/\s/g, '') }))} /></div>
       <div className="field"><label>חומר</label>
@@ -83,11 +85,19 @@ export function PropertiesPanel() {
         </select>
       </div>
       <div className="field"><label>סיבוב סביב הציר</label><NumField value={m.rollDeg} suffix="°" onCommit={(v) => store.exec(setMemberProps([m.id], { rollDeg: v }))} /></div>
-      <div className="field"><label>היפוך חתך</label>
-        <select className="inp" value={m.mirror ? '1' : '0'} onChange={(e) => store.exec(setMemberProps([m.id], { mirror: e.target.value === '1' }))}>
-          <option value="0">רגיל</option><option value="1">הפוך</option>
-        </select>
-      </div>
+      {m.purlin ? (
+        <div className="field"><label>היפוך חתך (פטה זו)</label>
+          <select className="inp" data-testid="prop-flip" value={p.memberOverrides[m.id]?.mirror ? '1' : '0'} onChange={(e) => store.exec(setMemberProps([m.id], { mirror: e.target.value === '1' }))}>
+            <option value="0">לפי הגדרת הצד</option><option value="1">הפוך מהגדרת הצד</option>
+          </select>
+        </div>
+      ) : (
+        <div className="field"><label>היפוך חתך</label>
+          <select className="inp" value={m.mirror ? '1' : '0'} onChange={(e) => store.exec(setMemberProps([m.id], { mirror: e.target.value === '1' }))}>
+            <option value="0">רגיל</option><option value="1">הפוך</option>
+          </select>
+        </div>
+      )}
       {ov && (ov.profile || ov.material || ov.rollDeg !== undefined || ov.mirror !== undefined) && m.source === 'generated' && (
         <div className="row"><span className="badge warn">ערכים ששונו ידנית</span><button className="btn small" onClick={() => store.exec(resetOverrides([m.id]))}>איפוס</button></div>
       )}
@@ -102,6 +112,7 @@ export function PropertiesPanel() {
         <dt>חיתוך סוף</dt><dd>{m.endCut ? 'מישורי' : 'ניצב'}</dd>
         <dt>משקל</dt><dd data-testid="prop-weight">{f1((kgm * cl.max) / 1000)} ק"ג</dd>
       </dl>
+      <SpliceEditor m={m} />
       {pr && <>
         <div className="panel-title">תכונות חתך <span className="badge warn" title={pr.source}>לא מאומת</span></div>
         <dl className="kv">
@@ -122,24 +133,57 @@ export function PropertiesPanel() {
 function ModelSummary() {
   const d = useStore((s) => s.derived);
   const counts = new Map<string, { n: number; len: number; kg: number }>();
-  for (const m of d.members) {
-    const pr = tryProfile(m.profile);
+  for (const x of d.parts) {
+    const pr = tryProfile(x.profile);
     if (!pr) continue;
-    const l = cutLength(m).max;
-    const e = counts.get(m.profile) ?? { n: 0, len: 0, kg: 0 };
-    e.n++; e.len += l; e.kg += (kgPerMeter(pr.props.area, getMaterial(m.material).density) * l) / 1000;
-    counts.set(m.profile, e);
+    const e = counts.get(x.profile) ?? { n: 0, len: 0, kg: 0 };
+    e.n++; e.len += x.length; e.kg += (kgPerMeter(pr.props.area, getMaterial(x.material).density) * x.length) / 1000;
+    counts.set(x.profile, e);
   }
   const tot = [...counts.values()].reduce((s, e) => s + e.kg, 0);
   return (
-    <table className="tbl" data-testid="summary">
-      <thead><tr><th>חתך</th><th>יח'</th><th>אורך (מ')</th><th>ק"ג</th></tr></thead>
-      <tbody>
-        {[...counts.entries()].map(([k, e]) => (
-          <tr key={k}><td style={{ direction: 'ltr', textAlign: 'right' }}>{k}</td><td>{e.n}</td><td>{f1(e.len / 1000, 2)}</td><td>{f1(e.kg, 0)}</td></tr>
-        ))}
-        <tr><td><b>סה"כ</b></td><td /><td /><td><b>{f1(tot, 0)}</b></td></tr>
-      </tbody>
-    </table>
+    <>
+      <table className="tbl" data-testid="summary">
+        <thead><tr><th>חתך</th><th>חלקים</th><th>אורך (מ')</th><th>ק"ג</th></tr></thead>
+        <tbody>
+          {[...counts.entries()].map(([k, e]) => (
+            <tr key={k}><td style={{ direction: 'ltr', textAlign: 'right' }}>{k}</td><td>{e.n}</td><td>{f1(e.len / 1000, 2)}</td><td>{f1(e.kg, 0)}</td></tr>
+          ))}
+          <tr><td><b>סה"כ</b></td><td /><td /><td><b>{f1(tot, 0)}</b></td></tr>
+        </tbody>
+      </table>
+      <dl className="kv"><dt>נקודות תמיכה לפטות</dt><dd>{d.supports.length}</dd><dt>חיבורי המשך (דורש תכנון)</dt><dd>{d.splices.length}</dd></dl>
+      <div className="hint">אורכים לפני חיתוך קצה מדויק; משקל גיאומטרי מחתכים לא מאומתים. רשימת חיתוך ו-BOM מלאים — שלב M5.</div>
+    </>
+  );
+}
+
+function PurlinInfoBlock({ id }: { id: string }) {
+  const d = useStore((s) => s.derived);
+  const p = useStore((s) => s.project);
+  const m = d.byId.get(id)!;
+  const pi = m.purlin!;
+  const u = p.displayUnit;
+  const L = (mm: number) => (u === 'm' ? `${fromMm(mm, 'm').toFixed(3)} מ'` : `${mm.toFixed(1)} מ"מ`);
+  const sup = d.supports.filter((s) => s.purlinId === id);
+  const b = p.building;
+  const sideName = { L: 'שמאל', R: 'ימין', M: 'גג חד־שיפועי' }[pi.side];
+  return (
+    <>
+      <div className="panel-title">פטה</div>
+      <dl className="kv" data-testid="purlin-info">
+        <dt>צד גג</dt><dd style={{ direction: 'rtl', textAlign: 'right', fontFamily: 'var(--font)' }}>{sideName}</dd>
+        <dt>מספר בצד</dt><dd>{pi.index} / {pi.count}</dd>
+        <dt>{pi.side === 'M' ? 'מרחק מקצה ההתחלה' : 'מרחק מהרכס'} (שיפוע)</dt><dd data-testid="purlin-s">{L(pi.sSlope)}</dd>
+        <dt>מרחק בהיטל אופקי</dt><dd>{L(pi.sHoriz)}</dd>
+        <dt>מרווח מהקודמת</dt><dd>{pi.index > 1 ? L(pi.spanBefore) : '—'}{pi.isLast && pi.index > 1 ? ' (אחרונה)' : ''}</dd>
+        <dt>פתיחת החתך</dt><dd style={{ direction: 'rtl', textAlign: 'right', fontFamily: 'var(--font)' }}>{pi.opening === 'up' ? 'לכיוון הרכס / הצד הגבוה' : 'לכיוון המרזב'}</dd>
+        <dt>אורך קו</dt><dd>{L(dist(m.start, m.end))}</dd>
+        <dt>קונזולות (Y)</dt><dd>{L(b.purlinOverhangStart)} / {L(b.purlinOverhangEnd)}</dd>
+        <dt>נקודות תמיכה</dt><dd data-testid="purlin-supports">{sup.length}</dd>
+        <dt>תומכים</dt><dd style={{ direction: 'rtl', textAlign: 'right', fontFamily: 'var(--font)' }}>זוויתן L — שלב M3</dd>
+      </dl>
+      <div className="hint">מגע עם האגף העליון של קורת הגג: 0 מ"מ. גובה החתך ניצב למישור הגג. מגע גיאומטרי אינו אישור ביצוע.</div>
+    </>
   );
 }

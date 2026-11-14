@@ -1,5 +1,5 @@
 import { uid } from '../core/ids';
-import type { BuildingParams, FrameDef, Project } from './types';
+import type { BuildingParams, FrameDef, Project, PurlinSideParams, PurlinSystem } from './types';
 import { SCHEMA_VERSION } from './types';
 
 /** יוצר מסגרות במרווח אחיד או לפי רשימת מרווחים. */
@@ -13,6 +13,17 @@ export function framesFromSpacings(spacings: number[], startNo = 1): FrameDef[] 
 export function uniformFrames(count: number, length: number): FrameDef[] {
   if (count < 2) throw new RangeError('נדרשות לפחות 2 מסגרות');
   return framesFromSpacings(Array.from({ length: count - 1 }, () => length / (count - 1)));
+}
+
+export function defaultPurlinSide(): PurlinSideParams {
+  return {
+    enabled: true, profile: 'C200x80x20x3', first: 300, spacing: 1500, measure: 'slope',
+    edgeOffset: 0, opening: 'up', manualPositions: null,
+  };
+}
+
+export function defaultPurlins(): PurlinSystem {
+  return { material: 'S235', left: defaultPurlinSide(), right: defaultPurlinSide(), monoStart: 'high' };
 }
 
 /** ברירת מחדל: מבנה GEO-01 — סככה דו־שיפועית 18×30 מ', 6 מסגרות, עמודים 6 מ', שיפוע 10%. */
@@ -34,6 +45,7 @@ export function defaultBuilding(): BuildingParams {
     rafterProfile: 'IPE300',
     material: 'S235',
     baseElevation: 0,
+    purlins: defaultPurlins(),
   };
 }
 
@@ -49,6 +61,7 @@ export function newProject(name = 'פרויקט חדש', building: BuildingParam
     memberOverrides: {},
     manualMembers: [],
     deleted: [],
+    splices: {},
     nextFrameNo: building.frames.length + 1,
     nextMemberNo: 1,
   };

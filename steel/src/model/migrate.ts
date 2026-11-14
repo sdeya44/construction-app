@@ -1,12 +1,17 @@
 import type { Project } from './types';
 import { SCHEMA_VERSION } from './types';
+import { defaultPurlins, defaultPurlinSide } from './defaults';
 
 /**
  * מיגרציות סכמה. כל מפתח N ממיר קובץ מגרסה N לגרסה N+1.
  * הוספת גרסה: להגדיל SCHEMA_VERSION, להוסיף פונקציה כאן ובדיקה ב-tests/persist.test.ts.
  */
 const MIGRATIONS: Record<number, (d: any) => any> = {
-  // 1: (d) => ({ ...d, schemaVersion: 2, newField: default })
+  // v1 → v2: מערכת פטות וחיבורי המשך
+  1: (d) => ({
+    ...d, schemaVersion: 2, splices: {},
+    building: { ...d.building, purlins: d.building.roofType === 'mono' ? { ...defaultPurlins(), left: { ...defaultPurlinSide(), first: 0 } } : defaultPurlins() },
+  }),
 };
 
 export class ProjectFileError extends Error {}
@@ -41,6 +46,14 @@ export function assertProject(d: any): asserts d is Project {
   need(Array.isArray(d.manualMembers), 'manualMembers');
   need(Array.isArray(d.deleted), 'deleted');
   need(d.settings && Number.isFinite(d.settings.stockLength), 'settings');
+  need(d.splices && typeof d.splices === 'object', 'splices');
+  for (const v of Object.values(d.splices)) need(Array.isArray(v) && (v as unknown[]).every(Number.isFinite), 'splice');
+  const pu = d.building.purlins;
+  need(pu && pu.left && pu.right, 'purlins');
+  for (const side of [pu.left, pu.right]) {
+    for (const k of ['first', 'spacing', 'edgeOffset']) need(Number.isFinite(side[k]), `purlins.${k}`);
+    need(typeof side.profile === 'string', 'purlins.profile');
+  }
 }
 
 /** קובץ JSON נייד: מעטפת עם שם פורמט וגרסת סכמה. */

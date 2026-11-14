@@ -43,7 +43,8 @@ export function StructurePanel() {
       <div className="field"><label>סוג גג</label>
         <select className="inp" value={b.roofType} data-testid="roofType" onChange={(e) => {
           const t = e.target.value as BuildingParams['roofType'];
-          set(t === 'gable' ? { roofType: t, eaveRight: b.eaveLeft, ridgeX: b.width / 2 } : { roofType: t, eaveRight: b.eaveLeft + Math.max(500, b.width * 0.1) });
+          const purlins = { ...b.purlins, left: { ...b.purlins.left, first: t === 'mono' ? 0 : 300, manualPositions: null } };
+          set(t === 'gable' ? { roofType: t, eaveRight: b.eaveLeft, ridgeX: b.width / 2, purlins } : { roofType: t, eaveRight: b.eaveLeft + Math.max(500, b.width * 0.1), purlins });
         }}>
           <option value="gable">דו־שיפועי</option><option value="mono">חד־שיפועי</option>
         </select>

@@ -8,7 +8,7 @@ test.describe('M1 – ליבת מידול', () => {
     const errors = await boot(page);
     const info = await page.evaluate(() => {
       const s = (window as any).__ksp.store.state;
-      return { n: s.derived.members.length, ridge: s.derived.roof.ridgeZ, frames: s.project.building.frames.map((f: any) => f.y) };
+      return { n: s.derived.members.filter((m: any) => m.kind !== 'purlin').length, ridge: s.derived.roof.ridgeZ, frames: s.project.building.frames.map((f: any) => f.y) };
     });
     expect(info).toEqual({ n: 24, ridge: RIDGE, frames: [0, 6000, 12000, 18000, 24000, 30000] });
     await setView(page, 'iso', 'persp');
@@ -161,7 +161,7 @@ test.describe('M1 – ליבת מידול', () => {
     expect(stale2).toEqual(['F1.COL.L']);
     // מחיקה
     await page.keyboard.press('Delete');
-    const n = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.length);
+    const n = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind !== 'purlin').length);
     expect(n).toBe(23);
     // ערך לא חוקי נדחה והמודל לא משתנה
     await page.getByTestId('ridgeX').fill('25'); await page.getByTestId('ridgeX').press('Enter');
@@ -186,7 +186,7 @@ test.describe('M1 – ליבת מידול', () => {
     const proj2 = await page.evaluate(() => JSON.stringify((window as any).__ksp.store.state.project));
     expect(after).toBe(before);
     expect(proj2).toBe(proj);
-    const n = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.length);
+    const n = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind !== 'purlin').length);
     expect(n).toBe(28);
     // ייצוא JSON
     const dl = page.waitForEvent('download');
@@ -195,7 +195,7 @@ test.describe('M1 – ליבת מידול', () => {
     const txt = await (await import('node:fs')).promises.readFile((await file.path())!, 'utf8');
     const j = JSON.parse(txt);
     expect(j.format).toBe('kayan-steel-pro');
-    expect(j.schemaVersion).toBe(1);
+    expect(j.schemaVersion).toBe(2);
     expect(j.project.building.width).toBe(20000);
     await shot(page, 'SAVE-01_after_reload');
   });
@@ -238,6 +238,6 @@ test.describe('M1 – ליבת מידול', () => {
     await page.getByTestId('isolate').click();
     expect(await page.evaluate(() => (window as any).__ksp.viewport.model.ids)).toEqual(['F1.COL.L']);
     await page.getByTestId('show-all').click();
-    expect(await page.evaluate(() => (window as any).__ksp.viewport.model.ids.length)).toBe(24);
+    expect(await page.evaluate(() => (window as any).__ksp.viewport.model.ids.length)).toBe(38);
   });
 });

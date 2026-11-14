@@ -68,8 +68,8 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
           <div className="field wide"><label>לקוח</label><input className="inp" value={client} onChange={(e) => setClient(e.target.value)} /></div>
           <div className="panel-title">סוג גג</div>
           <div className="choice">
-            <button className={b.roofType === 'gable' ? 'on' : ''} onClick={() => set({ roofType: 'gable', eaveRight: b.eaveLeft, ridgeX: b.width / 2 })} data-testid="np-gable"><GableSvg />דו־שיפועי</button>
-            <button className={b.roofType === 'mono' ? 'on' : ''} onClick={() => set({ roofType: 'mono', eaveRight: b.eaveLeft + 1000 })} data-testid="np-mono"><MonoSvg />חד־שיפועי</button>
+            <button className={b.roofType === 'gable' ? 'on' : ''} onClick={() => set({ roofType: 'gable', eaveRight: b.eaveLeft, ridgeX: b.width / 2, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 300 } } })} data-testid="np-gable"><GableSvg />דו־שיפועי</button>
+            <button className={b.roofType === 'mono' ? 'on' : ''} onClick={() => set({ roofType: 'mono', eaveRight: b.eaveLeft + 1000, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 0 } } })} data-testid="np-mono"><MonoSvg />חד־שיפועי</button>
           </div>
         </div>
         <div>

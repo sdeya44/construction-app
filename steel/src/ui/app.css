@@ -135,6 +135,9 @@ select.inp { padding: 0 6px; }
 .vp-label { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 11.5px; will-change: transform; direction: ltr; }
 .vp-label.bubble { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid #4b5866; background: #fff; display: grid; place-items: center; font-weight: 700; font-size: 12px; color: #2b3540; }
 .vp-label.dim { background: rgba(238,241,244,.92); color: var(--blue); font-family: var(--mono); padding: 0 3px; border-radius: 3px; font-weight: 600; }
+.vp-label.dim.small { font-size: 10.5px; }
+.vp-label.dim.rem { background: #fff1d6; color: #9a5200; border: 1px solid #f0c27a; }
+.vp-label.splice { color: #c4122f; font-size: 13px; text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
 .vp-label.tag { background: rgba(255,255,255,.95); border: 1px solid #f0b27a; color: #8a3f00; padding: 1px 6px; border-radius: 4px; font-family: var(--mono); font-size: 11px; }
 .vp-label.measure { background: #d0006f; color: #fff; padding: 2px 7px; border-radius: 4px; font-weight: 700; font-family: var(--mono); }
 .vp-axes { position: absolute; left: 10px; bottom: 10px; width: 76px; height: 76px; pointer-events: none; }

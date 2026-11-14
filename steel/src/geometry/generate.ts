@@ -4,6 +4,9 @@ import type {
   DerivedModel, GridLine, Member, ModelNode, Project, RoofInfo, ValidationIssue,
 } from '../model/types';
 import { derivedRoof, hasErrors, validateBuilding } from '../model/validate';
+import { buildParts } from './parts';
+import { buildPurlins } from './purlins';
+import type { SupportPoint } from '../model/types';
 
 const HEB_LETTERS = 'אבגדהוזחטיכלמנסעפצקרשת';
 export const xAxisLabel = (i: number) => HEB_LETTERS[i] ?? `X${i + 1}`;
@@ -87,8 +90,17 @@ export function generate(project: Project): DerivedModel {
     });
   }
 
-  // התאמות ידניות, מחיקות ואלמנטים ידניים
+  // פטות ונקודות תמיכה
   const deleted = new Set(project.deleted);
+  let supports: SupportPoint[] = [];
+  if (!hasErrors(issues)) {
+    const pr = buildPurlins(b, roof, deleted);
+    members.push(...pr.members);
+    supports = pr.supports;
+    issues.push(...pr.issues);
+  }
+
+  // התאמות ידניות, מחיקות ואלמנטים ידניים
   const out: Member[] = [];
   for (const m of members) {
     if (deleted.has(m.id)) continue;
@@ -97,7 +109,12 @@ export function generate(project: Project): DerivedModel {
       if (o.profile) m.profile = o.profile;
       if (o.material) m.material = o.material;
       if (o.rollDeg !== undefined) m.rollDeg = o.rollDeg;
-      if (o.mirror !== undefined) m.mirror = o.mirror;
+      if (o.mirror !== undefined) {
+        if (m.purlin) {
+          // בפטה: היפוך הוא יחסי לכיוון שנקבע בפריסה; קו הפטה אינו זז
+          if (o.mirror) { m.mirror = !m.mirror; m.purlin = { ...m.purlin, opening: m.purlin.opening === 'up' ? 'down' : 'up' }; }
+        } else m.mirror = o.mirror;
+      }
       if (o.placement) {
         if (o.placement.basis !== placementBasis(m.start, m.end)) {
           issues.push({
@@ -124,7 +141,11 @@ export function generate(project: Project): DerivedModel {
     }
   }
   const byId = new Map(out.map((m) => [m.id, m]));
-  return { members: out, nodes, grid, roof, issues, byId };
+  const valid = out.filter((m) => getProfileSafe(m.profile));
+  const pp = buildParts(valid, project);
+  issues.push(...pp.issues);
+  supports = supports.filter((sp) => byId.has(sp.purlinId) && byId.has(sp.rafterId));
+  return { members: out, nodes, grid, roof, issues, byId, supports, parts: pp.parts, splices: pp.splices };
 }
 
 function getProfileSafe(n: string) { try { return getProfile(n); } catch { return null; } }

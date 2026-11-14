@@ -2,7 +2,7 @@ import type { Mm } from '../core/units';
 import type { Plane, Vec3 } from '../core/vec';
 
 /** גרסת סכמת קובץ הפרויקט. כל שינוי שובר מחייב מיגרציה ב-model/migrate.ts */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export type RoofType = 'gable' | 'mono';
 /** לאן מתייחסים גובהי העמודים/הרכס: פני עליון של קורת הגג (TOS) או ציר הקורה. */
@@ -16,6 +16,33 @@ export interface FrameDef {
 }
 
 /** פרמטרים של המבנה. מקור האמת היחיד לגיאומטריה הנגזרת. כל האורכים ב-mm. */
+/** פרמטרי פריסת פטות לצד גג אחד. אורכים ב-mm. */
+export interface PurlinSideParams {
+  enabled: boolean;
+  profile: string;
+  /** מרחק הפטה הראשונה מנקודת ההתחלה (רכס בגג דו־שיפועי, קצה ההתחלה בחד־שיפועי) */
+  first: Mm;
+  /** מרווח רגיל */
+  spacing: Mm;
+  /** מדידה לאורך השיפוע (ברירת מחדל) או בהיטל אופקי (מסומן במפורש) */
+  measure: 'slope' | 'horizontal';
+  /** מרחק הפטה האחרונה מהקצה החיצוני של קורת הגג/הקונזולה (0 = בקצה) */
+  edgeOffset: Mm;
+  /** כיוון פתיחת החתך (אגפים של C): לכיוון הרכס/הקצה העליון או לכיוון המרזב */
+  opening: 'up' | 'down';
+  /** מיקומים ידניים (לאורך השיפוע מנקודת ההתחלה). null = פריסה אוטומטית */
+  manualPositions: Mm[] | null;
+}
+
+export interface PurlinSystem {
+  material: string;
+  left: PurlinSideParams;
+  /** בגג דו־שיפועי בלבד */
+  right: PurlinSideParams;
+  /** גג חד־שיפועי: מאיזה קצה מתחילה הפריסה */
+  monoStart: 'low' | 'high';
+}
+
 export interface BuildingParams {
   roofType: RoofType;
   heightRef: HeightRef;
@@ -38,6 +65,7 @@ export interface BuildingParams {
   rafterProfile: string;
   material: string;
   baseElevation: Mm;
+  purlins: PurlinSystem;
 }
 
 export interface ProjectMeta {
@@ -82,7 +110,8 @@ export interface ManualMember {
   copiedFrom?: string;
 }
 
-export type Anchor = 'center' | 'top';
+/** center: מרכז החתך על הקו; top: פני עליון על הקו; purlin: פני תחתון על הקו וציר הווב על הקו */
+export type Anchor = 'center' | 'top' | 'purlin';
 
 export interface Project {
   schemaVersion: number;
@@ -94,6 +123,11 @@ export interface Project {
   memberOverrides: Record<string, MemberOverride>;
   manualMembers: ManualMember[];
   deleted: string[];
+  /**
+   * מיקומי חיבורי המשך לכל מכלול (מזהה אלמנט): מרחקים לאורך ציר האלמנט מנקודת ההתחלה, mm.
+   * חיבור המשך אינו מאושר הנדסית — מסומן "דורש תכנון".
+   */
+  splices: Record<string, Mm[]>;
   nextFrameNo: number;
   nextMemberNo: number;
 }
@@ -119,6 +153,52 @@ export interface Member {
   endCut?: Plane;
   source: 'generated' | 'manual';
   manualPlacement: boolean;
+  purlin?: PurlinInfo;
+}
+
+export interface PurlinInfo {
+  side: 'L' | 'R' | 'M';
+  index: number;          // 1 = הקרוב לנקודת ההתחלה
+  count: number;
+  /** מרחק מנקודת ההתחלה לאורך השיפוע ובהיטל אופקי */
+  sSlope: Mm;
+  sHoriz: Mm;
+  /** מרווח מהפטה הקודמת לאורך השיפוע (0 לראשונה) */
+  spanBefore: Mm;
+  isLast: boolean;
+  /** נורמל מישור הגג (כלפי מעלה) */
+  roofNormal: Vec3;
+  opening: 'up' | 'down';
+  measure: 'slope' | 'horizontal';
+}
+
+/** נקודת תמיכה: מפגש קו פטה עם קורת גג של מסגרת. */
+export interface SupportPoint {
+  id: string;
+  purlinId: string;
+  frameId: string;
+  rafterId: string;
+  p: Vec3;
+}
+
+/** חלק ייצור: קטע של מכלול בין חיבורי המשך. t = מרחק לאורך ציר האלמנט מנקודת ההתחלה. */
+export interface FabPart {
+  id: string;
+  memberId: string;
+  index: number;
+  t0: Mm;
+  t1: Mm;
+  length: Mm;
+  profile: string;
+  material: string;
+}
+
+export interface SpliceInfo {
+  id: string;
+  memberId: string;
+  t: Mm;
+  p: Vec3;
+  status: 'requires-design';
 }
 
 export interface ModelNode { id: string; p: Vec3; frameId: string; role: string }
@@ -153,4 +233,7 @@ export interface DerivedModel {
   roof: RoofInfo;
   issues: ValidationIssue[];
   byId: Map<string, Member>;
+  supports: SupportPoint[];
+  parts: FabPart[];
+  splices: SpliceInfo[];
 }

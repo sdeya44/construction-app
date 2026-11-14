@@ -1,7 +1,8 @@
 import { add, rotateAxis, sub, v3, type Vec3 } from '../core/vec';
 import { degToRad } from '../core/units';
 import { generate, placementBasis } from '../geometry/generate';
-import type { BuildingParams, FrameDef, ManualMember, Member, MemberOverride, Project } from '../model/types';
+import type { BuildingParams, FrameDef, ManualMember, Member, MemberOverride, Project, PurlinSideParams, PurlinSystem } from '../model/types';
+import { proposeSplices } from '../geometry/purlins';
 import { hasErrors, validateBuilding } from '../model/validate';
 import { tryProfile } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
@@ -250,6 +251,82 @@ export function respaceFrames(count: number, spacing: number): Command {
         n.deleted = n.deleted.filter((d) => !d.startsWith(`${id}.`));
       }
       n.building.frames = frames;
+      return n;
+    },
+  };
+}
+
+/** עדכון פרמטרי פטות לצד אחד. פרמטרי צד אחד אינם משנים את הצד השני. */
+export function setPurlinSide(side: 'left' | 'right', patch: Partial<PurlinSideParams>): Command {
+  return {
+    label: `עדכון פטות ${side === 'left' ? 'שמאל' : 'ימין'}`,
+    run: (p) => {
+      if (patch.profile !== undefined && !tryProfile(patch.profile)) throw new CommandError(`חתך לא מוכר: ${patch.profile}`);
+      for (const k of ['first', 'spacing', 'edgeOffset'] as const) {
+        if (patch[k] !== undefined && !Number.isFinite(patch[k])) throw new CommandError('ערך לא מספרי');
+      }
+      if (patch.spacing !== undefined && !(patch.spacing > 0)) throw new CommandError('מרווח פטות חייב להיות חיובי');
+      if (patch.first !== undefined && patch.first < 0) throw new CommandError('מרחק ראשון לא יכול להיות שלילי');
+      if (patch.edgeOffset !== undefined && patch.edgeOffset < 0) throw new CommandError('מרחק מהקצה לא יכול להיות שלילי');
+      const n = clone(p);
+      n.building.purlins[side] = { ...n.building.purlins[side], ...clone(patch) };
+      const errs = generate(n).issues.filter((i) => i.severity === 'error' && i.code.startsWith('PURLIN'));
+      if (errs.length) throw new CommandError(errs.map((e) => e.message).join('\n'));
+      return n;
+    },
+  };
+}
+
+export function setPurlinSystem(patch: Partial<Pick<PurlinSystem, 'material' | 'monoStart'>>): Command {
+  return {
+    label: 'עדכון מערכת פטות',
+    run: (p) => {
+      const n = clone(p);
+      n.building.purlins = { ...n.building.purlins, ...patch };
+      return n;
+    },
+  };
+}
+
+/** קביעת מיקומי חיבורי המשך למכלול (מרחקים לאורך הציר מנקודת ההתחלה). */
+export function setSplices(memberId: string, positions: number[]): Command {
+  return {
+    label: 'עדכון חיבורי המשך',
+    run: (p) => {
+      if (positions.some((t) => !Number.isFinite(t))) throw new CommandError('מיקום לא מספרי');
+      const n = clone(p);
+      const sorted = [...new Set(positions.map((t) => Math.round(t * 1000) / 1000))].sort((a, b) => a - b);
+      if (sorted.length) n.splices[memberId] = sorted; else delete n.splices[memberId];
+      return n;
+    },
+  };
+}
+
+/**
+ * הצעה אוטומטית לחיבורי המשך: לפטות — מעל נקודות תמיכה, לשאר — חלוקה שווה, כך שאף חלק אינו ארוך מחומר הגלם.
+ * מחליפה חיבורים קיימים רק לאלמנטים שנבחרו.
+ */
+export function proposeSplicesFor(ids: string[]): Command {
+  return {
+    label: 'הצעת חיבורי המשך',
+    run: (p) => {
+      const d = generate(p);
+      const n = clone(p);
+      const stock = p.settings.stockLength;
+      for (const id of ids) {
+        const m = d.byId.get(id);
+        if (!m) continue;
+        const L = Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y, m.end.z - m.start.z);
+        let ts: number[];
+        if (m.purlin) {
+          const sup = d.supports.filter((s) => s.purlinId === id).map((s) => s.p.y - m.start.y);
+          ts = proposeSplices(L, stock, sup);
+        } else {
+          const k = Math.ceil(L / stock);
+          ts = k > 1 ? Array.from({ length: k - 1 }, (_, i) => (L * (i + 1)) / k) : [];
+        }
+        if (ts.length) n.splices[id] = ts; else delete n.splices[id];
+      }
       return n;
     },
   };

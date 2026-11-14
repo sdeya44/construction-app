@@ -19,7 +19,9 @@ export function TreePanel() {
   const groups: { key: string; title: string; items: Member[] }[] = frames.map((f, i) => ({
     key: f.id, title: `מסגרת ${i + 1} · ${f.id}`, items: d.members.filter((m) => m.frameId === f.id),
   }));
-  const manual = d.members.filter((m) => !m.frameId);
+  const purl = d.members.filter((m) => m.purlin);
+  if (purl.length) groups.push({ key: 'purlins', title: 'פטות', items: purl });
+  const manual = d.members.filter((m) => !m.frameId && !m.purlin);
   if (manual.length) groups.push({ key: 'manual', title: 'אלמנטים ידניים', items: manual });
 
   return (
@@ -48,7 +50,7 @@ export function TreePanel() {
               <div key={m.id} data-el={m.id} className={`tree-item${selSet.has(m.id) ? ' sel' : ''}${hidSet.has(m.id) ? ' hidden-el' : ''}`}
                 onClick={(e) => store.select([m.id], e.ctrlKey || e.metaKey ? 'toggle' : e.shiftKey ? 'add' : 'replace')}>
                 <span className="swatch" style={{ background: `#${KIND_COLOR[m.kind].toString(16).padStart(6, '0')}` }} />
-                <span>{KIND_LABEL[m.kind]}{m.side ? (m.side === 'L' ? ' שמאל' : ' ימין') : ''}</span>
+                <span>{m.purlin ? m.label : `${KIND_LABEL[m.kind]}${m.side ? (m.side === 'L' ? ' שמאל' : ' ימין') : ''}`}</span>
                 <span className="id">{m.id}</span>
                 <span className="prof">{m.profile}</span>
                 <button className="icon-btn" title={hidSet.has(m.id) ? 'הצג' : 'הסתר'} onClick={(e) => {

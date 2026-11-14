@@ -388,9 +388,37 @@ export class Viewport {
       if (d.roof.ridgeZ !== undefined) {
         dimLine({ x: b.ridgeX, y: y0 - off, z }, { x: b.ridgeX, y: y0 - off, z: d.roof.ridgeZ }, { x: 200, y: 0, z: 0 }, fmt(d.roof.ridgeZ - z));
       }
+      // פריסת פטות: מידות לאורך השיפוע, לפני המסגרת הראשונה, מעט מעל מישור הגג
+      const purl = d.members.filter((m) => m.purlin).sort((a, b) => a.purlin!.index - b.purlin!.index);
+      for (const side of ['L', 'R', 'M'] as const) {
+        const ls = purl.filter((m) => m.purlin!.side === side);
+        if (!ls.length) continue;
+        const n = ls[0].purlin!.roofNormal;
+        const yy = Math.min(...ys) - b.purlinOverhangStart - 900;
+        const lift = 450;
+        const at = (x: number, zz: number) => ({ x: x + n.x * lift, y: yy, z: zz + n.z * lift });
+        let prev = side === 'M' ? null : { x: b.ridgeX, z: d.roof.ridgeZ ?? 0 };
+        for (const m of ls) {
+          const cur = { x: m.start.x, z: m.start.z };
+          if (prev) {
+            const a = at(prev.x, prev.z), c = at(cur.x, cur.z);
+            pts.push(a.x, a.y, a.z, c.x, c.y, c.z);
+            for (const q of [a, c]) pts.push(q.x - n.x * 120, q.y, q.z - n.z * 120, q.x + n.x * 120, q.y, q.z + n.z * 120);
+            const span = Math.hypot(cur.x - prev.x, cur.z - prev.z);
+            const rem = m.purlin!.isLast && m.purlin!.index > 1 && Math.abs(span - (side === 'R' ? b.purlins.right : b.purlins.left).spacing) > 0.5;
+            const dir = new THREE.Vector3(c.x - a.x, 0, c.z - a.z).normalize();
+            this.labels.push({ p: new THREE.Vector3((a.x + c.x) / 2, yy, (a.z + c.z) / 2), text: fmt(span), cls: rem ? 'dim rem' : 'dim small', dir });
+          }
+          prev = cur;
+        }
+      }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
       this.helpers.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x1f5fa8 })));
+    }
+    // חיבורי המשך: סמן בכל מיקום, מסומן "דורש תכנון"
+    for (const sp of d.splices) {
+      this.labels.push({ p: new THREE.Vector3(sp.p.x, sp.p.y, sp.p.z), text: '◆', cls: 'splice' });
     }
     if (s.view.labels) {
       for (const id of s.selection.slice(0, 50)) {

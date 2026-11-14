@@ -6,11 +6,12 @@ import { VIEW_LABEL, Viewport } from '../view/viewport';
 import { duplicateProject, exportProject, NewProjectDialog, OpenDialog, TransformDialog } from './Dialogs';
 import { Icon } from './icons';
 import { PropertiesPanel } from './PropertiesPanel';
+import { RoofPanel } from './RoofPanel';
 import { ProfileDatalist, StructurePanel } from './StructurePanel';
 import { IssuesPanel, TreePanel } from './TreePanel';
 
 type DialogKind = null | 'new' | 'open' | 'move' | 'copy' | 'rotate' | 'mirror';
-type SideTab = 'structure' | 'tree' | 'issues';
+type SideTab = 'structure' | 'roof' | 'tree' | 'issues';
 type MobileTab = null | 'side' | 'props';
 
 function TB({ icon, label, on, onClick, disabled, testId, title, desk }: { icon: string; label?: string; on?: boolean; onClick: () => void; disabled?: boolean; testId?: string; title?: string; desk?: boolean }) {
@@ -81,7 +82,7 @@ export function App() {
     <div className="app">
       <ProfileDatalist />
       <header className="topbar">
-        <div className="brand"><img src="./icon.svg" alt="" />KAYAN STEEL PRO <small className="desk-only">0.1 · M1</small></div>
+        <div className="brand"><img src="./icon.svg" alt="" />KAYAN STEEL PRO <small className="desk-only">0.2 · M2</small></div>
         <div className="proj-name" data-testid="proj-name">{s.project.meta.name}</div>
         <div className="spacer" />
         <button className="tb-btn desk-only" onClick={() => setDialog('new')} data-testid="btn-new"><Icon name="file" />חדש</button>
@@ -144,12 +145,13 @@ export function App() {
         <aside className={`side side-start${sideOpen ? ' open' : ''}`}>
           <div className="tabs">
             <button className={`tab${tab === 'structure' ? ' on' : ''}`} onClick={() => setTab('structure')} data-testid="tab-structure">מבנה</button>
+            <button className={`tab${tab === 'roof' ? ' on' : ''}`} onClick={() => setTab('roof')} data-testid="tab-roof">גג ופטות</button>
             <button className={`tab${tab === 'tree' ? ' on' : ''}`} onClick={() => setTab('tree')} data-testid="tab-tree">אלמנטים</button>
             <button className={`tab${tab === 'issues' ? ' on' : ''}`} onClick={() => setTab('issues')} data-testid="tab-issues">
               בעיות {(errs + warns) > 0 && <span className={`count ${errs ? 'err' : 'warn'}`}>{errs + warns}</span>}
             </button>
           </div>
-          {tab === 'structure' ? <StructurePanel /> : tab === 'tree' ? <TreePanel /> : <IssuesPanel />}
+          {tab === 'structure' ? <StructurePanel /> : tab === 'roof' ? <RoofPanel /> : tab === 'tree' ? <TreePanel /> : <IssuesPanel />}
         </aside>
         <section className="viewport-host" dir="ltr" ref={host} data-testid="viewport">
           {!s.derived.members.length && <div className="empty-vp">אין גיאומטריה להצגה. {errs ? 'תקן את השגיאות בלשונית "בעיות".' : ''}</div>}
