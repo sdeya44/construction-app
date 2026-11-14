@@ -14,6 +14,9 @@ export interface Solid {
   /** קודקודי קצה הפרופיל בתחילה ובסוף (לנקודות הצמדה) */
   startRing: Vec3[];
   endRing: Vec3[];
+  /** היסט החתך ביחס לקו הייחוס (u, v) */
+  du: number;
+  dv: number;
 }
 
 /**
@@ -26,8 +29,9 @@ export function memberSolid(m: Member): Solid {
   const vTop = Math.max(...prof.outline.outer.map((p) => p.v));
   const vBot = Math.min(...prof.outline.outer.map((p) => p.v));
   // top: פני עליון על הקו · purlin: פני תחתון על הקו וציר הווב על הקו (מגע 0 מ"מ עם האגף העליון של הקורה)
-  const dv = m.anchor === 'top' ? -vTop : m.anchor === 'purlin' ? -vBot : 0;
-  const du = m.anchor === 'purlin' ? -webCenterU(m.profile) : 0;
+  const uMin = Math.min(...prof.outline.outer.map((p) => p.u));
+  const dv = m.anchor === 'top' ? -vTop : m.anchor === 'purlin' || m.anchor === 'corner' ? -vBot : 0;
+  const du = m.anchor === 'purlin' ? -webCenterU(m.profile) : m.anchor === 'corner' ? -uMin : 0;
 
   const startPlane: Plane = m.startCut ?? { point: m.start, normal: f.ex };
   const endPlane: Plane = m.endCut ?? { point: m.end, normal: f.ex };
@@ -75,7 +79,7 @@ export function memberSolid(m: Member): Solid {
       if (isSharp(r, i)) seg(S[ri][i], E[ri][i]);
     }
   });
-  return { tris, edges, startRing: S[0], endRing: E[0] };
+  return { tris, edges, startRing: S[0], endRing: E[0], du, dv };
 }
 
 function isSharp(r: P2[], i: number): boolean {

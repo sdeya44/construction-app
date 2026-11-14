@@ -6,7 +6,8 @@ import type {
 import { derivedRoof, hasErrors, validateBuilding } from '../model/validate';
 import { buildParts } from './parts';
 import { buildPurlins } from './purlins';
-import type { SupportPoint } from '../model/types';
+import type { Connection, SupportPoint } from '../model/types';
+import { buildConnections, checkClashes } from './connections';
 
 const HEB_LETTERS = 'אבגדהוזחטיכלמנסעפצקרשת';
 export const xAxisLabel = (i: number) => HEB_LETTERS[i] ?? `X${i + 1}`;
@@ -29,7 +30,19 @@ export function generate(project: Project): DerivedModel {
   const grid: GridLine[] = [];
   const roof: RoofInfo = hasErrors(issues) ? { slopeLeft: 0, slopeRight: 0 } : derivedRoof(b);
 
+  // קצה קורת הגג: לפחות עד קצה פלטת הכיפה (או הפנים החיצוניות של העמוד), גם כשהקונזולה 0
+  let bEff = b;
   if (!hasErrors(issues)) {
+    const eave = project.connectionDefaults.eave;
+    const minExt = eave.enabled ? eave.l / 2 : getProfile(b.columnProfile).props.h / 2;
+    const exL = Math.max(b.rafterOverhangLeft, minExt), exR = Math.max(b.rafterOverhangRight, minExt);
+    if (exL > b.rafterOverhangLeft || exR > b.rafterOverhangRight) {
+      issues.push({ code: 'RAFTER_EXT', severity: 'info', message: `קורות הגג מוארכות ${minExt} מ"מ מציר העמוד, עד קצה ${eave.enabled ? 'פלטת הכיפה' : 'העמוד'} — הפטה האחרונה בקצה זה` });
+    }
+    bEff = { ...b, rafterOverhangLeft: exL, rafterOverhangRight: exR };
+  }
+  if (!hasErrors(issues)) {
+    const b = bEff;
     const raf = getProfile(b.rafterProfile);
     const tos = b.heightRef === 'TOS';
     // מרחק מקו הייחוס של הקורה לפני התחתונים של הקורה (בניצב לקורה)
@@ -94,7 +107,7 @@ export function generate(project: Project): DerivedModel {
   const deleted = new Set(project.deleted);
   let supports: SupportPoint[] = [];
   if (!hasErrors(issues)) {
-    const pr = buildPurlins(b, roof, deleted);
+    const pr = buildPurlins(bEff, roof, deleted);
     members.push(...pr.members);
     supports = pr.supports;
     issues.push(...pr.issues);
@@ -140,12 +153,23 @@ export function generate(project: Project): DerivedModel {
       issues.push({ code: 'PROFILE', severity: 'error', elementId: m.id, message: `${m.label}: חתך לא מוכר ${m.profile}` });
     }
   }
-  const byId = new Map(out.map((m) => [m.id, m]));
-  const valid = out.filter((m) => getProfileSafe(m.profile));
+  let byId = new Map(out.map((m) => [m.id, m]));
+  supports = supports.filter((sp) => byId.has(sp.purlinId) && byId.has(sp.rafterId));
+  // חיבורים: משנים חיתוכי קצה של עמודים/קורות לפי עובי פלטות, ומוסיפים זוויתנים, פלטות וברגים
+  let connections: Connection[] = [];
+  if (!hasErrors(issues)) {
+    const cr = buildConnections(project, out, byId, supports.filter((sp) => getProfileSafe(byId.get(sp.purlinId)!.profile)));
+    const hidden = new Set(project.deleted);
+    out.push(...cr.members.filter((m) => !hidden.has(m.id)));
+    connections = cr.connections;
+    issues.push(...cr.issues);
+    byId = new Map(out.map((m) => [m.id, m]));
+    issues.push(...checkClashes(connections, byId));
+  }
+  const valid = out.filter((m) => m.kind !== 'bolt' && getProfileSafe(m.profile));
   const pp = buildParts(valid, project);
   issues.push(...pp.issues);
-  supports = supports.filter((sp) => byId.has(sp.purlinId) && byId.has(sp.rafterId));
-  return { members: out, nodes, grid, roof, issues, byId, supports, parts: pp.parts, splices: pp.splices };
+  return { members: out, nodes, grid, roof, issues, byId, supports, parts: pp.parts, splices: pp.splices, connections, connById: new Map(connections.map((c) => [c.id, c])) };
 }
 
 function getProfileSafe(n: string) { try { return getProfile(n); } catch { return null; } }

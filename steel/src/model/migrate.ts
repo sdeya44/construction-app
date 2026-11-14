@@ -1,6 +1,6 @@
 import type { Project } from './types';
 import { SCHEMA_VERSION } from './types';
-import { defaultPurlins, defaultPurlinSide } from './defaults';
+import { defaultCleat, defaultConnections, defaultPurlins, defaultPurlinSide } from './defaults';
 
 /**
  * מיגרציות סכמה. כל מפתח N ממיר קובץ מגרסה N לגרסה N+1.
@@ -12,6 +12,16 @@ const MIGRATIONS: Record<number, (d: any) => any> = {
     ...d, schemaVersion: 2, splices: {},
     building: { ...d.building, purlins: d.building.roofType === 'mono' ? { ...defaultPurlins(), left: { ...defaultPurlinSide(), first: 0 } } : defaultPurlins() },
   }),
+  // v2 → v3: חיבורים, תומכים, ברגים
+  2: (d) => {
+    // ברירת המחדל של כיוון פתיחת C שונתה (החלטת משתמש 14.11.2026): פתיחה לכיוון המרזב
+    const side = (x: any) => ({ ...x, opening: 'down', cleat: defaultCleat() });
+    return {
+      ...d, schemaVersion: 3,
+      connectionDefaults: defaultConnections(), connectionOverrides: {}, connectionTemplates: [], cleatOverrides: {},
+      building: { ...d.building, purlins: { ...d.building.purlins, left: side(d.building.purlins.left), right: side(d.building.purlins.right) } },
+    };
+  },
 };
 
 export class ProjectFileError extends Error {}
@@ -53,7 +63,12 @@ export function assertProject(d: any): asserts d is Project {
   for (const side of [pu.left, pu.right]) {
     for (const k of ['first', 'spacing', 'edgeOffset']) need(Number.isFinite(side[k]), `purlins.${k}`);
     need(typeof side.profile === 'string', 'purlins.profile');
+    need(side.cleat && Number.isFinite(side.cleat.thickness), 'purlins.cleat');
   }
+  need(d.connectionDefaults && d.connectionDefaults.eave && d.connectionDefaults.ridge && d.connectionDefaults.base, 'connectionDefaults');
+  need(d.connectionOverrides && typeof d.connectionOverrides === 'object', 'connectionOverrides');
+  need(Array.isArray(d.connectionTemplates), 'connectionTemplates');
+  need(d.cleatOverrides && typeof d.cleatOverrides === 'object', 'cleatOverrides');
 }
 
 /** קובץ JSON נייד: מעטפת עם שם פורמט וגרסת סכמה. */

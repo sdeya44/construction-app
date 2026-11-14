@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultBuilding, newProject } from '../src/model/defaults';
+import { defaultBuilding, defaultPurlinSide, newProject } from '../src/model/defaults';
 import { generate } from '../src/geometry/generate';
 import { layoutPositions } from '../src/geometry/purlins';
 import { memberSolid } from '../src/geometry/solid';
@@ -30,6 +30,9 @@ describe('ROOF – פריסת פטות', () => {
     expect(s.slice(0, 4)).toEqual([300, 1800, 3300, 4800]);
     // מרחק אמיתי במרחב בין שתי פטות עוקבות = 1500
     const L = purl(geo(), 'L');
+    // פטה אחרונה בקצה הקורה המוארכת (x=-170)
+    expect(L[L.length - 1].start.x).toBeCloseTo(-170, 6);
+    expect(L[L.length - 1].purlin!.sSlope).toBeCloseTo(Math.hypot(9170, 917), 6);
     expect(Math.hypot(L[1].start.x - L[0].start.x, L[1].start.z - L[0].start.z)).toBeCloseTo(1500, 6);
   });
   it('ROOF-03: שינוי מרווח שמאל אינו משנה את ימין', () => {
@@ -52,7 +55,7 @@ describe('ROOF – פריסת פטות', () => {
     expect(spans[spans.length - 1]).toBeLessThanOrEqual(1500);
   });
   it('ROOF-04: שארית זעירה מדווחת כאזהרה', () => {
-    const r = layoutPositions(300 + 1500 * 3 + 100, 1, { enabled: true, profile: 'C200x80x20x3', first: 300, spacing: 1500, measure: 'slope', edgeOffset: 0, opening: 'up', manualPositions: null }, 'x');
+    const r = layoutPositions(300 + 1500 * 3 + 100, 1, { ...defaultPurlinSide(), first: 300, spacing: 1500 }, 'x');
     expect(r.lastSpan).toBeCloseTo(100, 6);
     expect(r.issues.map((i) => i.code)).toContain('PURLIN_REMAINDER');
   });
@@ -72,11 +75,12 @@ describe('ROOF – פריסת פטות', () => {
         p.building.purlins.left.first = 0;
         p.building.purlins.monoStart = start;
         const M = purl(p, 'M');
-        const L = Math.hypot(6000, 1000);
+        // הקורה מוארכת 170 מ"מ מעבר לכל ציר (חצי פלטת כיפה)
+        const L = Math.hypot(6340, 6340 / 6);
         expect(M[0].purlin!.sSlope).toBe(0);
         expect(M[M.length - 1].purlin!.sSlope).toBeCloseTo(L, 6);
         const startHigh = (start === 'high') === (eR > eL);
-        expect(M[0].start.x).toBeCloseTo(startHigh ? 6000 : 0, 6);
+        expect(M[0].start.x).toBeCloseTo(startHigh ? 6170 : -170, 6);
         for (const m of M.slice(1, -1)) expect(m.purlin!.spanBefore).toBeCloseTo(1500, 9);
         expect(generate(p).issues.filter((i) => i.severity === 'error')).toEqual([]);
       }
@@ -126,7 +130,7 @@ describe('PURL – חתך ומיקום', () => {
     }
   });
   it('PURL-02: היפוך חתך — קו הפטה לא זז, האגפים פונים לצד השני', () => {
-    const p = geo();
+    const p = setPurlinSide('left', { opening: 'up' }).run(geo());
     const a = purl(p, 'L')[1];
     const p2 = setPurlinSide('left', { opening: 'down' }).run(p);
     const b = purl(p2, 'L')[1];
@@ -143,8 +147,12 @@ describe('PURL – חתך ומיקום', () => {
     // ציר הווב על קו הייחוס בשני המצבים
     void cross;
   });
-  it('פטה ראשונה שחוצה את הרכס — שגיאה, הפקודה נדחית', () => {
-    expect(() => setPurlinSide('left', { first: 20 }).run(geo())).toThrow(/רכס/);
+  it('פטה ראשונה (או התומך שלה) שחוצה את הרכס — שגיאה, הפקודה נדחית', () => {
+    expect(() => setPurlinSide('left', { first: 20 }).run(geo())).toThrow(/רכס/); // פתיחה למרזב: רגל הבסיס של התומך פונה לרכס
+    const up = setPurlinSide('left', { opening: 'up' }).run(geo());
+    expect(() => setPurlinSide('left', { first: 20 }).run(up)).toThrow(/רכס/); // פתיחה לרכס: אגפי הפטה פונים לרכס
+    expect(() => setPurlinSide('left', { first: 70 }).run(up)).toThrow(/רכס/); // אגף 78.5 מ"מ
+    expect(() => setPurlinSide('left', { first: 120 }).run(geo())).not.toThrow();
   });
   it('נקודת תמיכה מזוהה בכל מפגש פטה-מסגרת', () => {
     const d = generate(geo());
@@ -208,7 +216,7 @@ describe('מיגרציה v1 → v2', () => {
     const p: any = geo();
     delete p.building.purlins; delete p.splices; p.schemaVersion = 1;
     const m = migrate(JSON.parse(JSON.stringify(p)));
-    expect(m.schemaVersion).toBe(2);
+    expect(m.schemaVersion).toBe(3);
     expect(m.building.purlins.left.spacing).toBe(1500);
     expect(m.splices).toEqual({});
     expect(() => fromFileJson('{"schemaVersion":99}')).toThrow();

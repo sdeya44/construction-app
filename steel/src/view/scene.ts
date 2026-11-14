@@ -3,7 +3,7 @@ import { memberSolid, type Solid } from '../geometry/solid';
 import type { DerivedModel, Member, MemberKind } from '../model/types';
 
 export const KIND_COLOR: Record<MemberKind, number> = {
-  column: 0x5b7186, rafter: 0x7d93a8, beam: 0x8a9db0, brace: 0x9c8f6e, purlin: 0xa0a8b2,
+  column: 0x5b7186, rafter: 0x7d93a8, beam: 0x8a9db0, brace: 0x9c8f6e, purlin: 0xa0a8b2, cleat: 0x3f8f6b, plate: 0x6b8f3f, bolt: 0x8a5a2b,
 };
 const MANUAL_COLOR = 0xb08a4a;
 

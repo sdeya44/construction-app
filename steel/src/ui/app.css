@@ -194,3 +194,18 @@ select.inp { padding: 0 6px; }
   .grid2 { grid-template-columns: 1fr; }
   .measure-box { right: 8px; left: 8px; min-width: 0; }
 }
+
+/* תצוגת חתך חיבור */
+.conn-svg { border: 1px solid var(--line); border-radius: 8px; background: #fbfcfd; margin: 6px 0 8px; padding: 4px; }
+.conn-svg svg { width: 100%; height: 240px; display: block; }
+.conn-svg line { stroke-width: 1.2; vector-effect: non-scaling-stroke; stroke: #4b5866; }
+.conn-svg line.c { stroke: #1d7a46; stroke-width: 1.8; }
+.conn-svg line.p { stroke: #4f6b1f; stroke-width: 1.6; }
+.conn-svg line.b { stroke: #a5521b; }
+.conn-svg polygon { stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.conn-svg polygon.u { fill: #c9d1da; stroke: #2a3440; }
+.conn-svg polygon.c { fill: #b9e0c9; stroke: #1d7a46; }
+.conn-svg polygon.m { fill: #d5dbe2; stroke: #2a3440; }
+.conn-svg polygon.p { fill: #d6e4bf; stroke: #4f6b1f; }
+.conn-svg polygon.b { fill: #e9c3a5; stroke: #a5521b; }
+.btn svg { width: 15px; height: 15px; flex: none; }

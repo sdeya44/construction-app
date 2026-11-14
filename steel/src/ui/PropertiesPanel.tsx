@@ -8,10 +8,17 @@ import { store, useStore } from '../store';
 import { NumField, TextField } from './fields';
 import { KIND_LABEL } from './TreePanel';
 import { SpliceEditor } from './SpliceEditor';
+import { ConnectionEditor, MemberConnections } from './ConnectionEditor';
 
 const f1 = (n: number, d = 1) => n.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
 
 export function PropertiesPanel() {
+  const active = useStore((s) => s.activeConn);
+  if (active) return <ConnectionEditor />;
+  return <PropertiesInner />;
+}
+
+function PropertiesInner() {
   const sel = useStore((s) => s.selection);
   const d = useStore((s) => s.derived);
   const p = useStore((s) => s.project);
@@ -67,6 +74,7 @@ export function PropertiesPanel() {
         <dt>מזהה אלמנט</dt><dd data-testid="prop-id">{m.id}</dd>
         <dt>תיאור</dt><dd style={{ direction: 'rtl', textAlign: 'right', fontFamily: 'var(--font)' }}>{m.label}</dd>
         {frameNo > 0 && <><dt>מסגרת</dt><dd>{frameNo} ({m.frameId})</dd></>}
+        {m.partDesc && <><dt>חלק</dt><dd style={{ direction: 'rtl', textAlign: 'right', fontFamily: 'var(--font)' }}>{m.partDesc}</dd></>}
         <dt>סימון חלק</dt><dd style={{ direction: 'rtl', textAlign: 'right' }}><span className="badge">טרם הוקצה (שלב M5)</span></dd>
       </dl>
       {m.manualPlacement && m.source === 'generated' && (
@@ -112,7 +120,8 @@ export function PropertiesPanel() {
         <dt>חיתוך סוף</dt><dd>{m.endCut ? 'מישורי' : 'ניצב'}</dd>
         <dt>משקל</dt><dd data-testid="prop-weight">{f1((kgm * cl.max) / 1000)} ק"ג</dd>
       </dl>
-      <SpliceEditor m={m} />
+      <MemberConnections memberId={m.id} />
+      {m.kind !== 'bolt' && <SpliceEditor m={m} />}
       {pr && <>
         <div className="panel-title">תכונות חתך <span className="badge warn" title={pr.source}>לא מאומת</span></div>
         <dl className="kv">

@@ -6,7 +6,7 @@ import {
 
 export type Family =
   | 'IPE' | 'HEA' | 'HEB' | 'HEM' | 'INP' | 'UPN' | 'UPE'
-  | 'SHS' | 'RHS' | 'CHS' | 'L' | 'C' | 'Z' | 'PL';
+  | 'SHS' | 'RHS' | 'CHS' | 'L' | 'C' | 'Z' | 'PL' | 'RD' | 'HX';
 
 export interface Profile {
   name: string;            // שם קנוני, לדוגמה "IPE200", "SHS160x6", "Z200x70x20x2.5"
@@ -24,7 +24,7 @@ export interface Profile {
 export const FAMILY_LABEL: Record<Family, string> = {
   IPE: 'IPE', HEA: 'HEA', HEB: 'HEB', HEM: 'HEM', INP: 'INP', UPN: 'UPN', UPE: 'UPE',
   SHS: 'SHS – ריבועי חלול', RHS: 'RHS – מלבני חלול', CHS: 'CHS – צינור', L: 'L – זוויתן',
-  C: 'C – מכופף בקר', Z: 'Z – מכופף בקר', PL: 'PL – פלטה',
+  C: 'C – מכופף בקר', Z: 'Z – מכופף בקר', PL: 'PL – פלטה', RD: 'RD – מוט עגול', HX: 'HX – משושה',
 };
 
 const cache = new Map<string, Profile>();
@@ -33,7 +33,7 @@ export class ProfileError extends Error {}
 
 /** נרמול שם: אותיות גדולות, ללא רווחים, '*'/'×' → 'x'. */
 export function normalizeName(raw: string): string {
-  return raw.trim().toUpperCase().replace(/\s+/g, '').replace(/[*×X]/g, 'x').replace(/,/g, '.');
+  return raw.trim().toUpperCase().replace(/\s+/g, '').replace(/,/g, '.').replace(/(\d)[*×X](?=\d)/g, '$1x');
 }
 
 function nums(s: string): number[] {
@@ -60,7 +60,7 @@ export function tryProfile(raw: string): Profile | null {
 }
 
 function build(key: string): Profile {
-  const m = /^(IPE|HEA|HEB|HEM|INP|UPN|UPE|SHS|RHS|CHS|PL|L|C|Z)(.*)$/.exec(key);
+  const m = /^(IPE|HEA|HEB|HEM|INP|UPN|UPE|SHS|RHS|CHS|PL|RD|HX|L|C|Z)(.*)$/.exec(key);
   if (!m) throw new ProfileError(`סדרת חתך לא מוכרת: ${key}`);
   const fam = m[1] as Family;
   const rest = m[2];
@@ -116,6 +116,20 @@ function build(key: string): Profile {
       const name = c > 0 ? `${fam}${h}x${b}x${c}x${t}` : `${fam}${h}x${b}x${t}`;
       const ol = fam === 'C' ? cShape(h, b, c, t) : zShape(h, b, c, t);
       return mk(name, { h, b, c, t }, ol, 'פרופיל מכופף בקר — פינות חדות (רדיוס כיפוף מוזנח)');
+    }
+    case 'RD': {
+      if (n.length !== 1) throw new ProfileError('RD: קוטר');
+      const [d] = n; positive(d);
+      const o = chsShape(d, d / 2 - 1e-6, 16);
+      return mk(`RD${d}`, { d }, { outer: o.outer, holes: [] });
+    }
+    case 'HX': {
+      // משושה לפי מידה בין פאות (ראש בורג/אום)
+      if (n.length !== 1) throw new ProfileError('HX: מידה בין פאות');
+      const [s] = n; positive(s);
+      const r = s / Math.sqrt(3);
+      const outer = Array.from({ length: 6 }, (_, k) => ({ u: r * Math.cos((Math.PI / 3) * k), v: r * Math.sin((Math.PI / 3) * k) }));
+      return mk(`HX${s}`, { s }, { outer, holes: [] });
     }
     case 'PL': {
       if (n.length !== 2) throw new ProfileError('PL: רוחב x עובי, לדוגמה PL230x20');

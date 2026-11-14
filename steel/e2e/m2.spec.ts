@@ -10,7 +10,7 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     await page.getByTestId('tab-roof').click();
     const L = await purl(page, 'L'), R = await purl(page, 'R');
     expect(L[0][0]).toBe('PL.L.01'); expect(R[0][0]).toBe('PL.R.01');
-    expect(L.map((x: any) => Math.round(x[3]))).toEqual([300, 1800, 3300, 4800, 6300, 7800, 9045]);
+    expect(L.map((x: any) => Math.round(x[3]))).toEqual([300, 1800, 3300, 4800, 6300, 7800, 9216]); // קצה הקורה המוארכת עד פלטת הכיפה
     await expect(page.getByTestId('left-layout')).toContainText('שארית');
     await shot(page, 'ROOF_panel_iso');
     await page.getByTestId('left-spacing').fill('1.2'); await page.getByTestId('left-spacing').press('Enter');
@@ -30,7 +30,7 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     // מרכז חתך C בפתיחה לכיוון הרכס: כ-40 מ"מ לכיוון הרכס, 100 מ"מ מעל הקורה
     const pt = await screenOf(page, { x: x + 40, y: 0, z: z + 100 });
     await page.evaluate(() => { const k = (window as any).__ksp; k.store.select(['PL.L.01']); k.viewport.fitSelection(); k.store.select([]); });
-    const k = 100 / Math.sqrt(1.01); // 100 מ"מ לאורך הנורמל למישור הגג (-0.1, 1)
+    const k = 150 / Math.sqrt(1.01); // 150 מ"מ לאורך הנורמל (הבורג נמצא בגובה 100)
     const pt2 = await screenOf(page, { x: x - 0.1 * k, y: 0, z: z + k }); // אמצע הווב
     void pt;
     await page.mouse.click(pt2.x, pt2.y);
@@ -43,7 +43,7 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     await page.getByTestId('prop-flip').selectOption('1');
     const after = await page.evaluate(() => { const m = (window as any).__ksp.store.state.derived.byId.get('PL.L.01'); return { s: m.start, o: m.purlin.opening }; });
     expect(after.s).toEqual(before);
-    expect(after.o).toBe('down');
+    expect(after.o).toBe('up'); // ברירת מחדל: פתיחה למרזב; היפוך ⇒ לרכס
     await shot(page, 'PURL_flipped');
   });
 

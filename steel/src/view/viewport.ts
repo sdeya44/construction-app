@@ -102,12 +102,14 @@ class Pane {
   }
 
   /** התאמה למסך: שומרת יחס ממדים (אין מתיחה), מתחשבת ביחס הצדדים של החלון. */
-  fit(box: THREE.Box3, view?: ViewName) {
-    if (view) this.view = view;
+  customDir?: THREE.Vector3;
+  fit(box: THREE.Box3, view?: ViewName, dirOverride?: THREE.Vector3) {
+    if (view) { this.view = view; this.customDir = undefined; }
+    if (dirOverride) this.customDir = dirOverride.clone().normalize();
     if (box.isEmpty()) box = new THREE.Box3(new THREE.Vector3(-5000, -5000, 0), new THREE.Vector3(5000, 5000, 5000));
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3()).length();
-    const dir = DIRS[this.view].clone().normalize();
+    const dir = (this.customDir ?? DIRS[this.view]).clone().normalize();
     const cam = this.camera as THREE.PerspectiveCamera | THREE.OrthographicCamera;
     const a = this.rect.w / Math.max(1, this.rect.h);
     cam.position.copy(center).addScaledVector(dir, size * 2);
@@ -193,7 +195,7 @@ class Pane {
       parts.push(`<text x="${(x * 1.3).toFixed(1)}" y="${(y * 1.3 + 4).toFixed(1)}" fill="${c}" font-size="11" font-weight="700" text-anchor="middle">${n}</text>`);
     }
     this.axes.innerHTML = parts.join('');
-    this.title.textContent = `${VIEW_LABEL[this.view]} · ${this.projection === 'ortho' ? 'אורתוגרפי' : 'פרספקטיבה'}`;
+    this.title.textContent = `${this.customDir ? "מבט מותאם" : VIEW_LABEL[this.view]} · ${this.projection === 'ortho' ? 'אורתוגרפי' : 'פרספקטיבה'}`;
   }
 
   dispose() { this.controls.dispose(); this.el.remove(); }
@@ -416,6 +418,14 @@ export class Viewport {
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
       this.helpers.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x1f5fa8 })));
     }
+    // ריתוכים (מסגריה) — קו כתום לאורך הריתוך
+    const wp: number[] = [];
+    for (const c of d.connections) for (const w of c.welds) if (w.from.x !== w.to.x || w.from.y !== w.to.y || w.from.z !== w.to.z) wp.push(w.from.x, w.from.y, w.from.z, w.to.x, w.to.y, w.to.z);
+    if (wp.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
+      this.helpers.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xe8730c })));
+    }
     // חיבורי המשך: סמן בכל מיקום, מסומן "דורש תכנון"
     for (const sp of d.splices) {
       this.labels.push({ p: new THREE.Vector3(sp.p.x, sp.p.y, sp.p.z), text: '◆', cls: 'splice' });
@@ -553,6 +563,21 @@ export class Viewport {
     const box = this.model?.box ?? new THREE.Box3();
     if (view) this.panes[0].fit(box, view);
     else for (const p of this.panes) p.fit(box);
+  }
+
+  /** התמקדות בבחירה מכיוון מבט נתון (עולם). */
+  fitSelectionFrom(dir: Vec3) {
+    const s = store.state;
+    const box = new THREE.Box3();
+    for (const id of s.selection) {
+      const m = s.derived.byId.get(id);
+      if (!m) continue;
+      const sol = cachedSolid(m);
+      for (const q of [...sol.startRing, ...sol.endRing]) box.expandByPoint(new THREE.Vector3(q.x, q.y, q.z));
+    }
+    if (box.isEmpty()) return;
+    box.expandByScalar(250);
+    this.panes[0].fit(box, undefined, new THREE.Vector3(dir.x, dir.y, dir.z));
   }
 
   fitSelection() {

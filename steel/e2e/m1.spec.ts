@@ -8,7 +8,7 @@ test.describe('M1 – ליבת מידול', () => {
     const errors = await boot(page);
     const info = await page.evaluate(() => {
       const s = (window as any).__ksp.store.state;
-      return { n: s.derived.members.filter((m: any) => m.kind !== 'purlin').length, ridge: s.derived.roof.ridgeZ, frames: s.project.building.frames.map((f: any) => f.y) };
+      return { n: s.derived.members.filter((m: any) => m.kind === 'column' || m.kind === 'rafter').length, ridge: s.derived.roof.ridgeZ, frames: s.project.building.frames.map((f: any) => f.y) };
     });
     expect(info).toEqual({ n: 24, ridge: RIDGE, frames: [0, 6000, 12000, 18000, 24000, 30000] });
     await setView(page, 'iso', 'persp');
@@ -161,7 +161,7 @@ test.describe('M1 – ליבת מידול', () => {
     expect(stale2).toEqual(['F1.COL.L']);
     // מחיקה
     await page.keyboard.press('Delete');
-    const n = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind !== 'purlin').length);
+    const n = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind === 'column' || m.kind === 'rafter').length);
     expect(n).toBe(23);
     // ערך לא חוקי נדחה והמודל לא משתנה
     await page.getByTestId('ridgeX').fill('25'); await page.getByTestId('ridgeX').press('Enter');
@@ -186,7 +186,7 @@ test.describe('M1 – ליבת מידול', () => {
     const proj2 = await page.evaluate(() => JSON.stringify((window as any).__ksp.store.state.project));
     expect(after).toBe(before);
     expect(proj2).toBe(proj);
-    const n = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind !== 'purlin').length);
+    const n = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind === 'column' || m.kind === 'rafter').length);
     expect(n).toBe(28);
     // ייצוא JSON
     const dl = page.waitForEvent('download');
@@ -195,7 +195,7 @@ test.describe('M1 – ליבת מידול', () => {
     const txt = await (await import('node:fs')).promises.readFile((await file.path())!, 'utf8');
     const j = JSON.parse(txt);
     expect(j.format).toBe('kayan-steel-pro');
-    expect(j.schemaVersion).toBe(2);
+    expect(j.schemaVersion).toBe(3);
     expect(j.project.building.width).toBe(20000);
     await shot(page, 'SAVE-01_after_reload');
   });
@@ -213,15 +213,15 @@ test.describe('M1 – ליבת מידול', () => {
     await setView(page, 'left');
     await page.evaluate(() => { const k = (window as any).__ksp; k.store.select(['F1.COL.L']); k.viewport.fitSelection(); });
     await page.getByTestId('tool-measure').click();
-    const p1 = await screenOf(page, { x: -95, y: -100, z: 0 });
+    const p1 = await screenOf(page, { x: -95, y: -100, z: 20 }); // תחתית העמוד על פלטת הבסיס (20 מ"מ)
     await page.mouse.click(p1.x - 3, p1.y - 3);
     await setView(page, 'right');
     await page.evaluate(() => { const k = (window as any).__ksp; k.store.select(['F1.COL.R']); k.viewport.fitSelection(); });
-    const p2 = await screenOf(page, { x: 18095, y: -100, z: 0 });
+    const p2 = await screenOf(page, { x: 18095, y: -100, z: 20 });
     await page.mouse.click(p2.x + 3, p2.y - 3);
     const m = await page.evaluate(() => (window as any).__ksp.store.state.measure);
-    expect(m.a).toEqual({ x: -95, y: -100, z: 0 });
-    expect(m.b).toEqual({ x: 18095, y: -100, z: 0 });
+    expect(m.a).toEqual({ x: -95, y: -100, z: 20 });
+    expect(m.b).toEqual({ x: 18095, y: -100, z: 20 });
     await expect(page.getByTestId('measure-d')).toHaveText("18.190 מ'");
     await page.getByTestId('fit').click();
     await shot(page, 'VIEW_measure');
@@ -238,6 +238,6 @@ test.describe('M1 – ליבת מידול', () => {
     await page.getByTestId('isolate').click();
     expect(await page.evaluate(() => (window as any).__ksp.viewport.model.ids)).toEqual(['F1.COL.L']);
     await page.getByTestId('show-all').click();
-    expect(await page.evaluate(() => (window as any).__ksp.viewport.model.ids.length)).toBe(38);
+    expect(await page.evaluate(() => (window as any).__ksp.viewport.model.ids.length)).toBe(await page.evaluate(() => (window as any).__ksp.store.state.derived.members.length));
   });
 });

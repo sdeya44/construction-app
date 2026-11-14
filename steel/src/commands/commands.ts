@@ -1,7 +1,7 @@
 import { add, rotateAxis, sub, v3, type Vec3 } from '../core/vec';
 import { degToRad } from '../core/units';
 import { generate, placementBasis } from '../geometry/generate';
-import type { BuildingParams, FrameDef, ManualMember, Member, MemberOverride, Project, PurlinSideParams, PurlinSystem } from '../model/types';
+import type { ApprovalStatus, BuildingParams, CleatParams, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
 import { proposeSplices } from '../geometry/purlins';
 import { hasErrors, validateBuilding } from '../model/validate';
 import { tryProfile } from '../profiles/library';
@@ -326,6 +326,108 @@ export function proposeSplicesFor(ids: string[]): Command {
           ts = k > 1 ? Array.from({ length: k - 1 }, (_, i) => (L * (i + 1)) / k) : [];
         }
         if (ts.length) n.splices[id] = ts; else delete n.splices[id];
+      }
+      return n;
+    },
+  };
+}
+
+/** עדכון פרמטרי תומך ברירת מחדל לצד, או לתומך בודד (cleatId). */
+export function setCleat(side: 'left' | 'right', patch: Partial<CleatParams>, cleatId?: string): Command {
+  return {
+    label: cleatId ? `עדכון תומך ${cleatId}` : `עדכון תומכי פטות ${side === 'left' ? 'שמאל' : 'ימין'}`,
+    run: (p) => {
+      for (const [k, v] of Object.entries(patch)) {
+        if (typeof v === 'number' && !(v > 0) && k !== 'holeHeight') throw new CommandError('ערך חייב להיות חיובי');
+      }
+      if (patch.rows !== undefined && !(Number.isInteger(patch.rows) && patch.rows >= 1 && patch.rows <= 4)) throw new CommandError('מספר שורות 1–4');
+      if (patch.perRow !== undefined && !(Number.isInteger(patch.perRow) && patch.perRow >= 1 && patch.perRow <= 6)) throw new CommandError('ברגים בשורה 1–6');
+      const n = clone(p);
+      if (cleatId) n.cleatOverrides[cleatId] = { ...(n.cleatOverrides[cleatId] ?? {}), ...clone(patch) };
+      else n.building.purlins[side].cleat = { ...n.building.purlins[side].cleat, ...clone(patch) };
+      return n;
+    },
+  };
+}
+
+export function resetCleat(cleatId: string): Command {
+  return { label: 'איפוס תומך', run: (p) => { const n = clone(p); delete n.cleatOverrides[cleatId]; return n; } };
+}
+
+function checkPlate(patch: Partial<PlateConnParams>) {
+  for (const k of ['t', 'w', 'l', 'gauge', 'pitch', 'weldSize', 'anchorLength'] as const) {
+    const v = patch[k];
+    if (v !== undefined && (!Number.isFinite(v) || v < 0)) throw new CommandError('ערך לא תקין');
+  }
+  if (patch.t !== undefined && !(patch.t > 0)) throw new CommandError('עובי פלטה חייב להיות חיובי');
+  for (const k of ['cols', 'rows'] as const) {
+    const v = patch[k];
+    if (v !== undefined && !(Number.isInteger(v) && v >= 1 && v <= 8)) throw new CommandError('מספר ברגים 1–8');
+  }
+  if (patch.bolt?.d !== undefined && ![10, 12, 16, 20, 24].includes(patch.bolt.d)) throw new CommandError('קוטר בורג: M10/M12/M16/M20/M24');
+}
+
+/** עדכון חיבור בודד — נשמר לאלמנט (connectionOverrides). */
+export function setConnection(id: string, patch: Partial<PlateConnParams> & { status?: ApprovalStatus; fixity?: 'rigid' | 'pinned' | 'semi' }): Command {
+  return {
+    label: 'עדכון חיבור',
+    run: (p) => {
+      checkPlate(patch);
+      const n = clone(p);
+      const cur = n.connectionOverrides[id] ?? {};
+      n.connectionOverrides[id] = { ...cur, ...clone(patch), ...(patch.bolt ? { bolt: { ...(cur.bolt ?? n.connectionDefaults[connTypeOf(id)].bolt), ...patch.bolt } } : {}) };
+      return n;
+    },
+  };
+}
+
+export function resetConnection(id: string): Command {
+  return { label: 'איפוס חיבור לברירת מחדל', run: (p) => { const n = clone(p); delete n.connectionOverrides[id]; return n; } };
+}
+
+/** עדכון ברירת מחדל לסוג חיבור (חל על כל החיבורים שלא שונו ידנית). */
+export function setConnectionDefault(type: 'eave' | 'ridge' | 'base', patch: Partial<PlateConnParams>): Command {
+  return {
+    label: 'עדכון ברירת מחדל לחיבורים',
+    run: (p) => {
+      checkPlate(patch);
+      const n = clone(p);
+      n.connectionDefaults[type] = { ...n.connectionDefaults[type], ...clone(patch), bolt: { ...n.connectionDefaults[type].bolt, ...(patch.bolt ?? {}) } };
+      return n;
+    },
+  };
+}
+
+export function connTypeOf(id: string): 'eave' | 'ridge' | 'base' {
+  if (id.startsWith('C.EAVE.')) return 'eave';
+  if (id.startsWith('C.RIDGE.')) return 'ridge';
+  if (id.startsWith('C.BASE.')) return 'base';
+  throw new CommandError(`סוג חיבור לא נתמך: ${id}`);
+}
+
+/** שמירת החיבור כתבנית בספרייה, והחלת תבנית על חיבורים. */
+export function saveTemplate(name: string, connId: string, params: PlateConnParams): Command {
+  return {
+    label: 'שמירת תבנית חיבור',
+    run: (p) => {
+      if (!name.trim()) throw new CommandError('נדרש שם לתבנית');
+      const n = clone(p);
+      n.connectionTemplates.push({ id: `T${Date.now().toString(36)}`, name: name.trim(), type: connTypeOf(connId), params: clone(params) });
+      return n;
+    },
+  };
+}
+
+export function applyTemplate(templateId: string, connIds: string[]): Command {
+  return {
+    label: 'החלת תבנית חיבור',
+    run: (p) => {
+      const t = p.connectionTemplates.find((x) => x.id === templateId);
+      if (!t) throw new CommandError('תבנית לא נמצאה');
+      const n = clone(p);
+      for (const id of connIds) {
+        if (connTypeOf(id) !== t.type) throw new CommandError('התבנית אינה מתאימה לסוג החיבור');
+        n.connectionOverrides[id] = { ...(n.connectionOverrides[id] ?? {}), ...clone(t.params) };
       }
       return n;
     },

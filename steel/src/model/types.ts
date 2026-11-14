@@ -2,7 +2,7 @@ import type { Mm } from '../core/units';
 import type { Plane, Vec3 } from '../core/vec';
 
 /** גרסת סכמת קובץ הפרויקט. כל שינוי שובר מחייב מיגרציה ב-model/migrate.ts */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export type RoofType = 'gable' | 'mono';
 /** לאן מתייחסים גובהי העמודים/הרכס: פני עליון של קורת הגג (TOS) או ציר הקורה. */
@@ -30,8 +30,39 @@ export interface PurlinSideParams {
   edgeOffset: Mm;
   /** כיוון פתיחת החתך (אגפים של C): לכיוון הרכס/הקצה העליון או לכיוון המרזב */
   opening: 'up' | 'down';
+  cleat: CleatParams;
   /** מיקומים ידניים (לאורך השיפוע מנקודת ההתחלה). null = פריסה אוטומטית */
   manualPositions: Mm[] | null;
+}
+
+/** פרמטרי תומך זוויתן לפטה. אורכים ב-mm. */
+export interface CleatParams {
+  enabled: boolean;
+  /** גובה הרגל הניצבת (לאורך נורמל הגג). null = שווה לגובה הפטה (אוטומטי) */
+  height: Mm | null;
+  /** אורך רגל הבסיס (על האגף העליון של הקורה) */
+  base: Mm;
+  thickness: Mm;
+  /** רוחב הזוויתן לאורך ציר הפטה */
+  width: Mm;
+  bolt: BoltSpec;
+  /** מספר שורות (לאורך נורמל הגג) ומספר ברגים בשורה (לאורך ציר הפטה) */
+  rows: number;
+  perRow: number;
+  /** מרווח בין ברגים בשורה, ובין שורות */
+  pitch: Mm;
+  rowPitch: Mm;
+  /** גובה השורה התחתונה מפני הקורה. null = אוטומטי (באמצע הרגל) */
+  holeHeight: Mm | null;
+  weldSize: Mm;
+}
+
+export interface BoltSpec {
+  d: Mm;
+  grade: string;      // 8.8
+  standard: string;   // ISO 4017
+  /** תוספת קוטר חור (חור = d + clearance) */
+  clearance: Mm;
 }
 
 export interface PurlinSystem {
@@ -93,7 +124,32 @@ export interface MemberOverride {
   placement?: ManualPlacement;
 }
 
-export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin';
+export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'cleat' | 'plate' | 'bolt';
+
+export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat';
+export type ApprovalStatus = 'not-verified' | 'for-review' | 'approved';
+
+/** חיבור מבוסס פלטה וקבוצת ברגים (קורה-עמוד, רכס, פלטת בסיס). */
+export interface PlateConnParams {
+  enabled: boolean;
+  /** עובי, רוחב (ניצב לציר הקורה/לאורך Y) ואורך הפלטה */
+  t: Mm;
+  w: Mm;
+  l: Mm;
+  bolt: BoltSpec;
+  /** ברגים: עמודות (לאורך Y) × שורות (לאורך הפלטה), מרווחים */
+  cols: number;
+  rows: number;
+  gauge: Mm;   // מרחק בין עמודות
+  pitch: Mm;   // מרחק בין שורות
+  weldSize: Mm;
+  /** פלטת בסיס בלבד: אורך ברגי עיגון מתחת לפלטה */
+  anchorLength?: Mm;
+}
+
+export type ConnectionDefaults = Record<Exclude<ConnType, 'purlin-cleat'>, PlateConnParams>;
+
+export interface ConnectionTemplate { id: string; name: string; type: Exclude<ConnType, 'purlin-cleat'>; params: PlateConnParams }
 
 export interface ManualMember {
   id: string;
@@ -110,8 +166,8 @@ export interface ManualMember {
   copiedFrom?: string;
 }
 
-/** center: מרכז החתך על הקו; top: פני עליון על הקו; purlin: פני תחתון על הקו וציר הווב על הקו */
-export type Anchor = 'center' | 'top' | 'purlin';
+/** center: מרכז החתך על הקו; top: פני עליון על הקו; purlin: פני תחתון על הקו וציר הווב על הקו; corner: פינת (umin,vmin) על הקו */
+export type Anchor = 'center' | 'top' | 'purlin' | 'corner';
 
 export interface Project {
   schemaVersion: number;
@@ -128,6 +184,14 @@ export interface Project {
    * חיבור המשך אינו מאושר הנדסית — מסומן "דורש תכנון".
    */
   splices: Record<string, Mm[]>;
+  /** פרמטרי חיבורים לפי סוג (ברירת מחדל לפרויקט) */
+  connectionDefaults: ConnectionDefaults;
+  /** שינויים לחיבור בודד (לפי מזהה חיבור) — נשמרים לאלמנט */
+  connectionOverrides: Record<string, Partial<PlateConnParams> & { status?: ApprovalStatus; fixity?: 'rigid' | 'pinned' | 'semi' }>;
+  /** ספריית תבניות חיבור של המשתמש */
+  connectionTemplates: ConnectionTemplate[];
+  /** שינויים לתומך בודד (לפי מזהה תומך) */
+  cleatOverrides: Record<string, Partial<CleatParams>>;
   nextFrameNo: number;
   nextMemberNo: number;
 }
@@ -154,6 +218,10 @@ export interface Member {
   source: 'generated' | 'manual';
   manualPlacement: boolean;
   purlin?: PurlinInfo;
+  /** לחלקי חיבור (זוויתן, פלטה, בורג): מזהה החיבור */
+  connId?: string;
+  /** תיאור חלק לייצור (לפלטה/זוויתן/בורג) */
+  partDesc?: string;
 }
 
 export interface PurlinInfo {
@@ -191,6 +259,53 @@ export interface FabPart {
   length: Mm;
   profile: string;
   material: string;
+}
+
+export interface BoltInfo {
+  id: string;
+  connId: string;
+  /** מרכז ראש הבורג וכיוון הציר (מהראש לאום) */
+  p: Vec3;
+  axis: Vec3;
+  d: Mm;
+  hole: Mm;
+  grade: string;
+  standard: string;
+  grip: Mm;
+  length: Mm;
+  /** shop = מסגריה, site = שטח */
+  location: 'site' | 'shop';
+  /** חורים בחלקים המחוברים */
+  holesIn: string[];
+}
+
+export interface WeldInfo {
+  id: string;
+  connId: string;
+  type: 'fillet';
+  a: Mm;
+  length: Mm;
+  location: 'shop' | 'site';
+  between: [string, string];
+  /** קו הריתוך להצגה */
+  from: Vec3;
+  to: Vec3;
+}
+
+export interface Connection {
+  id: string;
+  type: ConnType;
+  label: string;
+  /** אלמנטים ראשיים המחוברים */
+  members: string[];
+  /** חלקי החיבור (מזהי אלמנטים: זוויתן, פלטות, ברגים) */
+  parts: string[];
+  bolts: BoltInfo[];
+  welds: WeldInfo[];
+  status: ApprovalStatus;
+  /** קביעות (rigid/pinned) — מאפיין מבני בלבד, ללא אימות */
+  fixity: 'rigid' | 'pinned' | 'semi';
+  overridden: boolean;
 }
 
 export interface SpliceInfo {
@@ -236,4 +351,6 @@ export interface DerivedModel {
   supports: SupportPoint[];
   parts: FabPart[];
   splices: SpliceInfo[];
+  connections: Connection[];
+  connById: Map<string, Connection>;
 }

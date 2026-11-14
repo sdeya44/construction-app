@@ -82,7 +82,7 @@ export function App() {
     <div className="app">
       <ProfileDatalist />
       <header className="topbar">
-        <div className="brand"><img src="./icon.svg" alt="" />KAYAN STEEL PRO <small className="desk-only">0.2 · M2</small></div>
+        <div className="brand"><img src="./icon.svg" alt="" />KAYAN STEEL PRO <small className="desk-only">0.3 · M3</small></div>
         <div className="proj-name" data-testid="proj-name">{s.project.meta.name}</div>
         <div className="spacer" />
         <button className="tb-btn desk-only" onClick={() => setDialog('new')} data-testid="btn-new"><Icon name="file" />חדש</button>

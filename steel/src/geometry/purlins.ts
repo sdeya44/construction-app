@@ -126,12 +126,18 @@ export function buildPurlins(b: BuildingParams, roof: RoofInfo, deleted: Set<str
     // היקף החתך לכיוון נקודת ההתחלה (לבדיקת חציית רכס)
     const wc = webCenterU(prm.profile);
     const us = prof.outline.outer.map((q) => (mirror ? -(q.u - wc) : q.u - wc));
-    const towardStart = ln.side === 'M' ? 0 : dot(u, ln.up) > 0 ? Math.max(...us) : -Math.min(...us);
+    let towardStart = ln.side === 'M' ? 0 : dot(u, ln.up) > 0 ? Math.max(...us) : -Math.min(...us);
+    // התומך (זוויתן) בצד הרחוק מהאגף התחתון: אם הוא פונה לרכס, גם רגל הבסיס שלו נבדקת מול קו הרכס
+    const cleatToStart = prm.cleat.enabled && (prof.family === 'Z' ? prm.opening === 'up' : prm.opening === 'down');
+    if (ln.side !== 'M' && cleatToStart) {
+      const wb = prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2;
+      towardStart = Math.max(towardStart, wb + prm.cleat.base);
+    }
     lay.s.forEach((s, i) => {
       const id = `PL.${ln.side}.${String(i + 1).padStart(2, '0')}`;
       if (deleted.has(id)) return;
       if (i === 0 && ln.side !== 'M' && s - towardStart < 0) {
-        out.issues.push({ code: 'PURLIN_RIDGE', severity: 'error', elementId: id, message: `${ln.label}: הפטה הראשונה חוצה את קו הרכס — הגדל את המרחק הראשון` });
+        out.issues.push({ code: 'PURLIN_RIDGE', severity: 'error', elementId: id, message: `${ln.label}: הפטה הראשונה או התומך שלה חוצים את קו הרכס — הגדל את המרחק הראשון` });
       }
       const P = { x: ln.S.x + dir.x * s, z: ln.S.z + dir.z * s };
       out.members.push({

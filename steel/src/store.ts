@@ -34,6 +34,8 @@ export interface AppState {
   saveState: 'saved' | 'dirty' | 'saving' | 'error';
   canUndo: boolean; canRedo: boolean;
   undoLabel?: string; redoLabel?: string;
+  /** חיבור פתוח בעורך החיבורים */
+  activeConn: string | null;
   measure: { a?: { x: number; y: number; z: number }; b?: { x: number; y: number; z: number } };
   revision: number;
 }
@@ -51,13 +53,13 @@ class Store {
     this.history = new History(p);
     this.state = {
       project: p, derived: generate(p), selection: [], hidden: [], isolated: null,
-      filter: { column: true, rafter: true, beam: true, brace: true, purlin: true },
+      filter: { column: true, rafter: true, beam: true, brace: true, purlin: true, cleat: true, plate: true, bolt: true },
       tool: 'select',
       view: {
         projection: 'persp', render: 'solid', grid: true, dims: true, labels: true, split: false,
         clip: { enabled: false, axis: 'Y', pos: 0, flip: false },
       },
-      toasts: [], saveState: 'saved', canUndo: false, canRedo: false, measure: {}, revision: 0,
+      toasts: [], saveState: 'saved', canUndo: false, canRedo: false, measure: {}, revision: 0, activeConn: null,
     };
   }
 

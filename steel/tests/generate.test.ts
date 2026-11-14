@@ -14,6 +14,7 @@ describe('GEO-01 – סככה דו־שיפועית 18×30, 6 מסגרות, 6 מ\
   });
   it('12 עמודים, 12 קורות גג, 6 צירי מסגרת, 2 צירי אורך', () => {
     expect(d.members.filter((m) => m.kind === 'column').length).toBe(12);
+    expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
     expect(d.members.filter((m) => m.kind === 'rafter').length).toBe(12);
     expect(d.grid.filter((g) => g.dir === 'Y').map((g) => g.pos)).toEqual([0, 6000, 12000, 18000, 24000, 30000]);
     expect(d.grid.filter((g) => g.dir === 'X').map((g) => g.pos)).toEqual([0, 18000]);
@@ -30,29 +31,32 @@ describe('GEO-01 – סככה דו־שיפועית 18×30, 6 מסגרות, 6 מ\
       const minZ = Math.min(...s.tris.filter((_, i) => i % 3 === 2));
       // עומק אנכי של הקורה בשיפוע = h / cos(α)
       const vDepth = getProfile('IPE300').props.h / Math.cos(Math.atan(0.1));
-      expect(minZ).toBeCloseTo(6000 - vDepth, 6);
+      // הקורה מוארכת 170 מ"מ מציר העמוד (חצי פלטת כיפה) — הנקודה הנמוכה בקצה המוארך
+      expect(minZ).toBeCloseTo(6000 - 0.1 * 170 - vDepth, 6);
     }
     for (const c of d.members.filter((x) => x.kind === 'column')) {
       expect(c.end.z).toBeGreaterThan(c.start.z);
     }
   });
-  it('ראש העמוד חתוך בדיוק בפני התחתון של קורת הגג', () => {
+  it('ראש העמוד חתוך בדיוק בפני התחתון של פלטת הכיפה שמתחת לקורת הגג', () => {
     const col = d.byId.get('F1.COL.L')!;
     const s = memberSolid(col);
     for (const p of s.endRing) {
       expect(Math.abs(dot(sub(p, col.endCut!.point), col.endCut!.normal))).toBeLessThan(1e-6);
     }
-    // פני התחתון של הקורה: 300 מ"מ בניצב מתחת ל-TOS
+    // פני התחתון של הקורה: 300 מ"מ בניצב מתחת ל-TOS, ומתחתיו פלטת כיפה 15 מ"מ
     const n = col.endCut!.normal;
     expect(n.z).toBeGreaterThan(0.99);
-    expect(dot(sub({ x: 0, y: 0, z: 6000 }, col.endCut!.point), n)).toBeCloseTo(300, 6);
+    expect(dot(sub({ x: 0, y: 0, z: 6000 }, col.endCut!.point), n)).toBeCloseTo(315, 6);
   });
   it('קורת גג: פני עליון על קו הייחוס (TOS)', () => {
     const r = d.byId.get('F1.RAF.L')!;
     const s = memberSolid(r);
-    const topZatX0 = Math.max(...s.startRing.map((p) => p.z));
-    // ללא קונזולה: קצה הקורה ב-x=0, פני עליון ב-6000
-    expect(topZatX0).toBeCloseTo(6000, 3);
+    const topZ = Math.max(...s.startRing.map((p) => p.z));
+    // ללא קונזולה: הקורה מוארכת עד קצה פלטת הכיפה (x=-170); פני עליון שם 6000-17; בציר העמוד — 6000
+    expect(r.start.x).toBeCloseTo(-170, 6);
+    expect(topZ).toBeCloseTo(6000 - 17, 3);
+    expect(r.start.z + 0.1 * 170).toBeCloseTo(6000, 6);
     expect(r.anchor).toBe('top');
   });
   it('דטרמיניסטי: אותו פרויקט ⇒ אותם מזהים ואותה גיאומטריה', () => {
@@ -98,7 +102,7 @@ describe('ולידציה ופרמטריות', () => {
     p.building.rafterOverhangLeft = 1000;
     const d = generate(p);
     const r = d.byId.get('F1.RAF.L')!;
-    expect(r.start.x).toBe(-1000);
+    expect(r.start.x).toBe(-1000); // קונזולה גדולה מהמינימום — נשמרת
     expect(r.start.z).toBeCloseTo(5900, 6);
   });
   it('התאמה ידנית שהפכה ללא תקפה מדווחת לאחר שינוי פרמטרי', () => {

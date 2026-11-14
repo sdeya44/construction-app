@@ -1,4 +1,5 @@
-import { proposeSplicesFor, setPurlinSide, setPurlinSystem, type Command } from '../commands/commands';
+import { proposeSplicesFor, setCleat, setPurlinSide, setPurlinSystem, type Command } from '../commands/commands';
+import { NumField } from './fields';
 import { fromMm } from '../core/units';
 import type { Member, PurlinSideParams } from '../model/types';
 import { MATERIALS } from '../profiles/materials';
@@ -58,6 +59,37 @@ function SideEditor({ side, title, items }: { side: 'left' | 'right'; title: str
             ? <><span className="badge warn">פריסה ידנית</span><button className="btn small" onClick={() => set({ manualPositions: null })}>חזרה לאוטומטי</button></>
             : <button className="btn small" data-testid={tid('manual')} onClick={() => set({ manualPositions: items.map((m) => m.purlin!.sSlope * (prm.measure === 'horizontal' ? 1 : 1)) })}>עריכה ידנית של המיקומים</button>}
         </div>
+        <div className="panel-title">תומכים (זוויתן L)
+          <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" checked={prm.cleat.enabled} data-testid={tid('cleat-enabled')} onChange={(e) => store.exec(setCleat(side, { enabled: e.target.checked }))} />פעיל</label>
+        </div>
+        {prm.cleat.enabled && <>
+          <div className="field"><label>גובה</label>
+            <div className="row" style={{ flexWrap: 'nowrap' }}>
+              {prm.cleat.height === null
+                ? <><span className="readonly" style={{ flex: 1 }}>= גובה הפטה</span><button className="btn small" data-testid={tid('cleat-h-manual')} onClick={() => store.exec(setCleat(side, { height: Math.round(items[0] ? 200 : 200) }))}>ידני</button></>
+                : <><LenField testId={tid('cleat-h')} mm={prm.cleat.height} unit="mm" onCommit={(v) => store.exec(setCleat(side, { height: v }))} /><button className="btn small" onClick={() => store.exec(setCleat(side, { height: null }))}>אוטו׳</button></>}
+            </div>
+          </div>
+          <div className="field"><label>רגל בסיס × עובי</label>
+            <div className="row" style={{ flexWrap: 'nowrap' }}>
+              <LenField testId={tid('cleat-base')} mm={prm.cleat.base} unit="mm" onCommit={(v) => store.exec(setCleat(side, { base: v }))} />
+              <LenField mm={prm.cleat.thickness} unit="mm" onCommit={(v) => store.exec(setCleat(side, { thickness: v }))} />
+            </div>
+          </div>
+          <div className="field"><label>רוחב לאורך הפטה</label><LenField mm={prm.cleat.width} unit="mm" onCommit={(v) => store.exec(setCleat(side, { width: v }))} /></div>
+          <div className="field"><label>ברגים בשורה × מרווח</label>
+            <div className="row" style={{ flexWrap: 'nowrap' }}>
+              <NumField value={prm.cleat.perRow} onCommit={(v) => store.exec(setCleat(side, { perRow: Math.round(v) }))} />
+              <LenField mm={prm.cleat.pitch} unit="mm" onCommit={(v) => store.exec(setCleat(side, { pitch: v }))} />
+            </div>
+          </div>
+          <div className="field"><label>קוטר בורג</label>
+            <select className="inp" value={prm.cleat.bolt.d} onChange={(e) => store.exec(setCleat(side, { bolt: { ...prm.cleat.bolt, d: Number(e.target.value) } }))}>
+              {[10, 12, 16, 20].map((x) => <option key={x} value={x}>M{x}</option>)}
+            </select>
+          </div>
+          <div className="hint">מרותך לקורה במסגריה, מוברג לווב הפטה בשטח. הרגל הניצבת צמודה לווב (0 מ"מ), רגל הבסיס פונה הרחק מהאגף התחתון.</div>
+        </>}
         {prm.manualPositions && (
           <div style={{ marginTop: 6 }}>
             {prm.manualPositions.map((v, i) => (

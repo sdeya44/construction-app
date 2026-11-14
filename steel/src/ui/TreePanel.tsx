@@ -5,7 +5,7 @@ import { KIND_COLOR } from '../view/scene';
 import { Icon } from './icons';
 
 export const KIND_LABEL: Record<MemberKind, string> = {
-  column: 'עמוד', rafter: 'קורת גג', beam: 'קורה', brace: 'קושרת', purlin: 'פטה',
+  column: 'עמוד', rafter: 'קורת גג', beam: 'קורה', brace: 'קושרת', purlin: 'פטה', cleat: 'זוויתן', plate: 'פלטה', bolt: 'בורג',
 };
 
 export function TreePanel() {

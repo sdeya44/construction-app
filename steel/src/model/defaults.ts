@@ -1,5 +1,5 @@
 import { uid } from '../core/ids';
-import type { BuildingParams, FrameDef, Project, PurlinSideParams, PurlinSystem } from './types';
+import type { BoltSpec, BuildingParams, CleatParams, ConnectionDefaults, FrameDef, Project, PurlinSideParams, PurlinSystem } from './types';
 import { SCHEMA_VERSION } from './types';
 
 /** יוצר מסגרות במרווח אחיד או לפי רשימת מרווחים. */
@@ -15,10 +15,29 @@ export function uniformFrames(count: number, length: number): FrameDef[] {
   return framesFromSpacings(Array.from({ length: count - 1 }, () => length / (count - 1)));
 }
 
+export const bolt = (d: number): BoltSpec => ({ d, grade: '8.8', standard: 'ISO 4017', clearance: 2 });
+
+/** זוויתן ברירת מחדל: רגל בסיס 80, עובי 8, גובה = גובה הפטה, 2 ברגי M12 בשורה אחת. */
+export function defaultCleat(): CleatParams {
+  return {
+    enabled: true, height: null, base: 80, thickness: 8, width: 100, bolt: bolt(12),
+    rows: 1, perRow: 2, pitch: 50, rowPitch: 60, holeHeight: null, weldSize: 4,
+  };
+}
+
 export function defaultPurlinSide(): PurlinSideParams {
   return {
     enabled: true, profile: 'C200x80x20x3', first: 300, spacing: 1500, measure: 'slope',
-    edgeOffset: 0, opening: 'up', manualPositions: null,
+    edgeOffset: 0, opening: 'down', cleat: defaultCleat(), manualPositions: null,
+  };
+}
+
+/** ברירות מחדל לחיבורים — הצעה גיאומטרית בלבד, לא מאומתת. */
+export function defaultConnections(): ConnectionDefaults {
+  return {
+    eave: { enabled: true, t: 15, w: 200, l: 340, bolt: bolt(16), cols: 2, rows: 2, gauge: 100, pitch: 260, weldSize: 6 },
+    ridge: { enabled: true, t: 15, w: 160, l: 0, bolt: bolt(16), cols: 2, rows: 2, gauge: 90, pitch: 0, weldSize: 6 },
+    base: { enabled: true, t: 20, w: 320, l: 320, bolt: bolt(20), cols: 2, rows: 2, gauge: 230, pitch: 230, weldSize: 6, anchorLength: 500 },
   };
 }
 
@@ -62,6 +81,10 @@ export function newProject(name = 'פרויקט חדש', building: BuildingParam
     manualMembers: [],
     deleted: [],
     splices: {},
+    connectionDefaults: defaultConnections(),
+    connectionOverrides: {},
+    connectionTemplates: [],
+    cleatOverrides: {},
     nextFrameNo: building.frames.length + 1,
     nextMemberNo: 1,
   };
