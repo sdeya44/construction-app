@@ -63,10 +63,10 @@ export function PropertiesPanel() {
     <div className="panel-body" data-testid="props-single">
       <div className="panel-title">{KIND_LABEL[m.kind]} <span className={`badge ${m.source === 'manual' ? 'warn' : 'blue'}`}>{m.source === 'manual' ? 'ידני' : 'פרמטרי'}</span></div>
       <dl className="kv">
-        <dt>Element ID</dt><dd data-testid="prop-id">{m.id}</dd>
+        <dt>מזהה אלמנט</dt><dd data-testid="prop-id">{m.id}</dd>
         <dt>תיאור</dt><dd style={{ direction: 'rtl', textAlign: 'right', fontFamily: 'var(--font)' }}>{m.label}</dd>
         {frameNo > 0 && <><dt>מסגרת</dt><dd>{frameNo} ({m.frameId})</dd></>}
-        <dt>Part Mark</dt><dd style={{ direction: 'rtl', textAlign: 'right' }}><span className="badge">טרם הוקצה (שלב M5)</span></dd>
+        <dt>סימון חלק</dt><dd style={{ direction: 'rtl', textAlign: 'right' }}><span className="badge">טרם הוקצה (שלב M5)</span></dd>
       </dl>
       {m.manualPlacement && m.source === 'generated' && (
         <div className={`issue ${stale ? 'warning' : ''}`} style={{ marginTop: 6 }}>
@@ -83,7 +83,7 @@ export function PropertiesPanel() {
         </select>
       </div>
       <div className="field"><label>סיבוב סביב הציר</label><NumField value={m.rollDeg} suffix="°" onCommit={(v) => store.exec(setMemberProps([m.id], { rollDeg: v }))} /></div>
-      <div className="field"><label>היפוך חתך (Mirror)</label>
+      <div className="field"><label>היפוך חתך</label>
         <select className="inp" value={m.mirror ? '1' : '0'} onChange={(e) => store.exec(setMemberProps([m.id], { mirror: e.target.value === '1' }))}>
           <option value="0">רגיל</option><option value="1">הפוך</option>
         </select>
