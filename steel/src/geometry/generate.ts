@@ -8,6 +8,7 @@ import { buildParts } from './parts';
 import { buildPurlins } from './purlins';
 import type { Connection, SupportPoint } from '../model/types';
 import { buildConnections, checkClashes } from './connections';
+import { buildBracing } from './bracing';
 
 const HEB_LETTERS = 'אבגדהוזחטיכלמנסעפצקרשת';
 export const xAxisLabel = (i: number) => HEB_LETTERS[i] ?? `X${i + 1}`;
@@ -163,6 +164,10 @@ export function generate(project: Project): DerivedModel {
     out.push(...cr.members.filter((m) => !hidden.has(m.id)));
     connections = cr.connections;
     issues.push(...cr.issues);
+    const bb = buildBracing(b, roof, out.filter((m) => m.purlin), bEff);
+    out.push(...bb.members.filter((m) => !hidden.has(m.id)));
+    connections.push(...bb.connections);
+    issues.push(...bb.issues);
     byId = new Map(out.map((m) => [m.id, m]));
     issues.push(...checkClashes(connections, byId));
   }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { addFrame, removeFrame, respaceFrames, setBuilding, setFrameY, setMeta, setSettings } from '../commands/commands';
 import type { BuildingParams } from '../model/types';
+import { resolveBays } from '../geometry/bracing';
 import { catalogNames } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
@@ -80,6 +81,7 @@ export function StructurePanel() {
         </select>
       </div>
 
+      <BracingEditor />
       <div className="panel-title">מסגרות ({frames.length})
         <button className="btn small" data-testid="add-frame" onClick={() => {
           const last = frames[frames.length - 1];
@@ -110,5 +112,51 @@ export function StructurePanel() {
       <div className="field"><label>מרווח</label><LenField mm={sp} unit={u} onCommit={setSp} /></div>
       <button className="btn" data-testid="respace" onClick={() => store.exec(respaceFrames(nf, sp))}>החל חלוקה</button>
     </div>
+  );
+}
+
+function BayPicker({ bays, count, onChange, testId }: { bays: number[]; count: number; onChange: (b: number[]) => void; testId: string }) {
+  const sel = new Set(resolveBays(bays, count));
+  return (
+    <div className="row" data-testid={testId} style={{ gap: 3 }}>
+      {Array.from({ length: count }, (_, i) => (
+        <label key={i} className={`badge${sel.has(i) ? ' blue' : ''}`} style={{ cursor: 'pointer' }} title={`מפתח ${i + 1} (מסגרות ${i + 1}–${i + 2})`}>
+          <input type="checkbox" checked={sel.has(i)} style={{ display: 'none' }}
+            onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(i); else n.delete(i); onChange([...n].sort((a, b) => a - b)); }} />
+          {i + 1}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function BracingEditor() {
+  const b = useStore((s) => s.project.building);
+  const br = b.bracing;
+  const nb = b.frames.length - 1;
+  const set = (patch: Partial<BuildingParams['bracing']>) => store.exec(setBuilding({ bracing: { ...br, ...patch } }));
+  return (
+    <>
+      <div className="panel-title">קושרות X – גג
+        <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-roof" checked={br.roof.enabled} onChange={(e) => set({ roof: { ...br.roof, enabled: e.target.checked } })} />פעיל</label>
+      </div>
+      {br.roof.enabled && <>
+        <div className="field"><label>חתך</label><TextField ltr list="profiles" value={br.roof.profile} onCommit={(v) => set({ roof: { ...br.roof, profile: v.toUpperCase().replace(/\s/g, '') } })} /></div>
+        <div className="field"><label>מפתחים</label><BayPicker testId="br-roof-bays" bays={br.roof.bays} count={nb} onChange={(x) => set({ roof: { ...br.roof, bays: x } })} /></div>
+      </>}
+      <div className="panel-title">קושרות X – קירות
+        <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-walls" checked={br.walls.enabled} onChange={(e) => set({ walls: { ...br.walls, enabled: e.target.checked } })} />פעיל</label>
+      </div>
+      {br.walls.enabled && <>
+        <div className="field"><label>חתך</label><TextField ltr list="profiles" value={br.walls.profile} onCommit={(v) => set({ walls: { ...br.walls, profile: v.toUpperCase().replace(/\s/g, '') } })} /></div>
+        <div className="field"><label>ציר א (שמאל)</label><BayPicker testId="br-wl" bays={br.walls.left} count={nb} onChange={(x) => set({ walls: { ...br.walls, left: x } })} /></div>
+        <div className="field"><label>ציר ב (ימין)</label><BayPicker testId="br-wr" bays={br.walls.right} count={nb} onChange={(x) => set({ walls: { ...br.walls, right: x } })} /></div>
+      </>}
+      <div className="panel-title">שורת קשירה לפטות
+        <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-ties" checked={br.purlinTies.enabled} onChange={(e) => set({ purlinTies: { ...br.purlinTies, enabled: e.target.checked } })} />פעיל</label>
+      </div>
+      {br.purlinTies.enabled && <div className="field"><label>חתך</label><TextField ltr list="profiles" value={br.purlinTies.profile} onCommit={(v) => set({ purlinTies: { ...br.purlinTies, profile: v.toUpperCase().replace(/\s/g, '') } })} /></div>}
+      <div className="hint">קושרות X עובדות במתיחה בלבד. שורת קשירה באמצע כל מפתח, צמודה לאגף התחתון של הפטות (נגד יניקת רוח). פחי חיבור והצטלבויות — דורש תכנון.</div>
+    </>
   );
 }

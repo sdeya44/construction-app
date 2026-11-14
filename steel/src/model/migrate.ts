@@ -1,6 +1,6 @@
 import type { Project } from './types';
 import { SCHEMA_VERSION } from './types';
-import { defaultCleat, defaultConnections, defaultPurlins, defaultPurlinSide } from './defaults';
+import { defaultBracing, defaultCleat, defaultConnections, defaultPurlins, defaultPurlinSide } from './defaults';
 
 /**
  * מיגרציות סכמה. כל מפתח N ממיר קובץ מגרסה N לגרסה N+1.
@@ -22,6 +22,12 @@ const MIGRATIONS: Record<number, (d: any) => any> = {
       building: { ...d.building, purlins: { ...d.building.purlins, left: side(d.building.purlins.left), right: side(d.building.purlins.right) } },
     };
   },
+  // v3 → v4: קושרות ושורות קשירה; פלטת בסיס מבוטנת (החלטת משתמש 14.11.2026)
+  3: (d) => ({
+    ...d, schemaVersion: 4,
+    building: { ...d.building, bracing: defaultBracing() },
+    connectionDefaults: { ...d.connectionDefaults, base: defaultConnections().base },
+  }),
 };
 
 export class ProjectFileError extends Error {}
@@ -69,6 +75,8 @@ export function assertProject(d: any): asserts d is Project {
   need(d.connectionOverrides && typeof d.connectionOverrides === 'object', 'connectionOverrides');
   need(Array.isArray(d.connectionTemplates), 'connectionTemplates');
   need(d.cleatOverrides && typeof d.cleatOverrides === 'object', 'cleatOverrides');
+  const br = d.building.bracing;
+  need(br && br.roof && br.walls && br.purlinTies && Array.isArray(br.roof.bays), 'bracing');
 }
 
 /** קובץ JSON נייד: מעטפת עם שם פורמט וגרסת סכמה. */

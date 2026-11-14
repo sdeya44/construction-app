@@ -5,7 +5,7 @@ import type {
   SupportPoint, ValidationIssue, WeldInfo,
 } from '../model/types';
 import { localFrame } from './frame';
-import { clash } from './clash';
+import { aabb, aabbOverlap, clash } from './clash';
 
 /** מידות בורג/אום/דיסקית לפי ISO 4017/4032/7089 (מידע גיאומטרי בלבד — לא מאומת). */
 const HW: Record<number, { s: number; k: number; m: number; w: number; P: number }> = {
@@ -183,35 +183,55 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       }
     }
 
-    // ---- בסיס: פלטה מרותכת לעמוד (מסגריה), ברגי עיגון (שטח)
+    // ---- בסיס. embedded (ברירת מחדל, לפי החלטת המשתמש): פלטה מבוטנת + מוטות עיגון מרותכים במסגריה, העמוד מרותך בשטח.
+    //      bolted: פלטה מרותכת לעמוד במסגריה, ברגי עיגון בשטח.
     for (const side of ['L', 'R'] as const) {
       const id = `C.BASE.${f.id}.${side}`;
       const col = byId.get(`${f.id}.COL.${side}`);
       const prm = effPlate(project, 'base', id);
       if (!prm.enabled || !isGen(col)) continue;
-      const base = col!.start;
-      const top = add(base, scale(Z, prm.t));
-      col!.startCut = { point: top, normal: Z };
       const X = v3(1, 0, 0);
       const pid = `${id}.PL`;
-      res.members.push(partMember(pid, 'plate', `PL${prm.w}x${prm.t}`, sub(top, scale(X, prm.l / 2)), add(top, scale(X, prm.l / 2)), Z, 'top', id, `פלטת בסיס PL${prm.t}×${prm.w}×${prm.l}`, mat));
-      const bolts: BoltInfo[] = [];
-      const h = hw(prm.bolt.d);
-      const anchorLen = (prm.anchorLength ?? 500) + prm.t + h.w + h.m + 2 * h.P;
-      grid(prm.cols, prm.gauge).forEach((gy, ci) => grid(prm.rows, prm.pitch).forEach((px, ri) => {
-        // בורג עיגון: מבצבץ מעל הפלטה (אום + דיסקית), ממשיך מתחת לבסיס
-        const headTop = add(top, v3(px, gy, h.w + h.m + 2 * h.P));
-        const bi = makeBolt(`${id}.A${ci + 1}${ri + 1}`, id, headTop, v3(0, 0, -1), prm.bolt, prm.t, 'site', [pid], X, res.members, anchorLen);
-        bolts.push(bi);
-      }));
-      const d0 = prm.bolt.d + prm.bolt.clearance;
       const label = `פלטת בסיס ${side === 'L' ? 'שמאל' : 'ימין'} מסגרת ${fi}`;
-      edgeChecks(label, id, d0, prm.l / 2 - ((prm.rows - 1) / 2) * prm.pitch, prm.w / 2 - ((prm.cols - 1) / 2) * prm.gauge, prm.rows > 1 ? prm.pitch : null, prm.cols > 1 ? prm.gauge : null, res.issues);
       const cp = getProfile(col!.profile);
-      if (prm.rows > 1 && prm.pitch / 2 - h.s / 2 < cp.props.h / 2 + 5) issue({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `${label}: ברגי העיגון קרובים מדי לעמוד — אין מקום לאום/מפתח` });
-      if (prm.l < cp.props.h || prm.w < cp.props.b) issue({ code: 'PLATE_SMALL', severity: 'warning', elementId: id, message: `${label}: הפלטה קטנה מחתך העמוד` });
-      const welds: WeldInfo[] = [{ id: `${id}.W1`, connId: id, type: 'fillet', a: prm.weldSize, length: outlinePerimeter(col!.profile), location: 'shop', between: [col!.id, pid], from: top, to: top }];
-      res.connections.push({ id, type: 'base', label, members: [col!.id], parts: [pid, ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'pinned', overridden: !!project.connectionOverrides[id] });
+      const embedded = (prm.mode ?? 'embedded') === 'embedded';
+      const base = col!.start;
+      const top = embedded ? base : add(base, scale(Z, prm.t));
+      if (!embedded) col!.startCut = { point: top, normal: Z };
+      res.members.push(partMember(pid, 'plate', `PL${prm.w}x${prm.t}`, sub(top, scale(X, prm.l / 2)), add(top, scale(X, prm.l / 2)), Z, 'top', id,
+        embedded ? `פלטה מבוטנת PL${prm.t}×${prm.w}×${prm.l}` : `פלטת בסיס PL${prm.t}×${prm.w}×${prm.l}`, mat));
+      const bolts: BoltInfo[] = [];
+      const welds: WeldInfo[] = [];
+      const h = hw(prm.bolt.d);
+      if (embedded) {
+        // מוטות עיגון בהיקף רשת cols×rows, מרותכים מתחת לפלטה (מסגריה)
+        const gx = grid(prm.rows, prm.pitch), gy = grid(prm.cols, prm.gauge);
+        let k = 0;
+        gy.forEach((yy, ci) => gx.forEach((xx, ri) => {
+          if (!(ci === 0 || ci === prm.cols - 1 || ri === 0 || ri === prm.rows - 1)) return;
+          k++;
+          const p0 = add(top, v3(xx, yy, -prm.t));
+          const aid = `${id}.A${k}`;
+          res.members.push({ id: aid, kind: 'anchor', label: `מוט עיגון Φ${prm.bolt.d}`, start: p0, end: add(p0, v3(0, 0, -(prm.anchorLength ?? 800))), profile: `RD${prm.bolt.d}`, material: 'S235', rollDeg: 0, mirror: false, anchor: 'center', refUp: X, source: 'generated', manualPlacement: false, connId: id, partDesc: `מוט עיגון Φ${prm.bolt.d} L=${prm.anchorLength ?? 800} מרותך לפלטה` });
+          welds.push({ id: `${id}.WA${k}`, connId: id, type: 'fillet', a: prm.weldSize, length: Math.PI * prm.bolt.d, location: 'shop', between: [pid, aid], from: p0, to: p0 });
+        }));
+        const edge = Math.min(prm.l / 2 - ((prm.rows - 1) / 2) * prm.pitch, prm.w / 2 - ((prm.cols - 1) / 2) * prm.gauge);
+        if (edge < prm.bolt.d) issue({ code: 'ANCHOR_EDGE', severity: 'warning', elementId: id, message: `${label}: מוט עיגון קרוב לשפת הפלטה (${edge.toFixed(1)} מ"מ)` });
+        welds.push({ id: `${id}.W1`, connId: id, type: 'fillet', a: prm.weldSize, length: outlinePerimeter(col!.profile), location: 'site', between: [col!.id, pid], from: top, to: top });
+        issue({ code: 'SITE_WELD_OK', severity: 'info', elementId: id, message: `${label}: ריתוך העמוד לפלטה המבוטנת בשטח — חריג מאושר לעיקרון; נדרש תיקון גלוון. לקבע את הפלטה במקומה ובמפלס לפני היציקה.` });
+      } else {
+        const anchorLen = (prm.anchorLength ?? 500) + prm.t + h.w + h.m + 2 * h.P;
+        grid(prm.cols, prm.gauge).forEach((gy, ci) => grid(prm.rows, prm.pitch).forEach((px, ri) => {
+          const headTop = add(top, v3(px, gy, h.w + h.m + 2 * h.P));
+          bolts.push(makeBolt(`${id}.A${ci + 1}${ri + 1}`, id, headTop, v3(0, 0, -1), prm.bolt, prm.t, 'site', [pid], X, res.members, anchorLen));
+        }));
+        const d0 = prm.bolt.d + prm.bolt.clearance;
+        edgeChecks(label, id, d0, prm.l / 2 - ((prm.rows - 1) / 2) * prm.pitch, prm.w / 2 - ((prm.cols - 1) / 2) * prm.gauge, prm.rows > 1 ? prm.pitch : null, prm.cols > 1 ? prm.gauge : null, res.issues);
+        if (prm.rows > 1 && prm.pitch / 2 - h.s / 2 < cp.props.h / 2 + 5) issue({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `${label}: ברגי העיגון קרובים מדי לעמוד — אין מקום לאום/מפתח` });
+        welds.push({ id: `${id}.W1`, connId: id, type: 'fillet', a: prm.weldSize, length: outlinePerimeter(col!.profile), location: 'shop', between: [col!.id, pid], from: top, to: top });
+      }
+      if (prm.l < cp.props.h + 2 * prm.weldSize || prm.w < cp.props.b + 2 * prm.weldSize) issue({ code: 'PLATE_SMALL', severity: 'warning', elementId: id, message: `${label}: הפלטה קטנה מחתך העמוד בתוספת מקום לריתוך` });
+      res.connections.push({ id, type: 'base', label, members: [col!.id], parts: [pid, ...bolts.map((x) => x.id), ...res.members.filter((m) => m.connId === id && m.kind === 'anchor').map((m) => m.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'pinned', overridden: !!project.connectionOverrides[id] });
     }
   }
 
@@ -280,7 +300,7 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
 
   // כלל ייצור: ריתוך רק במסגריה
   for (const c of res.connections) for (const w of c.welds) {
-    if (w.location === 'site') issue({ code: 'SITE_WELD', severity: 'warning', elementId: c.id, message: `${c.label}: ריתוך בשטח — מנוגד לעיקרון (ריתוך במסגריה, גלוון, הרכבה בברגים)` });
+    if (w.location === 'site' && !(c.type === 'base' && res.issues.some((i) => i.code === 'SITE_WELD_OK' && i.elementId === c.id))) issue({ code: 'SITE_WELD', severity: 'warning', elementId: c.id, message: `${c.label}: ריתוך בשטח — מנוגד לעיקרון (ריתוך במסגריה, גלוון, הרכבה בברגים)` });
   }
   void members;
   return res;
@@ -310,6 +330,20 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
       for (const bo of c.bolts) { test(byId.get(`${bo.id}.H`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(pid), ' (אום מול חתך הפטה)'); }
     } else {
       for (const part of c.parts.filter((x) => byId.get(x)?.kind === 'plate')) for (const mid of c.members) test(byId.get(part), byId.get(mid));
+    }
+  }
+  // קושרות ושורות קשירה מול עמודים, קורות, פטות, תומכים וקושרות אחרות (סינון לפי תיבה חוסמת)
+  const others = [...byId.values()].filter((m) => ['column', 'rafter', 'purlin', 'cleat', 'plate', 'brace'].includes(m.kind));
+  const boxes = new Map(others.map((m) => [m.id, aabb(m)]));
+  for (const c of conns.filter((x) => x.type === 'brace')) {
+    for (const pid of c.parts) {
+      const a = byId.get(pid);
+      if (!a) continue;
+      const ba = boxes.get(pid) ?? aabb(a);
+      for (const o of others) {
+        if (o.id === pid || (o.kind === 'brace' && c.parts.includes(o.id))) continue;
+        if (aabbOverlap(ba, boxes.get(o.id)!)) test(a, o, ' (קושרת)');
+      }
     }
   }
   // אזור הרכס: פטות ותומכים של שני הצדדים

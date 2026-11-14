@@ -2,7 +2,7 @@ import type { Mm } from '../core/units';
 import type { Plane, Vec3 } from '../core/vec';
 
 /** גרסת סכמת קובץ הפרויקט. כל שינוי שובר מחייב מיגרציה ב-model/migrate.ts */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export type RoofType = 'gable' | 'mono';
 /** לאן מתייחסים גובהי העמודים/הרכס: פני עליון של קורת הגג (TOS) או ציר הקורה. */
@@ -74,6 +74,14 @@ export interface PurlinSystem {
   monoStart: 'low' | 'high';
 }
 
+/** מערכת קושרות ושורות קשירה לפטות. מפתחים (bays) לפי אינדקס: 0 = בין מסגרת 1 ל-2. */
+export interface BracingParams {
+  roof: { enabled: boolean; profile: string; bays: number[] };
+  walls: { enabled: boolean; profile: string; left: number[]; right: number[] };
+  /** שורת קשירה לאגף התחתון של הפטות, באמצע כל מפתח */
+  purlinTies: { enabled: boolean; profile: string };
+}
+
 export interface BuildingParams {
   roofType: RoofType;
   heightRef: HeightRef;
@@ -97,6 +105,7 @@ export interface BuildingParams {
   material: string;
   baseElevation: Mm;
   purlins: PurlinSystem;
+  bracing: BracingParams;
 }
 
 export interface ProjectMeta {
@@ -124,9 +133,9 @@ export interface MemberOverride {
   placement?: ManualPlacement;
 }
 
-export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'cleat' | 'plate' | 'bolt';
+export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'cleat' | 'plate' | 'bolt' | 'anchor';
 
-export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat';
+export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace';
 export type ApprovalStatus = 'not-verified' | 'for-review' | 'approved';
 
 /** חיבור מבוסס פלטה וקבוצת ברגים (קורה-עמוד, רכס, פלטת בסיס). */
@@ -143,13 +152,18 @@ export interface PlateConnParams {
   gauge: Mm;   // מרחק בין עמודות
   pitch: Mm;   // מרחק בין שורות
   weldSize: Mm;
-  /** פלטת בסיס בלבד: אורך ברגי עיגון מתחת לפלטה */
+  /** פלטת בסיס בלבד: אורך ברגי/מוטות עיגון מתחת לפלטה */
   anchorLength?: Mm;
+  /**
+   * פלטת בסיס בלבד. embedded: פלטה מבוטנת ביסוד (פני הפלטה = מפלס הבסיס) עם מוטות עיגון מרותכים מתחתיה,
+   * והעמוד מרותך אליה בשטח (חריג מאושר לעיקרון — נדרש תיקון גלוון). bolted: פלטה מרותכת לעמוד וברגי עיגון.
+   */
+  mode?: 'embedded' | 'bolted';
 }
 
-export type ConnectionDefaults = Record<Exclude<ConnType, 'purlin-cleat'>, PlateConnParams>;
+export type ConnectionDefaults = Record<'eave' | 'ridge' | 'base', PlateConnParams>;
 
-export interface ConnectionTemplate { id: string; name: string; type: Exclude<ConnType, 'purlin-cleat'>; params: PlateConnParams }
+export interface ConnectionTemplate { id: string; name: string; type: 'eave' | 'ridge' | 'base'; params: PlateConnParams }
 
 export interface ManualMember {
   id: string;

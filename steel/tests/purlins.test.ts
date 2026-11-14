@@ -216,7 +216,8 @@ describe('מיגרציה v1 → v2', () => {
     const p: any = geo();
     delete p.building.purlins; delete p.splices; p.schemaVersion = 1;
     const m = migrate(JSON.parse(JSON.stringify(p)));
-    expect(m.schemaVersion).toBe(3);
+    expect(m.schemaVersion).toBe(4);
+    expect(m.building.bracing.roof.enabled).toBe(true);
     expect(m.building.purlins.left.spacing).toBe(1500);
     expect(m.splices).toEqual({});
     expect(() => fromFileJson('{"schemaVersion":99}')).toThrow();

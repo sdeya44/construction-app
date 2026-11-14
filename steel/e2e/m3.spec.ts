@@ -78,14 +78,29 @@ test.describe('M3 – תומכים וחיבורים', () => {
     await shot(page, 'CONN_ridge');
     await page.evaluate(() => (window as any).__ksp.store.set({ activeConn: 'C.BASE.F1.L', isolated: null }));
     await page.getByTestId('cp-t').fill('30'); await page.getByTestId('cp-t').press('Enter');
+    await expect(page.getByTestId('cp-mode')).toHaveValue('embedded');
     await page.getByTestId('tpl-name').fill('בסיס 30');
     await page.getByTestId('tpl-save').click();
     await page.evaluate(() => (window as any).__ksp.store.set({ activeConn: 'C.BASE.F6.R' }));
     await page.getByRole('button', { name: 'החל כאן' }).click();
     const prof = await page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('C.BASE.F6.R.PL').profile);
-    expect(prof).toBe('PL320x30');
+    expect(prof).toBe('PL230x30');
     await page.getByTestId('conn-show3d').click();
     await page.waitForTimeout(400);
     await shot(page, 'CONN_base');
   });
+});
+
+test('קושרות: ביטול/הוספה דרך הממשק, ללא התנגשויות', async ({ page }) => {
+  await boot(page);
+  const count = () => page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('BR.R')).length);
+  expect(await count()).toBe(8);
+  await page.getByTestId('br-roof-bays').getByText('3', { exact: true }).click();
+  expect(await count()).toBe(12);
+  await page.getByTestId('br-roof').uncheck();
+  expect(await count()).toBe(0);
+  await page.getByTestId('br-roof').check();
+  const clash = await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'CLASH').length);
+  expect(clash).toBe(0);
+  await shot(page, 'BRACING_iso');
 });

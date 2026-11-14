@@ -11,7 +11,7 @@ import { LenField, NumField } from './fields';
 import { Icon } from './icons';
 
 const STATUS: Record<ApprovalStatus, string> = { 'not-verified': 'לא מאומת', 'for-review': 'לבדיקה', approved: 'מאושר' };
-const TYPE: Record<Connection['type'], string> = { eave: 'קורה-עמוד (פלטת כיפה)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)' };
+const TYPE: Record<Connection['type'], string> = { eave: 'קורה-עמוד (פלטת כיפה)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות' };
 const BOLT_D = [10, 12, 16, 20, 24];
 
 /** רשימת החיבורים של אלמנט + כפתור פתיחת עורך. */
@@ -51,7 +51,7 @@ export function ConnectionEditor() {
   const isCleat = c.type === 'purlin-cleat';
   const cleatId = isCleat ? c.parts[0] : '';
   const side = isCleat ? (d.byId.get(c.members[0])?.purlin?.side === 'R' ? 'right' : 'left') : 'left';
-  const plateType = isCleat ? null : (c.type as 'eave' | 'ridge' | 'base');
+  const plateType = c.type === 'eave' || c.type === 'ridge' || c.type === 'base' ? c.type : null;
   const eff: PlateConnParams | null = plateType ? { ...p.connectionDefaults[plateType], ...(p.connectionOverrides[id] ?? {}), bolt: { ...p.connectionDefaults[plateType].bolt, ...(p.connectionOverrides[id]?.bolt ?? {}) } } as PlateConnParams : null;
   const cl: CleatParams | null = isCleat ? effCleat(p, side, cleatId) : null;
   const setP = (patch: Partial<PlateConnParams>) => store.exec(setConnection(id, patch));
@@ -95,12 +95,20 @@ export function ConnectionEditor() {
         </div>
       )}
 
+      {c.type === 'brace' && <div className="issue warning"><span className="ic">!</span>{c.label}. החלקים: {c.parts.join(', ')}.</div>}
+      {eff && c.type === 'base' && (
+        <div className="field"><label>סוג פרט</label>
+          <select className="inp" data-testid="cp-mode" value={eff.mode ?? 'embedded'} onChange={(e) => setP({ mode: e.target.value as 'embedded' | 'bolted' })}>
+            <option value="embedded">פלטה מבוטנת, ריתוך עמוד בשטח</option><option value="bolted">פלטה מרותכת לעמוד, ברגי עיגון</option>
+          </select>
+        </div>
+      )}
       {eff && <>
         <div className="panel-title">פלטה</div>
         <div className="field"><label>עובי</label><LenField testId="cp-t" mm={eff.t} unit="mm" onCommit={(v) => setP({ t: v })} /></div>
         <div className="field"><label>רוחב</label><LenField testId="cp-w" mm={eff.w} unit="mm" onCommit={(v) => setP({ w: v })} /></div>
         <div className="field"><label>{c.type === 'ridge' ? 'הארכה מתחת לקורה' : 'אורך'}</label><LenField testId="cp-l" mm={eff.l} unit="mm" onCommit={(v) => setP({ l: v })} /></div>
-        <div className="panel-title">ברגים</div>
+        <div className="panel-title">{c.type === 'base' && (eff.mode ?? 'embedded') === 'embedded' ? 'מוטות עיגון (בהיקף הרשת)' : 'ברגים'}</div>
         <div className="field"><label>קוטר</label>
           <select className="inp" data-testid="cp-d" value={eff.bolt.d} onChange={(e) => setP({ bolt: { ...eff.bolt, d: Number(e.target.value) } })}>
             {BOLT_D.map((x) => <option key={x} value={x}>M{x}</option>)}

@@ -126,7 +126,8 @@ test.describe('M1 – ליבת מידול', () => {
     await page.mouse.move(c.x, c.y); await page.mouse.down();
     await page.mouse.move(c.x + 120, c.y + 40, { steps: 6 }); await page.mouse.up();
     expect((await selection(page)).sort()).toEqual(['F1.COL.L', 'F1.RAF.L']);
-    // לחיצה בשטח ריק מנקה
+    // לחיצה בשטח ריק מנקה (אחרי שהגרירה סובבה את המצלמה — חוזרים למבט חזית)
+    await setView(page, 'front');
     const r = await paneRect(page);
     await page.mouse.click(r.left + 30, r.top + 60);
     expect(await selection(page)).toEqual([]);
@@ -195,7 +196,7 @@ test.describe('M1 – ליבת מידול', () => {
     const txt = await (await import('node:fs')).promises.readFile((await file.path())!, 'utf8');
     const j = JSON.parse(txt);
     expect(j.format).toBe('kayan-steel-pro');
-    expect(j.schemaVersion).toBe(3);
+    expect(j.schemaVersion).toBe(4);
     expect(j.project.building.width).toBe(20000);
     await shot(page, 'SAVE-01_after_reload');
   });
@@ -213,15 +214,15 @@ test.describe('M1 – ליבת מידול', () => {
     await setView(page, 'left');
     await page.evaluate(() => { const k = (window as any).__ksp; k.store.select(['F1.COL.L']); k.viewport.fitSelection(); });
     await page.getByTestId('tool-measure').click();
-    const p1 = await screenOf(page, { x: -95, y: -100, z: 20 }); // תחתית העמוד על פלטת הבסיס (20 מ"מ)
+    const p1 = await screenOf(page, { x: -95, y: -100, z: 0 }); // פני הפלטה המבוטנת = מפלס הבסיס
     await page.mouse.click(p1.x - 3, p1.y - 3);
     await setView(page, 'right');
     await page.evaluate(() => { const k = (window as any).__ksp; k.store.select(['F1.COL.R']); k.viewport.fitSelection(); });
-    const p2 = await screenOf(page, { x: 18095, y: -100, z: 20 });
+    const p2 = await screenOf(page, { x: 18095, y: -100, z: 0 });
     await page.mouse.click(p2.x + 3, p2.y - 3);
     const m = await page.evaluate(() => (window as any).__ksp.store.state.measure);
-    expect(m.a).toEqual({ x: -95, y: -100, z: 20 });
-    expect(m.b).toEqual({ x: 18095, y: -100, z: 20 });
+    expect(m.a).toEqual({ x: -95, y: -100, z: 0 });
+    expect(m.b).toEqual({ x: 18095, y: -100, z: 0 });
     await expect(page.getByTestId('measure-d')).toHaveText("18.190 מ'");
     await page.getByTestId('fit').click();
     await shot(page, 'VIEW_measure');

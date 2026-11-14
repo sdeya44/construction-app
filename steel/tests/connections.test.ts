@@ -128,15 +128,28 @@ describe('CONN – חיבורים', () => {
     expect(generate(p).connById.get('C.EAVE.F3.L')!.bolts.length).toBe(4); // חיבור אחר לא השתנה
     expect(JSON.parse(JSON.stringify(p)).connectionOverrides[id].t).toBe(25);
   });
-  it('פלטת בסיס מגביהה את תחתית העמוד, פלטות רכס מקצרות את הקורות, בלי התנגשות', () => {
+  it('פלטת בסיס מבוטנת: פני הפלטה במפלס הבסיס, 8 מוטות עיגון, ריתוך עמוד בשטח מסומן כחריג מאושר; פלטות רכס מקצרות את הקורות', () => {
     const d = generate(geo());
     const col = d.byId.get('F1.COL.L')!;
-    expect(Math.min(...allPts(col).map((q) => q.z))).toBeCloseTo(20, 6);
+    expect(Math.min(...allPts(col).map((q) => q.z))).toBeCloseTo(0, 6);
+    const c = d.connById.get('C.BASE.F1.L')!;
+    expect(d.members.filter((m) => m.kind === 'anchor' && m.connId === 'C.BASE.F1.L').length).toBe(8);
+    const pl = d.byId.get('C.BASE.F1.L.PL')!;
+    expect(Math.max(...allPts(pl).map((q) => q.z))).toBeCloseTo(0, 6);
+    expect(Math.min(...allPts(pl).map((q) => q.z))).toBeCloseTo(-20, 6);
+    expect(c.welds.find((w) => w.id.endsWith('.W1'))!.location).toBe('site');
+    expect(d.issues.some((i) => i.code === 'SITE_WELD_OK' && i.elementId === 'C.BASE.F1.L')).toBe(true);
+    expect(d.issues.some((i) => i.code === 'SITE_WELD')).toBe(false);
+    // מצב מוברג: העמוד מוגבה מעל הפלטה, ברגים בשטח, ריתוך במסגריה
+    const p2 = setConnection('C.BASE.F1.L', { mode: 'bolted', cols: 2, rows: 2, gauge: 160, pitch: 160, w: 320, l: 320, bolt: { d: 20, grade: '8.8', standard: 'ISO 4017', clearance: 6 } }).run(geo());
+    const d2 = generate(p2);
+    expect(Math.min(...allPts(d2.byId.get('F1.COL.L')!).map((q) => q.z))).toBeCloseTo(20, 6);
+    expect(d2.connById.get('C.BASE.F1.L')!.bolts.length).toBe(4);
     const rl = d.byId.get('F1.RAF.L')!;
     expect(Math.max(...allPts(rl).map((q) => q.x))).toBeCloseTo(9000 - 15, 6);
   });
   it('תבנית חיבור: שמירה והחלה על חיבור אחר', () => {
-    let p = setConnection('C.BASE.F1.L', { t: 30, w: 400, l: 400, gauge: 300, pitch: 300 }).run(geo());
+    let p = setConnection('C.BASE.F1.L', { t: 30, w: 400, l: 400, gauge: 150, pitch: 150 }).run(geo());
     const params = { ...p.connectionDefaults.base, ...p.connectionOverrides['C.BASE.F1.L'] } as any;
     p = saveTemplate('בסיס כבד', 'C.BASE.F1.L', params).run(p);
     p = applyTemplate(p.connectionTemplates[0].id, ['C.BASE.F6.R']).run(p);

@@ -134,3 +134,16 @@ export function clash(a: Member, b: Member): Clash | null {
   for (const p of samp(b)) depth = Math.max(depth, ta.depth(p));
   return depth > 0.1 ? { a: a.id, b: b.id, depth } : null;
 }
+
+/** תיבה חוסמת של מוצק (לסינון מהיר). */
+export function aabb(m: Member): { min: Vec3; max: Vec3 } {
+  const s = memberSolid(m);
+  const pts = [...s.startRing, ...s.endRing];
+  return {
+    min: { x: Math.min(...pts.map((p) => p.x)), y: Math.min(...pts.map((p) => p.y)), z: Math.min(...pts.map((p) => p.z)) },
+    max: { x: Math.max(...pts.map((p) => p.x)), y: Math.max(...pts.map((p) => p.y)), z: Math.max(...pts.map((p) => p.z)) },
+  };
+}
+export function aabbOverlap(a: { min: Vec3; max: Vec3 }, b: { min: Vec3; max: Vec3 }, eps = 0.05): boolean {
+  return a.min.x < b.max.x - eps && a.max.x > b.min.x + eps && a.min.y < b.max.y - eps && a.max.y > b.min.y + eps && a.min.z < b.max.z - eps && a.max.z > b.min.z + eps;
+}

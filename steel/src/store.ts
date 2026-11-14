@@ -53,7 +53,7 @@ class Store {
     this.history = new History(p);
     this.state = {
       project: p, derived: generate(p), selection: [], hidden: [], isolated: null,
-      filter: { column: true, rafter: true, beam: true, brace: true, purlin: true, cleat: true, plate: true, bolt: true },
+      filter: { column: true, rafter: true, beam: true, brace: true, purlin: true, cleat: true, plate: true, bolt: true, anchor: true },
       tool: 'select',
       view: {
         projection: 'persp', render: 'solid', grid: true, dims: true, labels: true, split: false,

@@ -1,5 +1,5 @@
 import { uid } from '../core/ids';
-import type { BoltSpec, BuildingParams, CleatParams, ConnectionDefaults, FrameDef, Project, PurlinSideParams, PurlinSystem } from './types';
+import type { BoltSpec, BracingParams, BuildingParams, CleatParams, ConnectionDefaults, FrameDef, Project, PurlinSideParams, PurlinSystem } from './types';
 import { SCHEMA_VERSION } from './types';
 
 /** יוצר מסגרות במרווח אחיד או לפי רשימת מרווחים. */
@@ -37,12 +37,21 @@ export function defaultConnections(): ConnectionDefaults {
   return {
     eave: { enabled: true, t: 15, w: 200, l: 340, bolt: bolt(16), cols: 2, rows: 2, gauge: 100, pitch: 260, weldSize: 6 },
     ridge: { enabled: true, t: 15, w: 160, l: 0, bolt: bolt(16), cols: 2, rows: 2, gauge: 90, pitch: 0, weldSize: 6 },
-    base: { enabled: true, t: 20, w: 320, l: 320, bolt: bolt(20), cols: 2, rows: 2, gauge: 230, pitch: 230, weldSize: 6, anchorLength: 500 },
+    // לפי פרט K-02: PL 230×230×20 מבוטנת, 8 מוטות Φ20 מרותכים מתחת (עיגון 800), העמוד מרותך מסביב בשטח
+    base: { enabled: true, mode: 'embedded', t: 20, w: 230, l: 230, bolt: { ...bolt(20), standard: 'מוט מצולע', grade: 'B500' }, cols: 3, rows: 3, gauge: 80, pitch: 80, weldSize: 4, anchorLength: 800 },
   };
 }
 
 export function defaultPurlins(): PurlinSystem {
   return { material: 'S235', left: defaultPurlinSide(), right: defaultPurlinSide(), monoStart: 'high' };
+}
+
+export function defaultBracing(): BracingParams {
+  return {
+    roof: { enabled: true, profile: 'L50x5', bays: [0, -1] },
+    walls: { enabled: true, profile: 'L50x5', left: [0, -1], right: [0, -1] },
+    purlinTies: { enabled: true, profile: 'L40x4' },
+  };
 }
 
 /** ברירת מחדל: מבנה GEO-01 — סככה דו־שיפועית 18×30 מ', 6 מסגרות, עמודים 6 מ', שיפוע 10%. */
@@ -65,6 +74,7 @@ export function defaultBuilding(): BuildingParams {
     material: 'S235',
     baseElevation: 0,
     purlins: defaultPurlins(),
+    bracing: defaultBracing(),
   };
 }
 
