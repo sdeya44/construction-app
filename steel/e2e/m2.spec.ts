@@ -50,15 +50,17 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
   test('SPL-01/02: הצעת חיבורים לפטה 30 מ\', הזזת חיבור, BOM מתעדכן', async ({ page }) => {
     await boot(page);
     await page.evaluate(() => (window as any).__ksp.store.select(['PL.L.03']));
-    await expect(page.getByTestId('part-len-1')).toContainText('30.000');
+    // קו 30.1 מ' (הארכה 50 מ"מ מעבר למסגרות הקיצוניות)
+    await expect(page.getByTestId('part-len-1')).toContainText('30.100');
     await page.getByTestId('splice-propose').click();
-    await expect(page.getByTestId('part-len-1')).toHaveText('12.000');
-    await expect(page.getByTestId('part-len-3')).toHaveText('6.000');
+    await expect(page.getByTestId('part-len-1')).toHaveText('6.050');
+    await expect(page.getByTestId('part-len-2')).toHaveText('12.000');
+    await expect(page.getByTestId('part-len-4')).toHaveText('6.050');
     const line = await page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('PL.L.03'));
-    expect(line.start.y).toBe(0); expect(line.end.y).toBe(30000);
+    expect(line.start.y).toBe(-50); expect(line.end.y).toBe(30050);
     await page.getByTestId('splice-0').fill('9'); await page.getByTestId('splice-0').press('Enter');
     await expect(page.getByTestId('part-len-1')).toHaveText('9.000');
-    await expect(page.getByTestId('part-len-2')).toContainText('15.000');
+    await expect(page.getByTestId('part-len-2')).toContainText('9.050');
     // רק לפטה זו
     const others = await page.evaluate(() => (window as any).__ksp.store.state.derived.parts.filter((p: any) => p.memberId === 'PL.L.04').length);
     expect(others).toBe(1);
@@ -66,7 +68,7 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     // הצעה לכל הפטות מכפתור לשונית הגג
     await page.getByTestId('tab-roof').click();
     await page.getByTestId('propose-purlin-splices').click();
-    await expect(page.getByTestId('purlin-splice-count')).toHaveText('28');
+    await expect(page.getByTestId('purlin-splice-count')).toHaveText('42');
     await page.keyboard.press('Escape');
     await setView(page, 'iso', 'persp');
     await shot(page, 'SPL_markers');

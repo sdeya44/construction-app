@@ -279,6 +279,12 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
     }
     const d0 = prm.bolt.d + prm.bolt.clearance;
     const label = `תומך ${cid}`;
+    const yMin = Math.min(pur.start.y, pur.end.y), yMax = Math.max(pur.start.y, pur.end.y);
+    for (const bo of bolts) {
+      if (bo.p.y - d0 / 2 < yMin + 1.2 * d0 - 0.01 || bo.p.y + d0 / 2 > yMax - 1.2 * d0 + 0.01) {
+        issue({ code: 'BOLT_OUTSIDE', severity: 'error', elementId: cid, message: `${label}: בורג ${bo.id} מחוץ לפטה או קרוב מדי לקצה שלה — הארך את קונזולת הפטות` });
+      }
+    }
     const top = hh0 + (prm.rows - 1) * prm.rowPitch;
     edgeChecks(label, cid, d0, prm.width / 2 - ((prm.perRow - 1) / 2) * prm.pitch, H - top, prm.perRow > 1 ? prm.pitch : null, prm.rows > 1 ? prm.rowPitch : null, res.issues);
     const h = hw(prm.bolt.d);

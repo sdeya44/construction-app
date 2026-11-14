@@ -169,7 +169,8 @@ export function buildPurlins(b: BuildingParams, roof: RoofInfo, deleted: Set<str
 export function proposeSplices(L: number, stock: number, supportsT: number[]): number[] {
   if (L <= stock + TOL) return [];
   const out: number[] = [];
-  const ts = [...supportsT].filter((t) => t > TOL && t < L - TOL).sort((a, b) => a - b);
+  // לא מציעים חיבור קרוב לקצה הקו (חלק קצר מ-500 מ"מ אינו מעשי)
+  const ts = [...supportsT].filter((t) => t > 500 && t < L - 500).sort((a, b) => a - b);
   let s = 0;
   while (L - s > stock + TOL) {
     const cand = ts.filter((t) => t > s + TOL && t - s <= stock + TOL);

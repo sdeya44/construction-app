@@ -9,6 +9,8 @@ import { PropertiesPanel } from './PropertiesPanel';
 import { RoofPanel } from './RoofPanel';
 import { ProfileDatalist, StructurePanel } from './StructurePanel';
 import { IssuesPanel, TreePanel } from './TreePanel';
+import { DrawingsView } from './DrawingsView';
+import { ProductionView } from './ProductionView';
 
 type DialogKind = null | 'new' | 'open' | 'move' | 'copy' | 'rotate' | 'mirror';
 type SideTab = 'structure' | 'roof' | 'tree' | 'issues';
@@ -28,6 +30,7 @@ export function App() {
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [tab, setTab] = useState<SideTab>('structure');
   const [mtab, setMtab] = useState<MobileTab>(null);
+  const [mode, setMode] = useState<'model' | 'drawings' | 'production'>('model');
   const s = useStore((x) => x);
   const sel = s.selection;
   const v = s.view;
@@ -79,11 +82,17 @@ export function App() {
   const sideOpen = mtab === 'side', propsOpen = mtab === 'props';
 
   return (
-    <div className="app">
+    <div className="app" style={mode !== 'model' ? { gridTemplateRows: 'auto 1fr auto auto' } : undefined}>
       <ProfileDatalist />
       <header className="topbar">
-        <div className="brand"><img src="./icon.svg" alt="" />KAYAN STEEL PRO <small className="desk-only">0.3 · M3</small></div>
+        <div className="brand"><img src="./icon.svg" alt="" /><span className="desk-only">KAYAN STEEL PRO</span> <small className="desk-only">1.0</small></div>
         <div className="proj-name" data-testid="proj-name">{s.project.meta.name}</div>
+        <div className="modes" role="tablist">
+          <button className={mode === 'model' ? 'on' : ''} onClick={() => setMode('model')} data-testid="mode-model">מודל</button>
+          <button className={mode === 'drawings' ? 'on' : ''} onClick={() => setMode('drawings')} data-testid="mode-drawings">שרטוטים</button>
+          <button className={mode === 'production' ? 'on' : ''} onClick={() => setMode('production')} data-testid="mode-production">ייצור</button>
+        </div>
+        {s.project.revision.locked && <span className="badge warn" data-testid="locked-badge">מהדורה {s.project.revision.current} נעולה</span>}
         <div className="spacer" />
         <button className="tb-btn desk-only" onClick={() => setDialog('new')} data-testid="btn-new"><Icon name="file" />חדש</button>
         <button className="tb-btn" onClick={() => setDialog('open')} data-testid="btn-open"><Icon name="folder" /><span className="desk-only">פתיחה</span></button>
@@ -95,7 +104,7 @@ export function App() {
         <span className={`save-state ${s.saveState} desk-only`} data-testid="save-state">{saveText}</span>
       </header>
 
-      <div className="toolbar" role="toolbar">
+      <div className="toolbar" role="toolbar" style={mode !== 'model' ? { display: 'none' } : undefined}>
         <div className="tgroup">
           <span className="tgroup-label desk-only">כלים</span>
           <TB icon="select" label="בחירה" on={s.tool === 'select'} onClick={() => store.set({ tool: 'select', measure: {} })} testId="tool-select" />
@@ -141,7 +150,9 @@ export function App() {
         </div>
       </div>
 
-      <main className="workspace">
+      {mode === 'drawings' && <main className="mode-area"><DrawingsView /></main>}
+      {mode === 'production' && <main className="mode-area"><ProductionView /></main>}
+      <main className="workspace" style={mode !== 'model' ? { display: 'none' } : undefined}>
         <aside className={`side side-start${sideOpen ? ' open' : ''}`}>
           <div className="tabs">
             <button className={`tab${tab === 'structure' ? ' on' : ''}`} onClick={() => setTab('structure')} data-testid="tab-structure">מבנה</button>

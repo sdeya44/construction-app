@@ -40,7 +40,14 @@ export function generate(project: Project): DerivedModel {
     if (exL > b.rafterOverhangLeft || exR > b.rafterOverhangRight) {
       issues.push({ code: 'RAFTER_EXT', severity: 'info', message: `קורות הגג מוארכות ${minExt} מ"מ מציר העמוד, עד קצה ${eave.enabled ? 'פלטת הכיפה' : 'העמוד'} — הפטה האחרונה בקצה זה` });
     }
-    bEff = { ...b, rafterOverhangLeft: exL, rafterOverhangRight: exR };
+    // קצה הפטה: לפחות חצי רוחב זוויתן מעבר למסגרת הקיצונית, כדי ששני הברגים יעברו בפטה
+    const pu = b.purlins;
+    const cw = Math.max(pu.left.cleat.enabled ? pu.left.cleat.width / 2 : 0, b.roofType === 'gable' && pu.right.cleat.enabled ? pu.right.cleat.width / 2 : 0);
+    const pS = Math.max(b.purlinOverhangStart, cw), pE = Math.max(b.purlinOverhangEnd, cw);
+    if (pS > b.purlinOverhangStart || pE > b.purlinOverhangEnd) {
+      issues.push({ code: 'PURLIN_EXT', severity: 'info', message: `הפטות מוארכות ${cw} מ"מ מעבר למסגרות הקיצוניות, עד קצה הזוויתן` });
+    }
+    bEff = { ...b, rafterOverhangLeft: exL, rafterOverhangRight: exR, purlinOverhangStart: pS, purlinOverhangEnd: pE };
   }
   if (!hasErrors(issues)) {
     const b = bEff;

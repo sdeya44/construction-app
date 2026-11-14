@@ -1,0 +1,115 @@
+import { useMemo, useRef, useState } from 'react';
+import { numberParts, setDrawing } from '../commands/commands';
+import { buildSheet, drawingCatalog, sheetHash, type DrawingDef } from '../drawing/views';
+import { sheetToSvg } from '../drawing/svg';
+import { sheetToDxf } from '../drawing/dxf';
+import { sheetsToPdf } from '../drawing/pdf';
+import { useFab } from '../fab/useFab';
+import type { DrawingRecord } from '../model/types';
+import { downloadText, safeFileName } from '../persist/files';
+import { store, useStore } from '../store';
+import { Icon } from './icons';
+
+const GROUPS: [DrawingDef['type'][], string][] = [
+  [['ga', 'roof-plan', 'frame', 'side'], 'תוכניות, חזיתות וחתכים'],
+  [['connection'], 'פרטי חיבור'],
+  [['assembly'], 'שרטוטי מכלול'],
+  [['part'], 'שרטוטי חלק'],
+];
+const ST: Record<DrawingRecord['status'], string> = { draft: 'טיוטה', 'for-review': 'לבדיקה', approved: 'מאושר' };
+
+function downloadBytes(name: string, bytes: Uint8Array, mime: string) {
+  const blob = new Blob([bytes as BlobPart], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+export function DrawingsView() {
+  const p = useStore((s) => s.project);
+  const d = useStore((s) => s.derived);
+  const { fab, bom } = useFab();
+  const cat = useMemo(() => drawingCatalog(p, d, fab), [p, d, fab]);
+  const [cur, setCur] = useState<string>('D-ROOF');
+  const [zoom, setZoom] = useState(1);
+  const [busy, setBusy] = useState(false);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const def = cat.find((c) => c.id === cur) ?? cat[0];
+  const rec = p.drawings.find((x) => x.id === def?.id);
+  const sheet = useMemo(() => (def ? buildSheet(def, p, d, fab, bom, rec) : null), [def, p, d, fab, bom, rec]);
+  const svg = useMemo(() => (sheet ? sheetToSvg(sheet) : ''), [sheet]);
+  const hash = useMemo(() => (sheet ? sheetHash(sheet) : ''), [sheet]);
+  const changed = rec?.status === 'approved' && rec.approvedHash && rec.approvedHash !== hash;
+  const box = useRef<HTMLDivElement>(null);
+  const provisional = fab.parts.some((x) => x.provisional);
+
+  const exportPdf = async (defs: DrawingDef[], name: string) => {
+    setBusy(true);
+    try {
+      const sheets = defs.map((x) => buildSheet(x, p, d, fab, bom, p.drawings.find((r) => r.id === x.id)));
+      const bytes = await sheetsToPdf(sheets, { title: `${p.meta.name} – ${name}`, author: p.meta.designer });
+      downloadBytes(`${safeFileName(p.meta.name)}_${safeFileName(name)}.pdf`, bytes, 'application/pdf');
+      store.toast('ok', `הופק PDF: ${sheets.length} גיליונות`);
+    } catch (e) { store.toast('error', `הפקת PDF נכשלה: ${(e as Error).message}`); }
+    finally { setBusy(false); }
+  };
+  const setStatus = (status: DrawingRecord['status']) => {
+    if (!def) return;
+    if (status === 'approved' && !confirm('אישור לייצור הוא החלטה של המשתמש. התוכנה לא ביצעה בדיקת חוזק. לאשר?')) return;
+    store.exec(setDrawing(def.id, { id: def.id, number: def.number, type: def.type, title: def.title, ref: def.ref }, { status, ...(status === 'approved' ? { approvedHash: hash } : {}) }));
+  };
+  if (!def || !sheet) return <div className="panel-body">אין שרטוטים — המודל ריק או שגוי.</div>;
+  return (
+    <div className="dwg" data-testid="drawings-view">
+      <aside className="dwg-list">
+        <div className="panel-body">
+          {provisional && <div className="issue warning" style={{ marginBottom: 8 }}><span className="ic">!</span><div>סימוני חלקים זמניים. <button className="btn small" data-testid="dwg-number" onClick={() => store.exec(numberParts())}>הרץ מספור</button></div></div>}
+          {GROUPS.map(([types, title]) => {
+            const items = cat.filter((c) => types.includes(c.type));
+            if (!items.length) return null;
+            return (
+              <div key={title}>
+                <div className="panel-title">{title} <span className="badge">{items.length}</span></div>
+                {items.map((c) => {
+                  const r = p.drawings.find((x) => x.id === c.id);
+                  return (
+                    <div key={c.id} className={`tree-item${c.id === def.id ? ' sel' : ''}`} style={{ paddingInlineStart: 6 }} onClick={() => setCur(c.id)} data-testid={`dwg-${c.id}`}>
+                      <input type="checkbox" checked={checked.has(c.id)} onClick={(e) => e.stopPropagation()} onChange={(e) => { const n = new Set(checked); if (e.target.checked) n.add(c.id); else n.delete(c.id); setChecked(n); }} />
+                      <span className="id">{c.number}</span><span>{c.title}</span>
+                      {r && <span className={`badge ${r.status === 'approved' ? 'ok' : r.status === 'for-review' ? 'warn' : ''}`} style={{ marginInlineStart: 'auto' }}>{ST[r.status]}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </aside>
+      <section className="dwg-main">
+        <div className="dwg-bar">
+          <b data-testid="dwg-title">{def.number} · {def.title}</b>
+          <span className="badge" data-testid="dwg-scale">קנ"מ {sheet.title.scale}</span>
+          <span className={`badge ${rec?.status === 'approved' ? 'ok' : ''}`} data-testid="dwg-status">{ST[rec?.status ?? 'draft']} · מהדורה {rec?.rev ?? p.revision.current}</span>
+          {changed && <span className="badge err" data-testid="dwg-changed">השתנה מאז האישור</span>}
+          <span style={{ flex: 1 }} />
+          <select className="inp" style={{ width: 70 }} value={rec?.sheet ?? 'A3'} onChange={(e) => store.exec(setDrawing(def.id, { id: def.id, number: def.number, type: def.type, title: def.title, ref: def.ref }, { sheet: e.target.value as DrawingRecord['sheet'] }))}>
+            {['A4', 'A3', 'A2', 'A1', 'A0'].map((x) => <option key={x}>{x}</option>)}
+          </select>
+          <select className="inp" style={{ width: 110 }} data-testid="dwg-set-status" value={rec?.status ?? 'draft'} onChange={(e) => setStatus(e.target.value as DrawingRecord['status'])}>
+            <option value="draft">טיוטה</option><option value="for-review">לבדיקה</option><option value="approved">מאושר לייצור</option>
+          </select>
+          <button className="btn small" onClick={() => setZoom((z) => Math.min(8, z * 1.4))}>+</button>
+          <button className="btn small" onClick={() => setZoom((z) => Math.max(0.5, z / 1.4))}>−</button>
+          <button className="btn small" onClick={() => setZoom(1)}>התאם</button>
+          <button className="btn small primary" disabled={busy} data-testid="dwg-pdf" onClick={() => exportPdf([def], def.number)}><Icon name="download" />PDF</button>
+          <button className="btn small" data-testid="dwg-dxf" onClick={() => { downloadText(`${safeFileName(p.meta.name)}_${def.number}.dxf`, sheetToDxf(sheet), 'application/dxf'); store.toast('ok', 'הופק DXF'); }}><Icon name="download" />DXF</button>
+          <button className="btn small" disabled={busy || !checked.size} data-testid="dwg-pdf-batch" onClick={() => exportPdf(cat.filter((c) => checked.has(c.id)), 'סט שרטוטים')}>PDF למסומנים ({checked.size})</button>
+        </div>
+        <div className="dwg-canvas" ref={box} onWheel={(e) => { if (e.ctrlKey) { e.preventDefault(); setZoom((z) => Math.max(0.5, Math.min(8, z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)))); } }}>
+          <div className="dwg-paper" style={{ width: `${zoom * 100}%` }} data-testid="dwg-svg" dangerouslySetInnerHTML={{ __html: svg }} />
+        </div>
+      </section>
+    </div>
+  );
+}

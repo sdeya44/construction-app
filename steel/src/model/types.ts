@@ -2,7 +2,7 @@ import type { Mm } from '../core/units';
 import type { Plane, Vec3 } from '../core/vec';
 
 /** גרסת סכמת קובץ הפרויקט. כל שינוי שובר מחייב מיגרציה ב-model/migrate.ts */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export type RoofType = 'gable' | 'mono';
 /** לאן מתייחסים גובהי העמודים/הרכס: פני עליון של קורת הגג (TOS) או ציר הקורה. */
@@ -188,7 +188,7 @@ export interface Project {
   id: string;
   meta: ProjectMeta;
   displayUnit: 'm' | 'mm';
-  settings: { stockLength: Mm };
+  settings: { stockLength: Mm; stockLengths: Mm[]; kerf: Mm; checkedBy: string; approvedBy: string };
   building: BuildingParams;
   memberOverrides: Record<string, MemberOverride>;
   manualMembers: ManualMember[];
@@ -208,6 +208,41 @@ export interface Project {
   cleatOverrides: Record<string, Partial<CleatParams>>;
   nextFrameNo: number;
   nextMemberNo: number;
+  /** רישום מספור יציב: חתימה ⇒ סימון. נכתב רק בפקודת "מספור" */
+  marks: MarkRegistry;
+  /** מהדורות: נעילת מהדורה מאושרת ופתיחת מהדורה חדשה */
+  revision: RevisionState;
+  /** רשומות שרטוטים (הגדרה + סטטוס + מהדורות); התוכן נגזר מהמודל */
+  drawings: DrawingRecord[];
+}
+
+export interface MarkRegistry {
+  parts: Record<string, string>;
+  assemblies: Record<string, string>;
+  counters: Record<string, number>;
+  /** הסימון האחרון של כל חלק לפי מזהה, לזיהוי שינויים */
+  lastByPart: Record<string, string>;
+  history: { date: string; id: string; from: string; to: string }[];
+  numberedAt?: string;
+}
+
+export interface RevisionEntry { rev: string; date: string; note: string; status: 'approved' | 'draft'; snapshot?: string }
+export interface RevisionState { current: string; locked: boolean; log: RevisionEntry[] }
+
+export type DrawingType = 'roof-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga';
+export interface DrawingRecord {
+  id: string;
+  number: string;
+  type: DrawingType;
+  title: string;
+  /** פרמטר: מזהה מסגרת / סימון חלק / מזהה חיבור / צד */
+  ref?: string;
+  sheet: 'A4' | 'A3' | 'A2' | 'A1' | 'A0';
+  status: 'draft' | 'for-review' | 'approved';
+  rev: string;
+  /** חתימת התוכן בעת האישור — שינוי מסמן "השתנה מאז האישור" */
+  approvedHash?: string;
+  history: { rev: string; date: string; status: string; note: string }[];
 }
 
 // ---------- מודל נגזר (אינו נשמר) ----------

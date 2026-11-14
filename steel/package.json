@@ -15,6 +15,9 @@
     "release": "vite build && node scripts-singlefile.mjs"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
+    "fflate": "^0.8.3",
+    "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.170.0"
@@ -26,6 +29,7 @@
     "@types/react-dom": "^18.3.1",
     "@types/three": "^0.170.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "dejavu-fonts-ttf": "^2.37.3",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vitest": "^2.1.8"

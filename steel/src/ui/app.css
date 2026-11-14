@@ -189,7 +189,11 @@ select.inp { padding: 0 6px; }
   .mnav button.on { color: var(--accent); }
   .mnav svg { width: 20px; height: 20px; }
   .statusbar { display: none; }
-  .proj-name { max-width: 40vw; }
+  .proj-name { max-width: 28vw; font-size: 12px; }
+  .topbar { gap: 6px; padding: 0 8px; overflow: hidden; }
+  .modes button { padding: 0 8px; }
+  .tb-btn { padding: 0 6px; }
+  .dwg-bar { gap: 4px; }
   .tbtn { height: 36px; min-width: 36px; }
   .grid2 { grid-template-columns: 1fr; }
   .measure-box { right: 8px; left: 8px; min-width: 0; }
@@ -209,3 +213,21 @@ select.inp { padding: 0 6px; }
 .conn-svg polygon.p { fill: #d6e4bf; stroke: #4f6b1f; }
 .conn-svg polygon.b { fill: #e9c3a5; stroke: #a5521b; }
 .btn svg { width: 15px; height: 15px; flex: none; }
+
+/* מצבי עבודה: שרטוטים וייצור */
+.modes { display: inline-flex; background: rgba(255,255,255,.08); border-radius: 7px; padding: 2px; }
+.modes button { border: 0; background: none; color: #c9d4df; height: 28px; padding: 0 12px; border-radius: 5px; cursor: pointer; font-weight: 600; }
+.modes button.on { background: #fff; color: var(--brand); }
+.mode-area { min-height: 0; display: grid; }
+.dwg, .prod { display: grid; grid-template-columns: 300px 1fr; min-height: 0; height: 100%; }
+.dwg-list { background: var(--panel); border-inline-end: 1px solid var(--line); overflow: auto; min-height: 0; }
+.dwg-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.dwg-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.dwg-canvas { flex: 1; overflow: auto; background: #8a96a3; padding: 16px; direction: ltr; }
+.dwg-paper { margin: 0 auto; box-shadow: 0 4px 18px rgba(0,0,0,.3); background: #fff; }
+.dwg-paper svg { width: 100%; height: auto; display: block; }
+.prod-table { flex: 1; overflow: auto; background: var(--panel); }
+.tbl.big th { position: sticky; top: 0; background: var(--panel-2); z-index: 1; padding: 6px 8px; }
+.tbl.big td { padding: 4px 8px; white-space: nowrap; }
+.tbl.big td.n { direction: ltr; text-align: right; font-family: var(--mono); }
+@media (max-width: 860px) { .dwg, .prod { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } .dwg-list { max-height: 35vh; } }

@@ -1,5 +1,5 @@
 import type { Project } from '../model/types';
-import type { Command } from './commands';
+import { CommandError, type Command } from './commands';
 
 function sameModel(a: Project, b: Project) {
   const strip = (p: Project) => JSON.stringify({ ...p, meta: { ...p.meta, updatedAt: '' } });
@@ -13,6 +13,9 @@ export class History {
   constructor(public current: Project, private limit = 200) {}
 
   exec(cmd: Command): Project {
+    if (this.current.revision?.locked && !cmd.allowWhenLocked) {
+      throw new CommandError(`מהדורה ${this.current.revision.current} מאושרת ונעולה. כדי לשנות — פתח מהדורה חדשה.`);
+    }
     const next = cmd.run(this.current);
     // פקודה שאינה משנה דבר אינה נכנסת להיסטוריה
     if (sameModel(next, this.current)) return this.current;

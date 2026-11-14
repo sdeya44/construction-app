@@ -172,21 +172,23 @@ describe('SPL / BEAM – חלקים וחיבורי המשך', () => {
     const d = generate(p2);
     const m = d.byId.get('PL.L.03')!;
     expect(m.start).toEqual(before.start); expect(m.end).toEqual(before.end);
+    expect(m.start.y).toBe(-50); expect(m.end.y).toBe(30050);
     const parts = d.parts.filter((x) => x.memberId === 'PL.L.03');
-    expect(parts.map((x) => x.length)).toEqual([12000, 12000, 6000]);
+    // קו 30.1 מ' (הארכה 50 מ"מ מעבר למסגרות הקיצוניות); חיבורים מעל מסגרות בלבד
+    expect(parts.map((x) => Math.round(x.length))).toEqual([6050, 12000, 6000, 6050]);
     expect(parts.every((x) => x.length <= 12000)).toBe(true);
     expect(d.splices.filter((s) => s.memberId === 'PL.L.03').every((s) => s.status === 'requires-design')).toBe(true);
     expect(d.issues.some((i) => i.code === 'SPLICE_DESIGN')).toBe(true);
   });
   it('SPL-01: בלי חיבורים — חלק אחד של 30 מ\' ואזהרה על חומר גלם', () => {
     const d = generate(geo());
-    expect(d.parts.filter((x) => x.memberId === 'PL.L.03').map((x) => x.length)).toEqual([30000]);
+    expect(d.parts.filter((x) => x.memberId === 'PL.L.03').map((x) => x.length)).toEqual([30100]);
     expect(d.issues.some((i) => i.code === 'PART_STOCK' && i.elementId === 'PL.L.03')).toBe(true);
   });
   it('SPL-02: הזזת חיבור למיקום שאינו מסגרת — מותר, חלקים מתעדכנים', () => {
     const p = setSplices('PL.L.03', [9000, 21000]).run(geo());
     const d = generate(p);
-    expect(d.parts.filter((x) => x.memberId === 'PL.L.03').map((x) => x.length)).toEqual([9000, 12000, 9000]);
+    expect(d.parts.filter((x) => x.memberId === 'PL.L.03').map((x) => x.length)).toEqual([9000, 12000, 9100]);
     expect(d.issues.some((i) => i.code === 'PART_STOCK' && i.elementId === 'PL.L.03')).toBe(false);
     // קווים אחרים לא קיבלו חיבור
     expect(d.parts.filter((x) => x.memberId === 'PL.L.04').length).toBe(1);
@@ -216,7 +218,9 @@ describe('מיגרציה v1 → v2', () => {
     const p: any = geo();
     delete p.building.purlins; delete p.splices; p.schemaVersion = 1;
     const m = migrate(JSON.parse(JSON.stringify(p)));
-    expect(m.schemaVersion).toBe(4);
+    expect(m.schemaVersion).toBe(5);
+    expect(m.marks.parts).toEqual({});
+    expect(m.settings.kerf).toBe(3);
     expect(m.building.bracing.roof.enabled).toBe(true);
     expect(m.building.purlins.left.spacing).toBe(1500);
     expect(m.splices).toEqual({});

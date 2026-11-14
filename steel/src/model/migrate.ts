@@ -1,6 +1,6 @@
 import type { Project } from './types';
 import { SCHEMA_VERSION } from './types';
-import { defaultBracing, defaultCleat, defaultConnections, defaultPurlins, defaultPurlinSide } from './defaults';
+import { emptyMarks, defaultBracing, defaultCleat, defaultConnections, defaultPurlins, defaultPurlinSide } from './defaults';
 
 /**
  * מיגרציות סכמה. כל מפתח N ממיר קובץ מגרסה N לגרסה N+1.
@@ -27,6 +27,12 @@ const MIGRATIONS: Record<number, (d: any) => any> = {
     ...d, schemaVersion: 4,
     building: { ...d.building, bracing: defaultBracing() },
     connectionDefaults: { ...d.connectionDefaults, base: defaultConnections().base },
+  }),
+  // v4 → v5: מספור, מהדורות, שרטוטים, אורכי חומר גלם וקרף
+  4: (d) => ({
+    ...d, schemaVersion: 5,
+    settings: { stockLengths: [6000, 12000], kerf: 3, checkedBy: '', approvedBy: '', ...d.settings },
+    marks: emptyMarks(), revision: { current: 'A', locked: false, log: [] }, drawings: [],
   }),
 };
 
@@ -75,6 +81,9 @@ export function assertProject(d: any): asserts d is Project {
   need(d.connectionOverrides && typeof d.connectionOverrides === 'object', 'connectionOverrides');
   need(Array.isArray(d.connectionTemplates), 'connectionTemplates');
   need(d.cleatOverrides && typeof d.cleatOverrides === 'object', 'cleatOverrides');
+  need(d.marks && d.marks.parts && d.marks.counters, 'marks');
+  need(d.revision && typeof d.revision.current === 'string', 'revision');
+  need(Array.isArray(d.drawings), 'drawings');
   const br = d.building.bracing;
   need(br && br.roof && br.walls && br.purlinTies && Array.isArray(br.roof.bays), 'bracing');
 }

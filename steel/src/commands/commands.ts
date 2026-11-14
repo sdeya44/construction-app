@@ -1,8 +1,9 @@
 import { add, rotateAxis, sub, v3, type Vec3 } from '../core/vec';
 import { degToRad } from '../core/units';
 import { generate, placementBasis } from '../geometry/generate';
-import type { ApprovalStatus, BuildingParams, CleatParams, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
+import type { ApprovalStatus, BuildingParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
 import { proposeSplices } from '../geometry/purlins';
+import { commitNumbering, computeFabrication } from '../fab/marks';
 import { hasErrors, validateBuilding } from '../model/validate';
 import { tryProfile } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
@@ -13,7 +14,7 @@ export class CommandError extends Error {}
  * כל פקודה היא פונקציה טהורה: Project ⇒ Project חדש. פקודה שאינה חוקית זורקת CommandError
  * והמודל אינו משתנה. ההיסטוריה (Undo/Redo) נשמרת ב-store כרצף מצבים.
  */
-export interface Command { label: string; run: (p: Project) => Project }
+export interface Command { label: string; run: (p: Project) => Project; /** מותר גם כשהמהדורה נעולה */ allowWhenLocked?: boolean }
 
 const clone = <T,>(x: T): T => structuredClone(x);
 
@@ -44,6 +45,8 @@ export function setSettings(patch: Partial<Project['settings']> & { displayUnit?
       if (displayUnit) n.displayUnit = displayUnit;
       n.settings = { ...n.settings, ...rest };
       if (!(n.settings.stockLength > 0)) throw new CommandError('אורך חומר גלם חייב להיות חיובי');
+      if (!n.settings.stockLengths.every((x) => x > 0)) throw new CommandError('אורכי מלאי חייבים להיות חיוביים');
+      if (!(n.settings.kerf >= 0 && n.settings.kerf < 20)) throw new CommandError('רוחב להב 0–20 מ"מ');
       return n;
     },
   };
@@ -429,6 +432,64 @@ export function applyTemplate(templateId: string, connIds: string[]): Command {
         if (connTypeOf(id) !== t.type) throw new CommandError('התבנית אינה מתאימה לסוג החיבור');
         n.connectionOverrides[id] = { ...(n.connectionOverrides[id] ?? {}), ...clone(t.params) };
       }
+      return n;
+    },
+  };
+}
+
+/** מספור: קיבוע הסימונים הזמניים ברישום (חלקים ומכלולים קיימים שומרים על סימונם). */
+export function numberParts(): Command {
+  return {
+    label: 'מספור חלקים ומכלולים',
+    run: (p) => {
+      const d = generate(p);
+      const fab = computeFabrication(p, d);
+      return { ...clone(p), marks: commitNumbering(p, fab) };
+    },
+  };
+}
+
+/** אישור מהדורה: נעילת המודל. השינוי הבא מחייב פתיחת מהדורה חדשה. */
+export function approveRevision(note: string): Command {
+  return {
+    label: 'אישור ונעילת מהדורה',
+    allowWhenLocked: false,
+    run: (p) => {
+      const n = clone(p);
+      const snap = JSON.stringify({ ...p, revision: undefined });
+      n.revision = { ...n.revision, locked: true, log: [...n.revision.log, { rev: n.revision.current, date: new Date().toISOString(), note, status: 'approved', snapshot: snap }] };
+      return n;
+    },
+  };
+}
+
+const nextRev = (r: string) => (/^[A-Y]$/.test(r) ? String.fromCharCode(r.charCodeAt(0) + 1) : `${r}1`);
+
+export function openNewRevision(note: string): Command {
+  return {
+    label: 'פתיחת מהדורה חדשה',
+    allowWhenLocked: true,
+    run: (p) => {
+      if (!p.revision.locked) throw new CommandError('המהדורה הנוכחית אינה נעולה');
+      const n = clone(p);
+      const rev = nextRev(p.revision.current);
+      n.revision = { current: rev, locked: false, log: [...n.revision.log, { rev, date: new Date().toISOString(), note, status: 'draft' }] };
+      return n;
+    },
+  };
+}
+
+/** עדכון רשומת שרטוט (סטטוס, גיליון, מהדורה). אישור שומר חתימת תוכן; שינוי מאוחר מסמן "השתנה מאז האישור". */
+export function setDrawing(id: string, base: Omit<DrawingRecord, 'status' | 'rev' | 'history' | 'sheet'>, patch: Partial<DrawingRecord>, note = ''): Command {
+  return {
+    label: 'עדכון שרטוט',
+    allowWhenLocked: true,
+    run: (p) => {
+      const n = clone(p);
+      const cur = n.drawings.find((x) => x.id === id) ?? { ...base, sheet: 'A3' as const, status: 'draft' as const, rev: p.revision.current, history: [] };
+      const next = { ...cur, ...patch };
+      if (patch.status && patch.status !== cur.status) next.history = [...cur.history, { rev: next.rev, date: new Date().toISOString(), status: patch.status, note }];
+      n.drawings = [...n.drawings.filter((x) => x.id !== id), next];
       return n;
     },
   };

@@ -85,7 +85,7 @@ export function newProject(name = 'פרויקט חדש', building: BuildingParam
     id: uid('P'),
     meta: { name, number: '', description: '', designer: '', client: '', createdAt: now, updatedAt: now },
     displayUnit: 'm',
-    settings: { stockLength: 12000 },
+    settings: { stockLength: 12000, stockLengths: [6000, 12000], kerf: 3, checkedBy: '', approvedBy: '' },
     building,
     memberOverrides: {},
     manualMembers: [],
@@ -95,7 +95,12 @@ export function newProject(name = 'פרויקט חדש', building: BuildingParam
     connectionOverrides: {},
     connectionTemplates: [],
     cleatOverrides: {},
+    marks: emptyMarks(),
+    revision: { current: 'A', locked: false, log: [] },
+    drawings: [],
     nextFrameNo: building.frames.length + 1,
     nextMemberNo: 1,
   };
 }
+
+export const emptyMarks = () => ({ parts: {}, assemblies: {}, counters: {}, lastByPart: {}, history: [] });

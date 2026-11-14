@@ -75,6 +75,8 @@ export interface Clash { a: string; b: string; depth: number }
 
 const testerCache = new WeakMap<Member, PrismTester>();
 const tester = (m: Member) => { let t = testerCache.get(m); if (!t) { t = new PrismTester(m); testerCache.set(m, t); } return t; };
+const boxCache = new WeakMap<Member, { min: Vec3; max: Vec3 }>();
+const box = (m: Member) => { let t = boxCache.get(m); if (!t) { t = aabb(m); boxCache.set(m, t); } return t; };
 const sampleCache = new WeakMap<Member, Vec3[]>();
 const samp = (m: Member) => { let t = sampleCache.get(m); if (!t) { t = samples(m); sampleCache.set(m, t); } return t; };
 
@@ -130,8 +132,12 @@ export function clash(a: Member, b: Member): Clash | null {
   }
   let depth = 0;
   const ta = tester(a), tb = tester(b);
-  for (const p of samp(a)) depth = Math.max(depth, tb.depth(p));
-  for (const p of samp(b)) depth = Math.max(depth, ta.depth(p));
+  const ba = box(a), bb = box(b);
+  if (!aabbOverlap(ba, bb)) return null;
+  // סינון מהיר: רק נקודות בתוך התיבה החוסמת של האלמנט השני נבדקות בבודק המדויק
+  const inBox = (p: Vec3, q: { min: Vec3; max: Vec3 }) => p.x > q.min.x && p.x < q.max.x && p.y > q.min.y && p.y < q.max.y && p.z > q.min.z && p.z < q.max.z;
+  for (const p of samp(a)) if (inBox(p, bb)) depth = Math.max(depth, tb.depth(p));
+  for (const p of samp(b)) if (inBox(p, ba)) depth = Math.max(depth, ta.depth(p));
   return depth > 0.1 ? { a: a.id, b: b.id, depth } : null;
 }
 
