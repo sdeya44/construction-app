@@ -11,7 +11,7 @@ import { LenField, NumField } from './fields';
 import { Icon } from './icons';
 
 const STATUS: Record<ApprovalStatus, string> = { 'not-verified': 'לא מאומת', 'for-review': 'לבדיקה', approved: 'מאושר' };
-const TYPE: Record<Connection['type'], string> = { eave: 'קורה-עמוד (פלטת כיפה)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה' };
+export const CONN_TYPE: Record<Connection['type'], string> = { eave: 'קורה-עמוד (פלטת כיפה)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה' };
 const BOLT_D = [10, 12, 16, 20, 24];
 
 /** רשימת החיבורים של אלמנט + כפתור פתיחת עורך. */
@@ -27,7 +27,7 @@ export function MemberConnections({ memberId }: { memberId: string }) {
       {shown.map((c) => (
         <div key={c.id} className="row" style={{ marginBottom: 4 }}>
           <button className="btn small" style={{ flex: 1, justifyContent: 'space-between' }} data-testid={`open-conn-${c.id}`} onClick={() => store.set({ activeConn: c.id })}>
-            <span>{TYPE[c.type]}</span><span className={`badge ${c.status === 'approved' ? 'ok' : 'warn'}`}>{STATUS[c.status]}</span>
+            <span>{CONN_TYPE[c.type]}</span><span className={`badge ${c.status === 'approved' ? 'ok' : 'warn'}`}>{STATUS[c.status]}</span>
           </button>
         </div>
       ))}
@@ -64,7 +64,7 @@ export function ConnectionEditor() {
         <button className="icon-btn" title="סגירת העורך" onClick={() => store.set({ activeConn: null })}><Icon name="x" /></button>
       </div>
       <dl className="kv">
-        <dt>סוג</dt><dd style={{ direction: 'rtl', textAlign: 'right', fontFamily: 'var(--font)' }} data-testid="conn-type">{TYPE[c.type]}</dd>
+        <dt>סוג</dt><dd style={{ direction: 'rtl', textAlign: 'right', fontFamily: 'var(--font)' }} data-testid="conn-type">{CONN_TYPE[c.type]}</dd>
         <dt>מזהה</dt><dd data-testid="conn-id">{c.id}</dd>
         <dt>מחבר</dt><dd>{c.members.join(' ↔ ')}</dd>
       </dl>
@@ -180,7 +180,7 @@ export function ConnectionEditor() {
       <div className="row">
         <button className="btn small" disabled={!c.overridden} onClick={() => store.exec(isCleat ? resetCleat(cleatId) : resetConnection(id))}>איפוס לברירת מחדל</button>
         {eff && plateType && <button className="btn small" data-testid="conn-apply-default" onClick={() => {
-          if (confirm(`להפוך את ערכי חיבור זה לברירת המחדל לכל חיבורי "${TYPE[c.type]}" שלא שונו ידנית?`)) store.exec(setConnectionDefault(plateType, (({ enabled: _e, ...r }) => r)(eff)));
+          if (confirm(`להפוך את ערכי חיבור זה לברירת המחדל לכל חיבורי "${CONN_TYPE[c.type]}" שלא שונו ידנית?`)) store.exec(setConnectionDefault(plateType, (({ enabled: _e, ...r }) => r)(eff)));
         }}>קבע כברירת מחדל</button>}
       </div>
       {eff && plateType && <>
@@ -247,7 +247,7 @@ function clip(x0: number, y0: number, x1: number, y1: number, R: number): [numbe
  * תצוגת חתך של החיבור, נגזרת מהמודל: מבט לאורך Y במישור המסגרת.
  * אלמנטים שחוצים את מישור החתך (פטה, זוויתן) — חתך ממולא; האחרים — היטל קווי מתאר, מקוטם לחלון.
  */
-function SectionSvg({ c }: { c: Connection }) {
+export function SectionSvg({ c }: { c: Connection }) {
   const d = useStore((s) => s.derived);
   const ids = [...c.members, ...c.parts.flatMap((x) => [x, `${x}.H`, `${x}.S`, `${x}.N`])];
   const parts = ids.map((x) => d.byId.get(x)).filter((m): m is NonNullable<typeof m> => !!m);

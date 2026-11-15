@@ -36,6 +36,12 @@ const ICONS: Record<string, ReactElement> = {
   building: <>{P('M3 20V10l9-6 9 6v10')}{P('M7 20v-7M17 20v-7M3 10h18')}</>,
   alert: <>{P('M12 3l10 18H2z')}{P('M12 10v5M12 18v.5')}</>,
   cube: <>{P('M12 2l9 5v10l-9 5-9-5V7z')}{P('M3 7l9 5 9-5M12 12v10')}</>,
+  link: <><circle cx="7" cy="7" r="3" /><circle cx="17" cy="17" r="3" />{P('M9 9l6 6')}</>,
+  sheet: <>{P('M6 2h9l5 5v15H6z')}{P('M14 2v6h6M9 13h6M9 17h4')}</>,
+  factory: <>{P('M3 20h18M5 20V10l5 3V8l5 3V6l4 2v12')}</>,
+  search: <><circle cx="11" cy="11" r="7" />{P('M20 20l-4-4')}</>,
+  calc: <><rect x="5" y="3" width="14" height="18" rx="2" />{P('M8 7h8M8 11h2M12 11h2M8 15h2M12 15h2')}</>,
+  more: <><circle cx="5" cy="12" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="19" cy="12" r="1.2" /></>,
   history: <>{P('M3 12a9 9 0 1 0 3-6.7L3 8')}{P('M3 3v5h5M12 7v5l3 2')}</>,
 };
 

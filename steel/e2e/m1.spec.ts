@@ -129,7 +129,8 @@ test.describe('M1 – ליבת מידול', () => {
     // לחיצה בשטח ריק מנקה (אחרי שהגרירה סובבה את המצלמה — חוזרים למבט חזית)
     await setView(page, 'front');
     const r = await paneRect(page);
-    await page.mouse.click(r.left + 30, r.top + 60);
+    // נקודה ריקה בפינה התחתונה (מחוץ לסרגלים הצפים)
+    await page.mouse.click(r.left + 12, r.bottom - 40);
     expect(await selection(page)).toEqual([]);
   });
 
@@ -196,7 +197,7 @@ test.describe('M1 – ליבת מידול', () => {
     const txt = await (await import('node:fs')).promises.readFile((await file.path())!, 'utf8');
     const j = JSON.parse(txt);
     expect(j.format).toBe('kayan-steel-pro');
-    expect(j.schemaVersion).toBe(5);
+    expect(j.schemaVersion).toBe(6);
     expect(j.project.building.width).toBe(20000);
     await shot(page, 'SAVE-01_after_reload');
   });

@@ -147,8 +147,10 @@ class Pane {
   onUp(e: PointerEvent) {
     const d = this.down;
     this.down = undefined;
-    if (!d || d.b !== 0) return;
+    if (!d) return;
     const moved = Math.hypot(e.clientX - d.x, e.clientY - d.y);
+    if (d.b === 2) { if (moved <= 6) this.vp.handleContext(this, e); return; }
+    if (d.b !== 0) return;
     // גרירה מסובבת/מזיזה את המצלמה — אינה מתפרשת כלחיצה
     if (moved > 6 || performance.now() - d.t > 700) return;
     this.vp.handleClick(this, e);
@@ -208,9 +210,9 @@ export class Viewport {
   panes: Pane[] = [];
   model?: ModelBuffers;
   modelMat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.15, roughness: 0.65, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-  edgeMat = new THREE.LineBasicMaterial({ color: 0x2a3440, transparent: true, opacity: 0.55 });
-  selMat = new THREE.MeshStandardMaterial({ color: 0xff8a1f, emissive: 0x7a3300, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
-  selEdgeMat = new THREE.LineBasicMaterial({ color: 0xb34d00 });
+  edgeMat = new THREE.LineBasicMaterial({ color: 0x2b322e, transparent: true, opacity: 0.5 });
+  selMat = new THREE.MeshStandardMaterial({ color: 0x2f8a5f, emissive: 0x0e3a24, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
+  selEdgeMat = new THREE.LineBasicMaterial({ color: 0x14432d });
   helpers = new THREE.Group();
   selGroup = new THREE.Group();
   measureGroup = new THREE.Group();
@@ -232,8 +234,8 @@ export class Viewport {
     const cv = this.renderer.domElement;
     cv.className = 'vp-canvas';
     host.appendChild(cv);
-    this.scene.background = new THREE.Color(0xeef1f4);
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 1.6));
+    this.scene.background = new THREE.Color(0xf3efe6);
+    this.scene.add(new THREE.HemisphereLight(0xfffdf6, 0x9a9484, 1.6));
     const sun = new THREE.DirectionalLight(0xffffff, 1.6);
     sun.position.set(-0.6, -1, 1.4);
     this.scene.add(sun);
@@ -246,7 +248,7 @@ export class Viewport {
     this.resize();
     const loop = () => {
       if (this.disposed) return;
-      if (this.dirty) { this.dirty = false; this.render(); }
+      if (this.dirty) { this.dirty = false; this.render(); for (const f of this.frameListeners) f(); }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
@@ -532,6 +534,46 @@ export class Viewport {
     p.lastPick = { x: e.clientX, y: e.clientY, ids: r.ids, i: idx };
     const id = r.ids[idx];
     store.select([id], e.ctrlKey || e.metaKey ? 'toggle' : e.shiftKey ? 'add' : 'replace');
+  }
+
+  /** לחיצה ימנית ללא גרירה: בחירת האלמנט שמתחת (אם אינו בבחירה) ופתיחת התפריט המעגלי. */
+  onContext?: (clientX: number, clientY: number) => void;
+  handleContext(p: Pane, e: PointerEvent) {
+    const r = this.pickAll(p, e.clientX, e.clientY);
+    const s = store.state;
+    if (r.ids.length && !s.selection.includes(r.ids[0])) store.select([r.ids[0]]);
+    if (!r.ids.length && !s.selection.length) return;
+    this.onContext?.(e.clientX, e.clientY);
+  }
+
+  /** מאזינים לכל ציור (תנועת מצלמה) — לעדכון מיקום הסרגל ההקשרי. */
+  frameListeners = new Set<() => void>();
+  private selPts: { key: string; pts: THREE.Vector3[] } = { key: '', pts: [] };
+  /** מלבן המסך (ביחס ל-host) של הבחירה בחלונית הראשית, או null אם אינה נראית. */
+  selectionScreenBox(): { x0: number; y0: number; x1: number; y1: number } | null {
+    const s = store.state;
+    if (!s.selection.length || !this.panes.length) return null;
+    const key = s.selection.join('|') + '#' + s.derived.members.length;
+    if (this.selPts.key !== key) {
+      const pts: THREE.Vector3[] = [];
+      for (const id of s.selection.slice(0, 60)) {
+        const m = s.derived.byId.get(id);
+        if (!m) continue;
+        const sol = cachedSolid(m);
+        for (const q of [...sol.startRing, ...sol.endRing]) pts.push(new THREE.Vector3(q.x, q.y, q.z));
+      }
+      this.selPts = { key, pts };
+    }
+    const p = this.panes[0];
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, vis = 0;
+    for (const q of this.selPts.pts) {
+      const sc = p.toScreen(q);
+      if (!sc.visible) continue;
+      vis++;
+      x0 = Math.min(x0, sc.x); y0 = Math.min(y0, sc.y); x1 = Math.max(x1, sc.x); y1 = Math.max(y1, sc.y);
+    }
+    if (!vis) return null;
+    return { x0: x0 + p.rect.x, y0: y0 + p.rect.y, x1: x1 + p.rect.x, y1: y1 + p.rect.y };
   }
 
   /** הצמדה: לקודקוד המשולש או לקצה האלמנט הקרוב ביותר על המסך (עד 14px), אחרת נקודת הפגיעה. */

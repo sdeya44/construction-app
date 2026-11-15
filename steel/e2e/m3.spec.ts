@@ -9,6 +9,7 @@ test.describe('M3 – תומכים וחיבורים', () => {
     const n = await page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { cleats: d.members.filter((m: any) => m.kind === 'cleat').length, sup: d.supports.length, clash: d.issues.filter((i: any) => i.code === 'CLASH').length }; });
     expect(n).toEqual({ cleats: 84, sup: 84, clash: 0 });
     await page.evaluate(() => (window as any).__ksp.store.select(['CL.PL.L.02.F2']));
+    await page.getByTestId('ptab-conns').click();
     await page.getByTestId('open-conn-C.PC.PL.L.02.F2').click();
     await expect(page.getByTestId('conn-type')).toContainText('זוויתן');
     // החתך נגזר מהמודל: חתך ממולא לפטה ולזוויתן
@@ -48,6 +49,7 @@ test.describe('M3 – תומכים וחיבורים', () => {
   test('CONN-01: בחירת קורה ← חיבורים ← עריכה; שינוי פלטה/ברגים נשמר לאלמנט גם אחרי טעינה מחדש', async ({ page }) => {
     await boot(page);
     await page.evaluate(() => (window as any).__ksp.store.select(['F2.RAF.L']));
+    await page.getByTestId('ptab-conns').click();
     await page.getByTestId('open-conn-C.EAVE.F2.L').click();
     await expect(page.getByTestId('conn-id')).toHaveText('C.EAVE.F2.L');
     await page.getByTestId('cp-t').fill('25'); await page.getByTestId('cp-t').press('Enter');

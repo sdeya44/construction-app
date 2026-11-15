@@ -29,13 +29,16 @@ export function LenField({ mm, unit, onCommit, min, testId, disabled }: {
   );
 }
 
-export function NumField({ value, suffix, onCommit, testId, step }: {
-  value: number; suffix?: string; onCommit: (v: number) => void; testId?: string; step?: number;
+export function NumField({ value, suffix, onCommit, testId, step, placeholder }: {
+  value: number; suffix?: string; onCommit: (v: number) => void; testId?: string; step?: number; placeholder?: string;
 }) {
-  const [text, setText] = useState(String(value));
+  const show = (v: number) => (Number.isFinite(v) ? String(+v.toFixed(6)) : '');
+  const [text, setText] = useState(show(value));
   const [bad, setBad] = useState(false);
-  useEffect(() => { setText(String(+value.toFixed(6))); setBad(false); }, [value]);
+  useEffect(() => { setText(show(value)); setBad(false); }, [value]);
   const commit = () => {
+    // ערך "משתנה" (NaN) שלא נגעו בו — לא משנה דבר
+    if (!Number.isFinite(value) && text.trim() === '') { setBad(false); return; }
     const n = Number(text.replace(',', '.'));
     if (!Number.isFinite(n) || text.trim() === '') { setBad(true); return; }
     setBad(false);
@@ -43,7 +46,7 @@ export function NumField({ value, suffix, onCommit, testId, step }: {
   };
   return (
     <div className="unit-wrap">
-      <input className={`inp num${bad ? ' bad' : ''}`} value={text} inputMode="decimal" data-testid={testId} step={step}
+      <input className={`inp num${bad ? ' bad' : ''}${!Number.isFinite(value) ? ' varies' : ''}`} value={text} inputMode="decimal" data-testid={testId} step={step} placeholder={placeholder}
         onChange={(e) => setText(e.target.value)} onBlur={commit}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
       {suffix && <span className="unit">{suffix}</span>}
@@ -51,12 +54,12 @@ export function NumField({ value, suffix, onCommit, testId, step }: {
   );
 }
 
-export function TextField({ value, onCommit, testId, list, ltr }: { value: string; onCommit: (v: string) => void; testId?: string; list?: string; ltr?: boolean }) {
+export function TextField({ value, onCommit, testId, list, ltr, placeholder, varies }: { value: string; onCommit: (v: string) => void; testId?: string; list?: string; ltr?: boolean; placeholder?: string; varies?: boolean }) {
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
   const commit = () => { if (text !== value) onCommit(text); };
   return (
-    <input className={`inp${ltr ? ' num' : ''}`} value={text} list={list} data-testid={testId}
+    <input className={`inp${ltr ? ' num' : ''}${varies ? ' varies' : ''}`} value={text} list={list} data-testid={testId} placeholder={placeholder}
       onChange={(e) => setText(e.target.value)} onBlur={commit}
       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
   );

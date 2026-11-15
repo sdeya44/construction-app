@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   base: './',
   plugins: [react()],
-  build: { target: 'es2022', chunkSizeWarningLimit: 1500 },
+  // גופנים מוטמעים כ-data URI כדי שהקובץ היחיד יעבוד ללא קבצים נלווים
+  build: { target: 'es2022', chunkSizeWarningLimit: 1500, assetsInlineLimit: (f: string) => (f.endsWith('.woff2') ? true : undefined) },
   test: { environment: 'node', include: ['tests/**/*.test.ts'] },
 } as any);

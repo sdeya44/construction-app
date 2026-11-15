@@ -12,9 +12,11 @@ import { IssuesPanel, TreePanel } from './TreePanel';
 import { DrawingsView } from './DrawingsView';
 import { CatalogDialog } from './CatalogDialog';
 import { ProductionView } from './ProductionView';
+import { CommandPalette, ConnCard, ConnectionsPanel, ContextBar, MarkingMenu, connectionsOf, type Cmd } from './Overlays';
+import { KIND_LABEL } from './TreePanel';
 
 type DialogKind = null | 'new' | 'open' | 'move' | 'copy' | 'rotate' | 'mirror' | 'catalog';
-type SideTab = 'structure' | 'roof' | 'tree' | 'issues';
+type SideTab = 'structure' | 'roof' | 'tree' | 'conns' | 'issues';
 type MobileTab = null | 'side' | 'props';
 
 function TB({ icon, label, on, onClick, disabled, testId, title, desk }: { icon: string; label?: string; on?: boolean; onClick: () => void; disabled?: boolean; testId?: string; title?: string; desk?: boolean }) {
@@ -32,6 +34,9 @@ export function App() {
   const [tab, setTab] = useState<SideTab>('structure');
   const [mtab, setMtab] = useState<MobileTab>(null);
   const [mode, setMode] = useState<'model' | 'drawings' | 'production'>('model');
+  const [palette, setPalette] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [vpObj, setVpObj] = useState<Viewport | null>(null);
   const s = useStore((x) => x);
   const sel = s.selection;
   const v = s.view;
@@ -42,6 +47,8 @@ export function App() {
     if (!host.current) return;
     const viewport = new Viewport(host.current);
     vp.current = viewport;
+    setVpObj(viewport);
+    viewport.onContext = (x, y) => setMenu({ x, y });
     window.__ksp = { store, viewport };
     return () => viewport.dispose();
   }, []);
@@ -49,11 +56,13 @@ export function App() {
   // קיצורי מקשים
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // לפי מיקום המקש (עובד גם בפריסת מקלדת עברית)
+      const k = e.code?.startsWith('Key') ? e.code.slice(3).toLowerCase() : e.key.toLowerCase();
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && k === 'k') { e.preventDefault(); setPalette((x) => !x); return; }
       const t = e.target as HTMLElement;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
-      if (dialog) return;
-      const k = e.key.toLowerCase();
-      const mod = e.ctrlKey || e.metaKey;
+      if (dialog || palette || menu) return;
       if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); store.undo(); }
       else if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); store.redo(); }
       else if (mod && k === 's') { e.preventDefault(); void store.saveNow('שמירה ידנית').then((ok) => ok && store.toast('ok', 'נשמר')); }
@@ -66,10 +75,11 @@ export function App() {
       else if (k === 'h') hide();
       else if (k === 'i') isolate();
       else if (k === 'u') showAll();
+      else if (k === 'p' && !mod) { setMode('model'); setTab('roof'); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dialog]);
+  }, [dialog, palette, menu]);
 
   const setView = (name: ViewName) => vp.current?.fitAll(name);
   const hide = () => { if (store.state.selection.length) store.set({ hidden: [...new Set([...store.state.hidden, ...store.state.selection])], selection: [] }); };
@@ -82,75 +92,113 @@ export function App() {
   const saveText = { saved: 'נשמר במחשב', dirty: 'שינויים לא שמורים', saving: 'שומר…', error: 'שגיאת שמירה' }[s.saveState];
   const sideOpen = mtab === 'side', propsOpen = mtab === 'props';
 
+  // פתיחת חיבור: עורך בלוח המאפיינים + סימון חלקיו
+  const openConn = (id: string) => {
+    const c = store.state.derived.connById.get(id);
+    setMode('model');
+    store.set({ activeConn: id, ...(c ? { selection: c.parts.filter((x) => store.state.derived.byId.has(x)).concat(c.members).slice(0, 80) } : {}) });
+    if (window.matchMedia('(max-width: 860px)').matches) setMtab('props');
+  };
+  const goTab = (t: SideTab) => { setMode('model'); setTab(t); if (window.matchMedia('(max-width: 860px)').matches) setMtab('side'); };
+  const focusProfile = () => { setMode('model'); store.set({ activeConn: null }); setTimeout(() => (document.querySelector('[data-testid="prop-profile"]') as HTMLInputElement | null)?.focus(), 30); };
+  const saveNow = () => void store.saveNow('שמירה ידנית').then((ok) => ok && store.toast('ok', 'נשמר'));
+
+  const cmds: Cmd[] = [
+    { id: 'mode-model', group: 'מצבי עבודה', label: 'מודל', run: () => setMode('model') },
+    { id: 'mode-conns', group: 'מצבי עבודה', label: 'חיבורים — רשימה ועורך', run: () => goTab('conns') },
+    { id: 'mode-drawings', group: 'מצבי עבודה', label: 'שרטוטים', run: () => setMode('drawings') },
+    { id: 'mode-production', group: 'מצבי עבודה', label: 'ייצור וכמויות', run: () => setMode('production') },
+    { id: 'issues', group: 'מצבי עבודה', label: `בדיקות ובעיות (${errs + warns})`, run: () => goTab('issues') },
+    { id: 'structure', group: 'מבנה', label: 'מבנה — מידות, מסגרות, קושרות', run: () => goTab('structure') },
+    { id: 'roof', group: 'מבנה', label: 'גג ופטות — פריסה, תומכים, חיבורי המשך', keys: 'P', run: () => goTab('roof') },
+    { id: 'tree', group: 'מבנה', label: 'עץ אלמנטים', run: () => goTab('tree') },
+    { id: 'select', group: 'כלים', label: 'בחירה', keys: 'Esc', run: () => store.set({ tool: 'select', measure: {} }) },
+    { id: 'measure', group: 'כלים', label: 'מדידה', keys: 'M', run: () => store.set({ tool: 'measure', measure: {} }) },
+    { id: 'move', group: 'עריכה', label: 'הזזה', disabled: !sel.length, run: () => setDialog('move') },
+    { id: 'copy', group: 'עריכה', label: 'העתקה', disabled: !sel.length, run: () => setDialog('copy') },
+    { id: 'rotate', group: 'עריכה', label: 'סיבוב', disabled: !sel.length, run: () => setDialog('rotate') },
+    { id: 'mirror', group: 'עריכה', label: 'שיקוף', disabled: !sel.length, run: () => setDialog('mirror') },
+    { id: 'delete', group: 'עריכה', label: 'מחיקה', keys: 'Del', disabled: !sel.length, danger: true, run: () => store.exec(deleteMembers(store.state.selection)) },
+    { id: 'restore', group: 'עריכה', label: 'שחזור אלמנטים שנמחקו', disabled: !s.project.deleted.length, run: () => store.exec(restoreDeleted()) },
+    { id: 'undo', group: 'עריכה', label: 'ביטול', keys: 'Ctrl Z', disabled: !s.canUndo, run: () => store.undo() },
+    { id: 'redo', group: 'עריכה', label: 'חזרה', keys: 'Ctrl Y', disabled: !s.canRedo, run: () => store.redo() },
+    { id: 'selall', group: 'בחירה', label: 'בחר הכל', keys: 'Ctrl A', run: () => store.select(store.state.derived.members.map((m) => m.id)) },
+    { id: 'hide', group: 'בחירה', label: 'הסתר בחירה', keys: 'H', disabled: !sel.length, run: () => hide() },
+    { id: 'isolate', group: 'בחירה', label: 'בודד בחירה', keys: 'I', disabled: !sel.length, run: () => isolate() },
+    { id: 'showall', group: 'בחירה', label: 'הצג הכל', keys: 'U', run: () => showAll() },
+    { id: 'fit', group: 'מבט', label: 'התאמה למסך', keys: 'F', run: () => vp.current?.fitAll() },
+    { id: 'zoomsel', group: 'מבט', label: 'התמקדות בבחירה', keys: 'Z', disabled: !sel.length, run: () => vp.current?.fitSelection() },
+    ...(['iso', 'front', 'right', 'top', 'left', 'back'] as ViewName[]).map((n) => ({ id: `view-${n}`, group: 'מבט', label: `מבט ${VIEW_LABEL[n]}`, run: () => { setMode('model'); setView(n); } })),
+    { id: 'ortho', group: 'מבט', label: v.projection === 'ortho' ? 'פרספקטיבה' : 'הטלה אורתוגרפית', run: () => store.setView({ projection: v.projection === 'ortho' ? 'persp' : 'ortho' }) },
+    { id: 'wire', group: 'מבט', label: v.render === 'solid' ? 'קווי מתאר' : 'מוצק', run: () => store.setView({ render: v.render === 'solid' ? 'wire' : 'solid' }) },
+    { id: 'clip', group: 'מבט', label: 'חתך מישורי', run: () => store.setView({ clip: { ...v.clip, enabled: !v.clip.enabled } }) },
+    { id: 'split', group: 'מבט', label: 'ארבעה מבטים', run: () => store.setView({ split: !v.split }) },
+    { id: 'dims', group: 'מבט', label: v.dims ? 'הסתר מידות' : 'הצג מידות', run: () => store.setView({ dims: !v.dims }) },
+    { id: 'new', group: 'קובץ', label: 'פרויקט חדש', run: () => setDialog('new') },
+    { id: 'open', group: 'קובץ', label: 'פתיחת פרויקט', run: () => setDialog('open') },
+    { id: 'save', group: 'קובץ', label: 'שמירה', keys: 'Ctrl S', run: saveNow },
+    { id: 'saveas', group: 'קובץ', label: 'שמירה בשם (שכפול)', run: duplicateProject },
+    { id: 'export', group: 'קובץ', label: 'ייצוא קובץ פרויקט', run: exportProject },
+    { id: 'catalog', group: 'קובץ', label: 'קטלוג חתכים — ייבוא מאקסל', run: () => setDialog('catalog') },
+  ];
+
+  const ms = sel.map((id) => s.derived.byId.get(id)).filter(Boolean);
+  const menuItems = (): Cmd[] => {
+    const one = ms.length === 1 ? ms[0]! : null;
+    const conns = one ? connectionsOf(one, s.derived.connections, s.derived.connById) : [];
+    return [
+      { id: 'conns', group: '', label: 'חיבורים', disabled: !conns.length, run: () => conns.length && openConn(conns[0].id) },
+      { id: 'profile', group: '', label: 'חתך', run: focusProfile },
+      { id: 'isolate', group: '', label: 'בודד', run: isolate },
+      { id: 'drawings', group: '', label: 'שרטוטים', run: () => setMode('drawings') },
+      { id: 'move', group: '', label: 'הזזה', run: () => setDialog('move') },
+      { id: 'copy', group: '', label: 'העתקה', run: () => setDialog('copy') },
+      { id: 'hide', group: '', label: 'הסתר', run: hide },
+      { id: 'delete', group: '', label: 'מחק', danger: true, run: () => store.exec(deleteMembers(store.state.selection)) },
+    ];
+  };
+  const pickElement = (id: string) => { setMode('model'); store.select([id]); setTimeout(() => vp.current?.fitSelection(), 0); };
+  const crumb = ms.length === 1 ? ms[0]!.label : ms.length > 1 ? `${ms.length} אלמנטים` : '';
+  const railBtn = (key: string, icon: string, label: string, on: boolean, onClick: () => void, testId?: string, badge?: number) => (
+    <button key={key} className={`rail-btn${on ? ' on' : ''}`} onClick={onClick} data-testid={testId} aria-pressed={on}>
+      <Icon name={icon} /><span>{label}</span>{badge ? <i className="rail-badge">{badge}</i> : null}
+    </button>
+  );
+
   return (
-    <div className="app" style={mode !== 'model' ? { gridTemplateRows: 'auto 1fr auto auto' } : undefined}>
+    <div className={`app mode-${mode}`}>
       <ProfileDatalist />
+      <nav className="rail" aria-label="מצבי עבודה">
+        <div className="rail-logo" aria-hidden="true">K</div>
+        {railBtn('model', 'cube', 'מודל', mode === 'model' && tab !== 'conns' && tab !== 'issues', () => { setMode('model'); if (tab === 'conns' || tab === 'issues') setTab('structure'); }, 'mode-model')}
+        {railBtn('conns', 'link', 'חיבורים', mode === 'model' && tab === 'conns', () => goTab('conns'), 'rail-conns')}
+        {railBtn('dwg', 'sheet', 'שרטוטים', mode === 'drawings', () => setMode('drawings'), 'mode-drawings')}
+        {railBtn('prod', 'factory', 'ייצור', mode === 'production', () => setMode('production'), 'mode-production')}
+        {railBtn('chk', 'alert', 'בדיקות', mode === 'model' && tab === 'issues', () => goTab('issues'), 'rail-issues', errs + warns)}
+        <div className="rail-sp" />
+        {railBtn('cat', 'tree', 'חתכים', false, () => setDialog('catalog'), 'btn-catalog')}
+        <span className="rail-btn disabled" title="מודול חישוב — שלב M8, טרם מומש"><Icon name="calc" /><span>חישובים<br />בפיתוח</span></span>
+      </nav>
+
       <header className="topbar">
-        <div className="brand"><img src="./icon.svg" alt="" /><span className="desk-only">KAYAN STEEL PRO</span> <small className="desk-only">1.1</small></div>
-        <div className="proj-name" data-testid="proj-name">{s.project.meta.name}</div>
-        <div className="modes" role="tablist">
-          <button className={mode === 'model' ? 'on' : ''} onClick={() => setMode('model')} data-testid="mode-model">מודל</button>
-          <button className={mode === 'drawings' ? 'on' : ''} onClick={() => setMode('drawings')} data-testid="mode-drawings">שרטוטים</button>
-          <button className={mode === 'production' ? 'on' : ''} onClick={() => setMode('production')} data-testid="mode-production">ייצור</button>
-        </div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.2</small></div>
+        <span className="tb-div desk-only" />
+        <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
+        {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
         {s.project.revision.locked && <span className="badge warn" data-testid="locked-badge">מהדורה {s.project.revision.current} נעולה</span>}
         <div className="spacer" />
-        <button className="tb-btn desk-only" onClick={() => setDialog('new')} data-testid="btn-new"><Icon name="file" />חדש</button>
-        <button className="tb-btn" onClick={() => setDialog('open')} data-testid="btn-open"><Icon name="folder" /><span className="desk-only">פתיחה</span></button>
-        <button className="tb-btn desk-only" onClick={() => void store.saveNow('שמירה ידנית').then((ok) => ok && store.toast('ok', 'נשמר'))} data-testid="btn-save"><Icon name="save" />שמירה</button>
-        <button className="tb-btn desk-only" onClick={duplicateProject}><Icon name="copy" />שמירה בשם</button>
-        <button className="tb-btn desk-only" onClick={exportProject} data-testid="btn-export"><Icon name="download" />ייצוא</button>
-        <button className="tb-btn desk-only" onClick={() => setDialog('catalog')} data-testid="btn-catalog"><Icon name="tree" />חתכים</button>
+        <button className="search-pill" onClick={() => setPalette(true)} data-testid="cmdk-open" title="לוח פקודות (Ctrl K)">
+          <Icon name="search" /><span className="desk-only">חיפוש אלמנט או פקודה…</span><kbd className="desk-only">Ctrl K</kbd>
+        </button>
+        <button className="tb-btn desk-only" onClick={() => setDialog('new')} data-testid="btn-new" title="פרויקט חדש"><Icon name="file" /></button>
+        <button className="tb-btn" onClick={() => setDialog('open')} data-testid="btn-open" title="פתיחה"><Icon name="folder" /></button>
+        <button className="tb-btn desk-only" onClick={saveNow} data-testid="btn-save" title="שמירה (Ctrl S)"><Icon name="save" /></button>
+        <button className="tb-btn desk-only" onClick={exportProject} data-testid="btn-export" title="ייצוא קובץ פרויקט"><Icon name="download" /></button>
+        <span className="tb-div desk-only" />
         <button className="tb-btn" onClick={() => store.undo()} disabled={!s.canUndo} title={s.undoLabel ? `ביטול: ${s.undoLabel}` : 'ביטול'} data-testid="btn-undo"><Icon name="undo" /></button>
         <button className="tb-btn" onClick={() => store.redo()} disabled={!s.canRedo} title={s.redoLabel ? `חזרה: ${s.redoLabel}` : 'חזרה'} data-testid="btn-redo"><Icon name="redo" /></button>
-        <span className={`save-state ${s.saveState} desk-only`} data-testid="save-state">{saveText}</span>
+        <span className={`save-state ${s.saveState} desk-only`}>{s.saveState === 'saved' ? '✓ ' : ''}<span data-testid="save-state">{saveText}</span> · מהדורה {s.project.revision.current}</span>
       </header>
-
-      <div className="toolbar" role="toolbar" style={mode !== 'model' ? { display: 'none' } : undefined}>
-        <div className="tgroup">
-          <span className="tgroup-label desk-only">כלים</span>
-          <TB icon="select" label="בחירה" on={s.tool === 'select'} onClick={() => store.set({ tool: 'select', measure: {} })} testId="tool-select" />
-          <TB icon="measure" label="מדידה" on={s.tool === 'measure'} onClick={() => store.set({ tool: s.tool === 'measure' ? 'select' : 'measure', measure: {} })} testId="tool-measure" />
-        </div>
-        <div className="tgroup desk-only">
-          <span className="tgroup-label">עריכה</span>
-          <TB icon="move" label="הזזה" disabled={!sel.length} onClick={() => setDialog('move')} testId="tool-move" />
-          <TB icon="copy" label="העתקה" disabled={!sel.length} onClick={() => setDialog('copy')} testId="tool-copy" />
-          <TB icon="rotate" title="סיבוב" disabled={!sel.length} onClick={() => setDialog('rotate')} testId="tool-rotate" />
-          <TB icon="mirror" title="שיקוף" disabled={!sel.length} onClick={() => setDialog('mirror')} testId="tool-mirror" />
-          <TB icon="trash" title="מחיקה (Delete)" disabled={!sel.length} onClick={() => store.exec(deleteMembers(sel))} testId="tool-delete" />
-          {s.project.deleted.length > 0 && <TB icon="history" label={`שחזור (${s.project.deleted.length})`} onClick={() => store.exec(restoreDeleted())} />}
-        </div>
-        <div className="tgroup">
-          <span className="tgroup-label desk-only">מבט</span>
-          <div className="seg">
-            {(['iso', 'front', 'right', 'top', 'left', 'back'] as ViewName[]).map((n) => (
-              <button key={n} className={`tbtn${n === 'left' || n === 'back' ? ' desk-only' : ''}`} onClick={() => setView(n)} data-testid={`view-${n}`}>{VIEW_LABEL[n]}</button>
-            ))}
-          </div>
-          <TB icon="fit" title="התאמה למסך (F)" onClick={() => vp.current?.fitAll()} testId="fit" />
-          <TB icon="zoomSel" title="התמקדות בבחירה (Z)" disabled={!sel.length} onClick={() => vp.current?.fitSelection()} />
-        </div>
-        <div className="tgroup">
-          <span className="tgroup-label desk-only">תצוגה</span>
-          <div className="seg">
-            <button className={`tbtn${v.projection === 'persp' ? ' on' : ''}`} onClick={() => store.setView({ projection: 'persp' })} data-testid="proj-persp">פרספקטיבה</button>
-            <button className={`tbtn${v.projection === 'ortho' ? ' on' : ''}`} onClick={() => store.setView({ projection: 'ortho' })} data-testid="proj-ortho">אורתו</button>
-          </div>
-          <TB icon={v.render === 'solid' ? 'solid' : 'wire'} title={v.render === 'solid' ? 'מוצק (מעבר לקווי מתאר)' : 'קווי מתאר (מעבר למוצק)'} on={v.render === 'wire'} onClick={() => store.setView({ render: v.render === 'solid' ? 'wire' : 'solid' })} testId="render-mode" />
-          <TB icon="grid" title="רשת צירים" on={v.grid} onClick={() => store.setView({ grid: !v.grid })} />
-          <TB icon="dims" title="מידות" on={v.dims} onClick={() => store.setView({ dims: !v.dims })} testId="toggle-dims" />
-          <TB icon="tag" title="תוויות בחירה" on={v.labels} onClick={() => store.setView({ labels: !v.labels })} desk />
-          <TB icon="clip" title="חתך מישורי" on={v.clip.enabled} onClick={() => store.setView({ clip: { ...v.clip, enabled: !v.clip.enabled } })} testId="toggle-clip" />
-          <TB icon="split" title="ארבעה מבטים" on={v.split} onClick={() => store.setView({ split: !v.split })} testId="toggle-split" desk />
-        </div>
-        <div className="tgroup">
-          <span className="tgroup-label desk-only">הסתרה</span>
-          <TB icon="eyeOff" title="הסתר בחירה (H)" disabled={!sel.length} onClick={hide} testId="hide" />
-          <TB icon="isolate" title="בודד בחירה (I)" disabled={!sel.length} onClick={isolate} testId="isolate" />
-          <TB icon="showAll" title="הצג הכל (U)" disabled={!s.hidden.length && !s.isolated} onClick={showAll} testId="show-all" />
-        </div>
-      </div>
 
       {mode === 'drawings' && <main className="mode-area"><DrawingsView /></main>}
       {mode === 'production' && <main className="mode-area"><ProductionView /></main>}
@@ -160,14 +208,64 @@ export function App() {
             <button className={`tab${tab === 'structure' ? ' on' : ''}`} onClick={() => setTab('structure')} data-testid="tab-structure">מבנה</button>
             <button className={`tab${tab === 'roof' ? ' on' : ''}`} onClick={() => setTab('roof')} data-testid="tab-roof">גג ופטות</button>
             <button className={`tab${tab === 'tree' ? ' on' : ''}`} onClick={() => setTab('tree')} data-testid="tab-tree">אלמנטים</button>
+            <button className={`tab${tab === 'conns' ? ' on' : ''}`} onClick={() => setTab('conns')} data-testid="tab-conns">חיבורים</button>
             <button className={`tab${tab === 'issues' ? ' on' : ''}`} onClick={() => setTab('issues')} data-testid="tab-issues">
               בעיות {(errs + warns) > 0 && <span className={`count ${errs ? 'err' : 'warn'}`}>{errs + warns}</span>}
             </button>
           </div>
-          {tab === 'structure' ? <StructurePanel /> : tab === 'roof' ? <RoofPanel /> : tab === 'tree' ? <TreePanel /> : <IssuesPanel />}
+          {tab === 'structure' ? <StructurePanel /> : tab === 'roof' ? <RoofPanel /> : tab === 'tree' ? <TreePanel /> : tab === 'conns' ? <ConnectionsPanel onOpen={openConn} /> : <IssuesPanel />}
         </aside>
-        <section className="viewport-host" dir="ltr" ref={host} data-testid="viewport">
-          {!s.derived.members.length && <div className="empty-vp">אין גיאומטריה להצגה. {errs ? 'תקן את השגיאות בלשונית "בעיות".' : ''}</div>}
+        <div className="center">
+          <section className="viewport-host" dir="ltr" ref={host} data-testid="viewport">
+            {!s.derived.members.length && <div className="empty-vp">אין גיאומטריה להצגה. {errs ? 'תקן את השגיאות בלשונית "בעיות".' : ''}</div>}
+          </section>
+
+          <div className="chips">
+            {errs > 0 && <button className="chip-st err" onClick={() => goTab('issues')} data-testid="chip-errors">{errs} שגיאות</button>}
+            {warns > 0 && <button className="chip-st warn" onClick={() => goTab('issues')} data-testid="chip-warnings">{warns} אזהרות</button>}
+            {s.isolated && <button className="chip-st" onClick={showAll}>מצב בידוד · הצג הכל</button>}
+          </div>
+
+          <div className="viewbar" role="toolbar" aria-label="מבט ותצוגה">
+            <div className="seg">
+              {(['iso', 'front', 'right', 'top', 'left', 'back'] as ViewName[]).map((n) => (
+                <button key={n} className={`tbtn${n === 'left' || n === 'back' ? ' desk-only' : ''}`} onClick={() => setView(n)} data-testid={`view-${n}`}>{VIEW_LABEL[n]}</button>
+              ))}
+            </div>
+            <TB icon="fit" title="התאמה למסך (F)" onClick={() => vp.current?.fitAll()} testId="fit" />
+            <TB icon="zoomSel" title="התמקדות בבחירה (Z)" disabled={!sel.length} onClick={() => vp.current?.fitSelection()} desk />
+            <span className="vb-sep desk-only" />
+            <div className="seg">
+              <button className={`tbtn${v.projection === 'persp' ? ' on' : ''}`} onClick={() => store.setView({ projection: 'persp' })} data-testid="proj-persp">פרספקטיבה</button>
+              <button className={`tbtn${v.projection === 'ortho' ? ' on' : ''}`} onClick={() => store.setView({ projection: 'ortho' })} data-testid="proj-ortho">אורתו</button>
+            </div>
+            <TB icon={v.render === 'solid' ? 'solid' : 'wire'} title={v.render === 'solid' ? 'מוצק (מעבר לקווי מתאר)' : 'קווי מתאר (מעבר למוצק)'} on={v.render === 'wire'} onClick={() => store.setView({ render: v.render === 'solid' ? 'wire' : 'solid' })} testId="render-mode" />
+            <TB icon="grid" title="רשת צירים" on={v.grid} onClick={() => store.setView({ grid: !v.grid })} desk />
+            <TB icon="dims" title="מידות" on={v.dims} onClick={() => store.setView({ dims: !v.dims })} testId="toggle-dims" />
+            <TB icon="tag" title="תוויות בחירה" on={v.labels} onClick={() => store.setView({ labels: !v.labels })} desk />
+            <TB icon="split" title="ארבעה מבטים" on={v.split} onClick={() => store.setView({ split: !v.split })} testId="toggle-split" desk />
+            <span className="vb-sep" />
+            <TB icon="eyeOff" title="הסתר בחירה (H)" disabled={!sel.length} onClick={hide} testId="hide" />
+            <TB icon="isolate" title="בודד בחירה (I)" disabled={!sel.length} onClick={isolate} testId="isolate" />
+            <TB icon="showAll" title="הצג הכל (U)" disabled={!s.hidden.length && !s.isolated} onClick={showAll} testId="show-all" />
+          </div>
+
+          <ContextBar vp={vpObj} onOpenConn={openConn} onMore={(x, y) => setMenu({ x, y })} />
+          <ConnCard onOpen={openConn} />
+
+          <div className="dock" role="toolbar" aria-label="כלי עבודה">
+            <TB icon="select" label="בחירה" on={s.tool === 'select'} onClick={() => store.set({ tool: 'select', measure: {} })} testId="tool-select" />
+            <TB icon="measure" label="מדידה" on={s.tool === 'measure'} onClick={() => store.set({ tool: s.tool === 'measure' ? 'select' : 'measure', measure: {} })} testId="tool-measure" />
+            <TB icon="clip" label="חתך" on={v.clip.enabled} onClick={() => store.setView({ clip: { ...v.clip, enabled: !v.clip.enabled } })} testId="toggle-clip" />
+            <span className="dock-sep desk-only" />
+            <TB icon="move" label="הזזה" disabled={!sel.length} onClick={() => setDialog('move')} testId="tool-move" desk />
+            <TB icon="copy" label="העתקה" disabled={!sel.length} onClick={() => setDialog('copy')} testId="tool-copy" desk />
+            <TB icon="rotate" title="סיבוב" disabled={!sel.length} onClick={() => setDialog('rotate')} testId="tool-rotate" desk />
+            <TB icon="mirror" title="שיקוף" disabled={!sel.length} onClick={() => setDialog('mirror')} testId="tool-mirror" desk />
+            <TB icon="trash" title="מחיקה (Delete)" disabled={!sel.length} onClick={() => store.exec(deleteMembers(sel))} testId="tool-delete" desk />
+            {s.project.deleted.length > 0 && <TB icon="history" label={`שחזור (${s.project.deleted.length})`} onClick={() => store.exec(restoreDeleted())} desk />}
+          </div>
+
           {s.tool === 'measure' && (
             <div className="measure-box" data-testid="measure-box">
               <b>מדידה</b>
@@ -193,17 +291,16 @@ export function App() {
               <div className="hint" style={{ margin: 0 }}>{v.clip.axis} = {fmt(v.clip.pos)}</div>
             </div>
           )}
-        </section>
+        </div>
         <aside className={`side side-end${propsOpen ? ' open' : ''}`} data-testid="props">
           <PropertiesPanel />
         </aside>
       </main>
 
       <footer className="statusbar" data-testid="statusbar">
-        <span>נבחרו: <b data-testid="status-sel">{sel.length}</b></span>
+        <span>נבחרו: <b data-testid="status-sel">{sel.length}</b>{ms.length === 1 && <> · <b>{ms[0]!.label}</b></>}</span>
         <span>אלמנטים: <b>{s.derived.members.length}</b></span>
         {s.hidden.length > 0 && <span>מוסתרים: <b>{s.hidden.length}</b></span>}
-        {s.isolated && <span className="badge warn">מצב בידוד</span>}
         <span>שגיאות: <b style={{ color: errs ? 'var(--err)' : undefined }}>{errs}</b> · אזהרות: <b>{warns}</b></span>
         <span className="sp" />
         <span>יחידות: <b>{u === 'm' ? 'מטר' : 'מ"מ'}</b> · מודל פנימי מ"מ</span>
@@ -212,13 +309,17 @@ export function App() {
       </footer>
 
       <nav className="mnav">
-        <button className={mtab === 'side' ? 'on' : ''} onClick={() => setMtab(sideOpen ? null : 'side')} data-testid="m-side"><Icon name="building" />מבנה</button>
-        <button className={!mtab ? 'on' : ''} onClick={() => setMtab(null)} data-testid="m-model"><Icon name="cube" />מודל</button>
-        <button className={mtab === 'props' ? 'on' : ''} onClick={() => setMtab(propsOpen ? null : 'props')} data-testid="m-props"><Icon name="props" />מאפיינים{sel.length ? ` (${sel.length})` : ''}</button>
+        <button className={mtab === 'side' ? 'on' : ''} onClick={() => { setMode('model'); setMtab(sideOpen ? null : 'side'); }} data-testid="m-side"><Icon name="building" />מבנה</button>
+        <button className={mode === 'model' && !mtab ? 'on' : ''} onClick={() => { setMode('model'); setMtab(null); }} data-testid="m-model"><Icon name="cube" />מודל</button>
+        <button className={mtab === 'props' ? 'on' : ''} onClick={() => { setMode('model'); setMtab(propsOpen ? null : 'props'); }} data-testid="m-props"><Icon name="props" />מאפיינים{sel.length ? ` (${sel.length})` : ''}</button>
+        <button className={mode === 'drawings' ? 'on' : ''} onClick={() => { setMtab(null); setMode('drawings'); }} data-testid="m-drawings"><Icon name="sheet" />שרטוטים</button>
+        <button className={mode === 'production' ? 'on' : ''} onClick={() => { setMtab(null); setMode('production'); }} data-testid="m-production"><Icon name="factory" />ייצור</button>
       </nav>
 
       <div className="toasts" data-testid="toasts">{s.toasts.map((t) => <div key={t.id} className={`toast ${t.kind}`}>{t.text}</div>)}</div>
 
+      {menu && ms.length > 0 && <MarkingMenu x={menu.x} y={menu.y} title={ms.length === 1 ? (ms[0]!.id.length > 12 ? KIND_LABEL[ms[0]!.kind] : ms[0]!.id) : String(ms.length)} items={menuItems()} onClose={() => setMenu(null)} />}
+      {palette && <CommandPalette cmds={cmds} onClose={() => setPalette(false)} onPickElement={pickElement} />}
       {dialog === 'new' && <NewProjectDialog onClose={() => setDialog(null)} />}
       {dialog === 'open' && <OpenDialog onClose={() => setDialog(null)} />}
       {dialog === 'catalog' && <CatalogDialog onClose={() => setDialog(null)} />}

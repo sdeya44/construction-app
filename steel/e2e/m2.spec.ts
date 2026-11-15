@@ -50,6 +50,7 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
   test('SPL-01/02: הצעת חיבורים לפטה 30 מ\', הזזת חיבור, BOM מתעדכן', async ({ page }) => {
     await boot(page);
     await page.evaluate(() => (window as any).__ksp.store.select(['PL.L.03']));
+    await page.getByTestId('ptab-conns').click();
     // קו 30.1 מ' (הארכה 50 מ"מ מעבר למסגרות הקיצוניות)
     await expect(page.getByTestId('part-len-1')).toContainText('30.100');
     await page.getByTestId('splice-propose').click();
@@ -79,6 +80,7 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     await page.getByTestId('roofType').selectOption('mono');
     await page.getByTestId('width').fill('14'); await page.getByTestId('width').press('Enter');
     await page.evaluate(() => (window as any).__ksp.store.select(['F1.RAF']));
+    await page.getByTestId('ptab-conns').click();
     await expect(page.getByTestId('parts-table')).toContainText('ארוך');
     await page.getByTestId('splice-add').click();
     await page.getByTestId('splice-new').fill('6'); await page.getByTestId('splice-new').press('Tab');
