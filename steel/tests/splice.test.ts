@@ -4,7 +4,8 @@ import { generate } from '../src/geometry/generate';
 import { proposeSplicesFor, setSplices } from '../src/commands/commands';
 import { computeFabrication } from '../src/fab/marks';
 
-const geo = () => newProject('t', defaultBuilding());
+// הבדיקות כאן על חיבורים ידניים — חלוקה אוטומטית כבויה
+const geo = () => { const p = newProject('t', defaultBuilding()); p.settings.autoSplice = false; return p; };
 
 describe('חיבור המשך פטה — פלטה ו-4 ברגים (2 בכל פטה)', () => {
   it('תפר סמוך לתומך (סוף מוט 12 מטר): פלטה בצד הפנימי של הווב, 4 ברגים מחוץ לרוחב הזוויתן, ברגי התומך עוברים גם בפלטה', () => {

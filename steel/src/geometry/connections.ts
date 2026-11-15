@@ -425,10 +425,13 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       const sign = dot(d, lf.u);
       wb = Math.max(...pp.outline.outer.map((q) => q.u * sign));
     }
-    const H = prm.height ?? pp.props.h;
-    if (prm.height !== null && Math.abs(prm.height - pp.props.h) > 0.5) {
-      issue({ code: 'CLEAT_MANUAL', severity: 'warning', elementId: cid, message: `תומך ${cid}: גובה ${prm.height} מ"מ נקבע ידנית ושונה מגובה הפטה (${pp.props.h} מ"מ)` });
+    // גובה אוטומטי: גובה הפטה; בפטת Z הזוויתן בצד האגף העליון — נעצר מתחת לאגף ולרדיוס הכיפוף (החלטת משתמש 15.11.2026)
+    const autoH = pp.family === 'Z' ? Math.floor((pp.props.h - pp.dims.t - (pp.dims.r ?? 2 * pp.dims.t) - 5) / 5) * 5 : pp.props.h;
+    const H = prm.height ?? autoH;
+    if (prm.height !== null && Math.abs(prm.height - autoH) > 0.5) {
+      issue({ code: 'CLEAT_MANUAL', severity: 'info', elementId: cid, message: `תומך ${cid}: גובה ${prm.height} מ"מ נקבע ידנית (אוטומטי: ${autoH} מ"מ)` });
     }
+    if (pp.family === 'Z' && H > autoH + 0.5) issue({ code: 'CLASH', severity: 'error', elementId: cid, message: `תומך ${cid}: הזוויתן (${H}) חודר לאגף העליון של פטת Z — גובה מרבי ${autoH} מ"מ`, cleatFix: { label: `גובה ${autoH}`, side, cleatId: project.cleatOverrides[cid] ? cid : undefined, patch: { height: null } } });
     const Q = add(sp.p, scale(d, wb)); // פינת הזוויתן: על מישור הגג, צמודה לפני הווב (0 מ"מ)
     const Y = v3(0, 1, 0);
     const prof = `L${H}x${prm.base}x${prm.thickness}`;
@@ -457,7 +460,20 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       }
     }
     const top = hh0 + (prm.rows - 1) * prm.rowPitch;
+    const nIss = res.issues.length;
     edgeChecks(label, cid, d0, prm.width / 2 - ((prm.perRow - 1) / 2) * prm.pitch, H - top, prm.perRow > 1 ? prm.pitch : null, prm.rows > 1 ? prm.rowPitch : null, res.issues);
+    // הצעת תיקון: הרחבת הזוויתן כך שמרחק הקצה ≥ 1.2·d0 (מעוגל ל-5), או הורדת החורים
+    for (const iss of res.issues.slice(nIss)) {
+      const minE = Math.ceil((1.2 * d0) / 5) * 5;
+      const ov = project.cleatOverrides[cid] ? cid : undefined;
+      if (iss.message.includes('מרחק קצה')) {
+        const w = (prm.perRow - 1) * prm.pitch + 2 * minE;
+        iss.cleatFix = { label: `רוחב זוויתן ${w}`, side, cleatId: ov, patch: { width: w } };
+      } else if (iss.message.includes('מרחק שפה')) {
+        const hh = Math.max(prm.thickness + 15, H - minE - (prm.rows - 1) * prm.rowPitch);
+        iss.cleatFix = { label: `גובה חורים ${hh}`, side, cleatId: ov, patch: { holeHeight: hh } };
+      }
+    }
     const h = hw(prm.bolt.d);
     // מרווח כלי עבודה: ראש הבורג מעל רגל הבסיס
     if (hh0 - (h.s / Math.sqrt(3)) < prm.thickness + 5) issue({ code: 'BOLT_ACCESS', severity: 'warning', elementId: cid, message: `${label}: ראש הבורג קרוב לרגל הבסיס — מרווח מפתח לבדיקה` });
@@ -478,6 +494,18 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
   // כלל ייצור: ריתוך רק במסגריה
   for (const c of res.connections) for (const w of c.welds) {
     if (w.location === 'site' && !(c.type === 'base' && res.issues.some((i) => i.code === 'SITE_WELD_OK' && i.elementId === c.id))) issue({ code: 'SITE_WELD', severity: 'warning', elementId: c.id, message: `${c.label}: ריתוך בשטח — מנוגד לעיקרון (ריתוך במסגריה, גלוון, הרכבה בברגים)` });
+  }
+  // חיזוק רכס: הודעה אחת לכל המסגרות
+  const rh = res.issues.filter((i) => i.code === 'RIDGE_HAUNCH');
+  if (rh.length > 1) {
+    res.issues = res.issues.filter((i) => i.code !== 'RIDGE_HAUNCH');
+    res.issues.push({ ...rh[0], elementId: undefined, message: `חיזוק רכס בשיטת הפלטה ב-${rh.length} חיבורים: ${rh[0].message.split(': ').slice(1).join(': ')}` });
+  }
+  // הודעה אחת (במקום אחת לכל עמוד) על ריתוך הפלטות המבוטנות בשטח
+  const okW = res.issues.filter((i) => i.code === 'SITE_WELD_OK');
+  if (okW.length) {
+    res.issues = res.issues.filter((i) => i.code !== 'SITE_WELD_OK');
+    res.issues.push({ code: 'SITE_WELD_OK', severity: 'info', message: `${okW.length} פלטות בסיס מבוטנות: העמוד מרותך לפלטה בשטח — חריג מאושר לעיקרון; נדרש תיקון גלוון במקום הריתוך. לקבע את הפלטות במקומן ובמפלס לפני היציקה.` });
   }
   void members;
   return res;
@@ -505,6 +533,9 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
       if (pur?.purlin && pur.purlin.index === 1 && pur.purlin.side !== 'M' && cl) ridgeGroup.push(cl);
       // ראשי ברגים ואומים מול הקורה
       for (const bo of c.bolts) { test(byId.get(`${bo.id}.H`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(pid), ' (אום מול חתך הפטה)'); }
+    } else if (c.type === 'beam-splice') {
+      // פלטות ההמשך יושבות בתפר של האלמנט (שאינו מפוצל במודל) — נבדקות מול שאר האלמנטים בלבד
+      for (const part of c.parts.filter((x) => byId.get(x)?.kind === 'plate')) for (const o of byId.values()) if (['purlin', 'cleat', 'brace', 'plate'].includes(o.kind) && !c.parts.includes(o.id) && aabbOverlap(aabb(byId.get(part)!), aabb(o))) test(byId.get(part), o, ' (חיבור המשך)');
     } else {
       // לשונית (".T") בחריץ ה-RHS של האלמנט המחובר — מותר; מול המארח — נבדקת
       for (const part of c.parts.filter((x) => ['plate', 'beam'].includes(byId.get(x)?.kind ?? ''))) for (const mid of c.members) {

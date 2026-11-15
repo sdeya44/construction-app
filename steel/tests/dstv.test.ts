@@ -7,7 +7,8 @@ import { dstvZip, partToNc1 } from '../src/fab/dstv';
 import { numberParts } from '../src/commands/commands';
 
 describe('DSTV (NC1)', () => {
-  const p = numberParts().run(newProject('t', defaultBuilding()));
+  const p0 = newProject('t', defaultBuilding()); p0.settings.autoSplice = false;
+  const p = numberParts().run(p0);
   const d = generate(p), fab = computeFabrication(p, d);
   it('פטה: בלוק ST עם סימון, אורך, קוד פרופיל, ובלוק BO עם כל החורים', () => {
     const part = fab.parts.find((x) => x.memberId === 'PL.L.04')!;

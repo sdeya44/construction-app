@@ -57,8 +57,8 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     await boot(page);
     await page.evaluate(() => (window as any).__ksp.store.select(['PL.L.03']));
     await page.getByTestId('ptab-conns').click();
-    // קו 30.1 מ' (הארכה 50 מ"מ מעבר למסגרות הקיצוניות)
-    await expect(page.getByTestId('part-len-1')).toContainText('30.100');
+    // קו 30.1 מ' (הארכה 50 מ"מ מעבר למסגרות הקיצוניות) — מחולק אוטומטית לחומר גלם 12 מ'
+    await expect(page.getByTestId('part-len-3')).toHaveText('6.100');
     await page.getByTestId('splice-propose').click();
     // ניצול מוט 12 מ': התפר בסוף המוט, 50 מ"מ לפני התומך
     await expect(page.getByTestId('part-len-1')).toHaveText('12.000');
@@ -70,8 +70,8 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     await expect(page.getByTestId('part-len-1')).toHaveText('9.000');
     await expect(page.getByTestId('part-len-2')).toContainText('15.000');
     // רק לפטה זו
-    const others = await page.evaluate(() => (window as any).__ksp.store.state.derived.parts.filter((p: any) => p.memberId === 'PL.L.04').length);
-    expect(others).toBe(1);
+    const others = await page.evaluate(() => (window as any).__ksp.store.state.derived.parts.filter((p: any) => p.memberId === 'PL.L.04').map((p: any) => p.length));
+    expect(others.length).toBe(3); // פטה אחרת נשארת בחלוקה האוטומטית
     await shot(page, 'SPL_parts');
     // הצעה לכל הפטות מכפתור לשונית הגג
     await page.getByTestId('tab-roof').click();
@@ -88,10 +88,10 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     await page.getByTestId('width').fill('14'); await page.getByTestId('width').press('Enter');
     await page.evaluate(() => (window as any).__ksp.store.select(['F1.RAF']));
     await page.getByTestId('ptab-conns').click();
-    await expect(page.getByTestId('parts-table')).toContainText('ארוך');
-    await page.getByTestId('splice-add').click();
-    await page.getByTestId('splice-new').fill('6'); await page.getByTestId('splice-new').press('Tab');
-    await page.getByTestId('splice-add-ok').click();
+    // חלוקה אוטומטית: מוט מלא + השלמה, חיבור המשך בפלטות קצה
+    await expect(page.getByTestId('parts-table')).not.toContainText('ארוך');
+    expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.connById.get('C.RS.F1.RAF.1')?.type)).toBe('beam-splice');
+    await page.getByTestId('splice-0').fill('6'); await page.getByTestId('splice-0').press('Enter');
     const parts = await page.evaluate(() => (window as any).__ksp.store.state.derived.parts.filter((p: any) => p.memberId === 'F1.RAF').map((p: any) => Math.round(p.length)));
     expect(parts.length).toBe(2);
     expect(parts.every((l: number) => l <= 12000)).toBe(true);
@@ -99,6 +99,9 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     expect(rafters).toBe(1);
     await page.getByTestId('splice-del-0').click();
     expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.parts.filter((p: any) => p.memberId === 'F1.RAF').length)).toBe(1);
+    await expect(page.getByTestId('parts-table')).toContainText('ארוך');
+    await page.getByTestId('splice-auto').click();
+    expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.parts.filter((p: any) => p.memberId === 'F1.RAF').length)).toBe(2);
     // ROOF-05 בממשק: גג חד־שיפועי, שני צדי התחלה
     await page.getByTestId('tab-roof').click();
     const M1 = await purl(page, 'M');

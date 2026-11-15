@@ -6,6 +6,8 @@ import type {
 import { derivedRoof, hasErrors, validateBuilding } from '../model/validate';
 import { normalizeSection, sectionTopology, type NSection, type SectionTopology } from '../model/section';
 import { buildParts } from './parts';
+import { issueKey } from '../model/issues';
+import { buildBeamSplices, effectiveSplices } from './autoSplice';
 import { buildPurlins } from './purlins';
 import type { Connection, SupportPoint } from '../model/types';
 import { buildConnections, checkClashes } from './connections';
@@ -41,14 +43,14 @@ export function generate(project: Project): DerivedModel {
     const minExt = eave.enabled ? eave.l / 2 : getProfile(b.columnProfile).props.h / 2;
     const exL = Math.max(b.rafterOverhangLeft, minExt), exR = Math.max(b.rafterOverhangRight, minExt);
     if (exL > b.rafterOverhangLeft || exR > b.rafterOverhangRight) {
-      issues.push({ code: 'RAFTER_EXT', severity: 'info', message: `קורות הגג מוארכות ${minExt} מ"מ מציר העמוד, עד קצה ${eave.enabled ? 'פלטת הכיפה' : 'העמוד'} — הפטה האחרונה בקצה זה` });
+      issues.push({ code: 'RAFTER_EXT', severity: 'info', message: `לידיעה, אין צורך בפעולה: קצה קורת הגג בולט ${minExt} מ"מ מעבר לציר העמוד — עד קצה ${eave.enabled ? 'פלטת הכיפה' : 'העמוד'}, כדי שהקורה תשב על כל הפלטה. הפטה האחרונה נקבעת לפי הקצה הזה. לשינוי — "קונזולת קורה" בגיאומטריה` });
     }
     // קצה הפטה: לפחות חצי רוחב זוויתן מעבר למסגרת הקיצונית, כדי ששני הברגים יעברו בפטה
     const pu = b.purlins;
     const cw = Math.max(pu.left.cleat.enabled ? pu.left.cleat.width / 2 : 0, b.roofType === 'gable' && pu.right.cleat.enabled ? pu.right.cleat.width / 2 : 0);
     const pS = Math.max(b.purlinOverhangStart, cw), pE = Math.max(b.purlinOverhangEnd, cw);
     if (pS > b.purlinOverhangStart || pE > b.purlinOverhangEnd) {
-      issues.push({ code: 'PURLIN_EXT', severity: 'info', message: `הפטות מוארכות ${cw} מ"מ מעבר למסגרות הקיצוניות, עד קצה הזוויתן` });
+      issues.push({ code: 'PURLIN_EXT', severity: 'info', message: `לידיעה, אין צורך בפעולה: הפטות בולטות ${cw} מ"מ מעבר למסגרות הקיצוניות, עד קצה הזוויתן, כדי ששני הברגים יעברו בפטה. לשינוי — "קונזולת פטות"` });
     }
     bEff = { ...b, rafterOverhangLeft: exL, rafterOverhangRight: exR, purlinOverhangStart: pS, purlinOverhangEnd: pE };
   }
@@ -160,14 +162,23 @@ export function generate(project: Project): DerivedModel {
   supports = supports.filter((sp) => byId.has(sp.purlinId) && byId.has(sp.rafterId));
   // חיבורים: משנים חיתוכי קצה של עמודים/קורות לפי עובי פלטות, ומוסיפים זוויתנים, פלטות וברגים
   let connections: Connection[] = [];
+  let projEff: Project = project;
   // שגיאה מקומית (פטה, חיבור בודד) אינה חוסמת את שאר המודל — רק שגיאות מבנה/טופולוגיה או חתך לא מוכר בעמוד/קורה
   const fatal = structuralError || issues.some((i) => i.severity === 'error' && i.code === 'PROFILE' && /\.(COL|RAF)\b/.test(i.elementId ?? ''));
   if (!fatal && topo) {
-    const cr = buildConnections(project, out, byId, supports.filter((sp) => getProfileSafe(byId.get(sp.purlinId)!.profile)), topo);
+    // חיבורי המשך: שנקבעו + אוטומטיים לאלמנטים ארוכים מחומר הגלם
+    const eff = effectiveSplices(project, out, supports);
+    projEff = { ...project, splices: eff.splices };
+    const cr = buildConnections(projEff, out, byId, supports.filter((sp) => getProfileSafe(byId.get(sp.purlinId)!.profile)), topo);
     const hidden = new Set(project.deleted);
     out.push(...cr.members.filter((m) => !hidden.has(m.id)));
     connections = cr.connections;
     issues.push(...cr.issues);
+    const bs = buildBeamSplices(projEff, out, eff.splices, eff.auto);
+    out.push(...bs.members.filter((m) => !hidden.has(m.id)));
+    connections.push(...bs.connections);
+    issues.push(...bs.issues);
+    if (eff.auto.size) issues.push({ code: 'AUTO_SPLICE', severity: 'info', message: `חיבורי המשך אוטומטיים ב-${eff.auto.size} אלמנטים ארוכים מחומר הגלם (${(project.settings.stockLength / 1000).toFixed(1)} מ') — לשינוי: בחר אלמנט ← "חיבורי המשך"` });
     const bb = buildBracing(b, topo, out.filter((m) => m.purlin), bEff);
     out.push(...bb.members.filter((m) => !hidden.has(m.id)));
     connections.push(...bb.connections);
@@ -176,9 +187,13 @@ export function generate(project: Project): DerivedModel {
     issues.push(...checkClashes(connections, byId));
   }
   const valid = out.filter((m) => m.kind !== 'bolt' && getProfileSafe(m.profile));
-  const pp = buildParts(valid, project, new Map(connections.map((c) => [c.id, c])));
+  const pp = buildParts(valid, projEff, new Map(connections.map((c) => [c.id, c])));
   issues.push(...pp.issues);
-  return { members: out, nodes, grid, roof, issues, byId, supports, parts: pp.parts, splices: pp.splices, connections, connById: new Map(connections.map((c) => [c.id, c])), section: sec ?? undefined };
+  // הודעות שהמשתמש הסתיר (אזהרות ומידע בלבד — שגיאה לעולם אינה מוסתרת)
+  const dis = new Set(project.dismissedIssues ?? []);
+  const hiddenIssues = dis.size ? issues.filter((i) => i.severity !== 'error' && (dis.has(`${i.code}|*`) || dis.has(issueKey(i)))) : [];
+  if (hiddenIssues.length) { const h = new Set(hiddenIssues); const keep = issues.filter((i) => !h.has(i)); issues.length = 0; issues.push(...keep); }
+  return { members: out, nodes, grid, roof, issues, byId, supports, parts: pp.parts, splices: pp.splices, hiddenIssues, connections, connById: new Map(connections.map((c) => [c.id, c])), section: sec ?? undefined };
 }
 
 function getProfileSafe(n: string) { try { return getProfile(n); } catch { return null; } }

@@ -56,9 +56,15 @@ describe('CLEAT – תומכי זוויתן', () => {
       for (const prof of ['RHS200x100x5', 'Z200x70x20x2.5']) {
         let p = setPurlinSide(side, { profile: prof }).run(geo());
         if (prof.startsWith('Z')) {
-          // Z: הזוויתן בצד האגף העליון — בגובה מלא הוא מתנגש באגף העליון, וזה מדווח
-          expect(generate(p).issues.some((i) => i.code === 'CLASH' && i.message.includes(`CL.${pid}`))).toBe(true);
-          p = setCleat(side, { height: 160 }).run(p);
+          // Z: הזוויתן בצד האגף העליון — הגובה האוטומטי נעצר מתחת לאגף (200 − 2.5 − r − 5 ⇒ 185), ללא התנגשות
+          const d0 = generate(p);
+          expect(d0.byId.get(`CL.${pid}.F2`)!.profile.startsWith('L185x')).toBe(true);
+          expect(d0.issues.some((i) => i.code === 'CLASH' && i.message.includes(`CL.${pid}`))).toBe(false);
+          // גובה ידני מלא — מדווח עם הצעת תיקון
+          const pm = setCleat(side, { height: 200 }).run(p);
+          const iss = generate(pm).issues.find((i) => i.code === 'CLASH' && i.message.includes(`CL.${pid}`))!;
+          expect(iss.cleatFix?.patch).toEqual({ height: null });
+          void pm;
         }
         checkCleat(p, pid, 'F2');
         expect(errs(p)).toEqual([]);
@@ -138,7 +144,7 @@ describe('CONN – חיבורים', () => {
     expect(Math.max(...allPts(pl).map((q) => q.z))).toBeCloseTo(0, 6);
     expect(Math.min(...allPts(pl).map((q) => q.z))).toBeCloseTo(-20, 6);
     expect(c.welds.find((w) => w.id.endsWith('.W1'))!.location).toBe('site');
-    expect(d.issues.some((i) => i.code === 'SITE_WELD_OK' && i.elementId === 'C.BASE.F1.L')).toBe(true);
+    expect(d.issues.filter((i) => i.code === 'SITE_WELD_OK').length).toBe(1); // הודעה אחת מרוכזת לכל הפלטות
     expect(d.issues.some((i) => i.code === 'SITE_WELD')).toBe(false);
     // מצב מוברג: העמוד מוגבה מעל הפלטה, ברגים בשטח, ריתוך במסגריה
     const p2 = setConnection('C.BASE.F1.L', { mode: 'bolted', cols: 2, rows: 2, gauge: 160, pitch: 160, w: 320, l: 320, bolt: { d: 20, grade: '8.8', standard: 'ISO 4017', clearance: 6 } }).run(geo());

@@ -1,8 +1,9 @@
 import { add, rotateAxis, sub, v3, type Vec3 } from '../core/vec';
 import { degToRad } from '../core/units';
 import { generate, placementBasis } from '../geometry/generate';
-import type { ApprovalStatus, BuildingParams, KneeBraceParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
-import { proposeSplices, purlinParams } from '../geometry/purlins';
+import type { ValidationIssue, ApprovalStatus, BuildingParams, KneeBraceParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
+import { purlinParams } from '../geometry/purlins';
+import { effectiveSplices } from '../geometry/autoSplice';
 import { defaultKneeBraces } from '../geometry/knee';
 import type { CustomSection } from '../model/section';
 import { commitNumbering, computeFabrication } from '../fab/marks';
@@ -357,7 +358,7 @@ export function setSplices(memberId: string, positions: number[]): Command {
       if (positions.some((t) => !Number.isFinite(t))) throw new CommandError('מיקום לא מספרי');
       const n = clone(p);
       const sorted = [...new Set(positions.map((t) => Math.round(t * 1000) / 1000))].sort((a, b) => a - b);
-      if (sorted.length) n.splices[memberId] = sorted; else delete n.splices[memberId];
+      n.splices[memberId] = sorted; // רשימה ריקה = "ללא חיבור" במפורש (גובר על החלוקה האוטומטית)
       return n;
     },
   };
@@ -373,21 +374,11 @@ export function proposeSplicesFor(ids: string[]): Command {
     run: (p) => {
       const d = generate(p);
       const n = clone(p);
-      const stock = p.settings.stockLength;
+      // אותו חישוב כמו החלוקה האוטומטית (מוט מלא + השלמה, הרחק מתומכי פטות; פטות — מעל תומכים)
+      const eff = effectiveSplices({ ...p, splices: {}, settings: { ...p.settings, autoSplice: true } }, d.members.filter((m) => ids.includes(m.id)), d.supports).splices;
       for (const id of ids) {
-        const m = d.byId.get(id);
-        if (!m) continue;
-        const L = Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y, m.end.z - m.start.z);
-        let ts: number[];
-        if (m.purlin) {
-          const sup = d.supports.filter((s) => s.purlinId === id).map((s) => s.p.y - m.start.y).sort((a, b) => a - b);
-          const nb = p.building.purlins.pieceBays ?? 0;
-          // אורך קטע לפי מספר מפתחים (החלטת משתמש): תפר מעל כל N מסגרות
-          ts = nb > 0 ? sup.filter((_, i) => i > 0 && i < sup.length - 1 && i % nb === 0) : proposeSplices(L, stock, sup);
-        } else {
-          const k = Math.ceil(L / stock);
-          ts = k > 1 ? Array.from({ length: k - 1 }, (_, i) => (L * (i + 1)) / k) : [];
-        }
+        if (!d.byId.get(id)) continue;
+        const ts = eff[id] ?? [];
         if (ts.length) n.splices[id] = ts; else delete n.splices[id];
       }
       return n;
@@ -569,4 +560,47 @@ export function setDrawing(id: string, base: Omit<DrawingRecord, 'status' | 'rev
       return n;
     },
   };
+}
+
+/** הסתרה / שחזור של הודעות (אזהרות ומידע): מפתחות issueKey או "קוד|*" לסוג שלם */
+export function dismissIssues(keys: string[], hide: boolean): Command {
+  return {
+    label: hide ? `הסתרת ${keys.length} הודעות` : 'שחזור הודעות',
+    run: (p) => {
+      const n = clone(p);
+      const s = new Set(n.dismissedIssues ?? []);
+      for (const k of keys) { if (hide) s.add(k); else s.delete(k); }
+      n.dismissedIssues = [...s];
+      return n;
+    },
+  };
+}
+
+/** החלת כל הצעות התיקון ברשימה בפקודה אחת (ביטול אחד מחזיר הכל). כפילויות מאוחדות. */
+export function applyIssueFixes(issues: ValidationIssue[]): Command {
+  return {
+    label: `תיקון ${issues.length} הודעות`,
+    run: (p) => {
+      let n = p;
+      const done = new Set<string>();
+      for (const i of issues) {
+        if (i.fix) {
+          const k = `F|${i.fix.purlinKey}|${JSON.stringify(i.fix.patch)}`;
+          if (done.has(k)) continue; done.add(k);
+          try { n = setPurlinSide(i.fix.purlinKey, i.fix.patch).run(n); } catch { /* תיקון שנדחה — ממשיכים */ }
+        } else if (i.cleatFix) {
+          const f = i.cleatFix;
+          const k = `C|${f.side}|${f.cleatId ?? ''}|${JSON.stringify(f.patch)}`;
+          if (done.has(k)) continue; done.add(k);
+          try { n = setCleat(f.side, f.patch, f.cleatId).run(n); } catch { /* תיקון שנדחה — ממשיכים */ }
+        }
+      }
+      return n;
+    },
+  };
+}
+
+/** ביטול מיקומי חיבורי המשך ידניים לאלמנט — חזרה לחלוקה האוטומטית */
+export function setSplicesAuto(memberId: string): Command {
+  return { label: 'חיבורי המשך — אוטומטי', run: (p) => { const n = clone(p); delete n.splices[memberId]; return n; } };
 }

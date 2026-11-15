@@ -22,6 +22,7 @@ const PY = '/tmp/claude-0/-home-user-construction-app/1a50a160-0b21-5222-a7ee-30
 
 function setup() {
   let p = newProject('בדיקת שרטוטים', defaultBuilding());
+  p.settings.autoSplice = false;
   p.meta.number = 'K-TEST'; p.meta.designer = 'מתכנן';
   p.building.purlins.left.layout = 'fixed'; p.building.purlins.right.layout = 'fixed'; // השוואה למידות 300/1500 + שארית
   p = proposeSplicesFor(['PL.L.03']).run(p);

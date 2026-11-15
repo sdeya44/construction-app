@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { proposeSplicesFor, setSplices } from '../commands/commands';
+import { proposeSplicesFor, setSplices, setSplicesAuto } from '../commands/commands';
 import { fromMm } from '../core/units';
 import type { Member } from '../model/types';
 import { store, useStore } from '../store';
@@ -12,7 +12,10 @@ export function SpliceEditor({ m }: { m: Member }) {
   const p = useStore((s) => s.project);
   const u = p.displayUnit;
   const parts = d.parts.filter((x) => x.memberId === m.id);
-  const pos = p.splices[m.id] ?? [];
+  // מיקומים: שנקבעו ידנית, או האוטומטיים (נגזרים) כשלא נקבע דבר
+  const manual = m.id in p.splices;
+  const pos = manual ? p.splices[m.id] : d.splices.filter((x) => x.memberId === m.id).map((x) => x.t);
+  const isAuto = !manual && pos.length > 0;
   const [add, setAdd] = useState<number | null>(null);
   const f = (mm: number) => (u === 'm' ? `${fromMm(mm, 'm').toFixed(3)}` : mm.toFixed(0));
   const stock = p.settings.stockLength;
@@ -36,7 +39,7 @@ export function SpliceEditor({ m }: { m: Member }) {
       <div className="panel-title">חיבורי המשך</div>
       {pos.map((t, i) => (
         <div className="row" key={i} style={{ marginBottom: 4 }}>
-          <span className="badge warn">דורש תכנון</span>
+          {isAuto ? <span className="badge blue">אוטומטי</span> : <span className="badge warn">ידני</span>}
           <div style={{ flex: 1 }}><LenField mm={t} unit={u} testId={`splice-${i}`} onCommit={(v) => { const a = [...pos]; a[i] = v; store.exec(setSplices(m.id, a)); }} /></div>
           <button className="icon-btn" title="מחיקת חיבור" data-testid={`splice-del-${i}`} onClick={() => store.exec(setSplices(m.id, pos.filter((_, k) => k !== i)))}><Icon name="x" /></button>
         </div>
@@ -50,8 +53,9 @@ export function SpliceEditor({ m }: { m: Member }) {
             <button className="btn small" onClick={() => setAdd(null)}>ביטול</button>
           </>}
         <button className="btn small" data-testid="splice-propose" onClick={() => store.exec(proposeSplicesFor([m.id]))}>הצעה אוטומטית</button>
+        {manual && <button className="btn small" data-testid="splice-auto" title="ביטול המיקומים הידניים — חזרה לחלוקה האוטומטית" onClick={() => store.exec(setSplicesAuto(m.id))}>חזרה לאוטומטי</button>}
       </div>
-      <div className="hint">חיבור המשך אינו מאושר אוטומטית מבחינה הנדסית — יש לתכנן ולאשר את סוג החיבור ומיקומו.</div>
+      <div className="hint">{isAuto ? `חלוקה אוטומטית: מוט מלא (${(stock / 1000).toFixed(1)} מ') מנקודת ההתחלה והשלמה בסוף, התפר מוזז כך שלא ייפול על תומך פטה. שינוי מיקום הופך את החלוקה לידנית. ` : ''}קורת I: שתי פלטות קצה PL12 מוגבהות, 8×M16. חיבור המשך אינו מאושר הנדסית — יש לתכנן ולאשר את מיקומו. אורך חומר הגלם וכיבוי החלוקה האוטומטית — מבנה ← פרטי פרויקט והגדרות.</div>
     </>
   );
 }

@@ -7,7 +7,7 @@ import { History } from '../src/commands/history';
 import { approveRevision, numberParts, openNewRevision, proposeSplicesFor, setBuilding, setMemberProps, setPurlinSide } from '../src/commands/commands';
 import type { Project } from '../src/model/types';
 
-const geo = () => newProject('t', defaultBuilding());
+const geo = () => { const p = newProject('t', defaultBuilding()); p.settings.autoSplice = false; return p; };
 const fabOf = (p: Project) => { const d = generate(p); return { d, f: computeFabrication(p, d) }; };
 const markOf = (p: Project, partId: string) => fabOf(p).f.byPart.get(partId)!.mark;
 

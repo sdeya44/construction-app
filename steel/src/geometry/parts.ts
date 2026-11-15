@@ -4,6 +4,8 @@ import { localFrame } from './frame';
 import { memberSolid } from './solid';
 
 const MIN_PART = 100; // mm — חלק קצר מזה אינו מעשי
+/** עובי כל אחת משתי פלטות חיבור ההמשך בקורת I — החלק מתקצר בעובייה בכל צד של התפר */
+export const BEAM_SPLICE_T = 12;
 
 /** תחום האלמנט לאורך צירו (t ביחס לנקודת ההתחלה), כולל חיתוכי קצה. */
 export function axialExtent(m: Member): { tMin: number; tMax: number } {
@@ -35,9 +37,12 @@ export function buildParts(members: Member[], project: Project, conns?: Map<stri
     }
     const f = localFrame(m);
     const cuts = [tMin, ...valid, tMax];
+    // חיבור המשך בפלטות קצה: החלקים מסתיימים בפני הפלטות
+    const gap = (t: number) => (conns?.has(`C.RS.${m.id}.${ts.indexOf(t) + 1}`) ? BEAM_SPLICE_T : 0);
     for (let i = 0; i < cuts.length - 1; i++) {
-      const length = cuts[i + 1] - cuts[i];
-      parts.push({ id: `${m.id}.P${i + 1}`, memberId: m.id, index: i + 1, t0: cuts[i], t1: cuts[i + 1], length, profile: m.profile, material: m.material });
+      const t0 = cuts[i] + (i > 0 ? gap(cuts[i]) : 0), t1 = cuts[i + 1] - (i < cuts.length - 2 ? gap(cuts[i + 1]) : 0);
+      const length = t1 - t0;
+      parts.push({ id: `${m.id}.P${i + 1}`, memberId: m.id, index: i + 1, t0, t1, length, profile: m.profile, material: m.material });
       if (length > stock + 0.5) {
         issues.push({ code: 'PART_STOCK', severity: 'warning', elementId: m.id, message: `${m.label}: חלק ${i + 1} באורך ${(length / 1000).toFixed(3)} מ' ארוך מחומר הגלם (${(stock / 1000).toFixed(2)} מ') — הוסף חיבור המשך או שנה אורך חומר גלם` });
       }

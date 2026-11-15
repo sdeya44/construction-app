@@ -11,7 +11,7 @@ import type { Member, Project } from '../src/model/types';
 import { fromFileJson, migrate } from '../src/model/migrate';
 
 // בדיקות ה-ROOF מהאפיון מתייחסות למצב "מרווח קבוע, שארית במפתח האחרון"
-const geo = () => { const p = newProject('t', defaultBuilding()); p.building.purlins.left.layout = 'fixed'; p.building.purlins.right.layout = 'fixed'; return p; };
+const geo = () => { const p = newProject('t', defaultBuilding()); p.building.purlins.left.layout = 'fixed'; p.building.purlins.right.layout = 'fixed'; p.settings.autoSplice = false; return p; };
 const purl = (p: Project, side: string) => generate(p).members.filter((m) => m.purlin?.side === side).sort((a, b) => a.purlin!.index - b.purlin!.index);
 const sl = (side: Member[]) => side.map((m) => m.purlin!.sSlope);
 
@@ -230,7 +230,8 @@ describe('SPL / BEAM – חלקים וחיבורי המשך', () => {
     expect(parts.every((x) => x.length <= 12000)).toBe(true);
     const p3 = setSplices('F1.RAF', [5000]).run(p2);
     d = generate(p3);
-    expect(d.parts.filter((x) => x.memberId === 'F1.RAF')[0].t1).toBe(5000);
+    expect(d.parts.filter((x) => x.memberId === 'F1.RAF')[0].t1).toBe(5000 - 12); // החלק מסתיים בפני פלטת ההמשך (12)
+    expect(d.connById.get('C.RS.F1.RAF.1')!.type).toBe('beam-splice');
     expect(d.members.filter((m) => m.kind === 'rafter' && m.frameId === 'F1').length).toBe(1);
   });
 });

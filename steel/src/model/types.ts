@@ -256,7 +256,7 @@ export interface MemberOverride {
 
 export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'cleat' | 'plate' | 'bolt' | 'anchor';
 
-export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee' | 'ridge-tie';
+export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee' | 'ridge-tie' | 'beam-splice';
 export type ApprovalStatus = 'not-verified' | 'for-review' | 'approved';
 
 /** חיבור מבוסס פלטה וקבוצת ברגים (קורה-עמוד, רכס, פלטת בסיס). */
@@ -311,7 +311,8 @@ export interface Project {
   id: string;
   meta: ProjectMeta;
   displayUnit: 'm' | 'mm';
-  settings: { stockLength: Mm; stockLengths: Mm[]; kerf: Mm; checkedBy: string; approvedBy: string };
+  /** autoSplice: חלוקה אוטומטית של אלמנט ארוך מחומר הגלם (ברירת מחדל: כן) */
+  settings: { stockLength: Mm; stockLengths: Mm[]; kerf: Mm; checkedBy: string; approvedBy: string; autoSplice?: boolean };
   building: BuildingParams;
   memberOverrides: Record<string, MemberOverride>;
   manualMembers: ManualMember[];
@@ -329,6 +330,8 @@ export interface Project {
   connectionTemplates: ConnectionTemplate[];
   /** שינויים לתומך בודד (לפי מזהה תומך) */
   cleatOverrides: Record<string, Partial<CleatParams>>;
+  /** הודעות שהוסתרו: "קוד|*" לסוג שלם, או מפתח הודעה (issueKey) */
+  dismissedIssues?: string[];
   nextFrameNo: number;
   nextMemberNo: number;
   /** רישום מספור יציב: חתימה ⇒ סימון. נכתב רק בפקודת "מספור" */
@@ -517,6 +520,8 @@ export interface ValidationIssue {
   field?: string;
   /** הצעת תיקון בלחיצה: עדכון פרמטרי פטות לסט מסוים */
   fix?: { label: string; purlinKey: string; patch: Partial<PurlinSideParams> };
+  /** הצעת תיקון לתומך פטה: לכל תומכי הצד, או לתומך בודד (cleatId) */
+  cleatFix?: { label: string; side: string; cleatId?: string; patch: Partial<CleatParams> };
 }
 
 export interface RoofInfo {
@@ -526,6 +531,8 @@ export interface RoofInfo {
 }
 
 export interface DerivedModel {
+  /** הודעות שהמשתמש הסתיר (לשחזור) */
+  hiddenIssues?: ValidationIssue[];
   members: Member[];
   nodes: ModelNode[];
   grid: GridLine[];

@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import {
-  applyTemplate, resetCleat, resetConnection, saveTemplate, setCleat, setCleatAll, setConnection, setConnectionDefault,
+  applyIssueFixes, applyTemplate, resetCleat, resetConnection, saveTemplate, setCleat, setCleatAll, setConnection, setConnectionDefault,
 } from '../commands/commands';
 import { effCleat } from '../geometry/connections';
 import type { Vec3 } from '../core/vec';
-import type { ApprovalStatus, CleatParams, Connection, PlateConnParams } from '../model/types';
+import type { ApprovalStatus, CleatParams, Connection, PlateConnParams, ValidationIssue } from '../model/types';
 import { store, useStore } from '../store';
 import { cachedSolid } from '../view/scene';
 import { LenField, NumField } from './fields';
 import { Icon } from './icons';
 
 const STATUS: Record<ApprovalStatus, string> = { 'not-verified': 'לא מאומת', 'for-review': 'לבדיקה', approved: 'מאושר' };
-export const CONN_TYPE: Record<Connection['type'], string> = { eave: 'עמוד-קורה (שתי פלטות מוברגות)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה', 'rafter-side': 'קורה לצד עמוד (פלטת קצה)', knee: 'אלכסון עמוד-קורה', 'ridge-tie': 'פרופיל חיזוק אופקי ברכס' };
+export const CONN_TYPE: Record<Connection['type'], string> = { eave: 'עמוד-קורה (שתי פלטות מוברגות)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה', 'rafter-side': 'קורה לצד עמוד (פלטת קצה)', knee: 'אלכסון עמוד-קורה', 'ridge-tie': 'פרופיל חיזוק אופקי ברכס', 'beam-splice': 'חיבור המשך קורה (פלטות קצה)' };
 const BOLT_D = [10, 12, 16, 20, 24];
 
 /** רשימת החיבורים של אלמנט + כפתור פתיחת עורך. */
@@ -140,7 +140,8 @@ export function ConnectionEditor() {
 
       {cl && <>
         <div className="panel-title">זוויתן</div>
-        <div className="field"><label>גובה (ריק = גובה הפטה)</label>
+        <CleatFace cl={cl} H={Math.round(heightOf(cleatId))} issues={d.issues.filter((i) => i.elementId === cleatId)} />
+        <div className="field"><label>גובה (ריק = אוטומטי)</label>
           <div className="row" style={{ flexWrap: 'nowrap' }}>
             <LenField testId="cl-h" mm={cl.height ?? (d.byId.get(cleatId) ? Math.round(heightOf(cleatId)) : 0)} unit="mm" onCommit={(v) => setC({ height: v })} />
             {cl.height !== null && <button className="btn small" title="חזרה לגובה הפטה" onClick={() => setC({ height: null })}>אוטו׳</button>}
@@ -297,6 +298,47 @@ export function SectionSvg({ c }: { c: Connection }) {
     <div className="conn-svg" data-testid="conn-section">
       <svg viewBox={`${-R} ${-R} ${2 * R} ${2 * R}`} dangerouslySetInnerHTML={{ __html: out.join('') }} />
       <div className="hint" style={{ margin: 0 }}>חתך במישור המסגרת (מבט לאורך Y) · נגזר מהמודל · ירוק: זוויתן · כתום: ברגים</div>
+    </div>
+  );
+}
+
+/**
+ * מבט על הרגל הניצבת של הזוויתן (הצד המוברג לווב הפטה) עם מידות: מרחק קצה, מרווח, מרחק שפה וגובה החורים.
+ * מידה קטנה מהמינימום המקובל (1.2·d0) — באדום, עם כפתור תיקון.
+ */
+function CleatFace({ cl, H, issues }: { cl: CleatParams; H: number; issues: ValidationIssue[] }) {
+  const d0 = cl.bolt.d + cl.bolt.clearance, minE = 1.2 * d0;
+  const hh0 = cl.holeHeight ?? (H - (cl.rows - 1) * cl.rowPitch) / 2;
+  const xs = Array.from({ length: cl.perRow }, (_, i) => (i - (cl.perRow - 1) / 2) * cl.pitch);
+  const zs = Array.from({ length: cl.rows }, (_, r) => hh0 + r * cl.rowPitch);
+  const e1 = cl.width / 2 - ((cl.perRow - 1) / 2) * cl.pitch, e2 = H - zs[zs.length - 1];
+  const pad = 46, k = Math.min(220 / cl.width, 170 / H), W = cl.width * k + 2 * pad, Hs = H * k + 2 * pad - 10;
+  const X = (x: number) => pad + (x + cl.width / 2) * k, Y = (z: number) => pad - 10 + (H - z) * k;
+  const bad = (v: number) => v < minE - 0.01;
+  const dimH = (x0: number, x1: number, y: number, v: number, warn = false) => (
+    <g className={warn ? 'cf-bad' : 'cf-dim'}><line x1={X(x0)} y1={y} x2={X(x1)} y2={y} /><line x1={X(x0)} y1={y - 4} x2={X(x0)} y2={y + 4} /><line x1={X(x1)} y1={y - 4} x2={X(x1)} y2={y + 4} />
+      <text x={(X(x0) + X(x1)) / 2} y={y - 4}>{Math.round(v * 10) / 10}</text></g>
+  );
+  const dimV = (z0: number, z1: number, x: number, v: number, warn = false) => (
+    <g className={warn ? 'cf-bad' : 'cf-dim'}><line x1={x} y1={Y(z0)} x2={x} y2={Y(z1)} /><line x1={x - 4} y1={Y(z0)} x2={x + 4} y2={Y(z0)} /><line x1={x - 4} y1={Y(z1)} x2={x + 4} y2={Y(z1)} />
+      <text x={x - 5} y={(Y(z0) + Y(z1)) / 2 + 3} textAnchor="end">{Math.round(v * 10) / 10}</text></g>
+  );
+  const fixes = issues.filter((i) => i.cleatFix);
+  return (
+    <div className="cleat-face" data-testid="cleat-face">
+      <svg viewBox={`0 0 ${W} ${Hs}`} role="img" aria-label="מבט על רגל הזוויתן">
+        <rect x={X(-cl.width / 2)} y={Y(H)} width={cl.width * k} height={H * k} className="cf-plate" />
+        <rect x={X(-cl.width / 2)} y={Y(cl.thickness)} width={cl.width * k} height={cl.thickness * k} className="cf-base" />
+        {zs.flatMap((z) => xs.map((x) => <circle key={`${x}.${z}`} cx={X(x)} cy={Y(z)} r={(d0 / 2) * k} className="cf-hole" />))}
+        {dimH(-cl.width / 2, -cl.width / 2 + e1, Y(H) - 14, e1, bad(e1))}
+        {cl.perRow > 1 && dimH(xs[0], xs[1], Y(H) - 14, cl.pitch)}
+        {dimH(-cl.width / 2, cl.width / 2, Y(0) + 22, cl.width)}
+        {dimV(zs[zs.length - 1], H, X(-cl.width / 2) - 8, e2, bad(e2))}
+        {dimV(0, zs[0], X(-cl.width / 2) - 8, zs[0])}
+        {dimV(0, H, X(cl.width / 2) + 34, H)}
+      </svg>
+      <div className="hint" style={{ margin: 0 }}>מבט על הרגל המוברגת לווב הפטה. חור Ø{d0} (M{cl.bolt.d}); מינימום מקובל לקצה ולשפה 1.2·d0 = {minE.toFixed(1)} מ"מ — מידה אדומה קטנה ממנו.</div>
+      {fixes.map((i, n) => <button key={n} className="btn small primary" data-testid={`cf-fix-${n}`} onClick={() => store.exec(applyIssueFixes([i]))}>תיקון: {i.cleatFix!.label}</button>)}
     </div>
   );
 }

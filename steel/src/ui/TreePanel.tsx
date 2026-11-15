@@ -1,4 +1,4 @@
-import { setPurlinSide } from '../commands/commands';
+import { IssueList } from './IssueList';
 import { useState } from 'react';
 import type { Member, MemberKind } from '../model/types';
 import { store, useStore } from '../store';
@@ -69,16 +69,7 @@ export function TreePanel() {
 
 export function IssuesPanel() {
   const issues = useStore((s) => s.derived.issues);
-  if (!issues.length) return <div className="panel-body"><div className="hint" data-testid="no-issues">אין בעיות פתוחות במודל.</div></div>;
-  return (
-    <div className="panel-body" data-testid="issues-panel">
-      {issues.map((i, k) => (
-        <div key={k} className={`issue ${i.severity}`} data-el={i.elementId}
-          onClick={() => { if (i.elementId) store.select([i.elementId]); }}>
-          <span className="ic">{i.severity === 'error' ? '✕' : i.severity === 'warning' ? '!' : 'i'}</span>
-          <div><div>{i.message}</div><div className="hint" style={{ margin: 0, direction: 'ltr', textAlign: 'right' }}>{i.code}{i.elementId ? ` · ${i.elementId}` : ''}</div>{i.fix && <button className="btn small fix-btn" data-testid={`fix-${i.code}`} onClick={(e) => { e.stopPropagation(); store.exec(setPurlinSide(i.fix!.purlinKey, i.fix!.patch)); }}>תיקון: {i.fix.label}</button>}</div>
-        </div>
-      ))}
-    </div>
-  );
+  const hidden = useStore((s) => s.derived.hiddenIssues?.length ?? 0);
+  if (!issues.length && !hidden) return <div className="panel-body"><div className="hint" data-testid="no-issues">אין בעיות פתוחות במודל.</div></div>;
+  return <div className="panel-body" data-testid="issues-panel"><IssueList issues={issues} /></div>;
 }

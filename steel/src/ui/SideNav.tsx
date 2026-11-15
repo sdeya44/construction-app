@@ -1,4 +1,4 @@
-import { setPurlinSide } from '../commands/commands';
+import { IssueList } from './IssueList';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Connection, MemberKind, Severity } from '../model/types';
 import { cutLength } from '../geometry/solid';
@@ -167,18 +167,10 @@ function ConnTable({ type, onOpen }: { type: Connection['type']; onOpen: (id: st
 
 function IssuesTable({ sev }: { sev: Severity }) {
   const issues = useStore((s) => s.derived.issues).filter((i) => i.severity === sev);
-  const byCode = new Map<string, number>();
-  for (const i of issues) byCode.set(i.code, (byCode.get(i.code) ?? 0) + 1);
   return (
     <div className="panel-body" data-testid={`itable-${sev}`}>
       <div className="panel-title">{SEV_LABEL[sev]} <span className="badge">{issues.length}</span></div>
-      <div className="row" style={{ marginBottom: 6 }}>{[...byCode].map(([k, n]) => <span key={k} className="badge">{k} · {n}</span>)}</div>
-      {issues.map((i, k) => (
-        <div key={k} className={`issue ${i.severity}`} onClick={() => { if (i.elementId) { store.select([i.elementId]); setTimeout(() => window.__ksp?.viewport?.fitSelection(), 0); } }} data-el={i.elementId}>
-          <span className="ic">{i.severity === 'error' ? '✕' : i.severity === 'warning' ? '!' : 'i'}</span>
-          <div><div>{i.message}</div><div className="hint" style={{ margin: 0, direction: 'ltr', textAlign: 'right' }}>{i.code}{i.elementId ? ` · ${i.elementId}` : ''}</div>{i.fix && <button className="btn small fix-btn" data-testid={`fix-${i.code}`} onClick={(e) => { e.stopPropagation(); store.exec(setPurlinSide(i.fix!.purlinKey, i.fix!.patch)); }}>תיקון: {i.fix.label}</button>}</div>
-        </div>
-      ))}
+      <IssueList issues={issues} />
     </div>
   );
 }

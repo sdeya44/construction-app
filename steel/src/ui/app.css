@@ -433,3 +433,22 @@ select.inp { padding: 0 6px; }
 .isec-inp { position: absolute; transform: translate(-50%, -50%); width: 80px; height: 26px; z-index: 5; box-shadow: var(--shadow); }
 .vp-label.editable { pointer-events: auto; cursor: pointer; } .vp-label.editable:hover { background: var(--brand); color: #fff; }
 .dim-edit { position: fixed; transform: translate(-50%, -50%); width: 96px; height: 30px; z-index: 80; box-shadow: var(--shadow); border-color: var(--brand); }
+
+/* הודעות מקובצות */
+.igroup { border: 1px solid var(--line, #e3e0d8); border-radius: 8px; margin-bottom: 6px; background: var(--panel, #fff); }
+.igroup.error { border-color: #e7b8b4; }
+.igroup.warning { border-color: #ecd8a8; }
+.igroup-h { display: flex; align-items: center; gap: 6px; padding: 6px 8px; cursor: pointer; font-size: 12.5px; }
+.igroup-h .grow, .issue .grow { flex: 1; }
+.igroup-h .chev { color: #8a8a80; width: 12px; text-align: center; }
+.igroup .issue { margin: 0 6px 6px; }
+.issue.muted { opacity: .65; }
+
+.cleat-face svg { width: 100%; max-height: 260px; display: block; }
+.cleat-face .cf-plate { fill: #e9ecef; stroke: #3d4650; stroke-width: 1.2; }
+.cleat-face .cf-base { fill: #c7ccd2; stroke: #3d4650; stroke-width: 1; }
+.cleat-face .cf-hole { fill: #fff; stroke: #1f5f45; stroke-width: 1.4; }
+.cleat-face .cf-dim line { stroke: #4a6a8a; stroke-width: .9; }
+.cleat-face .cf-dim text { fill: #2c4a68; font-size: 10px; text-anchor: middle; font-family: var(--mono, monospace); }
+.cleat-face .cf-bad line { stroke: #c0392b; stroke-width: 1.2; }
+.cleat-face .cf-bad text { fill: #c0392b; font-size: 10.5px; font-weight: 700; text-anchor: middle; font-family: var(--mono, monospace); }

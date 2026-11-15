@@ -68,3 +68,27 @@ test('USE-04: שינוי מידות כל תומכי הפטות בבת אחת מ�
   expect(Object.keys(pu.cleatOverrides ?? {}).length).toBe(0);
   expect(pu.left.cleat).toEqual(pu.right.cleat);
 });
+
+test('USE-05: הודעות מקובצות — הסתרת סוג, תקן הכל, שרטוט תומך עם מידות', async ({ page }) => {
+  await boot(page);
+  page.on('dialog', (d) => d.accept());
+  // רוחב זוויתן 80 ⇒ מרחק קצה 15 < 16.8 בכל תומכי השיפוע השמאלי
+  await page.evaluate(() => (window as any).__ksp.store.select(['CL.PL.L.02.F2']));
+  await page.getByTestId('ptab-conns').click();
+  await page.getByTestId('open-conn-C.PC.PL.L.02.F2').click();
+  await expect(page.getByTestId('cleat-face')).toBeVisible();
+  await shot(page, 'USE-05_cleat_face');
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => { const n = structuredClone(p); n.building.purlins.left.cleat.width = 80; return n; } }); });
+  await page.getByTestId('tab-issues').click();
+  await expect(page.getByTestId('igroup-BOLT_EDGE')).toBeVisible();
+  await page.getByTestId('igroup-RAFTER_EXT').getByTestId('ghide-RAFTER_EXT').click();
+  await expect(page.getByTestId('igroup-RAFTER_EXT')).toHaveCount(0);
+  await expect(page.getByTestId('hidden-toggle')).toBeVisible();
+  await page.getByTestId('gfix-BOLT_EDGE').click();
+  const left = await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'BOLT_EDGE' && i.elementId?.startsWith('CL.PL.L')).length);
+  expect(left).toBe(0);
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.purlins.left.cleat.width)).toBe(90);
+  await shot(page, 'USE-05_issues');
+  await page.getByTestId('restore-all').click();
+  await expect(page.getByTestId('igroup-RAFTER_EXT')).toBeVisible();
+});

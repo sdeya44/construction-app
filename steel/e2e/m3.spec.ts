@@ -39,11 +39,10 @@ test.describe('M3 – תומכים וחיבורים', () => {
     expect(res).toEqual({ clash: 0, err: 0 });
     await page.getByTestId('tab-roof').click();
     await page.getByTestId('left-profile').fill('Z200x70x20x2.5'); await page.getByTestId('left-profile').press('Enter');
-    const zc = await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'CLASH').length);
-    expect(zc).toBeGreaterThan(0); // Z: התנגשות התומך באגף העליון מדווחת
+    const zc = await page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { clash: d.issues.filter((i: any) => i.code === 'CLASH').length, prof: d.byId.get('CL.PL.L.03.F3').profile }; });
+    expect(zc).toEqual({ clash: 0, prof: 'L185x80x8' }); // Z: גובה אוטומטי מתחת לאגף העליון
     await page.getByTestId('tab-issues').click();
-    await expect(page.getByTestId('issues-panel')).toContainText('התנגשות');
-    await shot(page, 'CLEAT_Z_clash_reported');
+    await shot(page, 'CLEAT_Z_auto');
   });
 
   test('CONN-01: בחירת קורה ← חיבורים ← עריכה; שינוי פלטה/ברגים נשמר לאלמנט גם אחרי טעינה מחדש', async ({ page }) => {

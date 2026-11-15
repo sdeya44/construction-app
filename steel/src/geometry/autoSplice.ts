@@ -1,0 +1,110 @@
+import { add, dot, scale, sub, v3 } from '../core/vec';
+import type { BoltInfo, Connection, Member, Project, SupportPoint, ValidationIssue, WeldInfo } from '../model/types';
+import { tryProfile } from '../profiles/library';
+import { axialExtent, BEAM_SPLICE_T } from './parts';
+import { proposeSplices } from './purlins';
+import { localFrame } from './frame';
+import { hw, makeBolt } from './connections';
+
+const AUTO_KINDS = new Set(['rafter', 'column', 'beam', 'purlin']);
+
+/**
+ * חיבורי המשך אפקטיביים: המיקומים שהמשתמש קבע, ולכל אלמנט ארוך מחומר הגלם שלא נקבע לו דבר — חלוקה אוטומטית
+ * (ברירת מחדל, settings.autoSplice ≠ false). פטות: מעל נקודות תמיכה / לפי מספר מפתחים. קורות ועמודים: מוטות מלאים
+ * מנקודת ההתחלה (קצה המרזב) והשלמה בסוף, והתפר מוזז לאחור כך שלא ייפול על תומך פטה.
+ */
+export function effectiveSplices(project: Project, members: Member[], supports: SupportPoint[]): { splices: Record<string, number[]>; auto: Set<string> } {
+  const splices: Record<string, number[]> = { ...project.splices };
+  const auto = new Set<string>();
+  if (project.settings.autoSplice === false) return { splices, auto };
+  const stock = project.settings.stockLength;
+  const allow = Math.max(10, project.settings.kerf * 3); // מרווח חיתוך מהמוט
+  for (const m of members) {
+    if (!AUTO_KINDS.has(m.kind) || m.source !== 'generated' || m.id in project.splices) continue;
+    const L = Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y, m.end.z - m.start.z);
+    if (L <= stock - allow) continue;
+    const { tMin, tMax } = axialExtent(m);
+    if (tMax - tMin <= stock + 0.5) continue;
+    const f = localFrame(m);
+    let ts: number[];
+    if (m.purlin) {
+      const sup = supports.filter((s) => s.purlinId === m.id).map((s) => dot(sub(s.p, m.start), f.ex)).sort((a, b) => a - b);
+      const nb = project.building.purlins.pieceBays ?? 0;
+      ts = nb > 0 ? sup.filter((_, i) => i > 0 && i < sup.length - 1 && i % nb === 0) : proposeSplices(tMax, stock, sup);
+    } else {
+      // אזורים אסורים: תומכי פטות על הקורה (הפלטה המוגבהת מעל האגף העליון)
+      const zones = supports.filter((s) => s.rafterId === m.id).map((s) => dot(sub(s.p, m.start), f.ex)).sort((a, b) => a - b);
+      const HALF = 160;
+      ts = [];
+      let s = tMin;
+      while (tMax - s > stock + 0.5) {
+        let t = s + stock - allow;
+        for (let it = 0; it < 20; it++) {
+          const hit = zones.find((z) => Math.abs(z - t) < HALF);
+          if (hit === undefined) break;
+          t = hit - HALF;
+        }
+        if (t - s < 1000) { t = s + stock - allow; } // לא נמצא מקום — נשאר במוט מלא (אזהרה בבדיקת ההתנגשות)
+        ts.push(Math.round(t));
+        s = t;
+      }
+    }
+    if (ts.length) { splices[m.id] = ts; auto.add(m.id); }
+  }
+  return { splices, auto };
+}
+
+/**
+ * חיבור המשך לקורת I (פרט הלקוח "חיבור עקרוני הארכה"): שתי פלטות קצה PL12 מרותכות לקצוות (מסגריה),
+ * מוגבהות מעל ומתחת לאגפים, מוברגות זו לזו בשטח M16: שורה מחוץ לכל אגף ושתי שורות בין האגפים, 2 עמודות.
+ */
+export function buildBeamSplices(project: Project, members: Member[], splices: Record<string, number[]>, auto: Set<string>): { members: Member[]; connections: Connection[]; issues: ValidationIssue[] } {
+  const out = { members: [] as Member[], connections: [] as Connection[], issues: [] as ValidationIssue[] };
+  const T = BEAM_SPLICE_T, ext = 60;
+  const bolt = { d: 16, grade: '8.8', standard: 'ISO 4017', clearance: 2 };
+  const d0 = bolt.d + bolt.clearance;
+  const nutR = hw(bolt.d).s / Math.sqrt(3) + 2;
+  const eE = Math.max(30, Math.ceil((1.5 * d0) / 5) * 5);
+  for (const m of members) {
+    if (m.kind !== 'rafter' && m.kind !== 'beam' && m.kind !== 'column') continue;
+    const ts = [...new Set(splices[m.id] ?? [])].sort((a, b) => a - b);
+    if (!ts.length) continue;
+    const pr = tryProfile(m.profile);
+    if (!pr || !['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(pr.family)) continue;
+    const f = localFrame(m);
+    const h = pr.props.h, b = pr.props.b, tf = pr.dims.tf ?? 10, tw = pr.dims.tw ?? 7;
+    const vc = m.anchor === 'top' ? -h / 2 : 0; // מרכז החתך ביחס לקו
+    const Hp = h + 2 * ext, W = b;
+    const eS = Math.max(25, Math.ceil((1.2 * d0) / 5) * 5);
+    const g = Math.max(W - 2 * eS, 0);
+    const vOut = h / 2 + ext - eE, vIn = h / 2 - tf - nutR - 8;
+    const { tMin, tMax } = axialExtent(m);
+    ts.forEach((t, k) => {
+      if (!(t > tMin + 100 && t < tMax - 100)) return;
+      const id = `C.RS.${m.id}.${k + 1}`;
+      const at = (dt: number, dv: number, du = 0) => add(add(add(m.start, scale(f.ex, t + dt)), scale(f.v, vc + dv)), scale(f.u, du));
+      const plates: string[] = [];
+      for (const [pid, dt] of [[`${id}.PL1`, -T / 2], [`${id}.PL2`, T / 2]] as const) {
+        out.members.push({
+          id: pid, kind: 'plate', label: `פלטת המשך PL${T}×${W}×${Hp}`, start: at(dt, -Hp / 2), end: at(dt, Hp / 2), profile: `PL${W}x${T}`, material: m.material,
+          rollDeg: 0, mirror: false, anchor: 'center', refUp: f.ex, source: 'generated', manualPlacement: false, connId: id, partDesc: `פלטת המשך PL${T}×${W}×${Hp}`,
+        });
+        plates.push(pid);
+      }
+      const bolts: BoltInfo[] = [];
+      for (const dv of [vOut, vIn, -vIn, -vOut]) for (const du of [-g / 2, g / 2]) {
+        bolts.push(makeBolt(`${id}.B${bolts.length + 1}`, id, at(-T, dv, du), f.ex, bolt, 2 * T, 'site', plates, f.v, out.members));
+      }
+      if (g / 2 - tw / 2 < nutR) out.issues.push({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `${m.label}: חיבור המשך — אום קרוב לווב (אגף צר)` });
+      if (vOut - vIn < 2.2 * d0) out.issues.push({ code: 'BOLT_EDGE', severity: 'warning', elementId: id, message: `${m.label}: חיבור המשך — מרווח שורות קטן` });
+      const per = 2 * b + 2 * (h - 2 * tf) + 2 * (b - tw);
+      const welds: WeldInfo[] = plates.map((pid, i) => ({ id: `${id}.W${i + 1}`, connId: id, type: 'fillet', a: 6, length: Math.round(per), location: 'shop', between: [m.id, pid], from: at(0, 0), to: at(0, 0) }));
+      out.connections.push({
+        id, type: 'beam-splice', label: `חיבור המשך ${m.label} (${(t / 1000).toFixed(2)} מ')${auto.has(m.id) ? ' — אוטומטי' : ''}`,
+        members: [m.id], parts: [...plates, ...bolts.map((x) => x.id)], bolts, welds, status: 'not-verified', fixity: 'rigid', overridden: false,
+      });
+    });
+  }
+  void v3; void project;
+  return out;
+}
