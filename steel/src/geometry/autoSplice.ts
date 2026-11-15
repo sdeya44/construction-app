@@ -35,8 +35,16 @@ export function effectiveSplices(project: Project, members: Member[], supports: 
       ts = nb > 0 ? sup.filter((_, i) => i > 0 && i < sup.length - 1 && i % nb === 0) : proposeSplices(tMax, stock, sup);
     } else {
       // אזורים אסורים: תומכי פטות על הקורה (הפלטה המוגבהת מעל האגף העליון)
-      const zones = supports.filter((s) => s.rafterId === m.id).map((s) => dot(sub(s.p, m.start), f.ex)).sort((a, b) => a - b);
-      const HALF = 160;
+      // אזורים אסורים: תומכי פטות (±160) ועמודים מתחת לקורה — פלטת ראש עמוד ואלכסון עמוד-קורה (±1300)
+      const zoneList: [number, number][] = supports.filter((s) => s.rafterId === m.id).map((s) => [dot(sub(s.p, m.start), f.ex), 160]);
+      if (m.kind === 'rafter') for (const c of members) if (c.kind === 'column' && c.frameId === m.frameId) {
+        const t = dot(sub(c.end, m.start), f.ex);
+        const perp = Math.hypot(c.end.x - (m.start.x + f.ex.x * t), c.end.z - (m.start.z + f.ex.z * t));
+        if (t > tMin && t < tMax && perp < 1500) zoneList.push([t, 1300]);
+      }
+      const zones = zoneList.map((z) => z[0]);
+      const halfOf = (z: number) => zoneList.find((q) => q[0] === z)?.[1] ?? 160;
+      const HALF = 160; void HALF;
       ts = [];
       let s = tMin;
       // מצב חלוקה: stock = מוט מלא + השלמה (ברירת מחדל); equal = חלקים שווים
@@ -45,9 +53,9 @@ export function effectiveSplices(project: Project, members: Member[], supports: 
       while (tMax - s > stock + 0.5) {
         let t = s + step;
         for (let it = 0; it < 20; it++) {
-          const hit = zones.find((z) => Math.abs(z - t) < HALF);
+          const hit = zones.find((z) => Math.abs(z - t) < halfOf(z));
           if (hit === undefined) break;
-          t = hit - HALF;
+          t = hit - halfOf(hit);
         }
         if (t - s < 1000) { t = s + step; } // לא נמצא מקום — נשאר במוט מלא (אזהרה בבדיקת ההתנגשות)
         ts.push(Math.round(t));

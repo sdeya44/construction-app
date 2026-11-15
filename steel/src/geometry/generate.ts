@@ -84,12 +84,15 @@ export function generate(project: Project): DerivedModel {
         // קצה ברכס או בצד עמוד — נחתך מחדש בבניית החיבור.
         const exR = norm(sub(B, A));
         const below = (P: Vec3) => add(P, scale(Z, dot(sub(up.point, P), up.normal) / dot(Z, up.normal)));
+        // חיתוך 90° דרך הפינה שנותנת קורה ארוכה יותר: גם הפנים העליונות (פטה) וגם התחתונות (פלטת ראש עמוד) מגיעות לקצה.
+        // בשיפוע תלול (למשל 45°) זה ההבדל בין פטה שיושבת על הקורה לפטה שבולטת ממנה.
+        const cutAt = (P: Vec3, outward: -1 | 1) => { const Q = below(P); return dot(sub(Q, P), exR) * outward > 0 ? Q : P; };
         const side = pl.id === 'L' || pl.id === 'R' ? pl.id : undefined;
         members.push({
           id: pl.rafterId(f.id), kind: 'rafter', frameId: f.id, side, planeId: pl.id,
           label: sec!.custom ? `קורת גג ${pl.label} מסגרת ${fi + 1}` : `קורת גג ${side === 'L' ? 'שמאל' : side === 'R' ? 'ימין' : ''} מסגרת ${fi + 1}`.replace('  ', ' '),
           start: A, end: B, profile: b.rafterProfile, material: b.material, rollDeg: 0, mirror: false,
-          anchor, refUp: Z, startCut: { point: below(A), normal: exR }, endCut: { point: below(B), normal: exR }, source: 'generated', manualPlacement: false,
+          anchor, refUp: Z, startCut: { point: cutAt(A, -1), normal: exR }, endCut: { point: cutAt(B, 1), normal: exR }, source: 'generated', manualPlacement: false,
         });
       }
       for (const r of T.ridges) nodes.push({ id: sec!.custom ? `${f.id}.N.RG.${r.pa.id}.${r.pb.id}` : `${f.id}.N.RG`, p: v3(r.x, y, r.z), frameId: f.id, role: 'רכס' });

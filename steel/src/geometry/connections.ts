@@ -225,11 +225,13 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
             const ex = norm(sub(Cp, B));
             const a = Math.ceil(under(x0) - A.z); // גובה המשולש בפלטת הקצה (מעוגל — הקצה העליון בדיוק בתחתית הקורה)
             let nUp = norm(sub(Z, scale(ex, dot(Z, ex)))); if (nUp.z < 0) nUp = scale(nUp, -1);
-            const off = scale(nUp, -a / 2);
+            // גובה המשולש בניצב לקורה (a הוא אנכי): הצלע התחתונה של הפריזמה עוברת בדיוק בנקודה A — גם בשיפוע תלול
+            const aP = Math.round(a * Math.abs(nUp.z) * 10) / 10;
+            const off = scale(nUp, -aP / 2);
             const nCut = norm(cross(sub(Cp, A), v3(0, 1, 0)));
             const nOut = dot(nCut, ex) > 0 ? nCut : scale(nCut, -1);
             const len = Math.hypot(x1 - x0, Cp.z - B.z) + a;
-            res.members.push({ id: sid, kind: 'plate', label: `פלטת חיזוק רכס PL${rr0!.stiffT}`, start: add(B, off), end: add(add(B, off), scale(ex, len)), profile: `PL${Math.ceil(a)}x${rr0!.stiffT}`, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: v3(0, 1, 0), source: 'generated', manualPlacement: false, connId: id, startCut: { point: B, normal: scale(X, -sgn) }, endCut: { point: Cp, normal: nOut }, partDesc: `פלטת חיזוק רכס משולשת PL${rr0!.stiffT}×${Math.ceil(a)}×${Math.ceil(Math.abs(x1 - x0))}` });
+            res.members.push({ id: sid, kind: 'plate', label: `פלטת חיזוק רכס PL${rr0!.stiffT}`, start: sub(add(B, off), scale(ex, a)), end: add(add(B, off), scale(ex, len)), profile: `PL${aP}x${rr0!.stiffT}`, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: v3(0, 1, 0), source: 'generated', manualPlacement: false, connId: id, startCut: { point: B, normal: scale(X, -sgn) }, endCut: { point: Cp, normal: nOut }, partDesc: `פלטת חיזוק רכס משולשת PL${rr0!.stiffT}×${Math.ceil(a)}×${Math.ceil(Math.abs(x1 - x0))}` });
             extra.push(sid);
             welds.push({ id: `${sid}.W1`, connId: id, type: 'fillet', a: rr0!.weldSize, length: 2 * Math.abs(x1 - x0), location: 'shop', between: [r.id, sid], from: B, to: Cp });
             welds.push({ id: `${sid}.W2`, connId: id, type: 'fillet', a: rr0!.weldSize, length: 2 * a, location: 'shop', between: [plId, sid], from: A, to: B });
