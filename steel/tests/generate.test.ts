@@ -47,7 +47,7 @@ describe('GEO-01 – סככה דו־שיפועית 18×30, 6 מסגרות, 6 מ\
     // פני התחתון של הקורה: 300 מ"מ בניצב מתחת ל-TOS, ומתחתיו פלטת כיפה 15 מ"מ
     const n = col.endCut!.normal;
     expect(n.z).toBeGreaterThan(0.99);
-    expect(dot(sub({ x: 0, y: 0, z: 6000 }, col.endCut!.point), n)).toBeCloseTo(330, 6); // שתי פלטות 15 מ"מ
+    expect(dot(sub({ x: 0, y: 0, z: 6000 }, col.endCut!.point), n)).toBeCloseTo(324, 6); // שתי פלטות 12 מ"מ (פרט הלקוח)
   });
   it('קורת גג: פני עליון על קו הייחוס (TOS)', () => {
     const r = d.byId.get('F1.RAF.L')!;

@@ -36,12 +36,12 @@ describe('חיזוק רכס', () => {
     p.building.ridgeReinf = { ...defaultRidgeReinf(), type: 'plate' };
     const d = generate(p);
     const c = d.connById.get('C.RIDGE.F2')!;
-    expect(c.bolts.length).toBe(6);
+    expect(c.bolts.length).toBe(8); // פרט קודקוד: 4 שורות × 2
     expect(c.parts).toContain('C.RIDGE.F2.ST1');
     expect(c.parts).toContain('C.RIDGE.F2.ST2');
     expect(c.welds.filter((w) => w.between[1].includes('.ST')).every((w) => w.location === 'shop')).toBe(true);
     const plate = d.byId.get('C.RIDGE.F2.PL1')!;
-    expect(plate.profile.startsWith('PL160x')).toBe(true);
+    expect(plate.profile.startsWith('PL220x')).toBe(true);
     expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
   });
   it('שיטת הפרופיל האופקי: IPE160 בין שתי הקורות מתחת לרכס, מוברג לפחים (4 ברגים בכל קצה)', () => {
@@ -57,5 +57,23 @@ describe('חיזוק רכס', () => {
     expect(c.bolts.length).toBe(8);
     expect(c.welds.every((w) => w.location === 'shop')).toBe(true);
     expect(d.issues.filter((i) => i.code === 'CLASH' || i.code === 'RIDGE_TIE')).toEqual([]);
+  });
+});
+
+describe('ברירות מחדל לפי פרטי הלקוח (אושרו 15.11.2026)', () => {
+  it('פלטת קודקוד 220×~460×16, 8×M22; ראש עמוד PL12, 4×M18, מרחק שפה 40; ללא התנגשויות ושגיאות', () => {
+    const d = generate(newProject('t', defaultBuilding()));
+    const r = d.connById.get('C.RIDGE.F2')!;
+    expect(r.bolts.length).toBe(8);
+    expect(r.bolts.every((b) => b.d === 22)).toBe(true);
+    const pl = d.byId.get('C.RIDGE.F2.PL1')!;
+    expect(pl.profile.startsWith('PL220x')).toBe(true);
+    const h = Number(pl.profile.split('x')[1]);
+    expect(h).toBeGreaterThan(440); expect(h).toBeLessThan(480);
+    const e = d.connById.get('C.EAVE.F2.L')!;
+    expect(e.bolts.length).toBe(4);
+    expect(e.bolts.every((b) => b.d === 18)).toBe(true);
+    expect(d.byId.get('C.EAVE.F2.L.PL')!.profile).toBe('PL280x12');
+    expect(d.issues.filter((i) => i.severity === 'error' || i.code === 'EAVE_FIT' || i.code === 'CLASH')).toEqual([]);
   });
 });

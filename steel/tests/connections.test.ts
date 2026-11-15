@@ -124,7 +124,7 @@ describe('CONN – חיבורים', () => {
     expect(c.bolts.length).toBe(6);
     expect(c.overridden).toBe(true);
     const after = d.byId.get('F2.COL.L')!.endCut!;
-    expect(dot(sub(before.point, after.point), after.normal)).toBeCloseTo(20, 6); // העמוד התקצר ב-2×10 (פלטת עמוד ופלטת קורה)
+    expect(dot(sub(before.point, after.point), after.normal)).toBeCloseTo(26, 6); // העמוד התקצר ב-2×13 (פלטת עמוד ופלטת קורה: 25 במקום 12)
     expect(generate(p).connById.get('C.EAVE.F3.L')!.bolts.length).toBe(4); // חיבור אחר לא השתנה
     expect(JSON.parse(JSON.stringify(p)).connectionOverrides[id].t).toBe(25);
   });
@@ -146,7 +146,7 @@ describe('CONN – חיבורים', () => {
     expect(Math.min(...allPts(d2.byId.get('F1.COL.L')!).map((q) => q.z))).toBeCloseTo(20, 6);
     expect(d2.connById.get('C.BASE.F1.L')!.bolts.length).toBe(4);
     const rl = d.byId.get('F1.RAF.L')!;
-    expect(Math.max(...allPts(rl).map((q) => q.x))).toBeCloseTo(9000 - 15, 6);
+    expect(Math.max(...allPts(rl).map((q) => q.x))).toBeCloseTo(9000 - 16, 6); // פלטת קודקוד 16
   });
   it('תבנית חיבור: שמירה והחלה על חיבור אחר', () => {
     let p = setConnection('C.BASE.F1.L', { t: 30, w: 400, l: 400, gauge: 150, pitch: 150 }).run(geo());

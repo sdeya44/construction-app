@@ -208,7 +208,7 @@ function PortalFields() {
 }
 
 function RidgeReinfEditor() {
-  const rr = useStore((s) => s.project.building.ridgeReinf) ?? defaultRidgeReinf();
+  const rr = useStore((s) => s.project.building.ridgeReinf) ?? { ...defaultRidgeReinf(), type: 'none' as const };
   const hasRidge = useStore((s) => s.derived.connections.some((c) => c.type === 'ridge'));
   const set = (patch: Partial<RidgeReinfParams>) => store.exec(setBuilding({ ridgeReinf: { ...rr, ...patch } }));
   return (

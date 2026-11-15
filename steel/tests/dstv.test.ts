@@ -36,7 +36,7 @@ describe('DSTV (NC1)', () => {
     expect(L.map((x) => x.trim())).not.toContain('BO');
     const pl = fab.parts.find((x) => x.memberId === 'C.EAVE.F2.L.PL2')!;
     expect(pl.holes.length).toBe(4);
-    expect(pl.holes.every((h) => h.d === 18)).toBe(true);
+    expect(pl.holes.every((h) => h.d === 20)).toBe(true); // M18 + 2
     expect(Number(L[19])).toBeCloseTo(5.7, 1); // חיתוך קצה בשיפוע 10%
   });
   it('ZIP: קובץ לכל סימון (ללא מוטות עיגון), נפתח ומכיל ST/EN', () => {

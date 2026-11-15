@@ -36,8 +36,10 @@ export function defaultPurlinSide(): PurlinSideParams {
 export function defaultConnections(): ConnectionDefaults {
   return {
     // החלטת משתמש 15.11.2026: פלטה על העמוד ופלטה על הקורה, 4×M16 בפינות — מחוץ לאגף הקורה ומחוץ להיטל העמוד (גישה למפתח)
-    eave: { enabled: true, split: true, t: 15, w: 270, l: 340, bolt: bolt(16), cols: 2, rows: 2, gauge: 200, pitch: 260, weldSize: 6 },
-    ridge: { enabled: true, t: 15, w: 160, l: 0, bolt: bolt(16), cols: 2, rows: 2, gauge: 90, pitch: 0, weldSize: 6 },
+    // פרט הלקוח (אושר 15.11.2026): פח 12, M18, מרחק שפה 40. רוחב 280 (לא 270): עם IPE300 מרווח 190 מכניס את דסקית M18 לאגף הקורה; אורך 340 — מחוץ להיטל HEA200
+    eave: { enabled: true, split: true, t: 12, w: 280, l: 340, bolt: bolt(18), cols: 2, rows: 2, gauge: 200, pitch: 260, weldSize: 6 },
+    // פרט קודקוד של הלקוח (אושר 15.11.2026): פלטה 220×460×16, M22, 2 עמודות במרווח 120, 4 שורות; עם הגבהה ופלטות חיזוק
+    ridge: { enabled: true, t: 16, w: 220, l: 0, bolt: bolt(22), cols: 2, rows: 4, gauge: 120, pitch: 0, weldSize: 6 },
     // לפי פרט K-02: PL 230×230×20 מבוטנת, 8 מוטות Φ20 מרותכים מתחת (עיגון 800), העמוד מרותך מסביב בשטח
     base: { enabled: true, mode: 'embedded', t: 20, w: 230, l: 230, bolt: { ...bolt(20), standard: 'מוט מצולע', grade: 'B500' }, cols: 3, rows: 3, gauge: 80, pitch: 80, weldSize: 4, anchorLength: 800 },
   };
@@ -63,7 +65,7 @@ export function defaultSideConn(): PlateConnParams {
 }
 
 export function defaultRidgeReinf(): RidgeReinfParams {
-  return { type: 'none', depth: 250, length: 900, stiffT: 10, tieProfile: 'IPE160', tieGap: 200, gussetT: 10, bolt: bolt(16), gauge: 70, pitch: 70, edge: 35, weldSize: 5 };
+  return { type: 'plate', depth: 160, length: 450, stiffT: 12, tieProfile: 'IPE160', tieGap: 200, gussetT: 10, bolt: bolt(16), gauge: 70, pitch: 70, edge: 35, weldSize: 5 };
 }
 
 export function defaultBracing(): BracingParams {
@@ -96,6 +98,8 @@ export function defaultBuilding(): BuildingParams {
     baseElevation: 0,
     purlins: defaultPurlins(),
     bracing: defaultBracing(),
+    // פרט קודקוד: פלטה מוגבהת + פלטות חיזוק (IPE300 + 160 ⇒ פלטה 220×462×16)
+    ridgeReinf: defaultRidgeReinf(),
   };
 }
 
