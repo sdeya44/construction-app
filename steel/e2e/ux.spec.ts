@@ -173,3 +173,17 @@ test('VIS-01: שכבות תצוגה — הסתרת תומכים מוסיפה ח�
   expect(await shown()).toBe(total);
   await expect(page.getByTestId('layers-flag')).toHaveCount(0);
 });
+
+test('PURL-FIX: מרחק ראשון 0 — תיקון אוטומטי, הצעה בלחיצה; שינוי ערכים אינו נחסם', async ({ page }) => {
+  await boot(page);
+  await page.getByTestId('nav-r:left').click();
+  await page.getByTestId('left-first').fill('0'); await page.getByTestId('left-first').press('Enter');
+  const issues = () => page.evaluate(() => (window as any).__ksp.store.state.derived.issues.map((i: any) => i.code));
+  expect(await issues()).toContain('PURLIN_FIRST_AUTO');
+  expect(await issues()).not.toContain('PURLIN_RIDGE');
+  const cleats = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind === 'cleat').length);
+  expect(cleats).toBeGreaterThan(80); // המודל לא נפגע — כל התומכים נבנים
+  await page.getByTestId('side-fix-PURLIN_FIRST_AUTO').click();
+  expect(await issues()).not.toContain('PURLIN_FIRST_AUTO');
+  await expect(page.getByTestId('left-first')).toHaveValue('0.095');
+});

@@ -1,3 +1,4 @@
+import { setPurlinSide } from '../commands/commands';
 import { useState } from 'react';
 import type { Member, MemberKind } from '../model/types';
 import { store, useStore } from '../store';
@@ -75,7 +76,7 @@ export function IssuesPanel() {
         <div key={k} className={`issue ${i.severity}`} data-el={i.elementId}
           onClick={() => { if (i.elementId) store.select([i.elementId]); }}>
           <span className="ic">{i.severity === 'error' ? '✕' : i.severity === 'warning' ? '!' : 'i'}</span>
-          <div><div>{i.message}</div><div className="hint" style={{ margin: 0, direction: 'ltr', textAlign: 'right' }}>{i.code}{i.elementId ? ` · ${i.elementId}` : ''}</div></div>
+          <div><div>{i.message}</div><div className="hint" style={{ margin: 0, direction: 'ltr', textAlign: 'right' }}>{i.code}{i.elementId ? ` · ${i.elementId}` : ''}</div>{i.fix && <button className="btn small fix-btn" data-testid={`fix-${i.code}`} onClick={(e) => { e.stopPropagation(); store.exec(setPurlinSide(i.fix!.purlinKey, i.fix!.patch)); }}>תיקון: {i.fix.label}</button>}</div>
         </div>
       ))}
     </div>

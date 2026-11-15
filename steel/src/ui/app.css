@@ -412,3 +412,4 @@ select.inp { padding: 0 6px; }
 .layer-row:hover { background: var(--panel-2); }
 .layers-flag { position: absolute; top: 40px; inset-inline-end: 0; white-space: nowrap; background: var(--warn-soft); color: var(--warn); border: 1px solid #ead9b4; border-radius: 12px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
 .layers-flag u { cursor: pointer; }
+.fix-btn { margin-top: 5px; border-color: var(--brand); color: var(--brand); font-weight: 700; }

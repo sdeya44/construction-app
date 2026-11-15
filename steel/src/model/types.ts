@@ -3,7 +3,7 @@ import type { Plane, Vec3 } from '../core/vec';
 import type { CustomSection } from './section';
 
 /** גרסת סכמת קובץ הפרויקט. כל שינוי שובר מחייב מיגרציה ב-model/migrate.ts */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export type RoofType = 'gable' | 'mono';
 /** לאן מתייחסים גובהי העמודים/הרכס: פני עליון של קורת הגג (TOS) או ציר הקורה. */
@@ -29,6 +29,8 @@ export interface PurlinSideParams {
   measure: 'slope' | 'horizontal';
   /** מרחק הפטה האחרונה מהקצה החיצוני של קורת הגג/הקונזולה (0 = בקצה) */
   edgeOffset: Mm;
+  /** fixed = מרווח קבוע, השארית במפתח האחרון; even = חלוקה שווה, spacing = מרווח מרבי */
+  layout?: 'fixed' | 'even';
   /** כיוון פתיחת החתך (אגפים של C): לכיוון הרכס/הקצה העליון או לכיוון המרזב */
   opening: 'up' | 'down';
   cleat: CleatParams;
@@ -482,6 +484,8 @@ export interface ValidationIssue {
   message: string;
   elementId?: string;
   field?: string;
+  /** הצעת תיקון בלחיצה: עדכון פרמטרי פטות לסט מסוים */
+  fix?: { label: string; purlinKey: string; patch: Partial<PurlinSideParams> };
 }
 
 export interface RoofInfo {

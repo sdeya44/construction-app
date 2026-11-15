@@ -322,7 +322,10 @@ export function setPurlinSide(side: string, patch: Partial<PurlinSideParams>): C
       if (patch.edgeOffset !== undefined && patch.edgeOffset < 0) throw new CommandError('מרחק מהקצה לא יכול להיות שלילי');
       const n = clone(p);
       writePurlinParams(n, side, { ...purlinParams(n.building.purlins, side), ...clone(patch) });
-      const errs = generate(n).issues.filter((i) => i.severity === 'error' && i.code.startsWith('PURLIN'));
+      // נחסם רק שינוי שיוצר שגיאה חדשה — שגיאה קיימת (גם בשיפוע אחר) לא תמנע את תיקונה
+      const key = (i: { code: string; message: string }) => `${i.code}|${i.message}`;
+      const before = new Set(generate(p).issues.filter((i) => i.severity === 'error').map(key));
+      const errs = generate(n).issues.filter((i) => i.severity === 'error' && i.code.startsWith('PURLIN') && !before.has(key(i)));
       if (errs.length) throw new CommandError(errs.map((e) => e.message).join('\n'));
       return n;
     },

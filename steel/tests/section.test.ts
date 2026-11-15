@@ -89,7 +89,7 @@ describe('חתך מודולרי — מערכת לבניית סוגי סככות'
     const p = withTpl('gable-inner');
     p.building.purlins.left.first = 0;
     const d = generate(p);
-    expect(d.issues.some((i) => i.code === 'PURLIN_RIDGE')).toBe(true);
+    expect(d.issues.some((i) => i.code === 'PURLIN_FIRST_AUTO' || i.code === 'PURLIN_RIDGE')).toBe(true);
     expect(d.members.filter((m) => m.kind === 'cleat').length).toBeGreaterThan(80);
     expect(d.members.some((m) => m.id.startsWith('BR.R'))).toBe(true);
     expect(d.connections.some((c) => c.type === 'eave')).toBe(true);

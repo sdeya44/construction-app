@@ -49,6 +49,13 @@ const MIGRATIONS: Record<number, (d: any) => any> = {
     connectionDefaults: { ...d.connectionDefaults, eave: { ...d.connectionDefaults.eave, split: true, w: Math.max(d.connectionDefaults.eave.w, 270), gauge: Math.max(d.connectionDefaults.eave.gauge, 200) } },
     building: { ...d.building, bracing: { ...d.building.bracing, conn: { ...d.building.bracing.conn, boltsPerEnd: 1 } } },
   }),
+  // v7 → v8: חלוקת פטות אוטומטית (מרווחים שווים) כברירת מחדל — החלטת משתמש 15.11.2026
+  7: (d) => {
+    const ev = (x: any) => (x ? { ...x, layout: x.layout ?? 'even' } : x);
+    const pu = d.building.purlins;
+    const planes = pu.planes ? Object.fromEntries(Object.entries(pu.planes).map(([k, v]) => [k, ev(v)])) : undefined;
+    return { ...d, schemaVersion: 8, building: { ...d.building, purlins: { ...pu, left: ev(pu.left), right: ev(pu.right), ...(planes ? { planes } : {}) } } };
+  },
 };
 
 export class ProjectFileError extends Error {}

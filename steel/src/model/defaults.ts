@@ -28,7 +28,7 @@ export function defaultCleat(): CleatParams {
 export function defaultPurlinSide(): PurlinSideParams {
   return {
     enabled: true, profile: 'C200x80x20x3', first: 300, spacing: 1500, measure: 'slope',
-    edgeOffset: 0, opening: 'down', cleat: defaultCleat(), manualPositions: null,
+    edgeOffset: 0, layout: 'even', opening: 'down', cleat: defaultCleat(), manualPositions: null,
   };
 }
 

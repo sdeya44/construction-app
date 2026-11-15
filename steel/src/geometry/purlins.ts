@@ -42,13 +42,20 @@ export function layoutPositions(Ls: number, cosA: number, p: PurlinSideParams, l
     // בקצה חופשי (גג חד־שיפועי) גם הפטה הראשונה יושבת כולה על הקורה
     const first = p.first + towardStart * k;
     if (first > end + TOL) { W('PURLIN_FIRST', `${label}: המרחק הראשון גדול מאורך השיפוע`, 'error'); return { s: [], h: [], lastSpan: 0, issues }; }
-    s = [first];
-    while (s[s.length - 1] + p.spacing < end - TOL) s.push(s[s.length - 1] + p.spacing);
-    if (end - s[s.length - 1] > TOL) s.push(end);
-    else s[s.length - 1] = Math.max(s[s.length - 1], end); // מקרה גבולי: הפטה האחרונה נופלת בדיוק על הקצה
-    const last = s.length > 1 ? s[s.length - 1] - s[s.length - 2] : 0;
-    if (s.length > 1 && last < 0.25 * p.spacing) {
-      W('PURLIN_REMAINDER', `${label}: מרווח אחרון ${(last / 1000 / k).toFixed(3)} מ' קטן מרבע מהמרווח הרגיל — צפיפות חריגה, שקול התאמה ידנית`);
+    if (p.layout === 'even') {
+      // חלוקה שווה: מספר המפתחים המזערי שבו המרווח אינו עולה על spacing
+      const span = end - first;
+      const nsp = Math.max(1, Math.ceil((span - TOL) / p.spacing));
+      s = span > TOL ? Array.from({ length: nsp + 1 }, (_, i) => first + (span * i) / nsp) : [first];
+    } else {
+      s = [first];
+      while (s[s.length - 1] + p.spacing < end - TOL) s.push(s[s.length - 1] + p.spacing);
+      if (end - s[s.length - 1] > TOL) s.push(end);
+      else s[s.length - 1] = Math.max(s[s.length - 1], end); // מקרה גבולי: הפטה האחרונה נופלת בדיוק על הקצה
+      const last = s.length > 1 ? s[s.length - 1] - s[s.length - 2] : 0;
+      if (s.length > 1 && last < 0.25 * p.spacing) {
+        issues.push({ code: 'PURLIN_REMAINDER', severity: 'warning', message: `${label}: מרווח אחרון ${(last / 1000 / k).toFixed(3)} מ' קטן מרבע מהמרווח הרגיל — מוצע: חלוקה שווה`, fix: { label: 'חלוקה שווה', purlinKey: '', patch: { layout: 'even' } } });
+      }
     }
     if (p.spacing > 2500) W('PURLIN_SPACING_LARGE', `${label}: מרווח פטות מעל 2.5 מ' — לבדוק`);
   }
@@ -141,7 +148,20 @@ export function buildPurlins(b: BuildingParams, sec: NSection, deleted: Set<stri
       towardStart0 = dot(u0, sDir) > 0 ? Math.max(...us0) : -Math.min(...us0);
       if (cleatToStart0) towardStart0 = Math.max(towardStart0, (prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2) + prm.cleat.base);
     }
-    const lay = layoutPositions(Ls, cosA, prm, ln.label, Math.max(0, towardEnd), Math.max(0, towardStart0));
+    // רכס: מרחק ראשון מזערי כך שהפטה והתומך לא יחצו את קו הרכס — תיקון אוטומטי + הצעה לעדכון הערך
+    let prmL = prm;
+    if (!ln.free && !prm.manualPositions) {
+      let ridgeExt = dot(u0, sDir) > 0 ? Math.max(...us0) : -Math.min(...us0);
+      if (cleatToStart0) ridgeExt = Math.max(ridgeExt, (prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2) + prm.cleat.base);
+      const kk = prm.measure === 'horizontal' ? cosA : 1;
+      const minFirst = Math.ceil(((ridgeExt + 10) * kk) / 5) * 5;
+      if (prm.first < minFirst - 1e-6) {
+        prmL = { ...prm, first: minFirst };
+        out.issues.push({ code: 'PURLIN_FIRST_AUTO', severity: 'warning', message: `${ln.label}: מרחק ראשון ${Math.round(prm.first)} מ"מ קטן מהמזערי — הפטה הוזזה אוטומטית ל-${minFirst} מ"מ מהרכס (רוחב הפטה והתומך)`, fix: { label: `קבע ${minFirst} מ"מ`, purlinKey: ln.paramKey, patch: { first: minFirst } } });
+      }
+    }
+    const lay = layoutPositions(Ls, cosA, prmL, ln.label, Math.max(0, towardEnd), Math.max(0, towardStart0));
+    for (const i of lay.issues) if (i.fix) i.fix = { ...i.fix, purlinKey: ln.paramKey };
     out.issues.push(...lay.issues);
     if (lay.issues.some((i) => i.severity === 'error')) continue;
     // u = v × ex (כמו ב-localFrame) — כיוון פתיחת חתך C כאשר mirror=false

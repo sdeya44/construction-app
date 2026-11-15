@@ -1,3 +1,4 @@
+import { setPurlinSide } from '../commands/commands';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Connection, MemberKind, Severity } from '../model/types';
 import { cutLength } from '../geometry/solid';
@@ -175,7 +176,7 @@ function IssuesTable({ sev }: { sev: Severity }) {
       {issues.map((i, k) => (
         <div key={k} className={`issue ${i.severity}`} onClick={() => { if (i.elementId) { store.select([i.elementId]); setTimeout(() => window.__ksp?.viewport?.fitSelection(), 0); } }} data-el={i.elementId}>
           <span className="ic">{i.severity === 'error' ? '✕' : i.severity === 'warning' ? '!' : 'i'}</span>
-          <div><div>{i.message}</div><div className="hint" style={{ margin: 0, direction: 'ltr', textAlign: 'right' }}>{i.code}{i.elementId ? ` · ${i.elementId}` : ''}</div></div>
+          <div><div>{i.message}</div><div className="hint" style={{ margin: 0, direction: 'ltr', textAlign: 'right' }}>{i.code}{i.elementId ? ` · ${i.elementId}` : ''}</div>{i.fix && <button className="btn small fix-btn" data-testid={`fix-${i.code}`} onClick={(e) => { e.stopPropagation(); store.exec(setPurlinSide(i.fix!.purlinKey, i.fix!.patch)); }}>תיקון: {i.fix.label}</button>}</div>
         </div>
       ))}
     </div>

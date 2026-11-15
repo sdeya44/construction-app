@@ -197,7 +197,7 @@ test.describe('M1 – ליבת מידול', () => {
     const txt = await (await import('node:fs')).promises.readFile((await file.path())!, 'utf8');
     const j = JSON.parse(txt);
     expect(j.format).toBe('kayan-steel-pro');
-    expect(j.schemaVersion).toBe(7);
+    expect(j.schemaVersion).toBe(8);
     expect(j.project.building.width).toBe(20000);
     await shot(page, 'SAVE-01_after_reload');
   });

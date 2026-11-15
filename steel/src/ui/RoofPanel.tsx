@@ -27,7 +27,13 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
       {prm.enabled && <>
         <div className="field"><label>חתך</label><TextField ltr list="profiles" testId={tid('profile')} value={prm.profile} onCommit={(v) => set({ profile: v.toUpperCase().replace(/\s/g, '') })} /></div>
         <div className="field"><label>{mono ? 'מרחק ראשון מקצה ההתחלה' : 'מרחק ראשון מהרכס'}</label><LenField testId={tid('first')} mm={prm.first} unit={u} onCommit={(v) => set({ first: v })} /></div>
-        <div className="field"><label>מרווח רגיל</label><LenField testId={tid('spacing')} mm={prm.spacing} unit={u} onCommit={(v) => set({ spacing: v })} /></div>
+        <div className="field"><label>חלוקה</label>
+          <select className="inp" data-testid={tid('mode')} value={prm.layout ?? 'fixed'} onChange={(e) => set({ layout: e.target.value as 'fixed' | 'even' })}>
+            <option value="even">אוטומטית — מרווחים שווים</option><option value="fixed">מרווח קבוע, שארית במפתח האחרון</option>
+          </select>
+        </div>
+        <div className="field"><label>{(prm.layout ?? 'fixed') === 'even' ? 'מרווח מרבי' : 'מרווח רגיל'}</label><LenField testId={tid('spacing')} mm={prm.spacing} unit={u} onCommit={(v) => set({ spacing: v })} /></div>
+        <SideIssues pkey={side} />
         <div className="field"><label title="מקצה קורת הגג עד הפנים החיצוניות של הפטה או התומך — הפטה יושבת כולה על הקורה">פטה אחרונה – מרווח מקצה הקורה</label><LenField testId={tid('edge')} mm={prm.edgeOffset} unit={u} onCommit={(v) => set({ edgeOffset: v })} /></div>
         <div className="field"><label>אופן מדידה</label>
           <select className="inp" value={prm.measure} data-testid={tid('measure')} onChange={(e) => set({ measure: e.target.value as PurlinSideParams['measure'] })}>
@@ -103,6 +109,21 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
         )}
       </>}
     </>
+  );
+}
+
+function SideIssues({ pkey }: { pkey: string }) {
+  const issues = useStore((s) => s.derived.issues).filter((i) => i.fix?.purlinKey === pkey || (i.code === 'PURLIN_RIDGE'));
+  if (!issues.length) return null;
+  return (
+    <div data-testid={`side-issues-${pkey}`}>
+      {issues.map((i, k) => (
+        <div key={k} className={`issue ${i.severity}`}>
+          <span className="ic">{i.severity === 'error' ? '✕' : '!'}</span>
+          <div><div>{i.message}</div>{i.fix && <button className="btn small fix-btn" data-testid={`side-fix-${i.code}`} onClick={() => store.exec(setPurlinSide(i.fix!.purlinKey, i.fix!.patch))}>תיקון: {i.fix.label}</button>}</div>
+        </div>
+      ))}
+    </div>
   );
 }
 

@@ -10,7 +10,8 @@ import { getProfile } from '../src/profiles/library';
 import type { Member, Project } from '../src/model/types';
 import { fromFileJson, migrate } from '../src/model/migrate';
 
-const geo = () => newProject('t', defaultBuilding());
+// בדיקות ה-ROOF מהאפיון מתייחסות למצב "מרווח קבוע, שארית במפתח האחרון"
+const geo = () => { const p = newProject('t', defaultBuilding()); p.building.purlins.left.layout = 'fixed'; p.building.purlins.right.layout = 'fixed'; return p; };
 const purl = (p: Project, side: string) => generate(p).members.filter((m) => m.purlin?.side === side).sort((a, b) => a.purlin!.index - b.purlin!.index);
 const sl = (side: Member[]) => side.map((m) => m.purlin!.sSlope);
 
@@ -53,7 +54,7 @@ describe('ROOF – פריסת פטות', () => {
     expect(spans[spans.length - 1]).toBeLessThanOrEqual(1500);
   });
   it('ROOF-04: שארית זעירה מדווחת כאזהרה', () => {
-    const r = layoutPositions(300 + 1500 * 3 + 100, 1, { ...defaultPurlinSide(), first: 300, spacing: 1500 }, 'x');
+    const r = layoutPositions(300 + 1500 * 3 + 100, 1, { ...defaultPurlinSide(), layout: 'fixed', first: 300, spacing: 1500 }, 'x');
     expect(r.lastSpan).toBeCloseTo(100, 6);
     expect(r.issues.map((i) => i.code)).toContain('PURLIN_REMAINDER');
   });
@@ -146,12 +147,33 @@ describe('PURL – חתך ומיקום', () => {
     // ציר הווב על קו הייחוס בשני המצבים
     void cross;
   });
-  it('פטה ראשונה (או התומך שלה) שחוצה את הרכס — שגיאה, הפקודה נדחית', () => {
-    expect(() => setPurlinSide('left', { first: 20 }).run(geo())).toThrow(/רכס/); // פתיחה למרזב: רגל הבסיס של התומך פונה לרכס
+  it('מרחק ראשון קטן מדי ליד הרכס — תיקון אוטומטי למזערי והצעת תיקון (לא נחסם)', () => {
+    // פתיחה למרזב: רגל הבסיס של התומך (80 + 1.5) פונה לרכס ⇒ מזערי 95 (מעוגל ל-5, +10 מרווח)
+    const p1 = setPurlinSide('left', { first: 20 }).run(geo());
+    const d1 = generate(p1);
+    const w = d1.issues.find((i) => i.code === 'PURLIN_FIRST_AUTO')!;
+    expect(w.fix).toEqual({ label: 'קבע 95 מ"מ', purlinKey: 'left', patch: { first: 95 } });
+    expect(purl(p1, 'L')[0].purlin!.sSlope).toBe(95);
+    expect(d1.issues.some((i) => i.code === 'PURLIN_RIDGE')).toBe(false);
+    // פתיחה לרכס: אגפי הפטה (78.5) פונים לרכס ⇒ מזערי 90
     const up = setPurlinSide('left', { opening: 'up' }).run(geo());
-    expect(() => setPurlinSide('left', { first: 20 }).run(up)).toThrow(/רכס/); // פתיחה לרכס: אגפי הפטה פונים לרכס
-    expect(() => setPurlinSide('left', { first: 70 }).run(up)).toThrow(/רכס/); // אגף 78.5 מ"מ
-    expect(() => setPurlinSide('left', { first: 120 }).run(geo())).not.toThrow();
+    const d2 = generate(setPurlinSide('left', { first: 70 }).run(up));
+    expect(d2.issues.find((i) => i.code === 'PURLIN_FIRST_AUTO')!.fix!.patch).toEqual({ first: 90 });
+    // החלת ההצעה מעלימה את האזהרה
+    const p3 = setPurlinSide('left', w.fix!.patch).run(p1);
+    expect(generate(p3).issues.some((i) => i.code === 'PURLIN_FIRST_AUTO')).toBe(false);
+  });
+  it('חלוקה אוטומטית שווה: מרווחים שווים ≤ המרבי, בלי שארית קטנה', () => {
+    const p = setPurlinSide('left', { layout: 'even' }).run(geo());
+    const L = purl(p, 'L');
+    const spans = L.slice(1).map((m) => m.purlin!.spanBefore);
+    for (const sp of spans) { expect(sp).toBeLessThanOrEqual(1500 + 1e-6); expect(sp).toBeCloseTo(spans[0], 6); }
+    expect(generate(p).issues.some((i) => i.code === 'PURLIN_REMAINDER')).toBe(false);
+  });
+  it('תיקון שיפוע אחד אינו נחסם בגלל בעיה קיימת בשיפוע אחר', () => {
+    const p = geo();
+    p.building.purlins.right.manualPositions = [5000, 5000]; // שגיאה קיימת בימין
+    expect(() => setPurlinSide('left', { spacing: 1400 }).run(p)).not.toThrow();
   });
   it('נקודת תמיכה מזוהה בכל מפגש פטה-מסגרת', () => {
     const d = generate(geo());
@@ -218,7 +240,7 @@ describe('מיגרציה v1 → v2', () => {
     const p: any = geo();
     delete p.building.purlins; delete p.splices; p.schemaVersion = 1;
     const m = migrate(JSON.parse(JSON.stringify(p)));
-    expect(m.schemaVersion).toBe(7);
+    expect(m.schemaVersion).toBe(8);
     expect(m.marks.parts).toEqual({});
     expect(m.settings.kerf).toBe(3);
     expect(m.building.bracing.roof.enabled).toBe(true);

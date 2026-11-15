@@ -8,6 +8,12 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
   test('ROOF-01/02/03/04 דרך הממשק: פריסה, שארית, עצמאות צדדים', async ({ page }) => {
     await boot(page);
     await page.getByTestId('tab-roof').click();
+    // ברירת המחדל: חלוקה אוטומטית שווה; בדיקות ה-ROOF מהאפיון — במצב "מרווח קבוע + שארית"
+    const E = await purl(page, 'L');
+    const spans = E.slice(1).map((x: any, i: number) => x[3] - E[i][3]);
+    expect(Math.max(...spans) - Math.min(...spans)).toBeLessThan(0.01);
+    await page.getByTestId('left-mode').selectOption('fixed');
+    await page.getByTestId('right-mode').selectOption('fixed');
     const L = await purl(page, 'L'), R = await purl(page, 'R');
     expect(L[0][0]).toBe('PL.L.01'); expect(R[0][0]).toBe('PL.R.01');
     expect(L.map((x: any) => Math.round(x[3]))).toEqual([300, 1800, 3300, 4800, 6300, 7800, 9137]); // הפטה האחרונה יושבת כולה על הקורה (78.5 מ"מ פנימה מהקצה)
