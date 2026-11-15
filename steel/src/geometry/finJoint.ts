@@ -5,9 +5,9 @@ import { makeBolt } from './connections';
 
 /**
  * פרט חיבור אחיד לאלכסונים ולקורות אגד (פרט הלקוח, תמונות האתר 15.11.2026):
- *   פח מרותך למארח (מסגריה), 2 חורים;
+ *   פח מרותך למארח (מסגריה), 2 חורים — פס ברוחב ה-RHS לאורך ציר האלמנט, קצהו חתוך בזווית לפני המארח (סקיצה 15.11.2026);
  *   ב-RHS חריץ ברוחב עובי הפח, ובתוכו פח שני (לשונית) עם 2 חורים, מרותך לפרופיל (מסגריה);
- *   בשטח — הלשונית צמודה לפח ומוברגת (חפיפה). לכל אלמנט פח בשני הקצוות.
+ *   בשטח — הלשונית צמודה לפח ומוברגת (חפיפה), שני ברגים מדורגים לרוחב. לכל אלמנט פח בשני הקצוות.
  * הפח במישור האלמנט, ממורכז על קו המארח; ציר ה-RHS מוסט בעובי (פח+לשונית)/2 לצד הלשונית.
  */
 export interface FinJointIn {
@@ -54,33 +54,32 @@ export function finJoint(j: FinJointIn): FinJointOut {
   const endDist = j.endDist ?? Math.max(45, Math.ceil((2.2 * d0) / 5) * 5);
   const insert = j.insert ?? 80;
   const clr = j.clearance ?? 10;
-  // רוחב הלשונית = מידת ה-RHS במישור הפח
+  // רוחב הלשונית והפח = מידת ה-RHS במישור הפח
   const wt = j.prof.props.b;
   const dn = dot(d, j.n), un = Math.abs(dot(u, j.n));
   if (dn < 0.25) issues.push({ code: 'BRACE_ANGLE', severity: 'warning', elementId: j.cid, message: `${j.desc}: זווית חדה מדי למארח` });
   const k = Math.max(dn, 0.25);
   const sTip = (clr + (wt / 2) * un) / k; // פינות הלשונית במרחק clearance מהמארח
-  const sB = Array.from({ length: Math.max(1, j.bolts) }, (_, i) => sTip + edge + i * pitch);
+  // שני ברגים מדורגים לרוחב (כמו בסקיצה): היסט ±o מהציר, עם מרחק שפה ≥ 1.3·d0
+  const nb = Math.max(1, j.bolts);
+  const o = nb > 1 ? Math.max(0, Math.floor((wt / 2 - 1.3 * d0) / 5) * 5) : 0;
+  const sB = Array.from({ length: nb }, (_, i) => sTip + edge + i * pitch);
   const sLast = sB[sB.length - 1];
   const off = scale(pn, side * (j.finT + j.tongueT) / 2);
   const ax = (s: number) => add(j.P, scale(d, s));
-  // הפח: מלבן מפני המארח (b = 0) עד מעבר לבורג האחרון + שפה; לאורך המארח — מכסה את הברגים ואת קצה הלשונית
-  const pa = (Q: Vec3) => dot(sub(Q, j.P), hdir), pb = (Q: Vec3) => dot(sub(Q, j.P), j.n);
-  const boltPts = sB.map(ax);
-  const tipCorners = [add(ax(sTip), scale(u, wt / 2)), add(ax(sTip), scale(u, -wt / 2))];
-  const aVals = [...boltPts.map(pa).flatMap((a) => [a - edge, a + edge]), ...tipCorners.map(pa)];
-  const a0 = Math.min(...aVals), a1 = Math.max(...aVals);
-  const bMax = Math.max(...boltPts.map(pb)) + edge;
-  const finL = Math.ceil((a1 - a0) / 5) * 5, finW = Math.ceil(bMax / 5) * 5;
-  // קצה ה-RHS: אחרי הבורג האחרון, ופינותיו מעבר לפח (ה-RHS מוסט ואינו נכנס לפח)
-  const sEnd = Math.max(sLast + endDist, (finW + 10 + (j.prof.props.h / 2) * un) / k);
+  const boltPts = sB.map((s, i) => add(ax(s), scale(u, nb > 1 ? (i % 2 ? o : -o) : 0)));
+  // הפח: פס ברוחב ה-RHS לאורך ציר האלמנט, קצהו במארח חתוך בזווית לפני המארח, ועד הבורג האחרון + שפה
+  const s0 = -((wt / 2) * un) / k, sFin = sLast + edge;
+  const finL = Math.ceil((sFin - s0) / 5) * 5, finW = wt;
+  // קצה ה-RHS אחרי קצה הפח (ה-RHS מוסט ואינו נכנס לפח) ואחרי הבורג האחרון
+  const sEnd = Math.max(sLast + endDist, s0 + finL + 10);
   const base = j.tag ? `${j.cid}.${j.tag}` : j.cid;
   const fin = `${base}.PL`, tg = `${base}.T`;
-  const fc = add(add(j.P, scale(hdir, (a0 + a1) / 2)), scale(j.n, finW / 2));
   members.push({
-    id: fin, kind: 'plate', label: `פח חיבור ${j.desc} PL${j.finT}×${finW}×${finL}`, start: add(fc, scale(hdir, -finL / 2)), end: add(fc, scale(hdir, finL / 2)),
+    id: fin, kind: 'plate', label: `פח חיבור ${j.desc} PL${j.finT}×${finW}×${finL}`, start: ax(s0), end: ax(s0 + finL),
     profile: `PL${finW}x${j.finT}`, material: j.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: pn,
-    source: 'generated', manualPlacement: false, connId: j.cid, partDesc: `פח חיבור ${j.desc} PL${j.finT}×${finW}×${finL}`,
+    startCut: { point: j.P, normal: scale(j.n, -1) },
+    source: 'generated', manualPlacement: false, connId: j.cid, partDesc: `פח חיבור ${j.desc} PL${j.finT}×${finW}×${finL} (קצה חתוך בזווית)`,
   });
   const tongueL = Math.ceil((sEnd + insert - sTip) / 5) * 5;
   members.push({
@@ -92,8 +91,9 @@ export function finJoint(j: FinJointIn): FinJointOut {
     const head = add(Q, scale(pn, side * (j.finT / 2 + j.tongueT)));
     return makeBolt(`${base}.B${i + 1}`, j.cid, head, scale(pn, -side), j.bolt, j.finT + j.tongueT, 'site', [tg, fin], d, members);
   });
+  const weldL = Math.round(wt / Math.max(Math.sqrt(1 - un * un), 0.25));
   welds.push(
-    { id: `${base}.W1`, connId: j.cid, type: 'fillet', a: j.weldSize, length: 2 * finL, location: 'shop', between: [j.hostId, fin], from: add(j.P, scale(hdir, a0)), to: add(j.P, scale(hdir, a1)) },
+    { id: `${base}.W1`, connId: j.cid, type: 'fillet', a: j.weldSize, length: 2 * weldL, location: 'shop', between: [j.hostId, fin], from: add(j.P, scale(hdir, -weldL / 2)), to: add(j.P, scale(hdir, weldL / 2)) },
     { id: `${base}.W2`, connId: j.cid, type: 'fillet', a: j.weldSize, length: 4 * insert, location: 'shop', between: [j.memberId, tg], from: add(ax(sEnd), off), to: add(ax(sEnd + insert), off) },
   );
   return { start: add(ax(sEnd), off), members, bolts, welds, parts: [fin, tg, ...bolts.map((b) => b.id)], issues, finW, finL, tongueL };
