@@ -1,3 +1,4 @@
+import { settingsOf } from './navIndex';
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { setMemberProps } from '../commands/commands';
 import type { Connection, Member } from '../model/types';
@@ -83,7 +84,12 @@ export function ContextBar({ vp, onMore, onOpenConn }: { vp: Viewport | null; on
       <span className="ctx-sep" />
       {single && conns.length > 0 && <button className="ctx-btn" onClick={() => onOpenConn([...conns].sort((a, b) => ORDER[a.type] - ORDER[b.type])[0].id)} data-testid="ctx-conns">חיבורים <span className="cnt">{conns.length}</span></button>}
       {!single && <button className="ctx-btn" onClick={similar} data-testid="ctx-similar">בחר דומים</button>}
+      {single && settingsOf(single.id, single.kind, single.purlin?.paramKey ?? (single.purlin?.side === 'R' ? 'right' : 'left')) && (() => {
+        const [key, label] = settingsOf(single.id, single.kind, single.purlin?.paramKey ?? (single.purlin?.side === 'R' ? 'right' : 'left'))!;
+        return <button className="ctx-btn pri" data-testid="ctx-settings" title={label} onClick={() => window.dispatchEvent(new CustomEvent('ksp-quick', { detail: { key, label } }))}>⚙ מידות והגדרות</button>;
+      })()}
       <button className="ctx-btn" onClick={() => store.set({ isolated: [...sel] })}>בודד</button>
+      {single && <button className="ctx-btn" data-testid="ctx-hide-kind" title="הסתרת כל האלמנטים מסוג זה (שכבות — הצג הכל)" onClick={() => store.set({ hidden: [...new Set([...store.state.hidden, ...d.members.filter((m) => m.kind === single.kind && (single.kind !== 'brace' || m.id.slice(0, 4) === single.id.slice(0, 4))).map((m) => m.id)])], selection: [] })}>הסתר סוג</button>}
       <button className="ctx-btn" onClick={() => store.set({ hidden: [...new Set([...store.state.hidden, ...sel])], selection: [] })}>הסתר</button>
       <button className="ctx-btn icon" aria-label="עוד פעולות" title="עוד פעולות (לחיצה ימנית)" data-testid="ctx-more"
         onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); onMore(r.left + r.width / 2, r.bottom + 120); }}><Icon name="more" /></button>

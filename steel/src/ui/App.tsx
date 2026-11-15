@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { deleteMembers, restoreDeleted, setBuilding, setSection } from '../commands/commands';
+import { deleteMembers, restoreDeleted, setBuilding, setPurlinSide, setSection } from '../commands/commands';
 import { fromMm } from '../core/units';
 import { store, useStore, type ViewName } from '../store';
 import { VIEW_LABEL, Viewport } from '../view/viewport';
@@ -12,9 +12,9 @@ import { CatalogDialog } from './CatalogDialog';
 import { ProductionView } from './ProductionView';
 import { CommandPalette, ConnCard, ContextBar, MarkingMenu, connectionsOf, type Cmd } from './Overlays';
 import { KIND_LABEL } from './TreePanel';
-import { moveLines } from '../model/section';
+import { moveLines, setPlaneSlope, shiftRoof, toCustomSection } from '../model/section';
 import { NAV_INDEX } from './navIndex';
-import { SideNav, type NavKey } from './SideNav';
+import { NavContent, SideNav, type NavKey } from './SideNav';
 import { EaveCheckDialog } from './EaveCheckDialog';
 import { LayersMenu } from './LayersMenu';
 
@@ -44,8 +44,15 @@ export function App() {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [vpObj, setVpObj] = useState<Viewport | null>(null);
   const [dimEdit, setDimEdit] = useState<{ key: string; value: number; x: number; y: number } | null>(null);
+  // חלונית הגדרות צפה על המודל (בחירת אלמנט ← "מידות והגדרות")
+  const [quick, setQuick] = useState<{ key: NavKey; label: string } | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => setQuick((e as CustomEvent).detail);
+    window.addEventListener('ksp-quick', on);
+    return () => window.removeEventListener('ksp-quick', on);
+  }, []);
   /** עריכת מידה מהתצוגה: מרווח צירים / מרווח מסגרות / רוחב — מזיז את כל מה שאחרי */
-  const commitDim = (key: string, v: number) => {
+  const commitDim = (key: string, v: number, old = 0) => {
     const bb = store.state.project.building;
     const [k0, si] = key.split(':');
     // רוחב בחתך מודולרי עם שני צירים = מרווח הצירים
@@ -60,6 +67,13 @@ export function App() {
       const ls = [...bb.section.lines].sort((a, c) => a.x - c.x);
       const delta = v - (ls[i + 1].x - ls[i].x);
       store.exec(setSection(moveLines(bb.section, new Map(ls.filter((_, j) => j > i).map((l) => [l.id, l.x + delta]))), 'שינוי מרווח צירים'));
+    } else if (k === 'sl' || k === 'hz') {
+      // שיפוע (הערך ‰ ⇐ %) או גובה עמודים — על החתך (2 צירים הופך לחתך שנשמר)
+      const sec = bb.section ?? toCustomSection(bb, store.state.derived.roof);
+      if (k === 'sl') store.exec(setSection(setPlaneSlope(sec, si, v / 1000), 'שינוי שיפוע'));
+      else store.exec(setSection(shiftRoof(sec, v - old), 'שינוי גובה עמודים'));
+    } else if (k === 'ps') {
+      store.exec(setPurlinSide(si, { spacing: v }));
     } else if (k === 'w') {
       store.exec(setBuilding(bb.roofType === 'gable' && Math.abs(bb.ridgeX - bb.width / 2) < 1 ? { width: v, ridgeX: v / 2 } : { width: v }));
     }
@@ -220,7 +234,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.10</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.11</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -283,6 +297,16 @@ export function App() {
 
           <ContextBar vp={vpObj} onOpenConn={openConn} onMore={(x, y) => setMenu({ x, y })} />
           <ConnCard onOpen={openConn} />
+          {quick && (
+            <div className="quick-panel" data-testid="quick-panel" role="dialog" aria-label={quick.label}>
+              <div className="quick-h">
+                <b>{quick.label}</b>
+                <button className="btn small" data-testid="quick-to-tree" onClick={() => { setNav(quick.key); setQuick(null); }}>פתח בעץ</button>
+                <button className="icon-btn" aria-label="סגירה" data-testid="quick-close" onClick={() => setQuick(null)}><Icon name="x" /></button>
+              </div>
+              <div className="quick-b"><NavContent nav={quick.key} onOpenConn={openConn} /></div>
+            </div>
+          )}
 
           <div className="dock" role="toolbar" aria-label="כלי עבודה">
             <TB icon="select" label="בחירה" on={s.tool === 'select'} onClick={() => store.set({ tool: 'select', measure: {} })} testId="tool-select" />
@@ -353,7 +377,7 @@ export function App() {
       <EaveCheckDialog />
       {dimEdit && (
         <input className="inp num dim-edit" autoFocus data-testid="dim-edit" defaultValue={(dimEdit.value / 1000).toFixed(3)} style={{ left: dimEdit.x, top: dimEdit.y }}
-          onKeyDown={(e) => { if (e.key === 'Enter') { const v = Number((e.target as HTMLInputElement).value.replace(',', '.')); const d0 = dimEdit; setDimEdit(null); if (Number.isFinite(v)) commitDim(d0.key, v * 1000); } if (e.key === 'Escape') setDimEdit(null); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { const v = Number((e.target as HTMLInputElement).value.replace(',', '.')); const d0 = dimEdit; setDimEdit(null); if (Number.isFinite(v)) commitDim(d0.key, v * 1000, d0.value); } if (e.key === 'Escape') setDimEdit(null); }}
           onBlur={() => setDimEdit(null)} />
       )}
       {palette && <CommandPalette cmds={cmds} onClose={() => setPalette(false)} onPickElement={pickElement} />}

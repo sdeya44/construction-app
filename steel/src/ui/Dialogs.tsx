@@ -78,7 +78,7 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
           <div className="tpl-grid np-types">
             <button className={`tpl${kind === 'gable' ? ' on' : ''}`} onClick={() => { setKind('gable'); set({ roofType: 'gable', eaveRight: b.eaveLeft, ridgeX: b.width / 2, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 300 } } }); }} data-testid="np-gable"><GableSvg /><span>דו־שיפועי (2 צירים)</span></button>
             <button className={`tpl${kind === 'mono' ? ' on' : ''}`} onClick={() => { setKind('mono'); set({ roofType: 'mono', eaveRight: b.eaveLeft + 1000, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 0 } } }); }} data-testid="np-mono"><MonoSvg /><span>חד־שיפועי (2 צירים)</span></button>
-            {SECTION_TEMPLATES.map((t) => (
+            {SECTION_TEMPLATES.filter((t) => t.id !== 'gable-2' && t.id !== 'mono-2').map((t) => (
               <button key={t.id} className={`tpl${kind === t.id ? ' on' : ''}`} title={t.desc} data-testid={`np-${t.id}`} onClick={() => { setKind(t.id); setKnee(true); }}><SectionPreview section={t.make()} small /><span>{t.name}</span></button>
             ))}
           </div>

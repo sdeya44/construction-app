@@ -104,7 +104,7 @@ function NavCrumb({ nav, item }: { nav: NavKey; item?: string }) {
   return <div className="nav-crumb" data-testid="nav-crumb"><MenuPic name={gp} size={22} /><span>{gl}</span>{item && <><span className="sep">›</span><b>{item}</b></>}</div>;
 }
 
-function NavContent({ nav, onOpenConn }: { nav: NavKey; onOpenConn: (id: string) => void }) {
+export function NavContent({ nav, onOpenConn }: { nav: NavKey; onOpenConn: (id: string) => void }) {
   if (nav === 'structure') return <StructurePanel />;
   if (nav === 'roof') return <RoofPanel />;
   if (nav === 'tree') return <TreePanel />;

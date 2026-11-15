@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { setKneeBraces, setSection } from '../commands/commands';
 import { defaultKneeBraces } from '../geometry/knee';
-import { lineLabel, moveLines, setAxisCount, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
+import { lineLabel, moveLines, setAxisCount, setPlaneEndZ, setPlaneSlope, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
 import { store, useStore } from '../store';
 import { LenField, NumField, ProfilePicker } from './fields';
 import { Icon } from './icons';
@@ -17,14 +17,9 @@ export function SectionEditor() {
   const sec = b.section;
   const u = p.displayUnit;
   const apply = (s2: CustomSection | undefined, label?: string) => store.exec(setSection(s2, label));
-  const toModular = () => apply(toCustomSection(b, d.roof), 'מעבר לחתך מודולרי');
   return (
     <>
-      <div className="panel-title">צורת החתך</div>
-      <div className="seg" style={{ width: '100%', marginBottom: 6 }}>
-        <button className={`tbtn${!sec ? ' on' : ''}`} style={{ flex: 1 }} data-testid="sec-classic" onClick={() => sec && confirm('לחזור לחתך הקלאסי (שני צירים)? הגדרות הצירים והמישורים יימחקו.') && apply(undefined, 'חזרה לחתך קלאסי')}>קלאסי (2 צירים)</button>
-        <button className={`tbtn${sec ? ' on' : ''}`} style={{ flex: 1 }} data-testid="sec-modular" onClick={() => !sec && toModular()}>מודולרי</button>
-      </div>
+      <div className="panel-title">צורת הסככה — בחר תבנית, ושנה כל מידה בשרטוט</div>
       <div className="tpl-grid">
         {SECTION_TEMPLATES.map((t) => (
           <button key={t.id} className={`tpl${sec?.template === t.id ? ' on' : ''}`} data-testid={`tpl-${t.id}`} title={t.desc}
@@ -38,7 +33,8 @@ export function SectionEditor() {
           </button>
         ))}
       </div>
-      {sec && <ModularTables sec={sec} unit={u} apply={apply} />}
+      {/* אין "קלאסי" נפרד: מבנה של 2 צירים מוצג ונערך באותו עורך (העריכה הראשונה שומרת אותו כחתך) */}
+      <ModularTables sec={sec ?? toCustomSection(b, d.roof)} unit={u} apply={apply} />
       <button className="btn small link-nav" data-testid="goto-knee" onClick={() => window.dispatchEvent(new CustomEvent('ksp-nav', { detail: 'b:knee' }))}>אלכסוני עמוד-קורה, חיזוק רכס וקושרות ← חיזוקים וקשיחות</button>
     </>
   );
@@ -306,10 +302,7 @@ export function InteractiveSection({ sec, apply }: { sec: CustomSection; apply: 
         const fixed = pl.fixed ?? pl.start ?? 'x0';
         const slope = ((pl.z1 - pl.z0) / (pl.x1 - pl.x0)) * 100;
         const setP = (patch: Partial<RoofPlaneDef>, label: string) => apply({ ...sec, template: undefined, planes: sec.planes.map((q) => (q.id === pl.id ? { ...q, ...patch } : q)) }, label);
-        const setSlope = (pct: number) => {
-          const sl = pct / 100, dx = pl.x1 - pl.x0;
-          setP(fixed === 'x0' ? { z1: Math.round(pl.z0 + sl * dx) } : { z0: Math.round(pl.z1 - sl * dx) }, 'שינוי שיפוע');
-        };
+        const setSlope = (pct: number) => apply(setPlaneSlope(sec, pl.id, pct), 'שינוי שיפוע');
         const lockBtn = (e: 'x0' | 'x1') => (
           <button className={`lock-btn${fixed === e ? ' on' : ''}`} data-testid={`pl-lock-${e}`} title={fixed === e ? 'גובה זה נשמר כשמשנים שיפוע' : 'נעילת גובה זה'} onClick={() => setP({ fixed: e }, 'נעילת גובה')}>{fixed === e ? '🔒' : '🔓'}</button>
         );
@@ -317,8 +310,8 @@ export function InteractiveSection({ sec, apply }: { sec: CustomSection; apply: 
           <div className="pl-card" data-testid="pl-card">
             <div className="pl-card-h"><b>מישור גג {i + 1}</b><button className="icon-btn" onClick={() => setSelPl(null)}>✕</button></div>
             <div className="pl-row"><label>שיפוע</label><NumField testId="plc-slope" value={Math.round(slope * 100) / 100} suffix="%" onCommit={setSlope} /></div>
-            <div className="pl-row"><label>גובה בצד שמאל</label><LenField testId="plc-z0" mm={pl.z0} unit="m" onCommit={(v) => setP({ z0: v }, 'שינוי גובה')} />{lockBtn('x0')}</div>
-            <div className="pl-row"><label>גובה בצד ימין</label><LenField testId="plc-z1" mm={pl.z1} unit="m" onCommit={(v) => setP({ z1: v }, 'שינוי גובה')} />{lockBtn('x1')}</div>
+            <div className="pl-row"><label>גובה בצד שמאל</label><LenField testId="plc-z0" mm={pl.z0} unit="m" onCommit={(v) => apply(setPlaneEndZ(sec, pl.id, 'x0', v), 'שינוי גובה')} />{lockBtn('x0')}</div>
+            <div className="pl-row"><label>גובה בצד ימין</label><LenField testId="plc-z1" mm={pl.z1} unit="m" onCommit={(v) => apply(setPlaneEndZ(sec, pl.id, 'x1', v), 'שינוי גובה')} />{lockBtn('x1')}</div>
             <div className="hint" style={{ margin: 0 }}>🔒 = הגובה שנשאר קבוע כשמשנים את השיפוע. שינוי גובה ישירות משנה את השיפוע.</div>
           </div>
         );

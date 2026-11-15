@@ -110,6 +110,19 @@ export function toCustomSection(b: BuildingParams, roof: RoofInfo): CustomSectio
 /** תבניות חתך נפוצות — נקודת התחלה מהירה (כל ערך ניתן לעריכה). גבהים = פני עליון קורת הגג בציר. */
 export const SECTION_TEMPLATES: { id: string; name: string; desc: string; make: () => CustomSection }[] = [
   {
+    id: 'gable-2', name: 'דו־שיפועי (2 צירים)', desc: 'סככה סטנדרטית: שני צירי עמודים, רכס באמצע',
+    make: () => ({ template: 'gable-2', lines: [{ id: 'A', x: 0 }, { id: 'B', x: 18000 }], planes: [
+      { id: 'P1', x0: -170, z0: 6000 - 17, x1: 9000, z1: 6900, start: 'x1' },
+      { id: 'P2', x0: 9000, z0: 6900, x1: 18170, z1: 6000 - 17, start: 'x0' },
+    ] }),
+  },
+  {
+    id: 'mono-2', name: 'חד־שיפועי (2 צירים)', desc: 'שני צירי עמודים, שיפוע אחד',
+    make: () => ({ template: 'mono-2', lines: [{ id: 'A', x: 0 }, { id: 'B', x: 12000 }], planes: [
+      { id: 'P1', x0: -300, z0: 6000 - 30, x1: 12300, z1: 6000 + 0.1 * 12300, start: 'x1' },
+    ] }),
+  },
+  {
     id: 'mono-multi', name: 'חד־שיפועי רב־מפתחי', desc: '3 שורות עמודים, שיפוע אחד רציף, קונזולות בשני הקצוות',
     make: () => ({ template: 'mono-multi', lines: [{ id: 'A', x: 0 }, { id: 'B', x: 8000 }, { id: 'C', x: 16000 }], planes: [{ id: 'P1', x0: -600, z0: 6000 - 60, x1: 16600, z1: 6000 + 0.1 * 16600, start: 'x1' }] }),
   },
@@ -139,6 +152,43 @@ export const SECTION_TEMPLATES: { id: string; name: string; desc: string; make: 
     make: () => ({ template: 'gable-center', lines: [{ id: 'A', x: 0 }, { id: 'B', x: 9000 }, { id: 'C', x: 18000 }], planes: [
       { id: 'P1', x0: -300, z0: 6000 - 30, x1: 9000, z1: 6900, start: 'x1' },
       { id: 'P2', x0: 9000, z0: 6900, x1: 18300, z1: 6000 - 30, start: 'x0' },
+    ] }),
+  },
+  {
+    id: 'twin-gable', name: 'דו־מפתחי (שני רכסים)', desc: '3 צירים, שני גגות דו־שיפועיים; מרזב (עמק) מעל העמוד האמצעי',
+    make: () => ({ template: 'twin-gable', lines: [{ id: 'A', x: 0 }, { id: 'B', x: 15000 }, { id: 'C', x: 30000 }], planes: [
+      { id: 'P1', x0: -300, z0: 6000 - 30, x1: 7500, z1: 6750, start: 'x1' },
+      { id: 'P2', x0: 7500, z0: 6750, x1: 15000, z1: 6000, start: 'x0' },
+      { id: 'P3', x0: 15000, z0: 6000, x1: 22500, z1: 6750, start: 'x1' },
+      { id: 'P4', x0: 22500, z0: 6750, x1: 30300, z1: 6000 - 30, start: 'x0' },
+    ] }),
+  },
+  {
+    id: 'butterfly', name: 'פרפר (V) — מרזב באמצע', desc: '3 צירים; שני שיפועים יורדים אל עמוד אמצעי (מרזב פנימי)',
+    make: () => ({ template: 'butterfly', lines: [{ id: 'A', x: 0 }, { id: 'B', x: 9000 }, { id: 'C', x: 18000 }], planes: [
+      { id: 'P1', x0: -300, z0: 6900 + 30, x1: 9000, z1: 6000, start: 'x0' },
+      { id: 'P2', x0: 9000, z0: 6000, x1: 18300, z1: 6900 + 30, start: 'x1' },
+    ] }),
+  },
+  {
+    id: 'sawtooth', name: 'שן מסור', desc: 'כמה חד־שיפועיים ברצף; כל עמוד פנימי ממשיך למעלה ומקבל את הקורה הבאה בצדו',
+    make: () => ({ template: 'sawtooth', lines: [{ id: 'A', x: 0 }, { id: 'B', x: 8000 }, { id: 'C', x: 16000 }, { id: 'D', x: 24000 }], planes: [
+      { id: 'P1', x0: -300, z0: 5500 - 30, x1: 8000, z1: 5500 + 800, start: 'x1' },
+      { id: 'P2', x0: 8000, z0: 5500, x1: 16000, z1: 5500 + 800, start: 'x1' },
+      { id: 'P3', x0: 16000, z0: 5500, x1: 24300, z1: 5500 + 830, start: 'x1' },
+    ] }),
+  },
+  {
+    id: 't-canopy', name: 'סככת T — עמוד מרכזי', desc: 'שורת עמודים אחת במרכז, רכס מעל העמוד, קונזולות לשני הצדדים (חניה)',
+    make: () => ({ template: 't-canopy', lines: [{ id: 'A', x: 0 }], planes: [
+      { id: 'P1', x0: -5000, z0: 4000 - 250, x1: 0, z1: 4000, start: 'x0' },
+      { id: 'P2', x0: 0, z0: 4000, x1: 5000, z1: 4000 - 250, start: 'x1' },
+    ] }),
+  },
+  {
+    id: 'cantilever', name: 'קונזולה חד־עמודית (Γ)', desc: 'שורת עמודים אחת בגב, גג חד־שיפועי בקונזולה ארוכה לחזית (חניה / כניסה)',
+    make: () => ({ template: 'cantilever', lines: [{ id: 'A', x: 0 }], planes: [
+      { id: 'P1', x0: -300, z0: 4000 + 15, x1: 6000, z1: 4000 - 300, start: 'x0' },
     ] }),
   },
 ];
@@ -206,7 +256,10 @@ export function sectionTopology(sec: NSection, colHalf: number, minExt: number):
       const other = p[e === 'a' ? 'b' : 'a'];
       junctions.push({ line: l, plane: p, kind: 'side', side: other.x > l.x ? 1 : -1, end: e });
     }
-    colTop.set(l.id, { z: top, cap });
+    // עמוד שכל המישורים מסתיימים בצדו (עמק/מרזב — פרפר, דו־מפתחי): ראש העמוד בגובה הקורות בפני העמוד, כדי שפלטות הצד ייכנסו
+    let zTop = top;
+    if (!cap) for (const p of cover) zTop = Math.max(zTop, zAt(p, Math.max(xMin(p), Math.min(xMax(p), l.x - colHalf))), zAt(p, Math.max(xMin(p), Math.min(xMax(p), l.x + colHalf))));
+    colTop.set(l.id, { z: zTop, cap });
   }
   // רכסים: קצוות של שני מישורים באותה נקודה, ללא עמוד
   const ridges: Ridge[] = [];
@@ -261,4 +314,30 @@ export function setAxisCount(sec: CustomSection, n: number, width?: number): Cus
   const newId = () => { let k = 1; while (used.has(`C${k}`)) k++; used.add(`C${k}`); return `C${k}`; };
   for (let i = kept.length - 1; i < N - 1; i++) out = { ...out, lines: [...out.lines, { id: newId(), x: xs[i] }] };
   return { ...out, template: undefined };
+}
+
+/** קצה מישור עובר לגובה חדש; קצוות של מישורים אחרים באותה נקודה (רכס/עמק) זזים איתו — הטופולוגיה נשמרת */
+export function setPlaneEndZ(sec: CustomSection, planeId: string, end: 'x0' | 'x1', z: number): CustomSection {
+  const pl = sec.planes.find((p) => p.id === planeId);
+  if (!pl) return sec;
+  const x = pl[end], z0 = end === 'x0' ? pl.z0 : pl.z1;
+  const near = (px: number, pz: number) => Math.abs(px - x) < 1 && Math.abs(pz - z0) < 1;
+  return {
+    ...sec, template: undefined,
+    planes: sec.planes.map((p) => ({ ...p, z0: p.id === planeId && end === 'x0' || near(p.x0, p.z0) ? z : p.z0, z1: p.id === planeId && end === 'x1' || near(p.x1, p.z1) ? z : p.z1 })),
+  };
+}
+
+/** שינוי שיפוע מישור (%) — הקצה הנעול (fixed / start) נשאר במקומו; הקצה השני ומישורים שמחוברים אליו מתעדכנים */
+export function setPlaneSlope(sec: CustomSection, planeId: string, pct: number): CustomSection {
+  const pl = sec.planes.find((p) => p.id === planeId);
+  if (!pl) return sec;
+  const fixed = pl.fixed ?? pl.start ?? 'x0';
+  const sl = pct / 100, dx = pl.x1 - pl.x0;
+  return fixed === 'x0' ? setPlaneEndZ(sec, planeId, 'x1', Math.round(pl.z0 + sl * dx)) : setPlaneEndZ(sec, planeId, 'x0', Math.round(pl.z1 - sl * dx));
+}
+
+/** הזזת כל הגג אנכית (גובה עמודים) */
+export function shiftRoof(sec: CustomSection, dz: number): CustomSection {
+  return { ...sec, template: undefined, planes: sec.planes.map((p) => ({ ...p, z0: p.z0 + dz, z1: p.z1 + dz })) };
 }

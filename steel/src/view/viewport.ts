@@ -403,7 +403,14 @@ export class Viewport {
       const f0 = b.frames[0]?.id;
       for (const c of d.members.filter((m) => m.kind === 'column' && m.frameId === f0)) {
         const outside = c.start.x <= x0 + 1 ? -off : c.start.x >= x1 - 1 ? off : 0;
-        dimLine({ x: c.start.x + outside, y: y0 - (outside ? 0 : off), z }, { x: c.start.x + outside, y: y0 - (outside ? 0 : off), z: c.end.z }, { x: 200, y: 0, z: 0 }, fmt(c.end.z - z));
+        dimLine({ x: c.start.x + outside, y: y0 - (outside ? 0 : off), z }, { x: c.start.x + outside, y: y0 - (outside ? 0 : off), z: c.end.z }, { x: 200, y: 0, z: 0 }, fmt(c.end.z - z), 'hz', c.end.z - z);
+      }
+      // שיפוע כל מישור גג — על הקורה במסגרת הראשונה (לחיצה = שינוי; הקצה הנעול נשאר)
+      for (const r of d.members.filter((m) => m.kind === 'rafter' && m.frameId === f0)) {
+        const pid = r.planeId ?? (r.side ?? 'M');
+        const sl = Math.abs((r.end.z - r.start.z) / (r.end.x - r.start.x)) * 100;
+        const mid = new THREE.Vector3((r.start.x + r.end.x) / 2, y0 - 250, (r.start.z + r.end.z) / 2 + 450);
+        this.labels.push({ p: mid, text: `${sl.toFixed(1)}%`, cls: 'dim slope', edit: `sl:${pid}`, value: sl * 1000 });
       }
       for (const nd of d.nodes.filter((n) => n.frameId === f0 && n.role === 'רכס')) {
         dimLine({ x: nd.p.x, y: y0 - off, z }, { x: nd.p.x, y: y0 - off, z: nd.p.z }, { x: 200, y: 0, z: 0 }, fmt(nd.p.z - z));
@@ -429,7 +436,8 @@ export class Viewport {
             const span = Math.hypot(cur.x - prev.x, cur.z - prev.z);
             const rem = m.purlin!.isLast && m.purlin!.index > 1 && Math.abs(span - (side === 'R' ? b.purlins.right : b.purlins.left).spacing) > 0.5;
             const dir = new THREE.Vector3(c.x - a.x, 0, c.z - a.z).normalize();
-            this.labels.push({ p: new THREE.Vector3((a.x + c.x) / 2, yy, (a.z + c.z) / 2), text: fmt(span), cls: rem ? 'dim rem' : 'dim small', dir });
+            const pkey = m.purlin!.paramKey ?? (side === 'R' ? 'right' : 'left');
+            this.labels.push({ p: new THREE.Vector3((a.x + c.x) / 2, yy, (a.z + c.z) / 2), text: fmt(span), cls: rem ? 'dim rem' : 'dim small', dir, edit: `ps:${pkey}`, value: span });
           }
           prev = cur;
         }

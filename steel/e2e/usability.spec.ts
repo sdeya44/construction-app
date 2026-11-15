@@ -113,3 +113,35 @@ test('USE-06: חתך אינטראקטיבי — מספר צירים, בחירת 
   expect(Math.abs(((p0.z1 - p0.z0) / (p0.x1 - p0.x0)) * 100 - 8)).toBeLessThan(0.05);
   await shot(page, 'USE-06_plane_lock');
 });
+
+test('USE-07: עריכה על המודל — שיפוע, גובה עמודים ומרווח פטות בלחיצה על המידה; חלונית הגדרות מאלמנט', async ({ page }) => {
+  await boot(page);
+  const st0 = () => page.evaluate(() => (window as any).__ksp.store.state);
+  // שיפוע: לחיצה על תווית האחוז של המישור השמאלי ← 12%
+  await page.locator('.vp-label.editable[data-edit="sl:L"]').first().dispatchEvent('pointerup');
+  await page.getByTestId('dim-edit').fill('12'); await page.getByTestId('dim-edit').press('Enter');
+  const sec = (await st0()).project.building.section;
+  const L = sec.planes.find((p: any) => p.id === 'L'), R = sec.planes.find((p: any) => p.id === 'R');
+  expect(Math.abs(((L.z1 - L.z0) / (L.x1 - L.x0)) * 100 - 12)).toBeLessThan(0.05);
+  expect(Math.abs(L.z1 - R.z0)).toBeLessThan(1); // הרכס נשאר מחובר
+  expect((await st0()).derived.issues.filter((i: any) => i.severity === 'error').length).toBe(0);
+  // גובה עמודים: +500
+  const h0 = await page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('F1.COL.L').end.z);
+  await page.locator('.vp-label.editable[data-edit="hz"]').first().dispatchEvent('pointerup');
+  const cur = Number(await page.getByTestId('dim-edit').inputValue());
+  await page.getByTestId('dim-edit').fill(String(cur + 0.5)); await page.getByTestId('dim-edit').press('Enter');
+  const h1 = await page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('F1.COL.L').end.z);
+  expect(Math.round(h1 - h0)).toBe(500);
+  // מרווח פטות
+  await page.locator('.vp-label.editable[data-edit^="ps:"]').first().dispatchEvent('pointerup');
+  await page.getByTestId('dim-edit').fill('1.2'); await page.getByTestId('dim-edit').press('Enter');
+  const pu = (await st0()).project.building.purlins;
+  expect([pu.left.spacing, pu.right.spacing, ...Object.values(pu.planes ?? {}).map((x: any) => x.spacing)]).toContain(1200);
+  // חלונית הגדרות מתוך תומך שנבחר
+  await page.evaluate(() => { const k = (window as any).__ksp; const c = k.store.state.derived.members.find((m: any) => m.kind === 'cleat'); k.store.select([c.id]); });
+  await page.getByTestId('ctx-settings').click();
+  await expect(page.getByTestId('quick-panel')).toBeVisible();
+  await shot(page, 'USE-07_quick');
+  await page.getByTestId('quick-close').click();
+  await expect(page.getByTestId('quick-panel')).toHaveCount(0);
+});

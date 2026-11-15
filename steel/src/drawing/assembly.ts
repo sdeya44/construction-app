@@ -173,12 +173,21 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     bubble({ x, y: yBub }, mk);
     if (list.length > 1) text({ x: x + 4.5, y: yBub + 2.6 }, `×${list.length}`, 2, 'left', 'MARK');
   }
-  // שרשרת מידות אמיתיות למיקום החלקים: מקצה א דרך מרכז כל חלק ועד קצה ב — מתחת למבט החזית
-  const refs = [...new Set(subs.map((pt) => Math.round(cen(pt).t)))].filter((t) => t > 1 && t < L - 1).sort((a, b) => a - b);
+  // מידות מיקום לשפת החלק (בקשת משתמש): חלק בחצי הראשון — מקצה א אל השפה הקרובה אליו; בחצי השני — מקצה ב.
+  // קו עזר מקווקו מהשפה הנמדדת אל קו המידה — כדי שיהיה ברור לאיזו שפה המידה.
   const yChain = PF(0, vMin).y - 13;
-  const pts0 = [0, ...refs, Math.round(L)];
-  for (let i = 1; i < pts0.length; i++) dimH(PF(pts0[i - 1], 0).x, PF(pts0[i], 0).x, yChain, String(pts0[i] - pts0[i - 1]));
-  text({ x: PF(0, 0).x - 2, y: yChain - 4.5 }, `מרכזי החלקים מ${endA}`, 1.9, 'left', 'DIM');
+  const items = [...new Map(subs.map((pt) => { const [a, b] = ext(pt); const c = cen(pt); return [`${Math.round(a)}|${Math.round(b)}`, { a, b, mid: (a + b) / 2, vlo: Math.min(...[...cachedSolidPure(memOf(pt)).startRing, ...cachedSolidPure(memOf(pt)).endRing].map((q) => loc(q).v)), c }]; })).values()];
+  const firstH = items.filter((x) => x.mid < L / 2).sort((p1, p2) => p1.a - p2.a);
+  const secondH = items.filter((x) => x.mid >= L / 2).sort((p1, p2) => p2.b - p1.b);
+  const ext2 = (t: number, vFrom: number) => { const a = PF(t, vFrom), b = { x: a.x, y: yChain - 1.5 }; if (inSeg(t)) E.push({ k: 'line', a, b, layer: 'HIDDEN' }); };
+  { let prev = 0; for (const it of firstH) { const t = Math.max(0, it.a); if (t - prev > 0.5) { dimH(PF(prev, 0).x, PF(t, 0).x, yChain, String(Math.round(t - prev))); ext2(t, it.vlo); prev = t; } } }
+  { let prev = L; for (const it of secondH) { const t = Math.min(L, it.b); if (prev - t > 0.5) { dimH(PF(t, 0).x, PF(prev, 0).x, yChain, String(Math.round(prev - t))); ext2(t, it.vlo); prev = t; } } }
+  text({ x: PF(0, 0).x - 2, y: yChain - 4.5 }, `מידות מ${endA} / מ${endB} אל שפת החלק הקרובה (קו מקווקו)`, 1.9, 'left', 'DIM');
+  // כיוון המבט
+  { const u = f.u; const dirTxt = Math.abs(u.y) > 0.7 ? 'לאורך המבנה (Y) — מבט על מישור המסגרת' : Math.abs(u.x) > 0.7 ? 'מהצד (X) — מבט על מישור הקיר' : 'מלמעלה';
+    const xa = A.x0 + 1.5, ya = A.yTop - 5;
+    E.push({ k: 'line', a: { x: xa, y: ya + 2.2 }, b: { x: xa, y: ya - 2.2 }, layer: 'MARK' }, { k: 'line', a: { x: xa - 1.2, y: ya - 0.8 }, b: { x: xa, y: ya - 2.2 }, layer: 'MARK' }, { k: 'line', a: { x: xa + 1.2, y: ya - 0.8 }, b: { x: xa, y: ya - 2.2 }, layer: 'MARK' });
+    text({ x: xa + 2.5, y: ya - 0.8 }, `כיוון מבט: ${dirTxt}`, 2.1, 'left', 'MARK'); }
   // אורך כולל; קצה בשיפוע — אורך בשני הצדדים
   const s0 = cachedSolidPure(main);
   const r0 = s0.startRing.map(loc), r1 = s0.endRing.map(loc);

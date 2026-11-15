@@ -72,7 +72,12 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         if (!isJoined(e) && inside.length) return toward > 0 ? inside[0] : inside[inside.length - 1];
         return E.x + toward * ridgeGap;
       };
-      const xa = endX('a'), xc = endX('b');
+      let xa = endX('a'), xc = endX('b');
+      // עמוד יחיד מתחת למישור (סככת T / קונזולה): הקושרות עד קצות המישור
+      if (Math.abs(xc - xa) < 1000) {
+        const g = (e: 'a' | 'b') => { const E = pl[e]; return E.x + (E.x < (lo + hi) / 2 ? 1 : -1) * ridgeGap; };
+        xa = g('a'); xc = g('b');
+      }
       const x0 = Math.min(xa, xc), x1 = Math.max(xa, xc);
       const st = [x0, ...inside.filter((x) => x > x0 + 500 && x < x1 - 500), x1];
       // סדר מנקודה a לנקודה c (תאימות למזהים בגג הקלאסי)

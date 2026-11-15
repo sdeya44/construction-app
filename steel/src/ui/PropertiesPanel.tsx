@@ -1,3 +1,4 @@
+import { settingsOf } from './navIndex';
 import { Fragment, useState } from 'react';
 import { resetOverrides, setMemberProps } from '../commands/commands';
 import { useFab } from '../fab/useFab';
@@ -255,14 +256,3 @@ function PurlinInfoBlock({ id }: { id: string }) {
   );
 }
 
-/** מאלמנט שנבחר — אל ההגדרות הכלליות שקובעות אותו (שינוי לכולם במקום אחד) */
-function settingsOf(id: string, kind: string, side?: string): [string, string] | null {
-  if (id.startsWith('KB.') || id.startsWith('C.KB.')) return ['b:knee', 'הגדרות כל אלכסוני עמוד-קורה'];
-  if (id.startsWith('BB.') || id.startsWith('C.BB.') || id.startsWith('BR.W')) return ['b:walls', 'הגדרות קשיחות קירות / אגד B'];
-  if (id.startsWith('BR.R') || id.startsWith('HB.') || id.startsWith('C.HB.')) return ['b:roof', 'הגדרות קושרות גג'];
-  if (id.startsWith('BR.T')) return ['b:ties', 'הגדרות שורות קשירה'];
-  if (id.startsWith('C.RIDGE') || id.startsWith('RT.')) return ['b:ridge', 'הגדרות חיזוק רכס'];
-  if (kind === 'purlin' || kind === 'cleat') return [side === 'right' ? 'r:right' : 'r:left', kind === 'cleat' ? 'הגדרות כל התומכים בשיפוע' : 'הגדרות הפטות בשיפוע'];
-  if (kind === 'column' || kind === 'rafter') return ['s:profiles', 'חתכי כל העמודים והקורות'];
-  return null;
-}

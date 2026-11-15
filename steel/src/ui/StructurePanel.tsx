@@ -59,7 +59,7 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
 
       {show('geometry') && <>
       <SectionEditor />
-      <div className="panel-title">גיאומטריית מבנה</div>
+      <div className="panel-title">{b.section ? "גיאומטריית מבנה" : "מידות מהירות (2 צירים)"}</div>
       {!b.section && <>
       <div className="field"><label>סוג גג</label>
         <select className="inp" value={b.roofType} data-testid="roofType" onChange={(e) => {
