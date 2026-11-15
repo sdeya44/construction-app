@@ -159,7 +159,7 @@ function KneeEditor() {
           </select></div>
         {kb.detail !== 'flange'
           ? <div className="field"><label>ברגים בכל קצה</label>
-              <select className="inp" data-testid="kb-bolts" value={kb.boltsPerEnd ?? 2} onChange={(e) => set({ boltsPerEnd: Number(e.target.value) })}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}×M{kb.bolt.d}</option>)}</select></div>
+              <select className="inp" data-testid="kb-bolts" value={kb.boltsPerEnd ?? 2} onChange={(e) => set({ boltsPerEnd: Number(e.target.value) })}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}×M{kb.bolt.d} — {n / 2} {n === 2 ? 'שורה' : 'שורות'} של 2 לרוחב</option>)}</select></div>
           : <div className="field"><label>פלטת קצה / ברגים</label><span className="readonly">{kb.plateT}×{kb.plateW}×{kb.plateL} · 4×M{kb.bolt.d}</span></div>}
         <div className="field"><label>עובי פלטות</label><NumField testId="kb-t" value={kb.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: Math.max(6, v) })} /></div>
         <div className="hint">בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. פרט הלקוח: פח מרותך לעמוד ולקורה (במישור המסגרת, מסגריה); בקצות ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. אין בדיקת חוזק.</div>

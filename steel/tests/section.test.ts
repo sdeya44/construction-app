@@ -77,15 +77,17 @@ describe('חתך מודולרי — מערכת לבניית סוגי סככות'
     expect(Math.min(s(tg.start), s(tg.end))).toBeLessThan(-30);
     const ins = Math.max(s(tg.start), s(tg.end));
     expect(ins).toBeGreaterThanOrEqual(80); expect(ins).toBeLessThan(86); // 80 מ"מ בתוך ה-RHS, אורך מעוגל ל-5
-    // הפח: פס ברוחב ה-RHS לאורך ציר האלכסון, קצהו חתוך לפני העמוד; שני ברגים מדורגים לרוחב
+    // הפח: פס ברוחב ה-RHS + 10 מכל צד (100) לאורך ציר האלכסון, קצהו חתוך לפני העמוד; שני ברגים לרוחב באותו חתך
     const fd = { x: fin.end.x - fin.start.x, z: fin.end.z - fin.start.z }; const fl = Math.hypot(fd.x, fd.z);
     expect(Math.abs((fd.x * dir.x + fd.z * dir.z) / (fl * L))).toBeCloseTo(1, 6);
-    expect(fin.profile).toBe('PL80x12');
+    expect(fin.profile).toBe('PL100x12');
+    expect(tg.profile).toBe('PL100x12');
     expect(fin.startCut).toBeDefined();
     const bc = c.bolts.filter((b) => b.id.includes('.C.B'));
     const across = bc.map((b) => ((b.p.x - br.start.x) * -dir.z + (b.p.z - br.start.z) * dir.x) / L);
-    expect(across[0]).toBeCloseTo(-across[1], 6);
-    expect(Math.abs(across[0])).toBeGreaterThan(5);
+    across.sort((a, b) => a - b);
+    expect(across[0]).toBeCloseTo(-25, 6); expect(across[1]).toBeCloseTo(25, 6);
+    expect(s(bc[0].p)).toBeCloseTo(s(bc[1].p), 6);
     expect(c.welds.every((w) => w.location === 'shop')).toBe(true);
     expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
     expect(d.connById.has('C.KB.F2.A.P1.L')).toBe(false);

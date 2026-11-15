@@ -506,7 +506,12 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
       // ראשי ברגים ואומים מול הקורה
       for (const bo of c.bolts) { test(byId.get(`${bo.id}.H`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(pid), ' (אום מול חתך הפטה)'); }
     } else {
-      for (const part of c.parts.filter((x) => ['plate', 'beam'].includes(byId.get(x)?.kind ?? ''))) for (const mid of c.members) test(byId.get(part), byId.get(mid));
+      // לשונית (".T") בחריץ ה-RHS של האלמנט המחובר — מותר; מול המארח — נבדקת
+      for (const part of c.parts.filter((x) => ['plate', 'beam'].includes(byId.get(x)?.kind ?? ''))) for (const mid of c.members) {
+        const m = byId.get(mid);
+        if (/\.T$/.test(part) && m && (m.kind === 'brace' || m.kind === 'beam') && m.profile.startsWith('RHS')) continue;
+        test(byId.get(part), m);
+      }
     }
   }
   // קושרות ושורות קשירה מול עמודים, קורות, פטות, תומכים וקושרות אחרות (סינון לפי תיבה חוסמת)
@@ -519,6 +524,10 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
       const ba = boxes.get(pid) ?? aabb(a);
       for (const o of others) {
         if (o.id === pid || (o.kind === 'brace' && c.parts.includes(o.id))) continue;
+        // לשונית בחריץ ה-RHS של אותו חיבור — מותר (החריץ חותך את דפנות הפרופיל)
+        const own = (id: string) => c.parts.includes(id) || c.members.includes(id);
+        const isTongue = (id: string) => /\.T$/.test(id) && c.parts.includes(id);
+        if ((isTongue(pid) && o.kind === 'brace' && own(o.id)) || (isTongue(o.id) && a.kind === 'brace' && own(pid))) continue;
         if (aabbOverlap(ba, boxes.get(o.id)!)) test(a, o, ' (קושרת)');
       }
     }

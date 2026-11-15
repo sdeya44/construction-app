@@ -5,9 +5,9 @@ import { makeBolt } from './connections';
 
 /**
  * פרט חיבור אחיד לאלכסונים ולקורות אגד (פרט הלקוח, תמונות האתר 15.11.2026):
- *   פח מרותך למארח (מסגריה), 2 חורים — פס ברוחב ה-RHS לאורך ציר האלמנט, קצהו חתוך בזווית לפני המארח (סקיצה 15.11.2026);
+ *   פח מרותך למארח (מסגריה) — פס ברוחב ה-RHS + 10 מכל צד לאורך ציר האלמנט, קצהו חתוך בזווית לפני המארח (סקיצה 15.11.2026);
  *   ב-RHS חריץ ברוחב עובי הפח, ובתוכו פח שני (לשונית) עם 2 חורים, מרותך לפרופיל (מסגריה);
- *   בשטח — הלשונית צמודה לפח ומוברגת (חפיפה), שני ברגים מדורגים לרוחב. לכל אלמנט פח בשני הקצוות.
+ *   בשטח — הלשונית צמודה לפח ומוברגת (חפיפה), שני ברגים לרוחב. לכל אלמנט פח בשני הקצוות.
  * הפח במישור האלמנט, ממורכז על קו המארח; ציר ה-RHS מוסט בעובי (פח+לשונית)/2 לצד הלשונית.
  */
 export interface FinJointIn {
@@ -32,6 +32,8 @@ export interface FinJointIn {
   weldSize: number; mat: string;
   /** מרווחים: בין ברגים, בורג-קצה הפח, בורג אחרון-קצה ה-RHS, אורך הלשונית בתוך ה-RHS, מרווח קצה הלשונית מהמארח */
   pitch?: number; edge?: number; endDist?: number; insert?: number; clearance?: number;
+  /** הרחבת הפח והלשונית מעבר לרוחב ה-RHS, מכל צד (ברירת מחדל 10) */
+  extra?: number;
 }
 
 export interface FinJointOut {
@@ -55,19 +57,24 @@ export function finJoint(j: FinJointIn): FinJointOut {
   const insert = j.insert ?? 80;
   const clr = j.clearance ?? 10;
   // רוחב הלשונית והפח = מידת ה-RHS במישור הפח
-  const wt = j.prof.props.b;
+  // רוחב הפח והלשונית: רוחב ה-RHS + 10 מכל צד (RHS80 ⇒ 100), כדי ששני ברגים ייכנסו לרוחב
+  const wt = j.prof.props.b + 2 * (j.extra ?? 10);
   const dn = dot(d, j.n), un = Math.abs(dot(u, j.n));
   if (dn < 0.25) issues.push({ code: 'BRACE_ANGLE', severity: 'warning', elementId: j.cid, message: `${j.desc}: זווית חדה מדי למארח` });
   const k = Math.max(dn, 0.25);
   const sTip = (clr + (wt / 2) * un) / k; // פינות הלשונית במרחק clearance מהמארח
-  // שני ברגים מדורגים לרוחב (כמו בסקיצה): היסט ±o מהציר, עם מרחק שפה ≥ 1.3·d0
+  // ברגים: שניים לרוחב (באותו חתך), ושורות לאורך הציר; מרחק שפה לרוחב ≥ 1.2·d0 מעוגל ל-5
   const nb = Math.max(1, j.bolts);
-  const o = nb > 1 ? Math.max(0, Math.floor((wt / 2 - 1.3 * d0) / 5) * 5) : 0;
-  const sB = Array.from({ length: nb }, (_, i) => sTip + edge + i * pitch);
+  const eW = Math.max(25, Math.ceil((1.2 * d0) / 5) * 5);
+  const gauge = wt - 2 * eW;
+  const across = nb > 1 && gauge >= 2.4 * d0 - 0.01 ? 2 : 1;
+  if (nb > 1 && across === 1) issues.push({ code: 'BOLT_EDGE', severity: 'warning', elementId: j.cid, message: `${j.desc}: הפח צר מכדי שני ברגים לרוחב — ברגים בשורה לאורך הציר` });
+  const rows = Math.ceil(nb / across);
+  const sB = Array.from({ length: rows }, (_, i) => sTip + edge + i * pitch);
   const sLast = sB[sB.length - 1];
   const off = scale(pn, side * (j.finT + j.tongueT) / 2);
   const ax = (s: number) => add(j.P, scale(d, s));
-  const boltPts = sB.map((s, i) => add(ax(s), scale(u, nb > 1 ? (i % 2 ? o : -o) : 0)));
+  const boltPts = sB.flatMap((s) => (across === 2 ? [-gauge / 2, gauge / 2] : [0]).map((w) => add(ax(s), scale(u, w)))).slice(0, nb);
   // הפח: פס ברוחב ה-RHS לאורך ציר האלמנט, קצהו במארח חתוך בזווית לפני המארח, ועד הבורג האחרון + שפה
   const s0 = -((wt / 2) * un) / k, sFin = sLast + edge;
   const finL = Math.ceil((sFin - s0) / 5) * 5, finW = wt;
