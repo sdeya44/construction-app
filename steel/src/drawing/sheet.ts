@@ -18,6 +18,8 @@ export type SheetSize = keyof typeof SHEETS;
 export interface TitleInfo {
   company: string; project: string; projectNo: string; client: string; title: string; number: string;
   rev: string; scale: string; date: string; status: string; drawnBy: string; checkedBy: string; approvedBy: string; note: string;
+  /** יומן מהדורות (האחרונות), לטבלת המהדורות בגיליון */
+  revisions?: { rev: string; date: string; note: string }[];
 }
 
 export interface Sheet { size: SheetSize; w: number; h: number; ents: Ent[]; title: TitleInfo; scale: number }
@@ -32,8 +34,14 @@ export function fitScale(wModel: number, hModel: number, wPaper: number, hPaper:
 
 /** מבט: ממיר קואורדינטות דו־ממדיות של המודל (מ"מ) למיקום על הנייר בקנה מידה. */
 export class View {
-  constructor(public sheet: Sheet, public scale: number, public origin: P, public modelOrigin: P = { x: 0, y: 0 }) {}
-  p(x: number, y: number): P { return { x: this.origin.x + (x - this.modelOrigin.x) / this.scale, y: this.origin.y + (y - this.modelOrigin.y) / this.scale }; }
+  /** rot90: סיבוב המבט ב-90° (x המודל ← למטה, y המודל ← ימינה) — כדי שמבנה ארוך ינצל את רוחב הגיליון */
+  constructor(public sheet: Sheet, public scale: number, public origin: P, public modelOrigin: P = { x: 0, y: 0 }, public rot90 = false) {}
+  p(x: number, y: number): P {
+    const dx = (x - this.modelOrigin.x) / this.scale, dy = (y - this.modelOrigin.y) / this.scale;
+    return this.rot90 ? { x: this.origin.x + dy, y: this.origin.y - dx } : { x: this.origin.x + dx, y: this.origin.y + dy };
+  }
+  /** כיוון מודל ← כיוון נייר */
+  pd(d: P): P { return this.rot90 ? { x: d.y, y: -d.x } : d; }
   line(a: P, b: P, layer: Layer = 'OUTLINE') { this.sheet.ents.push({ k: 'line', a: this.p(a.x, a.y), b: this.p(b.x, b.y), layer }); }
   poly(pts: P[], closed: boolean, layer: Layer = 'OUTLINE', fill = false) { this.sheet.ents.push({ k: 'poly', pts: pts.map((q) => this.p(q.x, q.y)), closed, layer, fill }); }
   circle(c: P, rModel: number, layer: Layer = 'HOLE') { this.sheet.ents.push({ k: 'circle', c: this.p(c.x, c.y), r: rModel / this.scale, layer }); }
@@ -45,9 +53,10 @@ export class View {
    * מידה לינארית בין שתי נקודות מודל, בכיוון dir (וקטור יחידה במישור המבט), במרחק off מ"מ נייר.
    * הטקסט = המרחק במודל לאורך dir (מעוגל ל-1 מ"מ), או label אם ניתן.
    */
-  dim(a: P, b: P, dir: P, offPaper: number, label?: string, layer: Layer = 'DIM') {
+  dim(a: P, b: P, dirM: P, offPaper: number, label?: string, layer: Layer = 'DIM') {
+    const val = Math.abs((b.x - a.x) * dirM.x + (b.y - a.y) * dirM.y);
+    const dir = this.pd(dirM);
     const n = { x: -dir.y, y: dir.x };
-    const val = Math.abs((b.x - a.x) * dir.x + (b.y - a.y) * dir.y);
     const pa = this.p(a.x, a.y), pb = this.p(b.x, b.y);
     // נקודות קו המידה: היטל על קו המקביל ל-dir
     const base = pa;
@@ -68,6 +77,17 @@ export class View {
     this.sheet.ents.push({ k: 'text', p: mid, s: label ?? String(Math.round(val)), h: 2.2, align: 'center', layer: 'DIM', rot });
     return val;
   }
+  /** סימון מפלס (משולש על קו ההתייחסות + ערך במטרים), lenPaper = אורך קו ההובלה */
+  level(at: P, valueMm: number, side: 1 | -1 = 1, lenPaper = 14) {
+    const c = this.p(at.x, at.y);
+    const e = { x: c.x + side * lenPaper, y: c.y };
+    const v = valueMm / 1000;
+    const s = Math.abs(v) < 0.0005 ? '±0.00' : `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}`;
+    this.sheet.ents.push({ k: 'line', a: c, b: e, layer: 'DIM' });
+    const tx = c.x + side * (lenPaper - 3);
+    this.sheet.ents.push({ k: 'poly', pts: [{ x: tx - 1.3, y: c.y + 2 }, { x: tx + 1.3, y: c.y + 2 }, { x: tx, y: c.y }], closed: true, layer: 'DIM', fill: true });
+    this.sheet.ents.push({ k: 'text', p: { x: tx + side * 2, y: c.y + 0.8 }, s, h: 2.4, align: side > 0 ? 'left' : 'right', layer: 'DIM', bold: true });
+  }
   /** בועת ציר */
   bubble(at: P, label: string) {
     const c = this.p(at.x, at.y);
@@ -86,6 +106,8 @@ export function drawArea(s: Sheet) {
   return { x0: 20, y0: 10 + TB_H + 4, x1: s.w - 10, y1: s.h - 10 };
 }
 export const TB_W = 185, TB_H = 58;
+/** גובה טבלת המהדורות (פינה ימנית תחתונה) — גיליונות עם טבלאות בפינה זו מתחילים מעליה */
+export const revBandH = (t: TitleInfo) => 4.6 * (Math.min(5, Math.max(1, t.revisions?.length ?? 0)) + 1) + 2;
 
 /** מסגרת וגוש כותרת בעברית בפינה השמאלית התחתונה. */
 /** מסגרת וגוש כותרת — נקרא בסוף בניית הגיליון, כשקנה המידה ידוע. */
@@ -127,7 +149,24 @@ export function frameAndTitle(s: Sheet) {
     T(x - 1.5, by + bh - 48.3, k, 1.9);
     T(x - sw / 2, by + 4, v || '—', 2.6, 'center');
   });
-  if (t.note) s.ents.push({ k: 'text', p: { x: bx + bw + 3, y: by + 2 }, s: t.note, h: 2.2, align: 'left', layer: 'TITLE' });
+  // טבלת מהדורות: מימין לבלוק הכותרת, צמודה לתחתית המסגרת
+  {
+    const revs = (t.revisions?.length ? t.revisions : [{ rev: t.rev, date: t.date, note: 'הוצאה ראשונה' }]).slice(-5);
+    const cw = [14, 22, 84], W = cw.reduce((a, x) => a + x, 0), rh = 4.6;
+    const rx1 = x1, rx0 = rx1 - W;
+    let y = y0 + rh * (revs.length + 1);
+    const top = y;
+    s.ents.push({ k: 'poly', pts: [{ x: rx0, y: y0 }, { x: rx1, y: y0 }, { x: rx1, y: top }, { x: rx0, y: top }], closed: true, layer: 'TITLE' });
+    const row = (vals: string[], bold = false) => {
+      let x = rx1;
+      vals.forEach((v, i) => { s.ents.push({ k: 'text', p: { x: i === 2 ? x - 1.5 : x - cw[i] / 2, y: y - rh + 1.4 }, s: v, h: 2.1, align: i === 2 ? 'right' : 'center', layer: 'TITLE', bold }); x -= cw[i]; });
+      y -= rh; if (y > y0 + 0.1) L({ x: rx0, y }, { x: rx1, y }, 'TITLE');
+    };
+    row(['מהדורה', 'תאריך', 'תיאור השינוי'], true);
+    for (const r of [...revs].reverse()) row([r.rev, r.date, r.note.length > 48 ? r.note.slice(0, 47) + '…' : r.note]);
+    let x = rx1; for (const w of cw.slice(0, -1)) { x -= w; L({ x, y: y0 }, { x, y: top }, 'TITLE'); }
+  }
+  if (t.note) s.ents.push({ k: 'text', p: { x: bx + bw + 3, y: by + bh - 4 }, s: t.note, h: 2.2, align: 'left', layer: 'TITLE' });
 }
 
 // -------------- סדר תצוגה דו־כיווני (לפלט שאינו תומך RTL: PDF/DXF) --------------

@@ -4,10 +4,10 @@ import { cachedSolidPure, silhouetteEdges } from './solidCache';
 import { partSheet, plateFaceInBox } from './part';
 import { assemblySheet, renderIso } from './assembly';
 import { purlinParams } from '../geometry/purlins';
-import { getProfile } from '../profiles/library';
+import { getProfile, tryProfile } from '../profiles/library';
 import type { Bom } from '../fab/bom';
 import type { Fabrication } from '../fab/marks';
-import type { DerivedModel, DrawingRecord, DrawingType, Member, Project } from '../model/types';
+import type { Connection, DerivedModel, DrawingRecord, DrawingType, Member, Project } from '../model/types';
 import { drawArea, fitScale, frameAndTitle, newSheet, today, View, type P, type Sheet, type SheetSize, type TitleInfo } from './sheet';
 
 export interface DrawingDef { id: string; type: DrawingType; number: string; title: string; ref?: string }
@@ -19,6 +19,7 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
   const out: DrawingDef[] = [];
   out.push({ id: 'D-GA', type: 'ga', number: 'G-01', title: 'שרטוט כללי והרכבה – איזומטריה' });
   out.push({ id: 'D-ROOF', type: 'roof-plan', number: 'R-01', title: 'תוכנית גג ופריסת פטות' });
+  if (d.connections.some((c) => c.type === 'base')) out.push({ id: 'D-ANCHOR', type: 'anchor-plan', number: 'B-01', title: 'תוכנית ברגי עיגון ופלטות בסיס' });
   p.building.frames.forEach((f, i) => out.push({ id: `D-FRAME-${f.id}`, type: 'frame', number: `F-${String(i + 1).padStart(2, '0')}`, title: `חתך מסגרת – ציר ${i + 1}`, ref: f.id }));
   out.push({ id: 'D-SIDE-L', type: 'side', number: 'E-01', title: 'חזית צד – ציר א', ref: 'L' });
   out.push({ id: 'D-SIDE-R', type: 'side', number: 'E-02', title: 'חזית צד – ציר ב', ref: 'R' });
@@ -42,6 +43,7 @@ function titleOf(p: Project, def: DrawingDef, rec: DrawingRecord | undefined, sc
     company: 'כיאן הנדסה', project: p.meta.name, projectNo: p.meta.number, client: p.meta.client, title: def.title,
     number: def.number, rev: rec?.rev ?? p.revision.current, scale: scaleLabel, date: today(), status: STATUS_HE[status],
     drawnBy: p.meta.designer, checkedBy: p.settings.checkedBy, approvedBy: status === 'approved' ? p.settings.approvedBy : '',
+    revisions: p.revision.log.map((r) => ({ rev: r.rev, date: r.date, note: r.note || (r.status === 'approved' ? 'אושר לייצור' : 'טיוטה') })),
     note: status === 'approved' ? 'מאושר לייצור ע"י המשתמש — חתכים וחיבורים לפי אחריות המתכנן' : 'טיוטה — אינו תכן מאושר; נתוני חתכים לא מאומתים; אין בדיקת חוזק',
   };
 }
@@ -86,10 +88,35 @@ function solidPts(ms: Member[], pr: Proj): P[] {
 }
 
 /** מבט ממורכז באזור נתון של הגיליון, עם קנה מידה תקני. */
-function placeView(sh: Sheet, box: { x0: number; x1: number; y0: number; y1: number }, area: { x0: number; y0: number; x1: number; y1: number }, scale?: number, margin = 18): View {
-  const sc = scale ?? fitScale(box.x1 - box.x0, box.y1 - box.y0, area.x1 - area.x0 - 2 * margin, area.y1 - area.y0 - 2 * margin);
+function placeView(sh: Sheet, box: { x0: number; x1: number; y0: number; y1: number }, area: { x0: number; y0: number; x1: number; y1: number }, scale?: number, margin = 18, allowRot = false): View {
+  const W = area.x1 - area.x0 - 2 * margin, H = area.y1 - area.y0 - 2 * margin;
+  const sc0 = scale ?? fitScale(box.x1 - box.x0, box.y1 - box.y0, W, H);
+  // תוכנית: אם סיבוב 90° נותן קנה מידה גדול יותר — מסובבים (מבנה ארוך לרוחב הגיליון)
+  const scR = allowRot && !scale ? fitScale(box.y1 - box.y0, box.x1 - box.x0, W, H) : Infinity;
+  const rot = scR < sc0;
   const cx = (area.x0 + area.x1) / 2, cy = (area.y0 + area.y1) / 2;
-  return new View(sh, sc, { x: cx, y: cy }, { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 });
+  return new View(sh, rot ? scR : sc0, { x: cx, y: cy }, { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 }, rot);
+}
+
+/** טבלה ממוסגרת בקואורדינטות דף; מימין לשמאל: העמודה הראשונה בצד ימין. מחזירה את קצה הטבלה התחתון. */
+function table(sh: Sheet, x1: number, yTop: number, cw: number[], title: string, head: string[], rows: string[][], footer?: string[]): number {
+  const W = cw.reduce((a, x) => a + x, 0), rh = 4.4, x0 = x1 - W;
+  let y = yTop;
+  const line = (a: P, b: P, layer: 'THIN' | 'TITLE' = 'THIN') => sh.ents.push({ k: 'line', a, b, layer });
+  sh.ents.push({ k: 'text', p: { x: (x0 + x1) / 2, y: y - 4.2 }, s: title, h: 2.8, align: 'center', layer: 'TEXT', bold: true });
+  y -= 6; line({ x: x0, y }, { x: x1, y }, 'TITLE');
+  const yHead = y;
+  const cell = (vals: string[], bold = false) => {
+    let x = x1;
+    vals.forEach((t, i) => { sh.ents.push({ k: 'text', p: { x: x - cw[i] / 2, y: y - rh + 1.3 }, s: t, h: 2.2, align: 'center', layer: 'TEXT', bold }); x -= cw[i]; });
+    y -= rh; line({ x: x0, y }, { x: x1, y });
+  };
+  cell(head, true);
+  for (const r of rows) cell(r);
+  if (footer) cell(footer, true);
+  sh.ents.push({ k: 'poly', pts: [{ x: x0, y: yTop }, { x: x1, y: yTop }, { x: x1, y }, { x: x0, y }], closed: true, layer: 'TITLE' });
+  let x = x1; for (const w of cw.slice(0, -1)) { x -= w; line({ x, y: yHead }, { x, y }); }
+  return y;
 }
 
 export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrication, bom: Bom, rec?: DrawingRecord): Sheet {
@@ -111,18 +138,29 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       const main = d.members.filter((m) => ['rafter', 'purlin', 'column'].includes(m.kind));
       const bx = boxOf(solidPts(main, pr));
       bx.x0 -= 3000; bx.x1 += 3000; bx.y0 -= 2500; bx.y1 += 2500;
-      const v = placeView(sh, bx, area); setScale(v);
+      const v = placeView(sh, bx, area, undefined, 14, true); setScale(v);
       // צירים
       for (const g of d.grid) {
         if (g.dir === 'X') { v.line({ x: g.pos, y: bx.y0 + 800 }, { x: g.pos, y: bx.y1 - 800 }, 'AXIS'); v.bubble({ x: g.pos, y: bx.y1 - 300 }, g.label); }
         else { v.line({ x: bx.x0 + 800, y: g.pos }, { x: bx.x1 - 800, y: g.pos }, 'AXIS'); v.bubble({ x: bx.x0 + 300, y: g.pos }, g.label); }
       }
       for (const rx of ridgeXs(d)) v.line({ x: rx, y: bx.y0 + 1500 }, { x: rx, y: bx.y1 - 1500 }, 'AXIS');
+      // סימוני חתך: כל קו מסגרת מפנה לגיליון חתך המסגרת (F-xx), חץ לכיוון המבט
+      b.frames.forEach((f, i) => {
+        const at = { x: bx.x1 - 1400, y: f.y };
+        const q = v.p(at.x, at.y), dirP = v.pd({ x: 0, y: 1 });
+        sh.ents.push({ k: 'line', a: q, b: { x: q.x + dirP.x * 4, y: q.y + dirP.y * 4 }, layer: 'MARK' });
+        sh.ents.push({ k: 'poly', pts: [{ x: q.x + dirP.x * 4 + dirP.y * 1.2, y: q.y + dirP.y * 4 - dirP.x * 1.2 }, { x: q.x + dirP.x * 6, y: q.y + dirP.y * 6 }, { x: q.x + dirP.x * 4 - dirP.y * 1.2, y: q.y + dirP.y * 4 + dirP.x * 1.2 }], closed: true, layer: 'MARK', fill: true });
+        sh.ents.push({ k: 'text', p: { x: q.x + 1.5, y: q.y + 1.5 }, s: `F-${String(i + 1).padStart(2, '0')}`, h: 2.2, align: 'left', layer: 'MARK', bold: true });
+      });
       const raf = getProfile(b.rafterProfile);
       for (const m of d.members.filter((x) => x.kind === 'rafter')) {
         const hb = raf.props.b / 2;
         const xs = [m.start.x, m.end.x];
         v.poly([{ x: xs[0], y: m.start.y - hb }, { x: xs[1], y: m.start.y - hb }, { x: xs[1], y: m.start.y + hb }, { x: xs[0], y: m.start.y + hb }], true, 'OUTLINE');
+        // סימון הרכבה על כל קורה
+        const mk = asmOf(m.id);
+        if (mk) v.text({ x: xs[0] + (xs[1] - xs[0]) * 0.3, y: m.start.y + hb + 220 }, mk, 2.2, 'center', 'MARK', 0, true);
       }
       for (const m of d.members.filter((x) => x.kind === 'column')) {
         const c = getProfile(m.profile);
@@ -136,8 +174,15 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         if (!ls.length) continue;
         const marks = [...new Set(fab.parts.filter((x) => ls.some((m) => m.id === x.memberId)).map((x) => x.mark))].sort(num);
         const xm = ls.reduce((acc, m) => acc + m.start.x, 0) / ls.length;
-        const ym = (Math.min(...ys0()) + Math.max(...ys0())) / 2 + (b.frames.length > 2 ? (b.frames[1].y - b.frames[0].y) / 2 : 0);
-        v.text({ x: xm, y: ym }, `פטות ${ls[0].profile} (${marks.join(', ')})`, 2.4, 'center', 'MARK');
+        // באמצע מפתח (לא על קו מסגרת), מוסט מקו הקורה
+        const fr = [...b.frames].sort((a1, a2) => a1.y - a2.y); const kk = Math.max(0, Math.floor(fr.length / 2) - 1);
+        const ym = fr.length > 1 ? (fr[kk].y + fr[kk + 1].y) / 2 : fr[0].y + 1000;
+        void ys0;
+        // בין שתי פטות (לא על קו פטה)
+        const xsS = ls.map((m) => m.start.x).sort((a1, a2) => a1 - a2);
+        const near = xsS.reduce((bst, x) => (Math.abs(x - xm) < Math.abs(bst - xm) ? x : bst), xsS[0]);
+        const nxt = xsS.find((x) => x > near + 1) ?? xsS.slice().reverse().find((x) => x < near - 1) ?? near + 600;
+        v.text({ x: (near + nxt) / 2, y: ym }, `פטות ${ls[0].profile} (${marks.join(', ')})`, 2.4, 'center', 'MARK');
       }
       for (const sp of d.splices.filter((x) => x.memberId.startsWith('PL.'))) {
         const q = v.p(sp.p.x, sp.p.y);
@@ -153,8 +198,8 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       const ys = d.grid.filter((g) => g.dir === 'Y').map((g) => g.pos);
       const xr = bx.x1 - 1800;
       for (let i = 1; i < ys.length; i++) v.dim({ x: xr, y: ys[i - 1] }, { x: xr, y: ys[i] }, { x: 0, y: 1 }, 0);
-      v.dim({ x: xr, y: ys[0] }, { x: xr, y: ys[ys.length - 1] }, { x: 0, y: 1 }, 8);
-      { const [lx0, lx1] = lineSpan(d); v.dim({ x: lx0, y: bx.y0 + 1200 }, { x: lx1, y: bx.y0 + 1200 }, { x: 1, y: 0 }, -6); }
+      v.dim({ x: xr, y: ys[0] }, { x: xr, y: ys[ys.length - 1] }, { x: 0, y: 1 }, -9);
+      { const [lx0, lx1] = lineSpan(d); v.dim({ x: lx0, y: bx.y0 + 1200 }, { x: lx1, y: bx.y0 + 1200 }, { x: 1, y: 0 }, -14); }
       // פריסת פטות: שרשרת מידות מעל, הטקסט = מרחק לאורך השיפוע (או אופקי, מסומן)
       const ytop = Math.max(...ys) + b.purlinOverhangEnd + 900;
       for (const side of [...new Set(purl.map((m) => m.purlin!.side))]) {
@@ -173,7 +218,12 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
           prevX = m.start.x; prevS = pi.sSlope;
         });
       }
-      v.text({ x: (bx.x0 + bx.x1) / 2, y: ytop + 1500 }, 'מידות פטות לאורך השיפוע (מ"מ); * מרווח שאריתי; × חיבור המשך – דורש תכנון', 2.4, 'center', 'TEXT');
+      { // הערה מתחת לתצוגה, בקואורדינטות דף (לא מסתובבת עם התצוגה)
+        const cs = [v.p(bx.x0, bx.y0), v.p(bx.x1, bx.y1), v.p(bx.x0, bx.y1), v.p(bx.x1, bx.y0)];
+        const px = (Math.min(...cs.map((c) => c.x)) + Math.max(...cs.map((c) => c.x))) / 2, py = Math.min(...cs.map((c) => c.y)) - 14;
+        sh.ents.push({ k: 'text', p: { x: px, y: py }, s: 'מידות פטות לאורך השיפוע (מ"מ); * מרווח שאריתי; × חיבור המשך – דורש תכנון', h: 2.4, align: 'center', layer: 'TEXT' });
+      }
+      if (0) v.text({ x: (bx.x0 + bx.x1) / 2, y: ytop + 1500 }, 'מידות פטות לאורך השיפוע (מ"מ); * מרווח שאריתי; × חיבור המשך – דורש תכנון', 2.4, 'center', 'TEXT');
       break;
     }
     case 'frame': {
@@ -200,10 +250,35 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       colsF.forEach((c, i) => v.dim({ x: c.start.x, y: b.baseElevation }, { x: c.start.x, y: c.end.z }, { x: 0, y: 1 }, i === 0 ? 14 : i === colsF.length - 1 ? -14 : 8));
       for (const nd of d.nodes.filter((x) => x.frameId === f.id && x.role === 'רכס')) v.dim({ x: nd.p.x, y: b.baseElevation }, { x: nd.p.x, y: nd.p.z }, { x: 0, y: 1 }, 0);
       const lbl = (m?: Member) => m && v.text({ x: (m.start.x + m.end.x) / 2, y: (m.start.z + m.end.z) / 2 + 250 }, `${asmOf(m.id)} ${m.profile}`, 2.4, 'center', 'MARK');
-      for (const m of own.filter((x) => x.kind === 'column' || x.kind === 'rafter')) lbl(m);
+      for (const m of own.filter((x) => x.kind === 'rafter')) lbl(m);
+      // עמודים: תווית אנכית לצד העמוד (לא על הקו)
+      for (const m of colsF) v.text({ x: m.start.x + (m.start.x < b.width / 2 ? 450 : -450), y: (m.start.z + m.end.z) / 2 }, `${asmOf(m.id)} ${m.profile}`, 2.4, 'center', 'MARK', 90);
       const slopesTxt = (d.section?.planes ?? []).map((q) => `${Math.abs(((q.b.z - q.a.z) / (q.b.x - q.a.x)) * 100).toFixed(1)}%`).join(' / ');
       v.text({ x: (bx.x0 + bx.x1) / 2, y: bx.y1 - 300 }, `שיפוע ${slopesTxt}  ·  מבט לאורך Y, מסגרת ${fi}`, 2.4, 'center', 'TEXT');
-      v.text({ x: 0, y: b.baseElevation - 1400 }, `±${(b.baseElevation / 1000).toFixed(2)}`, 2.2, 'center', 'TEXT');
+      // מפלסים
+      const xL = (xsF[0] ?? 0) - 1400;
+      v.level({ x: xL, y: b.baseElevation }, 0, -1);
+      for (const c of colsF.slice(0, 1)) v.level({ x: xL, y: c.end.z }, c.end.z - b.baseElevation, -1);
+      // הפניות לפרטי חיבור (עיגול מקווקו + תג מספר הגיליון)
+      const cat = drawingCatalog(p, d, fab);
+      const seen = new Set<string>();
+      for (const c of d.connections.filter((x) => (x.type === 'eave' || x.type === 'ridge' || x.type === 'base') && x.id.split('.').includes(f.id))) {
+        const ref = cat.find((x) => x.id === `D-CONN-${c.type}`); if (!ref) continue;
+        const pm = c.parts.map((id) => d.byId.get(id)).find((m): m is Member => !!m && m.kind === 'plate'); if (!pm) continue;
+        const q = v.p((pm.start.x + pm.end.x) / 2, (pm.start.z + pm.end.z) / 2);
+        const key = `${c.type}:${Math.round(q.x)}`; if (seen.has(key)) continue; seen.add(key);
+        const R = 7, n = 24, pts: P[] = [];
+        for (let i = 0; i <= n; i++) pts.push({ x: q.x + R * Math.cos((2 * Math.PI * i) / n), y: q.y + R * Math.sin((2 * Math.PI * i) / n) });
+        for (let i = 0; i < n; i += 2) sh.ents.push({ k: 'line', a: pts[i], b: pts[i + 1], layer: 'MARK' });
+        const sx = q.x < (v.p(0, 0).x + v.p(b.width, 0).x) / 2 ? -1 : 1;
+        const ridge = c.type === 'ridge';
+        const tg = ridge ? { x: q.x + R + 8, y: q.y - R - 6 } : { x: q.x + sx * (R + 7), y: q.y + R + 5 };
+        sh.ents.push({ k: 'line', a: ridge ? { x: q.x + R * 0.7, y: q.y - R * 0.7 } : { x: q.x + sx * R * 0.7, y: q.y + R * 0.7 }, b: tg, layer: 'MARK' });
+        sh.ents.push({ k: 'circle', c: tg, r: 4, layer: 'MARK' });
+        sh.ents.push({ k: 'line', a: { x: tg.x - 4, y: tg.y }, b: { x: tg.x + 4, y: tg.y }, layer: 'MARK' });
+        sh.ents.push({ k: 'text', p: { x: tg.x, y: tg.y + 0.8 }, s: ref.number, h: 2, align: 'center', layer: 'MARK', bold: true });
+        sh.ents.push({ k: 'text', p: { x: tg.x, y: tg.y - 3 }, s: 'פרט', h: 1.6, align: 'center', layer: 'MARK' });
+      }
       break;
     }
     case 'side': {
@@ -217,14 +292,115 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       bx.x0 -= 2500; bx.x1 += 2500; bx.y0 -= 1500; bx.y1 += 1500;
       const v = placeView(sh, bx, area); setScale(v);
       for (const m of ms) edges(m, pr, v);
+      // פלטות בסיס וראש עמוד, וחתכי הקורות/קורות אגד שנשענות על קו העמודים
+      const colIds = new Set(ms.filter((m) => m.kind === 'column').map((m) => m.id));
+      for (const c of d.connections.filter((c) => (c.type === 'base' || c.type === 'eave') && c.members.some((id) => colIds.has(id)))) {
+        for (const pid of c.parts) { const pm = d.byId.get(pid); if (pm && pm.kind === 'plate') edges(pm, pr, v, 'THIN'); }
+      }
+      for (const m of d.members.filter((x) => x.kind === 'beam' && Math.abs(x.start.x - x0) < 400 && Math.abs(x.end.x - x0) < 400)) edges(m, pr, v);
+      for (const m of d.members.filter((x) => x.kind === 'rafter')) {
+        // קטע הקורה ברוחב החתך סביב קו העמודים — מראה את הקורה הנחתכת מעל העמוד
+        const dx = m.end.x - m.start.x; if (Math.abs(dx) < 1) continue;
+        const t = (x0 - m.start.x) / dx; if (t < -0.02 || t > 1.02) continue;
+        const rp = tryProfile(m.profile); if (!rp) continue;
+        const zc = m.start.z + (m.end.z - m.start.z) * Math.min(1, Math.max(0, t));
+        const yc = m.start.y, hb = rp.props.b / 2, hh = rp.props.h;
+        const zb = m.anchor === 'top' ? zc - hh : zc - hh / 2, zt = zb + hh;
+        v.poly([{ x: yc - hb, y: zb }, { x: yc + hb, y: zb }, { x: yc + hb, y: zt }, { x: yc - hb, y: zt }], true, 'CUT');
+        const mk = asmOf(m.id); if (mk) v.text({ x: yc, y: zt + 250 }, mk, 2, 'center', 'MARK', 0, true);
+      }
+      for (const m of ms.filter((x) => x.kind === 'column')) { const mk = asmOf(m.id); if (mk) v.text({ x: m.start.y + 350, y: (m.start.z + m.end.z) / 2 }, mk, 2, 'left', 'MARK', 90, true); }
       const ys = b.frames.map((f) => f.y);
       const eave = Math.max(...ms.filter((m) => m.kind === 'column').map((m) => m.end.z), b.baseElevation + 1000);
       v.line({ x: Math.min(...ys) - b.purlinOverhangStart, y: eave }, { x: Math.max(...ys) + b.purlinOverhangEnd, y: eave }, 'THIN');
       d.grid.filter((g) => g.dir === 'Y').forEach((g) => { v.line({ x: g.pos, y: b.baseElevation - 600 }, { x: g.pos, y: eave + 600 }, 'AXIS'); v.bubble({ x: g.pos, y: b.baseElevation - 900 }, g.label); });
-      for (let i = 1; i < ys.length; i++) v.dim({ x: ys[i - 1], y: b.baseElevation }, { x: ys[i], y: b.baseElevation }, { x: 1, y: 0 }, -12);
-      v.dim({ x: ys[0], y: b.baseElevation }, { x: ys[ys.length - 1], y: b.baseElevation }, { x: 1, y: 0 }, -20);
+      for (let i = 1; i < ys.length; i++) v.dim({ x: ys[i - 1], y: b.baseElevation }, { x: ys[i], y: b.baseElevation }, { x: 1, y: 0 }, -17);
+      v.dim({ x: ys[0], y: b.baseElevation }, { x: ys[ys.length - 1], y: b.baseElevation }, { x: 1, y: 0 }, -25);
       v.dim({ x: ys[0], y: b.baseElevation }, { x: ys[0], y: eave }, { x: 0, y: 1 }, 12);
+      // מפלסים: ±0.00 בבסיס, ראש עמוד
+      const yR = Math.max(...ys) + b.purlinOverhangEnd + 300;
+      v.line({ x: Math.min(...ys) - 1200, y: b.baseElevation }, { x: yR + 600, y: b.baseElevation }, 'THIN');
+      v.level({ x: yR, y: b.baseElevation }, 0);
+      v.level({ x: yR, y: eave }, eave - b.baseElevation);
       v.text({ x: (ys[0] + ys[ys.length - 1]) / 2, y: eave + 900 }, `חזית ציר ${lineS?.label ?? (side === 'L' ? 'א' : 'ב')} (x=${x0})`, 2.6, 'center', 'TEXT');
+      break;
+    }
+    case 'anchor-plan': {
+      const pr: Proj = (q) => ({ x: q.x, y: q.y });
+      const bases = d.connections.filter((c) => c.type === 'base');
+      const plateOf = (c: Connection) => c.parts.map((id) => d.byId.get(id)).find((m): m is Member => !!m && m.kind === 'plate');
+      const anchorsOf = (c: Connection): P[] => [
+        ...c.parts.map((id) => d.byId.get(id)).filter((m): m is Member => !!m && m.kind === 'anchor').map((m) => ({ x: m.start.x, y: m.start.y })),
+        ...c.bolts.map((bt) => ({ x: bt.p.x, y: bt.p.y })),
+      ];
+      const plates = bases.map(plateOf).filter((m): m is Member => !!m);
+      const cols = bases.map((c) => d.byId.get(c.members[0])).filter((m): m is Member => !!m);
+      const bx = boxOf(solidPts(plates, pr));
+      bx.x0 -= 3000; bx.x1 += 3000; bx.y0 -= 2600; bx.y1 += 2600;
+      // תוכנית בשמאל הגיליון; עמודה ימנית לפרט טיפוסי ולטבלה
+      const colW = 112;
+      const planArea = { ...area, x1: area.x1 - colW };
+      const v = placeView(sh, bx, planArea, undefined, 10, true); setScale(v);
+      for (const g of d.grid) {
+        if (g.dir === 'X') { v.line({ x: g.pos, y: bx.y0 + 900 }, { x: g.pos, y: bx.y1 - 900 }, 'AXIS'); v.bubble({ x: g.pos, y: bx.y1 - 400 }, g.label); }
+        else { v.line({ x: bx.x0 + 900, y: g.pos }, { x: bx.x1 - 900, y: g.pos }, 'AXIS'); v.bubble({ x: bx.x0 + 400, y: g.pos }, g.label); }
+      }
+      for (const m of plates) edges(m, pr, v, 'OUTLINE');
+      for (const m of cols) edges(m, pr, v, 'THIN');
+      const diaOf = (c: Connection) => c.bolts[0]?.d ?? (Number((d.byId.get(c.parts.find((id) => d.byId.get(id)?.kind === 'anchor') ?? '')?.profile ?? '').replace(/\D/g, '')) || 16);
+      for (const c of bases) for (const a of anchorsOf(c)) v.circle(a, Math.max(diaOf(c) / 2 + 1, 0.6 * v.scale));
+      for (const [i, m] of plates.entries()) { const mk = asmOf(m.id) || asmOf(cols[i]?.id ?? ''); if (mk) v.text({ x: m.start.x + 450, y: m.start.y + 450 }, mk, 2, 'left', 'MARK', 0, true); }
+      // מידות צירים
+      const xs = d.grid.filter((g) => g.dir === 'X').map((g) => g.pos).sort((a1, a2) => a1 - a2);
+      const ys = d.grid.filter((g) => g.dir === 'Y').map((g) => g.pos).sort((a1, a2) => a1 - a2);
+      const yD = bx.y0 + 1400, xD = bx.x1 - 1400;
+      for (let i = 1; i < xs.length; i++) v.dim({ x: xs[i - 1], y: yD }, { x: xs[i], y: yD }, { x: 1, y: 0 }, 0);
+      if (xs.length > 2) v.dim({ x: xs[0], y: yD }, { x: xs[xs.length - 1], y: yD }, { x: 1, y: 0 }, -8);
+      for (let i = 1; i < ys.length; i++) v.dim({ x: xD, y: ys[i - 1] }, { x: xD, y: ys[i] }, { x: 0, y: 1 }, 0);
+      if (ys.length > 2) v.dim({ x: xD, y: ys[0] }, { x: xD, y: ys[ys.length - 1] }, { x: 0, y: 1 }, -8);
+
+      // פרט טיפוסי מוגדל
+      const c0 = bases[0], pm = plateOf(c0), col0 = d.byId.get(c0.members[0]);
+      if (pm && col0) {
+        const pb = boxOf(solidPts([pm], pr));
+        const cen = { x: col0.start.x, y: col0.start.y };
+        const det = { x0: area.x1 - colW + 4, x1: area.x1 - 2, y0: area.y1 - 80, y1: area.y1 - 2 };
+        const dbx = { x0: pb.x0 - 140, x1: pb.x1 + 140, y0: pb.y0 - 140, y1: pb.y1 + 140 };
+        const sc = fitScale(dbx.x1 - dbx.x0, dbx.y1 - dbx.y0, det.x1 - det.x0 - 30, det.y1 - det.y0 - 26);
+        const dv = new View(sh, sc, { x: (det.x0 + det.x1) / 2, y: (det.y0 + det.y1) / 2 - 2 }, { x: (pb.x0 + pb.x1) / 2, y: (pb.y0 + pb.y1) / 2 });
+        edges(pm, pr, dv, 'OUTLINE'); edges(col0, pr, dv, 'THIN');
+        dv.line({ x: cen.x, y: pb.y0 - 100 }, { x: cen.x, y: pb.y1 + 100 }, 'AXIS');
+        dv.line({ x: pb.x0 - 100, y: cen.y }, { x: pb.x1 + 100, y: cen.y }, 'AXIS');
+        const an = anchorsOf(c0);
+        const dia = diaOf(c0);
+        for (const a of an) dv.circle(a, (dia + 2) / 2);
+        const ux = [...new Set(an.map((a) => Math.round(a.x)))].sort((a1, a2) => a1 - a2);
+        const uy = [...new Set(an.map((a) => Math.round(a.y)))].sort((a1, a2) => a1 - a2);
+        const chX = [pb.x0, ...ux, pb.x1], chY = [pb.y0, ...uy, pb.y1];
+        for (let i = 1; i < chX.length; i++) dv.dim({ x: chX[i - 1], y: pb.y0 }, { x: chX[i], y: pb.y0 }, { x: 1, y: 0 }, -7);
+        dv.dim({ x: pb.x0, y: pb.y0 }, { x: pb.x1, y: pb.y0 }, { x: 1, y: 0 }, -13);
+        for (let i = 1; i < chY.length; i++) dv.dim({ x: pb.x1, y: chY[i - 1] }, { x: pb.x1, y: chY[i] }, { x: 0, y: 1 }, -7);
+        dv.dim({ x: pb.x1, y: pb.y0 }, { x: pb.x1, y: pb.y1 }, { x: 0, y: 1 }, -13);
+        sh.ents.push({ k: 'text', p: { x: (det.x0 + det.x1) / 2, y: det.y1 - 4 }, s: `פרט פלטת בסיס טיפוסי  1:${sc}`, h: 2.8, align: 'center', layer: 'TEXT', bold: true });
+        sh.ents.push({ k: 'text', p: { x: (det.x0 + det.x1) / 2, y: det.y0 + 3 }, s: `${an.length} × ${c0.bolts.length ? 'M' : 'Φ'}${dia} — ${pm.partDesc ?? pm.profile}`, h: 2.3, align: 'center', layer: 'TEXT' });
+      }
+      // טבלת פלטות ועוגנים
+      const groups = new Map<string, { mk: string; n: number; plate: string; anchors: number; dia: string; len: string }>();
+      for (const c of bases) {
+        const pl = plateOf(c); if (!pl) continue;
+        const anc = c.parts.map((id) => d.byId.get(id)).filter((m): m is Member => !!m && m.kind === 'anchor');
+        const an = anchorsOf(c);
+        const dia = c.bolts[0] ? `M${c.bolts[0].d}` : anc[0] ? `Φ${anc[0].profile.replace(/\D/g, '')}` : '—';
+        const len = c.bolts[0] ? String(Math.round(c.bolts[0].length)) : anc[0] ? String(Math.round(Math.abs(anc[0].start.z - anc[0].end.z))) : '—';
+        const key = `${pl.partDesc ?? pl.profile}|${an.length}|${dia}|${len}`;
+        const g = groups.get(key) ?? { mk: asmOf(pl.id) || '—', n: 0, plate: (pl.partDesc ?? pl.profile).replace(/^פלט(ה|ת) (בסיס |מבוטנת )?/, ''), anchors: an.length, dia, len };
+        g.n++; groups.set(key, g);
+      }
+      const rows = [...groups.values()].map((g) => [g.mk, g.plate, String(g.n), String(g.anchors), g.dia, g.len]);
+      const yEnd = table(sh, area.x1 - 2, area.y1 - 86, [12, 30, 11, 17, 13, 17], 'פלטות בסיס ועוגנים', ['סימון', 'פלטה', 'כמות', 'עוגנים/פלטה', 'קוטר', 'אורך [מ"מ]'], rows,
+        ['סה"כ', '', String(bases.length), String(bases.reduce((a1, c) => a1 + anchorsOf(c).length, 0)), '', '']);
+      const notes = ['הערות:', '1. מפלס פני פלטה ±0.00 = מפלס בסיס העמודים.', '2. מידות לצירים במ"מ; סימון ופילוס לפני יציקה.', '3. סטיית מיקום עוגן מותרת ±3 מ"מ (EN 1090-2).', '4. מילוי גראוט לא מתכווץ מתחת לפלטה, לפי המתכנן.'];
+      notes.forEach((t, i) => sh.ents.push({ k: 'text', p: { x: area.x1 - 2, y: yEnd - 6 - i * 4.2 }, s: t, h: 2.3, align: 'right', layer: 'TEXT', bold: i === 0 }));
       break;
     }
     case 'ga': {
@@ -247,11 +423,33 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         const a = g.dir === 'X' ? { x: g.pos, y: Math.min(...ys) - 1500, z: b.baseElevation } : { x: -1500, y: g.pos, z: b.baseElevation };
         v.bubble(pr(a), g.label);
       }
-      // טבלת מכלולים
-      let y = area.y1 - 8;
-      const tx = area.x1 - 4;
-      sh.ents.push({ k: 'text', p: { x: tx, y }, s: 'מכלולים להרכבה', h: 3, align: 'right', layer: 'TEXT', bold: true });
-      for (const r of bom.assemblies.slice(0, 30)) { y -= 4.2; sh.ents.push({ k: 'text', p: { x: tx, y }, s: `${r.mark}  ×${r.qty}   ${r.unitWeight.toFixed(1)} ק"ג`, h: 2.4, align: 'right', layer: 'TEXT' }); }
+      // טבלת מכלולים ממוסגרת: סימון | כמות | משקל יח' | משקל כולל
+      {
+        const rows = bom.assemblies;
+        const cw = [16, 11, 17, 19], W = cw.reduce((a1, x) => a1 + x, 0), rh = 4.4;
+        const tx1 = area.x1 - 2, tx0 = tx1 - W;
+        let y = area.y1 - 2;
+        const line = (a: P, b2: P, layer: 'FRAME' | 'THIN' | 'TITLE' = 'THIN') => sh.ents.push({ k: 'line', a, b: b2, layer });
+        const top = y;
+        sh.ents.push({ k: 'text', p: { x: (tx0 + tx1) / 2, y: y - 4.2 }, s: 'טבלת מכלולים להרכבה', h: 2.8, align: 'center', layer: 'TEXT', bold: true });
+        y -= 6;
+        line({ x: tx0, y }, { x: tx1, y }, 'TITLE');
+        const cell = (vals: string[], bold = false) => {
+          let x = tx1;
+          vals.forEach((t, i) => { sh.ents.push({ k: 'text', p: { x: x - cw[i] / 2, y: y - rh + 1.3 }, s: t, h: 2.2, align: 'center', layer: 'TEXT', bold }); x -= cw[i]; });
+          y -= rh; line({ x: tx0, y }, { x: tx1, y });
+        };
+        cell(['סימון', 'כמות', 'יח\' [ק"ג]', 'סה"כ [ק"ג]'], true);
+        const maxRows = Math.floor((top - area.y0 - 20) / rh) - 2;
+        const shown = rows.slice(0, maxRows);
+        let tot = 0;
+        for (const r of rows) tot += r.unitWeight * r.qty;
+        for (const r of shown) cell([r.mark, String(r.qty), r.unitWeight.toFixed(1), (r.unitWeight * r.qty).toFixed(1)]);
+        if (rows.length > shown.length) cell([`+${rows.length - shown.length}`, '', '', '']);
+        cell(['סה"כ', String(rows.reduce((a1, r) => a1 + r.qty, 0)), '', tot.toFixed(0)], true);
+        sh.ents.push({ k: 'poly', pts: [{ x: tx0, y: top }, { x: tx1, y: top }, { x: tx1, y }, { x: tx0, y }], closed: true, layer: 'TITLE' });
+        let x = tx1; for (const w of cw.slice(0, -1)) { x -= w; line({ x, y: top - 6 }, { x, y }); }
+      }
       break;
     }
     case 'connection': {
@@ -265,7 +463,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       const C = { x: cen.x / n, y: cen.y / n, z: cen.z / n };
       // חיבורים מישוריים (פלטת המשך, פחי קושרות): מבט בניצב לפלטה; האחרים — חתך במישור המסגרת
       const planar = c.type === 'purlin-splice' || c.type === 'brace-end' || c.type === 'brace-cross';
-      const R = c.type === 'purlin-cleat' ? 300 : planar ? 220 : 600;
+      const R = c.type === 'purlin-cleat' ? 300 : planar ? 220 : c.type === 'eave' || c.type === 'ridge' || c.type === 'base' || c.type === 'beam-splice' ? 420 : 600;
       let pr: Proj = (q) => ({ x: q.x, y: q.z });
       let Cp = { x: C.x, y: C.z };
       if (planar) {
@@ -302,6 +500,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         if (poly && (m.kind === 'purlin' || m.kind === 'cleat')) { v.poly(poly, true, 'CUT', true); continue; }
         edges(m, pr, v, m.kind === 'bolt' || m.kind === 'anchor' ? 'THIN' : 'OUTLINE', clipBox);
       }
+      connDims(v, c, d, pr, planar, pr(C));
       // טבלת ברגים וריתוכים
       let y = area.y1 - 8;
       const tx = area.x1 - 4;
@@ -365,3 +564,100 @@ function trimNear(m: Member, C: Vec3, r: number): Member {
 function ridgeXs(d: DerivedModel): number[] { return [...new Set(d.nodes.filter((n) => n.role === 'רכס').map((n) => Math.round(n.p.x)))]; }
 /** תחום צירי העמודים */
 function lineSpan(d: DerivedModel): [number, number] { const xs = (d.section?.lines ?? []).map((l) => l.x); return xs.length ? [Math.min(...xs), Math.max(...xs)] : [0, 0]; }
+
+/**
+ * מידות בפרט חיבור (בקשת משתמש: "ברמת PRO"): לכל פלטה — שרשרת לאורך הכיוון הראשי שלה: שפה → מרכזי ברגים → שפה,
+ * ואורך כולל; ולפי סוג החיבור — מידות מיקום: תומך פטה (גובה, רגל, גובה חור מפני הקורה), אלכסון (ירידה, זווית),
+ * ראש עמוד (מרחק קצה הפלטה מציר העמוד), בסיס (מידות הפלטה מציר העמוד).
+ */
+function connDims(v: View, c: Connection, d: DerivedModel, pr: (q: Vec3) => P, planar: boolean, ctr: P) {
+  void ctr;
+  type Q = { x: number; y: number };
+  const norm2 = (a: Q) => { const l = Math.hypot(a.x, a.y) || 1; return { x: a.x / l, y: a.y / l }; };
+  const dot2 = (a: Q, b: Q) => a.x * b.x + a.y * b.y;
+  const seen = new Set<string>();
+  const byIdD = (id: string) => d.byId.get(id);
+  let nDone = 0;
+  // שרשרות פלטה במבט הראשי — לחיבורים שבהם מיקום הפלטה במבט הוא העיקר; באלכסונים ובפחי קושרות המידות במבטי הפלטות שברצועה
+  const chainTypes = new Set(['eave', 'ridge', 'base', 'beam-splice', 'rafter-side', 'purlin-splice', 'ridge-tie']);
+  for (const pid of chainTypes.has(c.type) ? c.parts : []) {
+    const m = d.byId.get(pid);
+    if (!m || (m.kind !== 'plate' && m.kind !== 'cleat') || nDone >= 3) continue;
+    const s0 = cachedSolidPure(m);
+    const pts = [...s0.startRing, ...s0.endRing].map(pr);
+    // כיוון ראשי בהיטל: הציר הארוך מבין אורך האלמנט ופריסת הנקודות
+    const cx = pts.reduce((a, q) => a + q.x, 0) / pts.length, cy = pts.reduce((a, q) => a + q.y, 0) / pts.length;
+    let sxx = 0, syy = 0, sxy = 0;
+    for (const q of pts) { sxx += (q.x - cx) ** 2; syy += (q.y - cy) ** 2; sxy += (q.x - cx) * (q.y - cy); }
+    const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+    const e = norm2({ x: Math.cos(ang), y: Math.sin(ang) }), nrm = { x: -e.y, y: e.x };
+    const proj = (q: Q) => dot2({ x: q.x - cx, y: q.y - cy }, e);
+    const side = (q: Q) => dot2({ x: q.x - cx, y: q.y - cy }, nrm);
+    const sMin = Math.min(...pts.map(proj)), sMax = Math.max(...pts.map(proj));
+    if (sMax - sMin < 25) continue; // פלטה בחתך — נראית כקו עובי
+    const bolts = c.bolts.filter((b) => b.holesIn.includes(pid)).map((b) => proj(pr(b.p)));
+    const bs = [...new Set(bolts.map((x) => Math.round(x * 2) / 2))].sort((a, b) => a - b);
+    const key = `${Math.round(sMax - sMin)}|${bs.map((x) => Math.round(x - sMin)).join(',')}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // המידות בצד הרחוק ממרכז החיבור (מחוץ לאלמנטים)
+    // הצד עם פחות "חומר" של האלמנטים הראשיים (עמוד/קורה) בטווח הפלטה — שם המידות לא נופלות על פרופיל
+    const near = c.members.map(byIdD).filter((x): x is Member => !!x).flatMap((mm) => { const ss = cachedSolidPure(mm); const ring = [...ss.startRing, ...ss.endRing]; const out: P[] = []; const nK = Math.min(400, Math.ceil(Math.hypot(ss.endRing[0].x - ss.startRing[0].x, ss.endRing[0].y - ss.startRing[0].y, ss.endRing[0].z - ss.startRing[0].z) / 40)); for (let i = 0; i < ss.startRing.length; i++) for (let k = 0; k <= nK; k++) { const a = ss.startRing[i], b = ss.endRing[i]; out.push(pr({ x: a.x + (b.x - a.x) * k / nK, y: a.y + (b.y - a.y) * k / nK, z: a.z + (b.z - a.z) * k / nK })); } void ring; return out; })
+      .filter((q) => { const sv = proj(q); return sv > sMin - 30 && sv < sMax + 30 && Math.abs(side(q)) < 700; });
+    // המידות מעבר לכל החומר שבטווח הפלטה, בצד שבו החומר נגמר מוקדם יותר
+    const ext0 = (sgn: number) => Math.max(0, ...near.filter((q) => side(q) * sgn > 0).map((q) => Math.abs(side(q))));
+    const plateOut = (sgn: number) => Math.max(...pts.map((q) => side(q) * sgn));
+    const sg = ext0(1) - plateOut(1) <= ext0(-1) - plateOut(-1) ? 1 : -1;
+    const clear = Math.max(0, ext0(sg) - plateOut(sg)) / v.scale;
+    const nOut = sg > 0 ? Math.max(...pts.map(side)) : Math.min(...pts.map(side));
+    const at = (sv: number): P => ({ x: cx + e.x * sv + nrm.x * nOut, y: cy + e.y * sv + nrm.y * nOut });
+    const chain = [sMin, ...bs.filter((x) => x > sMin + 1 && x < sMax - 1), sMax];
+    const off = sg * (clear + 7 + nDone * 12);
+    if (chain.length > 2) for (let i = 1; i < chain.length; i++) v.dim(at(chain[i - 1]), at(chain[i]), e, off);
+    v.dim(at(sMin), at(sMax), e, off + sg * (chain.length > 2 ? 6 : 0));
+    nDone++;
+  }
+  const byId = (id: string) => d.byId.get(id);
+  if (c.type === 'purlin-cleat') {
+    const cl = c.parts.map(byId).find((m) => m?.kind === 'cleat');
+    const pur = c.members.map(byId).find((m) => m?.purlin);
+    if (cl && pur && !planar) {
+      const n = pur.purlin!.roofNormal; const nn = norm2({ x: n.x, y: n.z }); const t = { x: nn.y, y: -nn.x };
+      const pts = [...cachedSolidPure(cl).startRing, ...cachedSolidPure(cl).endRing].map(pr);
+      const base = pts.reduce((a, q) => (dot2(q, nn) < dot2(a, nn) ? q : a));
+      const topP = pts.reduce((a, q) => (dot2(q, nn) > dot2(a, nn) ? q : a));
+      const sideP = pts.reduce((a, q) => (dot2(q, t) > dot2(a, t) ? q : a));
+      v.dim(base, topP, nn, -14, undefined);
+      const b0 = c.bolts[0];
+      if (b0) v.dim(base, pr(b0.p), nn, -24, undefined);
+      v.dim(pts.reduce((a, q) => (dot2(q, t) < dot2(a, t) ? q : a)), sideP, t, -10);
+    }
+  }
+  if (c.type === 'knee' && c.id.startsWith('C.KB.')) {
+    const col = byId(c.members[0]), raf = byId(c.members[1]), br = c.parts.map(byId).find((m) => m?.kind === 'brace');
+    if (col && raf && br && !planar) {
+      const a = pr(br.start), b = pr(br.end);
+      const ang = Math.abs((Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI);
+      v.dim(a, { x: a.x, y: b.y }, { x: 0, y: 1 }, a.x < b.x ? -12 : 12, undefined);
+      v.dim(a, { x: b.x, y: a.y }, { x: 1, y: 0 }, -10, undefined);
+      v.text({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, `${Math.round(Math.min(ang, 180 - ang))}°`, 2.4, 'center', 'DIM');
+    }
+  }
+  if (c.type === 'eave' || c.type === 'base') {
+    const col = c.members.map(byId).find((m) => m?.kind === 'column');
+    const pl = c.parts.map(byId).find((m) => m?.kind === 'plate');
+    if (col && pl && !planar) {
+      const ax = pr(c.type === 'eave' ? col.end : col.start);
+      const pts = [...cachedSolidPure(pl).startRing, ...cachedSolidPure(pl).endRing].map(pr);
+      const lo = pts.reduce((q, w) => (w.x < q.x ? w : q)), hi = pts.reduce((q, w) => (w.x > q.x ? w : q));
+      // ראש עמוד: מעל כל החומר (קורה) ומעל שרשרת הפלטה; בסיס: מתחת לפלטה
+      const memPts = c.members.map(byId).filter((x): x is Member => !!x).flatMap((mm) => { const ss = cachedSolidPure(mm); return [...ss.startRing, ...ss.endRing].map(pr); });
+      const inRange = memPts.filter((q) => q.x > lo.x - 50 && q.x < hi.x + 50);
+      const yy = c.type === 'eave' ? Math.max(...pts.map((q) => q.y), ...inRange.filter((q) => q.y > ax.y && q.y < ax.y + 1500).map((q) => q.y)) : Math.min(...pts.map((q) => q.y));
+      const off = c.type === 'eave' ? 33 : -16;
+      v.dim({ x: lo.x, y: yy }, { x: ax.x, y: yy }, { x: 1, y: 0 }, off);
+      v.dim({ x: ax.x, y: yy }, { x: hi.x, y: yy }, { x: 1, y: 0 }, off);
+      v.line({ x: ax.x, y: yy - 200 }, { x: ax.x, y: yy + 200 }, 'AXIS');
+    }
+  }
+}

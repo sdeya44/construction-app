@@ -359,7 +359,7 @@ export interface MarkRegistry {
 export interface RevisionEntry { rev: string; date: string; note: string; status: 'approved' | 'draft'; snapshot?: string }
 export interface RevisionState { current: string; locked: boolean; log: RevisionEntry[] }
 
-export type DrawingType = 'roof-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga';
+export type DrawingType = 'roof-plan' | 'anchor-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga';
 export interface DrawingRecord {
   id: string;
   number: string;

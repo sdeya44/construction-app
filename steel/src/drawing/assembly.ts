@@ -1,9 +1,10 @@
 import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
+import { getProfile } from '../profiles/library';
 import type { Fabrication, MarkedPart } from '../fab/marks';
 import type { DerivedModel, Member } from '../model/types';
 import { cachedSolidPure, silhouetteEdges } from './solidCache';
-import { fitScale, type P, type Sheet } from './sheet';
+import { fitScale, revBandH, type P, type Sheet } from './sheet';
 
 /**
  * שרטוט מכלול (החלטת משתמש 15.11.2026: "לא ברור — לצרף תלת־ממד"):
@@ -79,7 +80,7 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     return ox;
   };
   const yF = A.yTop - 24 - (vMax - vMin) / sc; // תחתית מבט החזית (v = vMin)
-  const yT = yF - 34 - (uMax - uMin) / sc;     // תחתית מבט עליון (u = uMin)
+  const yT = yF - 46 - (uMax - uMin) / sc;     // תחתית מבט עליון (u = uMin) — מקום לשלוש שרשראות מידה בין המבטים
   const PF = (t: number, v: number): P => ({ x: X(t), y: yF + (v - vMin) / sc });
   const PT = (t: number, u: number): P => ({ x: X(t), y: yT + (u - uMin) / sc });
   const inSeg = (t: number) => useSegs.some(([a, b]) => t >= a - 1e-6 && t <= b + 1e-6);
@@ -120,6 +121,22 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   const bubble = (c: P, s: string, r = 3.4) => {
     E.push({ k: 'circle', c, r, layer: 'MARK' });
     text({ x: c.x, y: c.y - 1 }, s, s.length > 3 ? 2 : 2.5, 'center', 'MARK', true);
+  };
+  const shopWelds = d.connections.flatMap((c) => c.welds).filter((w) => w.location === 'shop' && w.between.includes(main.id));
+  const mainPerim = 2 * (getProfile(main.profile).props.h + getProfile(main.profile).props.b);
+  /** סמל ריתוך ISO 2553: חץ מהמפרק, קו ייחוס מלא עם קו זיהוי מקווקו, משולש ריתוך פינתי בצד החץ, a, עיגול היקפי */
+  const weldSymbol = (at: P, bend: P, a: number, allAround: boolean, mk: string) => {
+    line(at, bend, 'MARK');
+    const ang = Math.atan2(at.y - bend.y, at.x - bend.x);
+    for (const da of [0.4, -0.4]) line(at, { x: at.x - 2 * Math.cos(ang + da), y: at.y - 2 * Math.sin(ang + da) }, 'MARK');
+    const L2 = 15;
+    line(bend, { x: bend.x + L2, y: bend.y }, 'MARK');
+    E.push({ k: 'line', a: { x: bend.x, y: bend.y + 1.1 }, b: { x: bend.x + L2, y: bend.y + 1.1 }, layer: 'HIDDEN' });
+    const tx = bend.x + 6;
+    E.push({ k: 'poly', pts: [{ x: tx, y: bend.y }, { x: tx, y: bend.y - 2.4 }, { x: tx + 2.4, y: bend.y }], closed: true, layer: 'MARK' });
+    text({ x: tx - 0.8, y: bend.y - 2.2 }, `a${a}`, 1.9, 'right', 'MARK');
+    if (allAround) E.push({ k: 'circle', c: bend, r: 1.1, layer: 'MARK' });
+    text({ x: bend.x + L2 + 1, y: bend.y - 0.6 }, mk, 1.7, 'left', 'MARK');
   };
   /** חור במבט שכיוון ההסתכלות שלו `view` (וקטור מקומי): עיגול אם הבורג לאורך הכיוון, אחרת קו מרכז דרך העובי */
   const drawHole = (h: (typeof holesW)[number], proj: (q: { t: number; u: number; v: number }) => P, view: 'u' | 'v', r: number) => {
@@ -175,7 +192,7 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   }
   // מידות מיקום לשפת החלק (בקשת משתמש): חלק בחצי הראשון — מקצה א אל השפה הקרובה אליו; בחצי השני — מקצה ב.
   // קו עזר מקווקו מהשפה הנמדדת אל קו המידה — כדי שיהיה ברור לאיזו שפה המידה.
-  const yChain = PF(0, vMin).y - 13;
+  const yChain = PF(0, vMin).y - 10;
   const items = [...new Map(subs.map((pt) => { const [a, b] = ext(pt); const c = cen(pt); return [`${Math.round(a)}|${Math.round(b)}`, { a, b, mid: (a + b) / 2, vlo: Math.min(...[...cachedSolidPure(memOf(pt)).startRing, ...cachedSolidPure(memOf(pt)).endRing].map((q) => loc(q).v)), c }]; })).values()];
   const firstH = items.filter((x) => x.mid < L / 2).sort((p1, p2) => p1.a - p2.a);
   const secondH = items.filter((x) => x.mid >= L / 2).sort((p1, p2) => p2.b - p1.b);
@@ -195,12 +212,23 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   const sTop = edgeT(r0, vMaxMain) ?? 0, sBot = edgeT(r0, vMinMain) ?? 0, eTop = edgeT(r1, vMaxMain) ?? L, eBot = edgeT(r1, vMinMain) ?? L;
   if (Math.abs(sTop - sBot) > 0.5 || Math.abs(eTop - eBot) > 0.5) {
     dimH(PF(sTop, 0).x, PF(eTop, 0).x, PF(0, vMax).y + 24, `${Math.round(eTop - sTop)} (צד ${main.kind === 'column' ? 'ימין/עליון' : 'עליון'} במבט)`);
-    dimH(PF(sBot, 0).x, PF(eBot, 0).x, yChain - 9, `${Math.round(eBot - sBot)} (צד ${main.kind === 'column' ? 'שמאל/תחתון' : 'תחתון'} במבט)`);
+    dimH(PF(sBot, 0).x, PF(eBot, 0).x, yChain - 20, `${Math.round(eBot - sBot)} (צד ${main.kind === 'column' ? 'שמאל/תחתון' : 'תחתון'} במבט)`);
   }
-  dimH(PF(0, 0).x, PF(L, 0).x, PT(0, uMin).y - 7, `${Math.round(L)}`);
+  // שרשרת חורים לאורך כל החלק (גם בקטעים המקוצרים): חורים שנראים כעיגול במבט חזית — מתחת לחזית; במבט עליון — מתחת לעליון
+  const holeChain = (view: 'u' | 'v', y: number, label: string) => {
+    const ts0 = holesW.filter((h) => Math.abs(view === 'u' ? dot(h.axis, f.u) : dot(h.axis, f.v)) > 0.9).map((h) => loc(h.p).t).filter((t) => t > -1 && t < L + 1);
+    if (!ts0.length) return;
+    const ts = [...new Set(ts0.map((t) => Math.round(t)))].sort((a, b) => a - b);
+    const pts = [0, ...ts.filter((t) => t > 0 && t < Math.round(L)), Math.round(L)];
+    for (let i = 1; i < pts.length; i++) dimH(PF(pts[i - 1], 0).x, PF(pts[i], 0).x, y, String(pts[i] - pts[i - 1]));
+    text({ x: PF(0, 0).x - 2, y: y + 0.5 }, label, 1.9, 'right', 'DIM');
+  };
+  holeChain('u', yChain - 10, 'חורים');
+  holeChain('v', PT(0, uMin).y - 7, 'חורים');
+  dimH(PF(0, 0).x, PF(L, 0).x, PT(0, uMin).y - 15, `${Math.round(L)}`);
 
   // ---- פרטים מוגדלים לקצוות
-  const detTop = yT - 18, detH = Math.max(40, Math.min(80, detTop - 78)), detW = (A.x1 - A.x0 - 12) / 2;
+  const detTop = yT - 24, detH = Math.max(40, Math.min(80, detTop - 78)), detW = (A.x1 - A.x0 - 12) / 2;
   const span = 700;
   const regions: [string, number, number][] = [['א', tMin - 40, tMin - 40 + span], ['ב', tMax + 40 - span, tMax + 40]];
   const dsc = fitScale(span, (vMax - vMin) * 1.25, detW - 14, detH - 18);
@@ -213,6 +241,20 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     E.push({ k: 'poly', pts: [{ x: a.x - 1, y: a.y - 1 }, { x: b.x + 1, y: a.y - 1 }, { x: b.x + 1, y: b.y + 1 }, { x: a.x - 1, y: b.y + 1 }], closed: true, layer: 'HIDDEN' });
     text({ x: k ? b.x + 2 : a.x - 2, y: b.y + 2 }, name, 2.6, k ? 'left' : 'right', 'MARK', true);
     for (const pt of parts) drawEdges(memOf(pt), (q) => P2(q.t, q.v), pt === mainPart ? 'OUTLINE' : 'THIN', [t0, t1]);
+    // סמלי ריתוך לפי ISO 2553 (שיטה A): קו חץ, קו ייחוס מלא + קו זיהוי מקווקו, משולש פינתי, a, ועיגול "מסביב" כשהריתוך היקפי
+    { const usedMk = new Set<string>(); let k2 = 0;
+      for (const pt of subs) {
+        if (usedMk.has(pt.mark)) continue;
+        const c = cen(pt);
+        if (c.t < t0 || c.t > t1) continue;
+        const w = shopWelds.find((x) => x.between.includes(memOf(pt).id));
+        if (!w) continue;
+        usedMk.add(pt.mark);
+        const anchor = P2(c.t, c.vmax);
+        const bend = { x: anchor.x + 5 + k2 * 2, y: anchor.y + 8 + k2 * 6 }; k2++;
+        weldSymbol(anchor, bend, w.a, w.length >= 0.8 * mainPerim, pt.mark);
+      }
+    }
     // חורים בווב/חתך של כל החלקים שבאזור, מידות מהקצה
     const holes: { t: number; v: number; d: number }[] = [];
     for (const h of holesW) {
@@ -242,7 +284,8 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
 
   // ---- מבטים איזומטריים מוצללים (עולם: Z למעלה): מכלול שלם + הגדלה לכל קצה
   const nRows = new Set(parts.map((x) => x.mark)).size;
-  const isoY0 = Math.min(118, 12 + 4.6 * (nRows + 2) + 2 + 18);
+  const rb = revBandH(sh.title);
+  const isoY0 = Math.min(128, 12 + rb + 4.6 * (nRows + 2) + 2 + 18);
   const ms = parts.map(memOf);
   renderIso(sh, ms, parts.map((x) => x.mark), { x0: 302, x1: sh.w - 14, y0: 158, y1: sh.h - 18 }, null, loc, 'מבט תלת־ממדי — המכלול (ללא קנ"מ)', holesW.map((h) => ({ p: h.p, axis: h.axis, r: h.d / 2, len: h.grip })));
   regions.forEach(([name, t0, t1], k) => {
@@ -258,7 +301,7 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   const cnt = new Map<string, { q: number; p: MarkedPart }>();
   for (const pt of parts) { const e = cnt.get(pt.mark) ?? { q: 0, p: pt }; e.q++; cnt.set(pt.mark, e); }
   const rows = [...cnt.values()].sort((a, b) => (a.p === mainPart ? -1 : b.p === mainPart ? 1 : a.p.mark.localeCompare(b.p.mark, 'en', { numeric: true })));
-  const tableTop = 12 + rowH * (rows.length + 2) + 2;
+  const tableTop = 12 + rb + rowH * (rows.length + 2) + 2;
   let yy = tableTop;
   const hline = (y: number) => line({ x: tx0, y }, { x: tx1, y }, 'THIN');
   text({ x: tx1, y: yy + 2 }, `מכלול ${asm.mark} · ${asm.weight.toFixed(1)} ק"ג · כמות בפרויקט ${fab.assemblies.filter((x) => x.mark === asm.mark).length}`, 2.6, 'right', 'TEXT', true);
@@ -281,7 +324,7 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   const notes = [
     aSizes.length ? `ריתוך פינתי במסגריה a=${aSizes.join('/')} מ"מ, היקפי, לפני גלוון` : 'ללא ריתוך במכלול',
     'גלוון חם לאחר ייצור; הרכבה בשטח בברגים בלבד',
-    'מידות במ"מ; מיקומים מצטברים מתחילת החלק הראשי',
+    'מידות במ"מ; סמלי ריתוך לפי ISO 2553 (שיטה A) — ○ = ריתוך היקפי',
   ];
   notes.forEach((n2, i) => text({ x: tx1, y: tableTop + 10 + (notes.length - 1 - i) * 3.6 }, `${i + 1}. ${n2}`, 2.1, 'right'));
   return `1:${sc}`;

@@ -11,7 +11,7 @@ import { store, useStore } from '../store';
 import { Icon } from './icons';
 
 const GROUPS: [DrawingDef['type'][], string][] = [
-  [['ga', 'roof-plan', 'frame', 'side'], 'תוכניות, חזיתות וחתכים'],
+  [['ga', 'roof-plan', 'anchor-plan', 'frame', 'side'], 'תוכניות, חזיתות וחתכים'],
   [['connection'], 'פרטי חיבור'],
   [['assembly'], 'שרטוטי מכלול'],
   [['part'], 'שרטוטי חלק'],
