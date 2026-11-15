@@ -289,7 +289,7 @@ export class Viewport {
     if ((this.panes.length > 1) !== s.view.split) this.layoutPanes(s.view.split);
     const main = this.panes[0];
     if (main.projection !== s.view.projection) { main.setProjection(s.view.projection); }
-    const visKey = `${s.hidden.join(',')}|${s.isolated?.join(',') ?? ''}`;
+    const visKey = `${s.hidden.join(',')}|${s.isolated?.join(',') ?? ''}|${Object.entries(s.filter).filter(([, v]) => !v).map(([k]) => k).join(',')}`;
     if (s.derived !== this.lastDerived || visKey !== this.lastVisKey) {
       this.lastDerived = s.derived; this.lastVisKey = visKey;
       this.rebuildModel(s);
@@ -316,7 +316,7 @@ export class Viewport {
       this.scene.remove(this.model.mesh, this.model.edges);
       this.model.mesh.geometry.dispose(); this.model.edges.geometry.dispose();
     }
-    const vis = visibleMembers(s.derived, s.hidden, s.isolated);
+    const vis = visibleMembers(s.derived, s.hidden, s.isolated).filter((m) => s.filter[m.kind] !== false);
     this.model = buildModel(vis, this.modelMat, this.edgeMat);
     this.scene.add(this.model.mesh, this.model.edges);
   }

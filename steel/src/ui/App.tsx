@@ -14,6 +14,7 @@ import { CommandPalette, ConnCard, ContextBar, MarkingMenu, connectionsOf, type 
 import { KIND_LABEL } from './TreePanel';
 import { SideNav, type NavKey } from './SideNav';
 import { EaveCheckDialog } from './EaveCheckDialog';
+import { LayersMenu } from './LayersMenu';
 
 type DialogKind = null | 'new' | 'open' | 'move' | 'copy' | 'rotate' | 'mirror' | 'catalog';
 type SideTab = 'structure' | 'roof' | 'tree' | 'conns' | 'issues';
@@ -95,7 +96,7 @@ export function App() {
   const setView = (name: ViewName) => vp.current?.fitAll(name);
   const hide = () => { if (store.state.selection.length) store.set({ hidden: [...new Set([...store.state.hidden, ...store.state.selection])], selection: [] }); };
   const isolate = () => { if (store.state.selection.length) store.set({ isolated: [...store.state.selection] }); };
-  const showAll = () => store.set({ hidden: [], isolated: null });
+  const showAll = () => store.set({ hidden: [], isolated: null, filter: { column: true, rafter: true, beam: true, brace: true, purlin: true, cleat: true, plate: true, bolt: true, anchor: true } });
   const u = s.project.displayUnit;
   const m = s.measure;
   const mdist = m.a && m.b ? { d: Math.hypot(m.b.x - m.a.x, m.b.y - m.a.y, m.b.z - m.a.z), dx: m.b.x - m.a.x, dy: m.b.y - m.a.y, dz: m.b.z - m.a.z } : null;
@@ -192,7 +193,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.5</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.5.1</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -247,6 +248,7 @@ export function App() {
             <TB icon="tag" title="תוויות בחירה" on={v.labels} onClick={() => store.setView({ labels: !v.labels })} desk />
             <TB icon="split" title="ארבעה מבטים" on={v.split} onClick={() => store.setView({ split: !v.split })} testId="toggle-split" desk />
             <span className="vb-sep" />
+            <LayersMenu />
             <TB icon="eyeOff" title="הסתר בחירה (H)" disabled={!sel.length} onClick={hide} testId="hide" />
             <TB icon="isolate" title="בודד בחירה (I)" disabled={!sel.length} onClick={isolate} testId="isolate" />
             <TB icon="showAll" title="הצג הכל (U)" disabled={!s.hidden.length && !s.isolated} onClick={showAll} testId="show-all" />

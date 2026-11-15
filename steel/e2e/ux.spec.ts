@@ -154,3 +154,20 @@ test('BR-02: סבכה אופקית RHS וחיזוק רכס בשתי השיטות
   await page.getByTestId('ridge-reinf').selectOption('tie');
   expect(await q()).toMatchObject({ st: 0, tie: 6, clash: 0 });
 });
+
+test('VIS-01: שכבות תצוגה — הסתרת תומכים מוסיפה חיווי; "הצג הכל" מחזיר; הכל מוצג כברירת מחדל', async ({ page }) => {
+  await boot(page);
+  const shown = () => page.evaluate(() => { const vp = (window as any).__ksp.viewport; return vp.model.ids.length; });
+  const all = await shown();
+  const total = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.length);
+  expect(all).toBe(total); // כל האלמנטים מוצגים, כולל תומכים, פלטות וברגים
+  await expect(page.getByTestId('layers-flag')).toHaveCount(0);
+  await page.getByTestId('layers-btn').click();
+  await page.getByTestId('layer-cleat').uncheck();
+  expect(await shown()).toBe(total - 84);
+  await page.getByTestId('layers-btn').click();
+  await expect(page.getByTestId('layers-flag')).toContainText('תומכי פטות');
+  await page.getByTestId('layers-flag').getByText('הצג הכל').click();
+  expect(await shown()).toBe(total);
+  await expect(page.getByTestId('layers-flag')).toHaveCount(0);
+});

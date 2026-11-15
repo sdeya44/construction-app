@@ -142,9 +142,12 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         const q = v.p(sp.p.x, sp.p.y);
         sh.ents.push({ k: 'line', a: { x: q.x - 1.2, y: q.y - 1.2 }, b: { x: q.x + 1.2, y: q.y + 1.2 }, layer: 'MARK' }, { k: 'line', a: { x: q.x - 1.2, y: q.y + 1.2 }, b: { x: q.x + 1.2, y: q.y - 1.2 }, layer: 'MARK' });
       }
-      for (const m of d.members.filter((x) => x.kind === 'brace' && (x.id.startsWith('BR.R') || x.id.startsWith('BR.T')))) {
+      for (const m of d.members.filter((x) => x.kind === 'brace' && (x.id.startsWith('BR.R') || x.id.startsWith('BR.T') || x.id.startsWith('HB.')))) {
         v.line({ x: m.start.x, y: m.start.y }, { x: m.end.x, y: m.end.y }, m.id.startsWith('BR.T') ? 'HIDDEN' : 'THIN');
       }
+      // תומכי פטות, פחי קושרות/סבכה וחיזוקי רכס — בהיטל עליון
+      const prXY: Proj = (q) => ({ x: q.x, y: q.y });
+      for (const m of d.members.filter((x) => x.kind === 'cleat' || x.kind === 'beam' || (x.kind === 'plate' && /^C\.(BR\.R|HB\.|PS\.|RT\.)/.test(x.connId ?? '')))) edges(m, prXY, v, 'THIN');
       // מידות: מרווחי מסגרות וסה"כ
       const ys = d.grid.filter((g) => g.dir === 'Y').map((g) => g.pos);
       const xr = bx.x1 - 1800;
@@ -226,12 +229,14 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
     case 'ga': {
       const c30 = Math.cos(Math.PI / 6), s30 = 0.5;
       const pr: Proj = (q) => ({ x: (q.x - q.y) * c30, y: (q.x + q.y) * s30 + q.z });
-      const ms = d.members.filter((m) => ['column', 'rafter', 'purlin', 'brace'].includes(m.kind));
+      const ms = d.members.filter((m) => ['column', 'rafter', 'purlin', 'brace', 'beam'].includes(m.kind));
       const pts = ms.flatMap((m) => [pr(m.start), pr(m.end)]);
       const bx = boxOf(pts);
       bx.x0 -= 2000; bx.x1 += 2000; bx.y0 -= 2000; bx.y1 += 2000;
       const v = placeView(sh, bx, area); setScale(v);
       for (const m of ms) v.line(pr(m.start), pr(m.end), m.kind === 'purlin' || m.kind === 'brace' ? 'THIN' : 'OUTLINE');
+      // חלקי חיבור (תומכים, פלטות, פחים) בקווי מתאר דקים — כדי שהשרטוט הכללי יראה את כל מה שמורכב
+      for (const m of d.members.filter((x) => x.kind === 'cleat' || x.kind === 'plate')) edges(m, pr, v, 'THIN');
       for (const m of ms.filter((x) => x.kind === 'column' || x.kind === 'rafter')) {
         const mid = pr({ x: (m.start.x + m.end.x) / 2, y: (m.start.y + m.end.y) / 2, z: (m.start.z + m.end.z) / 2 });
         v.text({ x: mid.x, y: mid.y + 250 }, asmOf(m.id), 2, 'center', 'MARK');
