@@ -1,7 +1,7 @@
-import { cross, norm, sub, v3 } from '../core/vec';
+import { norm, sub, v3 } from '../core/vec';
 import type { Connection, Member, PortalBraceParams, ValidationIssue } from '../model/types';
 import { getProfile, tryProfile } from '../profiles/library';
-import { stubJoint } from './stubJoint';
+import { finJoint } from './finJoint';
 
 /** אגד B (ברירת מחדל): קורת RHS100/100/5 בין העמודים, שני אלכסוני RHS60/60/4 ב-45°, פלטות 12, M16 */
 export function defaultPortal(): PortalBraceParams {
@@ -29,8 +29,8 @@ export interface PortalLine {
 /**
  * אגד B לאורך ציר עמודים: במפתחים שנבחרו — קורה + שני אלכסונים קטנים מהעמודים לתחתית הקורה;
  * בשאר המפתחים (continuous) — קורה באותו חתך בלבד, להעברת הכוחות האופקיים לאגד.
- * כל החיבורים לפי פרט הלקוח: זיז מרותך למארח + שתי פלטות ניצבות לציר, ברגים בשטח מחוץ לפרופיל.
- * קורה-עמוד: זיז על ווב העמוד, 4 ברגים (2 מעל ו-2 מתחת לקורה). אלכסון: 2 (או 4) ברגים.
+ * כל החיבורים לפי פרט הלקוח: פח מרותך למארח (מסגריה), לשונית בחריץ ה-RHS מרותכת לפרופיל (מסגריה),
+ * מוברגים בחפיפה בשטח (2 ברגים). קורת האגד מוסטת מציר העמודים בעובי פח; האלכסונים על ציר העמודים.
  * גיאומטריה בלבד — אין בדיקת חוזק.
  */
 export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) {
@@ -41,6 +41,7 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
   const tw = cp.dims.tw ?? cp.dims.t ?? 8;
   const inner = cp.props.h - 2 * (cp.dims.tf ?? 10) - 2 * (cp.dims.r ?? 0);
   const X = v3(1, 0, 0), Z = v3(0, 0, 1);
+  void Z;
   const hb = bp.props.h;
   const zc = L.zTop - pp.gap - hb / 2, zBot = zc - hb / 2;
   const x = L.x;
@@ -49,7 +50,8 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
   const bays = (pp.continuous ?? true) ? Array.from({ length: nb }, (_, i) => i) : [...portal];
   const tA = Math.tan((Math.max(20, Math.min(70, pp.angle)) * Math.PI) / 180);
   const reach = pp.drop / tA;
-  const base = { plateT: pp.plateT, bolt: pp.bolt, weldSize: pp.weldSize, mat: L.mat };
+  const base = { finT: pp.plateT, tongueT: pp.plateT, bolt: pp.bolt, weldSize: pp.weldSize, mat: L.mat };
+  const T = pp.plateT; // הסטת ציר ה-RHS מהפח: (פח + לשונית) / 2
   for (const bay of bays) {
     const f0 = L.frames[bay], f1 = L.frames[bay + 1];
     const key = `${bay + 1}.${L.side}`;
@@ -63,8 +65,8 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
     // קורה-עמוד בשני הקצוות
     const ends = ([['E0', ya, 1, colA], ['E1', yb, -1, colB]] as const).map(([k, yF, sg, col]) => {
       const cid = `C.BB.${key}.${k}`;
-      const j = stubJoint({ ...base, cid, desc: 'קורת אגד', hostId: col, memberId: bid, P: v3(x, yF, zc), n: v3(0, sg, 0), d: v3(0, sg, 0), u: Z, prof: bp, profile: pp.beam, refUp: Z, bolts: 4 });
-      if (j.plateW > inner + 0.5) out.issues.push({ code: 'PLATE_WIDE', severity: 'warning', elementId: cid, message: `${lab}: פלטת הזיז (${j.plateW}) רחבה מהמרווח בין אגפי העמוד (${Math.round(inner)})` });
+      const j = finJoint({ ...base, cid, desc: 'קורת אגד', hostId: col, memberId: bid, P: v3(x, yF, zc), n: v3(0, sg, 0), d: v3(0, sg, 0), pn: X, side: 1, prof: bp, profile: pp.beam, bolts: pp.beamBolts ?? 2 });
+      if (bp.props.b / 2 + T > inner / 2 + 0.5) out.issues.push({ code: 'PLATE_WIDE', severity: 'warning', elementId: cid, message: `${lab}: קורת האגד המוסטת אינה נכנסת בין אגפי העמוד (${Math.round(inner)})` });
       return { cid, col, j, label: `${lab} — קורה לעמוד` };
     });
     out.members.push({ id: bid, kind: 'beam', label: lab, start: ends[0].j.start, end: ends[1].j.start, profile: pp.beam, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: Z, source: 'generated', manualPlacement: false, partDesc: `קורת אגד ${pp.beam}` });
@@ -76,13 +78,13 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
     // שני אלכסונים: מווב העמוד בגובה zBot−drop אל תחתית הקורה, בזווית מהאופק
     for (const [k, yF, sg, col] of [['1', ya, 1, colA], ['2', yb, -1, colB]] as const) {
       const kid = `${bid}.K${k}`;
-      const C0 = v3(x, yF, zBot - pp.drop), R0 = v3(x, yF + sg * reach, zBot);
+      // הפחים לאלכסון: על ציר קורת האגד (x+T); הלשונית בצד השני — ציר האלכסון על ציר העמודים
+      const C0 = v3(x + T, yF, zBot - pp.drop), R0 = v3(x + T, yF + sg * reach, zBot);
       const dir = norm(sub(R0, C0));
-      const u = norm(cross(X, dir));
-      const common = { ...base, desc: 'אלכסון אגד', memberId: kid, prof: kp, profile: pp.brace, refUp: X, bolts: (pp.boltsPerEnd ?? 2) as 2 | 4, u };
+      const common = { ...base, desc: 'אלכסון אגד', memberId: kid, prof: kp, profile: pp.brace, bolts: pp.boltsPerEnd ?? 2, pn: X, side: -1 as const };
       const cidC = `C.BB.${key}.K${k}C`, cidB = `C.BB.${key}.K${k}B`;
-      const jc = stubJoint({ ...common, cid: cidC, hostId: col, P: C0, n: v3(0, sg, 0), d: dir });
-      const jb = stubJoint({ ...common, cid: cidB, hostId: bid, P: R0, n: v3(0, 0, -1), d: v3(-dir.x, -dir.y, -dir.z) });
+      const jc = finJoint({ ...common, cid: cidC, hostId: col, P: C0, n: v3(0, sg, 0), d: dir });
+      const jb = finJoint({ ...common, cid: cidB, hostId: bid, P: R0, n: v3(0, 0, -1), d: v3(-dir.x, -dir.y, -dir.z) });
       out.members.push({ id: kid, kind: 'brace', label: `${lab} — אלכסון`, start: jc.start, end: jb.start, profile: pp.brace, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: X, source: 'generated', manualPlacement: false, partDesc: `אלכסון אגד B ${pp.brace}` });
       for (const [cid, j, hostId, t] of [[cidC, jc, col, 'אלכסון לעמוד'], [cidB, jb, bid, 'אלכסון לקורה']] as const) {
         out.members.push(...j.members); out.issues.push(...j.issues);

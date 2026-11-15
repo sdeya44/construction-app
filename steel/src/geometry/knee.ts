@@ -3,14 +3,14 @@ import type { BoltInfo, Connection, KneeBraceParams, Member, Project, Validation
 import { zAt, type SectionTopology } from '../model/section';
 import { getProfile, tryProfile } from '../profiles/library';
 import { hw, makeBolt } from './connections';
-import { stubJoint } from './stubJoint';
+import { finJoint } from './finJoint';
 
 /** ברירת מחדל לפי תוכניות הלקוח: RHS80/80/4, פלטת קצה 180×280×14 בכל קצה, 4×M16 (שתי עמודות × שתי שורות) */
 export function defaultKneeBraces(): KneeBraceParams {
   return {
     enabled: false, profile: 'RHS80x80x4', drop: 800, reach: 900, mode: 'angle', angle: 45, plateT: 12, plateW: 180, plateL: 280,
     bolt: { d: 16, grade: '8.8', standard: 'ISO 4017', clearance: 2 }, gauge: 80, pitch: 200, weldSize: 5, exclude: [],
-    detail: 'stub', boltsPerEnd: 2,
+    detail: 'fin', boltsPerEnd: 2,
   };
 }
 
@@ -79,11 +79,11 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
         const dir = norm(sub(R0, C0));
         const id = `C.KB.${f.id}.${key}`;
         const bid = `KB.${f.id}.${key}`;
-        if ((kb.detail ?? 'stub') === 'stub') {
-          // פרט הלקוח: זיז מרותך למארח + שתי פלטות ניצבות לציר, ברגים מחוץ לפרופיל (פריסה ניצבת למישור המסגרת)
-          const common = { cid: id, desc: 'אלכסון', memberId: bid, prof, profile: kb.profile, refUp: Y, plateT: kb.plateT, bolt: kb.bolt, bolts: (kb.boltsPerEnd ?? 2) as 2 | 4, weldSize: kb.weldSize, mat, u: Y };
-          const jc = stubJoint({ ...common, tag: 'C', hostId: col.id, P: lineHitPlane(C0, dir, colFace), n: colFace.normal, d: dir });
-          const jr = stubJoint({ ...common, tag: 'R', hostId: raf.id, P: lineHitPlane(C0, dir, rafUnder), n: rafUnder.normal, d: scale(dir, -1) });
+        if ((kb.detail ?? 'fin') !== 'flange') {
+          // פרט הלקוח: פח מרותך לעמוד/לקורה במישור המסגרת, לשונית בחריץ ה-RHS, 2 ברגים בחפיפה
+          const common = { cid: id, desc: 'אלכסון', memberId: bid, prof, profile: kb.profile, finT: kb.plateT, tongueT: kb.plateT, bolt: kb.bolt, bolts: kb.boltsPerEnd ?? 2, weldSize: kb.weldSize, mat, pn: Y, side: 1 as const };
+          const jc = finJoint({ ...common, tag: 'C', hostId: col.id, P: lineHitPlane(C0, dir, colFace), n: colFace.normal, d: dir });
+          const jr = finJoint({ ...common, tag: 'R', hostId: raf.id, P: lineHitPlane(C0, dir, rafUnder), n: rafUnder.normal, d: scale(dir, -1) });
           if (dot(sub(jr.start, jc.start), dir) < 300) { out.issues.push({ code: 'KNEE_SHORT', severity: 'warning', message: `אלכסון ${key} מסגרת ${fi}: קצר מדי לפרט הזיז` }); continue; }
           out.members.push({
             id: bid, kind: 'brace', label: `אלכסון עמוד-קורה ציר ${jn.line.label} מסגרת ${fi}`, start: jc.start, end: jr.start, profile: kb.profile, material: mat,

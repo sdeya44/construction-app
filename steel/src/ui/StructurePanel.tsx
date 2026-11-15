@@ -190,17 +190,19 @@ function PortalFields() {
   const set = (patch: Partial<PortalBraceParams>) => store.exec(setBuilding({ bracing: { ...br, walls: { ...br.walls, portal: { ...p, ...patch } } } }));
   return (
     <>
-      <div className="field prof"><label>קורת אגד</label><ProfilePicker testId="pb-beam" value={p.beam} families={['RHS', 'SHS', 'CHS', 'IPE', 'HEA', 'UPN']} onCommit={(v) => set({ beam: v })} /></div>
+      <div className="field prof"><label>קורת אגד</label><ProfilePicker testId="pb-beam" value={p.beam} families={['RHS', 'SHS']} onCommit={(v) => set({ beam: v })} /></div>
       <div className="field prof"><label>אלכסונים</label><ProfilePicker testId="pb-brace" value={p.brace} families={['RHS', 'SHS', 'CHS']} onCommit={(v) => set({ brace: v })} /></div>
       <div className="field"><label>מרווח מתחת לקורה הראשית</label><NumField testId="pb-gap" value={p.gap} suffix='מ"מ' onCommit={(v) => set({ gap: Math.max(0, v) })} /></div>
       <div className="field"><label>ירידה על העמוד</label><NumField testId="pb-drop" value={p.drop} suffix='מ"מ' onCommit={(v) => set({ drop: Math.max(200, v) })} /></div>
       <div className="field"><label>זווית אלכסון</label><NumField testId="pb-angle" value={p.angle} suffix="°" onCommit={(v) => set({ angle: Math.max(20, Math.min(70, v)) })} /></div>
       <div className="field"><label>עובי פלטות</label><NumField value={p.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: v })} /></div>
       <div className="field"><label>ברגים בקצה אלכסון</label>
-        <select className="inp" data-testid="pb-bolts" value={p.boltsPerEnd ?? 2} onChange={(e) => set({ boltsPerEnd: Number(e.target.value) as 2 | 4 })}><option value={2}>2 (אחד מכל צד)</option><option value={4}>4</option></select></div>
+        <select className="inp" data-testid="pb-bolts" value={p.boltsPerEnd ?? 2} onChange={(e) => set({ boltsPerEnd: Number(e.target.value) })}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}×M{p.bolt.d}</option>)}</select></div>
+      <div className="field"><label>ברגים בקצה קורת האגד</label>
+        <select className="inp" data-testid="pb-beam-bolts" value={p.beamBolts ?? 2} onChange={(e) => set({ beamBolts: Number(e.target.value) })}>{[2, 3, 4].map((n) => <option key={n} value={n}>{n}×M{p.bolt.d}</option>)}</select></div>
       <div className="field"><label>קורת אגד בשאר המפתחים</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="pb-cont" checked={p.continuous ?? true} onChange={(e) => set({ continuous: e.target.checked })} />{(p.continuous ?? true) ? 'כן — ללא אלכסונים' : 'לא'}</label></div>
       <div className="field"><label>קוטר בורג</label><NumField value={p.bolt.d} suffix="M" onCommit={(v) => set({ bolt: { ...p.bolt, d: Math.round(v) } })} /></div>
-      <div className="hint">פרט חיבור (לכל הקצוות): זיז קצר מאותו פרופיל מרותך למארח במסגריה, עם פלטה ניצבת לציר; פלטת קצה על האלמנט; שתי הפלטות מוברגות בשטח, הברגים מחוץ לפרופיל. קורה-עמוד: 4 ברגים (2 מעל, 2 מתחת). בשאר המפתחים של הציר — קורת אגד בלבד, להעברת הכוחות האופקיים לאגד.</div>
+      <div className="hint">פרט חיבור (לכל הקצוות, פרט הלקוח): פח מרותך לעמוד/לקורה במסגריה; בקצה ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. קורת האגד מוסטת בעובי פח מציר העמודים; האלכסונים על ציר העמודים. בשאר המפתחים של הציר — קורת אגד בלבד, להעברת הכוחות האופקיים לאגד.</div>
     </>
   );
 }

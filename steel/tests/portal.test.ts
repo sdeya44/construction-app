@@ -24,7 +24,7 @@ describe('אגד B — קשיחות לאורך בקיר', () => {
     const d2 = mk({ portal: { ...defaultPortal(), continuous: false } });
     expect(beams(d2).length).toBe(4);
   });
-  it('פרט הלקוח: זיזים + 2 פלטות, ברגים לא דרך העמוד; קורה 4 ברגים, אלכסון 2; 45°; ללא התנגשויות', () => {
+  it('פרט הלקוח: פח מרותך + לשונית בחריץ, 2 ברגים בכל קצה, לא דרך העמוד; 45°; האלכסונים על ציר העמודים; ללא התנגשויות', () => {
     const d = mk();
     const k = diags(d)[0];
     const a = Math.atan2(Math.abs(k.end.z - k.start.z), Math.abs(k.end.y - k.start.y)) * 180 / Math.PI;
@@ -32,11 +32,14 @@ describe('אגד B — קשיחות לאורך בקיר', () => {
     const cs = d.connections.filter((c) => c.id.startsWith('C.BB.'));
     expect(cs.length).toBe(10 * 2 + 4 * 4);
     for (const c of cs) {
-      expect(c.bolts.length).toBe(/\.E[01]$/.test(c.id) ? 4 : 2);
+      expect(c.bolts.length).toBe(2);
+      expect(c.bolts.every((b) => Math.abs(b.axis.x) > 0.999)).toBe(true);
       expect(c.bolts.every((b) => b.location === 'site' && !b.holesIn.some((h) => h.includes('.COL.')))).toBe(true);
       expect(c.welds.every((w) => w.location === 'shop')).toBe(true);
-      expect(c.parts.some((p) => p.endsWith('.S'))).toBe(true);
+      expect(c.parts.some((p) => p.endsWith('.PL')) && c.parts.some((p) => p.endsWith('.T'))).toBe(true);
     }
+    expect(k.start.x).toBeCloseTo(0, 6); // ציר האלכסון על ציר העמודים
+    expect(beams(d)[0].start.x).toBeCloseTo(12, 6); // קורת האגד מוסטת בעובי פח
     expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
   });
   it('אגד בכל ציר: ציר פנימי בחתך מודולרי', () => {

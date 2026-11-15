@@ -56,25 +56,27 @@ describe('חתך מודולרי — מערכת לבניית סוגי סככות'
     expect(['C.SIDE.F1.B.P1', 'C.SIDE.F1.B.P2'].every((id) => d.connById.get(id)?.type === 'rafter-side')).toBe(true);
     expect(d.byId.get('F1.COL.B')!.end.z).toBeCloseTo(6900, 3);
   });
-  it('אלכסון עמוד-קורה לפי פרט הלקוח: זיז מרותך למארח + 2 פלטות ניצבות לציר, 2×M16 בכל קצה מחוץ לפרופיל', () => {
+  it('אלכסון עמוד-קורה לפי פרט הלקוח: פח מרותך למארח + לשונית בחריץ ה-RHS, 2×M16 בחפיפה בכל קצה', () => {
     const d = generate(withTpl('mono-multi', true));
     const c = d.connById.get('C.KB.F2.B.P1.L')!;
     expect(c.bolts.length).toBe(4);
     expect(c.bolts.every((b) => b.d === 16 && b.location === 'site' && b.grip === 24)).toBe(true);
-    // אין ברגים במארח — רק דרך שתי הפלטות
-    expect(c.bolts.some((b) => b.holesIn.includes('F2.COL.B') || b.holesIn.includes('F2.RAF.P1'))).toBe(false);
+    // הברגים דרך הלשונית והפח בלבד — אין קידוח בעמוד/בקורה; ציר הבורג ניצב למישור המסגרת
+    expect(c.bolts.every((b) => b.holesIn.every((h) => h.startsWith('C.KB.')) && Math.abs(b.axis.y) > 0.999)).toBe(true);
     const br = d.byId.get('KB.F2.B.P1.L')!;
     expect(br.profile).toBe('RHS80x80x4');
-    const stubC = d.byId.get('C.KB.F2.B.P1.L.C.S')!, stubR = d.byId.get('C.KB.F2.B.P1.L.R.S')!;
-    expect(stubC.profile).toBe('RHS80x80x4');
-    expect(stubR.profile).toBe('RHS80x80x4');
-    // ציר האלכסון ממשיך את ציר הזיז
-    const dir = (m: any) => { const v = { x: m.end.x - m.start.x, z: m.end.z - m.start.z }; const l = Math.hypot(v.x, v.z); return { x: v.x / l, z: v.z / l }; };
-    expect(dir(stubC).x).toBeCloseTo(dir(br).x, 6);
-    // ברגים משני צדי הפרופיל (ניצב למישור המסגרת), מחוץ ל-RHS80
-    const ys = c.bolts.filter((b) => b.id.includes('.C.B')).map((b) => b.p.y - br.start.y).sort((a, b) => a - b);
-    expect(ys[0]).toBeLessThan(-40 - 10);
-    expect(ys[1]).toBeGreaterThan(40 + 10);
+    const fin = d.byId.get('C.KB.F2.B.P1.L.C.PL')!, tg = d.byId.get('C.KB.F2.B.P1.L.C.T')!;
+    const col = d.byId.get('F2.COL.B')!;
+    // הפח במישור המסגרת (ממורכז על העמוד), הלשונית צמודה לו, וציר ה-RHS על ציר הלשונית
+    expect(fin.start.y).toBeCloseTo(col.start.y, 6);
+    expect(tg.start.y - fin.start.y).toBeCloseTo(12, 6);
+    expect(br.start.y).toBeCloseTo(tg.start.y, 6);
+    // הלשונית נכנסת לתוך ה-RHS (לאורך הציר) ויוצאת ממנו אל הפח
+    const dir = { x: br.end.x - br.start.x, z: br.end.z - br.start.z }; const L = Math.hypot(dir.x, dir.z);
+    const s = (p: any) => ((p.x - br.start.x) * dir.x + (p.z - br.start.z) * dir.z) / L;
+    expect(Math.min(s(tg.start), s(tg.end))).toBeLessThan(-30);
+    const ins = Math.max(s(tg.start), s(tg.end));
+    expect(ins).toBeGreaterThanOrEqual(80); expect(ins).toBeLessThan(86); // 80 מ"מ בתוך ה-RHS, אורך מעוגל ל-5
     expect(c.welds.every((w) => w.location === 'shop')).toBe(true);
     expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
     expect(d.connById.has('C.KB.F2.A.P1.L')).toBe(false);
