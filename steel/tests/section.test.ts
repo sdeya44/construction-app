@@ -84,4 +84,14 @@ describe('חתך מודולרי — מערכת לבניית סוגי סככות'
     expect(a0).toBeLessThan(200); expect(a1).toBeGreaterThan(6900); // מהעמוד החיצוני לפנימי
     expect(b0).toBeLessThan(7100); expect(b1).toBeGreaterThan(10700); // מהעמוד הפנימי עד הרכס (11.0)
   });
+
+  it('שגיאה מקומית בפטה (חוצה רכס) אינה מוחקת את החיבורים, התומכים והקושרות בשאר המודל', () => {
+    const p = withTpl('gable-inner');
+    p.building.purlins.left.first = 0;
+    const d = generate(p);
+    expect(d.issues.some((i) => i.code === 'PURLIN_RIDGE')).toBe(true);
+    expect(d.members.filter((m) => m.kind === 'cleat').length).toBeGreaterThan(80);
+    expect(d.members.some((m) => m.id.startsWith('BR.R'))).toBe(true);
+    expect(d.connections.some((c) => c.type === 'eave')).toBe(true);
+  });
 });

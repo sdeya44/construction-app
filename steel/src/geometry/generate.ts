@@ -108,7 +108,8 @@ export function generate(project: Project): DerivedModel {
   // פטות ונקודות תמיכה
   const deleted = new Set(project.deleted);
   let supports: SupportPoint[] = [];
-  if (!hasErrors(issues) && sec) {
+  const structuralError = hasErrors(issues);
+  if (!structuralError && sec) {
     const pr = buildPurlins(bEff, sec, deleted);
     members.push(...pr.members);
     supports = pr.supports;
@@ -159,7 +160,9 @@ export function generate(project: Project): DerivedModel {
   supports = supports.filter((sp) => byId.has(sp.purlinId) && byId.has(sp.rafterId));
   // חיבורים: משנים חיתוכי קצה של עמודים/קורות לפי עובי פלטות, ומוסיפים זוויתנים, פלטות וברגים
   let connections: Connection[] = [];
-  if (!hasErrors(issues) && topo) {
+  // שגיאה מקומית (פטה, חיבור בודד) אינה חוסמת את שאר המודל — רק שגיאות מבנה/טופולוגיה או חתך לא מוכר בעמוד/קורה
+  const fatal = structuralError || issues.some((i) => i.severity === 'error' && i.code === 'PROFILE' && /\.(COL|RAF)\b/.test(i.elementId ?? ''));
+  if (!fatal && topo) {
     const cr = buildConnections(project, out, byId, supports.filter((sp) => getProfileSafe(byId.get(sp.purlinId)!.profile)), topo);
     const hidden = new Set(project.deleted);
     out.push(...cr.members.filter((m) => !hidden.has(m.id)));
