@@ -10,9 +10,10 @@ import { RoofPanel } from './RoofPanel';
 import { ProfileDatalist, StructurePanel } from './StructurePanel';
 import { IssuesPanel, TreePanel } from './TreePanel';
 import { DrawingsView } from './DrawingsView';
+import { CatalogDialog } from './CatalogDialog';
 import { ProductionView } from './ProductionView';
 
-type DialogKind = null | 'new' | 'open' | 'move' | 'copy' | 'rotate' | 'mirror';
+type DialogKind = null | 'new' | 'open' | 'move' | 'copy' | 'rotate' | 'mirror' | 'catalog';
 type SideTab = 'structure' | 'roof' | 'tree' | 'issues';
 type MobileTab = null | 'side' | 'props';
 
@@ -85,7 +86,7 @@ export function App() {
     <div className="app" style={mode !== 'model' ? { gridTemplateRows: 'auto 1fr auto auto' } : undefined}>
       <ProfileDatalist />
       <header className="topbar">
-        <div className="brand"><img src="./icon.svg" alt="" /><span className="desk-only">KAYAN STEEL PRO</span> <small className="desk-only">1.0</small></div>
+        <div className="brand"><img src="./icon.svg" alt="" /><span className="desk-only">KAYAN STEEL PRO</span> <small className="desk-only">1.1</small></div>
         <div className="proj-name" data-testid="proj-name">{s.project.meta.name}</div>
         <div className="modes" role="tablist">
           <button className={mode === 'model' ? 'on' : ''} onClick={() => setMode('model')} data-testid="mode-model">מודל</button>
@@ -99,6 +100,7 @@ export function App() {
         <button className="tb-btn desk-only" onClick={() => void store.saveNow('שמירה ידנית').then((ok) => ok && store.toast('ok', 'נשמר'))} data-testid="btn-save"><Icon name="save" />שמירה</button>
         <button className="tb-btn desk-only" onClick={duplicateProject}><Icon name="copy" />שמירה בשם</button>
         <button className="tb-btn desk-only" onClick={exportProject} data-testid="btn-export"><Icon name="download" />ייצוא</button>
+        <button className="tb-btn desk-only" onClick={() => setDialog('catalog')} data-testid="btn-catalog"><Icon name="tree" />חתכים</button>
         <button className="tb-btn" onClick={() => store.undo()} disabled={!s.canUndo} title={s.undoLabel ? `ביטול: ${s.undoLabel}` : 'ביטול'} data-testid="btn-undo"><Icon name="undo" /></button>
         <button className="tb-btn" onClick={() => store.redo()} disabled={!s.canRedo} title={s.redoLabel ? `חזרה: ${s.redoLabel}` : 'חזרה'} data-testid="btn-redo"><Icon name="redo" /></button>
         <span className={`save-state ${s.saveState} desk-only`} data-testid="save-state">{saveText}</span>
@@ -219,6 +221,7 @@ export function App() {
 
       {dialog === 'new' && <NewProjectDialog onClose={() => setDialog(null)} />}
       {dialog === 'open' && <OpenDialog onClose={() => setDialog(null)} />}
+      {dialog === 'catalog' && <CatalogDialog onClose={() => setDialog(null)} />}
       {(dialog === 'move' || dialog === 'copy' || dialog === 'rotate' || dialog === 'mirror') && <TransformDialog mode={dialog} onClose={() => setDialog(null)} />}
     </div>
   );

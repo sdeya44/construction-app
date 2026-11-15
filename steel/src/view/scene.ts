@@ -11,6 +11,7 @@ const solidCache = new Map<string, Solid>();
 function solidKey(m: Member) {
   return JSON.stringify([m.start, m.end, m.profile, m.rollDeg, m.mirror, m.anchor, m.refUp, m.startCut, m.endCut]);
 }
+export function clearSceneCache() { solidCache.clear(); }
 export function cachedSolid(m: Member): Solid {
   const k = solidKey(m);
   let s = solidCache.get(k);

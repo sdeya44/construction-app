@@ -1,6 +1,9 @@
 import { add, norm, scale, sub, v3, type Vec3 } from '../core/vec';
 import { getProfile, tryProfile } from '../profiles/library';
-import type { BuildingParams, Connection, Member, RoofInfo, ValidationIssue } from '../model/types';
+import type { BoltInfo, BuildingParams, Connection, Member, RoofInfo, ValidationIssue } from '../model/types';
+import { makeBolt } from './connections';
+import { localFrame } from './frame';
+import { bolt } from '../model/defaults';
 
 export interface BracingResult { members: Member[]; connections: Connection[]; issues: ValidationIssue[] }
 
@@ -93,11 +96,28 @@ export function buildBracing(b: BuildingParams, roof: RoofInfo, purlins: Member[
       const n = first.purlin!.roofNormal;
       const a0 = sub(v3(first.start.x, 0, first.start.z), scale(dir, 60));
       const a1 = add(v3(last.start.x, 0, last.start.z), scale(dir, 60));
+      const tieProf = getProfile(br.purlinTies.profile);
+      const tieT = tieProf.dims.t ?? 4;
       for (let bay = 0; bay < nb; bay++) {
         const ym = (frames[bay].y + frames[bay + 1].y) / 2;
         const id = `BR.T${bay + 1}.${side}`;
-        res.members.push(mk(id, `שורת קשירה לפטות מפתח ${bay + 1}`, br.purlinTies.profile, v3(a0.x, ym, a0.z), v3(a1.x, ym, a1.z), n, mat, 'top'));
-        conn(`C.BR.TIE.${side}.${bay + 1}`, `שורת קשירה מפתח ${bay + 1} — חיבור לאגף התחתון של כל פטה: דורש תכנון`, [id]);
+        // זוויתן מסובב 180°: הרגל האופקית למעלה, צמודה מתחת לאגף התחתון של הפטות (מגע 0 מ"מ)
+        const tie = mk(id, `שורת קשירה לפטות מפתח ${bay + 1}`, br.purlinTies.profile, v3(a0.x, ym, a0.z), v3(a1.x, ym, a1.z), n, mat, 'purlin');
+        tie.rollDeg = 180;
+        res.members.push(tie);
+        const cid = `C.BR.TIE.${side}.${bay + 1}`;
+        // בורג M12 בכל הצטלבות: דרך הרגל האופקית ואמצע האגף התחתון של הפטה (בשטח)
+        const bolts: BoltInfo[] = [];
+        for (const pm of ps) {
+          const pp = getProfile(pm.profile);
+          const lf = localFrame(pm);
+          const flangeDir = pp.family === 'Z' ? scale(lf.u, -1) : lf.u;
+          if (pp.family !== 'C' && pp.family !== 'Z') continue;
+          const at = add(v3(pm.start.x, ym, pm.start.z), scale(flangeDir, pp.props.b / 2));
+          const head = sub(at, scale(n, tieT));
+          bolts.push(makeBolt(`${cid}.B${pm.purlin!.index}`, cid, head, n, bolt(12), tieT + pp.dims.t, 'site', [id, pm.id], flangeDir, res.members));
+        }
+        res.connections.push({ id: cid, type: 'brace', label: `שורת קשירה מפתח ${bay + 1} — מוברגת לאגף התחתון של כל פטה`, members: ps.map((m) => m.id), parts: [id, ...bolts.map((b2) => b2.id)], bolts, welds: [], status: 'not-verified', fixity: 'pinned', overridden: false });
       }
     }
   }

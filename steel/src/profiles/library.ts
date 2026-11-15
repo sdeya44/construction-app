@@ -1,4 +1,5 @@
 import { I_SERIES, U_SERIES, type ITuple } from './catalog';
+import { catalogRow, getUserCatalog } from './userCatalog';
 import {
   chsShape, cShape, iShape, lShape, plateShape, rhsShape, sectionProps, uShape, zShape,
   type Outline, type SectionProps,
@@ -16,9 +17,11 @@ export interface Profile {
   props: SectionProps;
   /** שם מקור הנתונים; לא מאומת עד ייבוא קטלוג מוסמך. */
   source: string;
-  verified: false;
+  verified: boolean;
   /** הערה הנדסית על קירוב (אגפים משופעים, רדיוסי כיפוף). */
   note?: string;
+  /** משקל למטר מהקטלוג (אם קיים) */
+  catalogMass?: number;
 }
 
 export const FAMILY_LABEL: Record<Family, string> = {
@@ -49,10 +52,32 @@ export function getProfile(raw: string): Profile {
   const key = normalizeName(raw);
   const hit = cache.get(key);
   if (hit) return hit;
-  const p = build(key);
+  const p = applyCatalog(build(key));
   cache.set(key, p);
   cache.set(p.name, p);
   return p;
+}
+
+export function clearProfileCache() { cache.clear(); }
+
+/** החלת נתוני הקטלוג המאומת: מידות גיאומטריה (לחתכי I/U) ותכונות חתך מהטבלה. */
+function applyCatalog(p: Profile): Profile {
+  const r = catalogRow(p.name);
+  if (!r) return p;
+  let outline = p.outline;
+  const dims = { ...p.dims };
+  const isI = p.family in I_SERIES, isU = p.family in U_SERIES;
+  if ((isI || isU) && r.h && r.b && r.tw && r.tf) {
+    Object.assign(dims, { h: r.h, b: r.b, tw: r.tw, tf: r.tf, r: r.r ?? dims.r });
+    outline = isU ? uShape(r.h, r.b, r.tw, r.tf, dims.r) : iShape(r.h, r.b, r.tw, r.tf, dims.r);
+  }
+  const g = sectionProps(outline);
+  const props = {
+    ...g,
+    area: r.A ?? g.area, Iy: r.Iy ?? g.Iy, Iz: r.Iz ?? g.Iz, Wy: r.Wy ?? g.Wy, Wz: r.Wz ?? g.Wz, iy: r.iy ?? g.iy, iz: r.iz ?? g.iz,
+  };
+  const src = getUserCatalog();
+  return { ...p, dims, outline, props, verified: true, source: `קטלוג משתמש: ${src?.source ?? ''}`, note: undefined, catalogMass: r.mass };
 }
 
 export function tryProfile(raw: string): Profile | null {
@@ -66,7 +91,7 @@ function build(key: string): Profile {
   const rest = m[2];
   const src = 'ידע כללי לפי סדרות EN — לא מאומת';
   const mk = (name: string, dims: Record<string, number>, outline: Outline, note?: string): Profile => ({
-    name, family: fam, dims, outline, props: sectionProps(outline), source: src, verified: false, note,
+    name, family: fam, dims, outline, props: sectionProps(outline), source: src, verified: false as boolean, note,
   });
 
   if (fam in I_SERIES || fam in U_SERIES) {
@@ -154,4 +179,14 @@ export function catalogNames(): { family: Family; names: string[] }[] {
   out.push({ family: 'Z', names: ['Z150x60x20x2', 'Z200x70x20x2.5', 'Z200x80x20x3'] });
   out.push({ family: 'PL', names: ['PL100x10', 'PL200x15', 'PL230x20'] });
   return out;
+}
+
+/** משקל למטר: מהקטלוג המאומת אם קיים, אחרת שטח × צפיפות. */
+export function massPerMeter(p: Profile, density: number): number {
+  return p.catalogMass ?? (p.props.area / 1e6) * density;
+}
+
+/** חתך מחושב גיאומטרית בלבד (ללא הקטלוג) — להשוואה מול הטבלה. */
+export function profileWithoutCatalog(raw: string): Profile | null {
+  try { return build(normalizeName(raw)); } catch { return null; }
 }

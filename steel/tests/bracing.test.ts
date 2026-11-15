@@ -16,7 +16,10 @@ describe('קושרות ושורות קשירה', () => {
     expect(ids.filter((i) => i.startsWith('BR.W')).length).toBe(2 * 2 * 2); // 2 מפתחים × 2 קירות × 2
     expect(ids.filter((i) => i.startsWith('BR.T')).length).toBe(5 * 2); // 5 מפתחים × 2 שיפועים
     expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
-    expect(d.connections.filter((c) => c.type === 'brace').every((c) => c.label.includes('דורש תכנון'))).toBe(true);
+    expect(d.connections.filter((c) => c.id.startsWith('C.BR.ROOF') || c.id.startsWith('C.BR.WALL')).every((c) => c.label.includes('דורש תכנון'))).toBe(true);
+    const tie = d.connById.get('C.BR.TIE.L.2')!;
+    expect(tie.bolts.length).toBe(7);
+    expect(tie.bolts.every((b) => b.location === 'site' && b.d === 12)).toBe(true);
   });
   it('שורת קשירה: באמצע המפתח, צמודה לאגף התחתון של הפטות (מגע 0 מ"מ), מהפטה הראשונה עד האחרונה', () => {
     const d = generate(geo());
@@ -25,7 +28,10 @@ describe('קושרות ושורות קשירה', () => {
     const s = memberSolid(t);
     const n = norm(v3(-0.1, 0, 1));
     const dists = [...s.startRing, ...s.endRing].map((q) => dot(sub(q, v3(9000, 0, 6900)), n));
-    expect(Math.max(...dists)).toBeCloseTo(0, 6);
+    expect(Math.max(...dists)).toBeCloseTo(0, 6); // הרגל האופקית צמודה לאגף התחתון של הפטות
+    expect(Math.min(...dists)).toBeCloseTo(-40, 6);
+    // הרגל האופקית למעלה: יותר מקודקוד אחד במישור הגג
+    expect(dists.filter((x) => Math.abs(x) < 1e-6).length).toBeGreaterThanOrEqual(4);
   });
   it('בחירת מפתחים, כולל אינדקס שלילי מהסוף; ביטול מערכת', () => {
     expect(resolveBays([0, -1], 5)).toEqual([0, 4]);

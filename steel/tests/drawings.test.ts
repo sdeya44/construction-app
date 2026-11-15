@@ -65,8 +65,8 @@ describe('שרטוטים', () => {
     const sh = buildSheet(cat.find((c) => c.id === `D-PART-${purl.mark}`)!, p, d, fab, bom);
     const ts = texts(sh);
     expect(ts).toContain(String(Math.round(purl.length)));
-    expect(purl.holes.length).toBe(12);
-    expect(sh.ents.filter((e) => e.k === 'circle' && e.layer === 'HOLE').length).toBe(12);
+    expect(purl.holes.length).toBe(17);
+    expect(sh.ents.filter((e) => e.k === 'circle' && e.layer === 'HOLE').length).toBe(17);
     // מרחק חור ראשון מקצה הפטה (25 מ"מ = 50 הארכה − 25 חצי מרווח) ומרווח 50 בין שני ברגי התומך
     expect(ts).toContain('25'); expect(ts).toContain('50');
     expect(ts.some((x) => x.includes(`סימון: ${purl.mark}`))).toBe(true);

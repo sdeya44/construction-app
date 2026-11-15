@@ -105,6 +105,9 @@ class Store {
     if (!dirty) this.set({ saveState: 'saved' });
   }
 
+  /** גזירה מחדש של המודל (למשל אחרי ייבוא קטלוג חתכים) בלי לשנות היסטוריה. */
+  rederive() { this.syncHistory(this.history.current, false); }
+
   select(ids: string[], mode: 'replace' | 'toggle' | 'add' = 'replace') {
     let sel: string[];
     if (mode === 'replace') sel = ids;

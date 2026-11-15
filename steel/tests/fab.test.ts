@@ -20,9 +20,11 @@ describe('מספור, מכלולים, כמויות', () => {
     expect(purl.length).toBe(14);
     expect(new Set(purl.map((x) => x.mark)).size).toBe(1);
     expect(f.parts.every((x) => x.provisional)).toBe(true);
-    // חורי ברגים בפטה: 2 בכל מסגרת = 12
-    expect(purl[0].holes.length).toBe(12);
-    expect(purl[0].holes.every((h) => h.face === 'web' && h.d === 14)).toBe(true);
+    // חורי ברגים בפטה: 2 בכל מסגרת (ווב, תומך) = 12, ועוד חור באגף התחתון בכל מפתח (שורת קשירה) = 5
+    expect(purl[0].holes.length).toBe(17);
+    expect(purl[0].holes.filter((h) => h.face === 'web').length).toBe(12);
+    expect(purl[0].holes.filter((h) => h.face === 'flange').length).toBe(5);
+    expect(purl[0].holes.every((h) => h.d === 14)).toBe(true);
   });
   it('מכלול: קורת גג + פלטת קצה + זוויתנים (ריתוך מסגריה); עמוד + פלטת כיפה; פלטה מבוטנת + מוטות (ריתוך העמוד בשטח מפריד)', () => {
     const { f } = fabOf(geo());
@@ -65,9 +67,11 @@ describe('מספור, מכלולים, כמויות', () => {
     const c200 = bom.profiles.find((r) => r.profile === 'C200x80x20x3')!;
     expect(c200.count).toBe(12 + 2 * 4); // 12 קווים בחלק אחד + 2 קווים בארבעה חלקים
     expect(c200.length).toBeCloseTo(14 * 30100, 6);
-    const bolts12 = bom.bolts.find((b) => b.d === 12)!;
-    expect(bolts12.qty).toBe(84 * 2);
-    expect(bolts12.location).toBe('site');
+    const cleatBolts = bom.bolts.find((b) => b.d === 12 && b.length === 35)!;
+    expect(cleatBolts.qty).toBe(84 * 2);
+    expect(cleatBolts.location).toBe('site');
+    const tieBolts = bom.bolts.find((b) => b.d === 12 && b.length === 30)!;
+    expect(tieBolts.qty).toBe(5 * 14); // שורת קשירה: בורג בכל הצטלבות
     // שינוי חתך הפטה — משקל, כמות וחיתוך מתעדכנים
     const p2 = setPurlinSide('left', { profile: 'C250x80x20x3' }).run(p);
     const r2 = fabOf(p2), bom2 = computeBom(r2.d, r2.f);

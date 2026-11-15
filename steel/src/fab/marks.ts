@@ -2,8 +2,7 @@ import { dot, sub } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import { memberSolid } from '../geometry/solid';
 import { axialExtent } from '../geometry/parts';
-import { kgPerMeter } from '../core/units';
-import { getProfile } from '../profiles/library';
+import { getProfile, massPerMeter } from '../profiles/library';
 import { getMaterial } from '../profiles/materials';
 import type { DerivedModel, FabPart, Member, MemberKind, Project } from '../model/types';
 
@@ -71,7 +70,7 @@ export function memberHoles(m: Member, d: DerivedModel): Hole[] {
     const throughV = Math.abs(dot(b.axis, f.v)) > Math.abs(dot(b.axis, f.u));
     // דרך אגף (ציר הבורג לאורך v) ⇒ קואורדינטה רוחבית u; דרך ווב ⇒ קואורדינטה v
     const cc = throughV ? dot(r, f.u) : dot(r, f.v);
-    out.push({ t, c: cc, d: b.hole, face: throughV ? 'flange' : 'web', boltId: b.id });
+    out.push({ t, c: cc, c2: throughV ? dot(r, f.v) : dot(r, f.u), d: b.hole, face: throughV ? 'flange' : 'web', boltId: b.id });
   }
   return out.sort((a, b) => a.t - b.t || a.c - b.c);
 }
@@ -94,7 +93,7 @@ export function computeFabrication(project: Project, d: DerivedModel): Fabricati
     const sig = [m.kind, p.profile, p.material, r1(p.length), cutStart, cutEnd, holes.map((h) => `${h.face}${r1(h.t)}/${r1(h.c)}/${r1(h.c2 ?? 0)}/${h.d}`).join(';')].join('|');
     parts.push({
       ...p, mark: '', provisional: false, kind: m.kind, desc: m.partDesc ?? `${m.profile}`,
-      weight: (kgPerMeter(pr.props.area, getMaterial(p.material).density) * p.length) / 1000,
+      weight: (massPerMeter(pr, getMaterial(p.material).density) * p.length) / 1000,
       holes, cutStart, cutEnd, assembly: '', signature: sig,
     });
   }

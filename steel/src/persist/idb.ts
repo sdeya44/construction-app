@@ -102,3 +102,17 @@ export async function deleteProject(id: string): Promise<void> {
   await done(t);
   db.close();
 }
+
+/** קטלוג חתכים מאומת — גלובלי לכל הפרויקטים במחשב. */
+export async function saveCatalog(c: unknown): Promise<void> {
+  const db = await open();
+  const t = db.transaction('kv', 'readwrite');
+  t.objectStore('kv').put(c, 'catalog');
+  await done(t); db.close();
+}
+export async function loadCatalog<T>(): Promise<T | null> {
+  const db = await open();
+  const c = (await req(db.transaction('kv').objectStore('kv').get('catalog'))) as T | undefined;
+  db.close();
+  return c ?? null;
+}

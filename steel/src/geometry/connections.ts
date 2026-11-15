@@ -52,7 +52,7 @@ function partMember(id: string, kind: 'plate' | 'cleat', profile: string, start:
 }
 
 /** בורג כשלושה מוצקים להצגה (ראש, גוף, אום) + רשומת בורג. */
-function makeBolt(id: string, connId: string, head: Vec3, axis: Vec3, spec: BoltSpec, grip: number, location: 'site' | 'shop', holesIn: string[], refUp: Vec3, members: Member[], anchorLen?: number): BoltInfo {
+export function makeBolt(id: string, connId: string, head: Vec3, axis: Vec3, spec: BoltSpec, grip: number, location: 'site' | 'shop', holesIn: string[], refUp: Vec3, members: Member[], anchorLen?: number): BoltInfo {
   const h = hw(spec.d);
   const length = anchorLen ?? boltLength(spec.d, grip);
   const mk = (sid: string, prof: string, a: Vec3, b: Vec3, desc: string): Member => ({

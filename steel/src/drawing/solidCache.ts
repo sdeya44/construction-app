@@ -9,3 +9,5 @@ export function cachedSolidPure(m: Member): Solid {
   if (!s) { s = memberSolid(m); if (cache.size > 60000) cache.clear(); cache.set(k, s); }
   return s;
 }
+
+export function clearPureCache() { cache.clear(); }

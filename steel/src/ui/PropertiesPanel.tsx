@@ -1,8 +1,8 @@
 import { resetOverrides, setMemberProps } from '../commands/commands';
-import { fromMm, kgPerMeter } from '../core/units';
+import { fromMm } from '../core/units';
 import { dist } from '../core/vec';
 import { cutLength } from '../geometry/solid';
-import { tryProfile } from '../profiles/library';
+import { massPerMeter, tryProfile } from '../profiles/library';
 import { getMaterial, MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
 import { NumField, TextField } from './fields';
@@ -41,7 +41,7 @@ function PropertiesInner() {
     const profiles = [...new Set(ms.map((m) => m.profile))];
     const weight = ms.reduce((s, m) => {
       const pr = tryProfile(m.profile);
-      return s + (pr ? kgPerMeter(pr.props.area, getMaterial(m.material).density) * cutLength(m).max / 1000 : 0);
+      return s + (pr ? massPerMeter(pr, getMaterial(m.material).density) * cutLength(m).max / 1000 : 0);
     }, 0);
     return (
       <div className="panel-body" data-testid="props-multi">
@@ -63,7 +63,7 @@ function PropertiesInner() {
   const pr = tryProfile(m.profile);
   const mat = getMaterial(m.material);
   const cl = cutLength(m);
-  const kgm = pr ? kgPerMeter(pr.props.area, mat.density) : 0;
+  const kgm = pr ? massPerMeter(pr, mat.density) : 0;
   const ov = p.memberOverrides[m.id];
   const stale = d.issues.some((i) => i.code === 'STALE_OVERRIDE' && i.elementId === m.id);
   const frameNo = m.frameId ? p.building.frames.findIndex((f) => f.id === m.frameId) + 1 : 0;
@@ -123,7 +123,7 @@ function PropertiesInner() {
       <MemberConnections memberId={m.id} />
       {m.kind !== 'bolt' && <SpliceEditor m={m} />}
       {pr && <>
-        <div className="panel-title">תכונות חתך <span className="badge warn" title={pr.source}>לא מאומת</span></div>
+        <div className="panel-title">תכונות חתך {pr.verified ? <span className="badge ok" title={pr.source} data-testid="prof-verified">מאומת</span> : <span className="badge warn" title={pr.source}>לא מאומת</span>}</div>
         <dl className="kv">
           <dt>h × b</dt><dd>{f1(pr.props.h)} × {f1(pr.props.b)} מ"מ</dd>
           <dt>A</dt><dd>{f1(pr.props.area / 100, 2)} ס"מ²</dd>
@@ -133,7 +133,7 @@ function PropertiesInner() {
           <dt>Wy / Wz</dt><dd>{f1(pr.props.Wy / 1e3)} / {f1(pr.props.Wz / 1e3)} ס"מ³</dd>
           <dt>iy / iz</dt><dd>{f1(pr.props.iy / 10, 2)} / {f1(pr.props.iz / 10, 2)} ס"מ</dd>
         </dl>
-        <div className="hint">מחושב מגיאומטריית החתך. {pr.note ?? ''} אסור לשימוש בחישובי חוזק עד ייבוא קטלוג מאומת.</div>
+        <div className="hint">{pr.verified ? `מקור: ${pr.source}.` : `מחושב מגיאומטריית החתך. ${pr.note ?? ''} אסור לשימוש בחישובי חוזק עד ייבוא קטלוג מאומת.`}</div>
       </>}
     </div>
   );
@@ -146,7 +146,7 @@ function ModelSummary() {
     const pr = tryProfile(x.profile);
     if (!pr) continue;
     const e = counts.get(x.profile) ?? { n: 0, len: 0, kg: 0 };
-    e.n++; e.len += x.length; e.kg += (kgPerMeter(pr.props.area, getMaterial(x.material).density) * x.length) / 1000;
+    e.n++; e.len += x.length; e.kg += (massPerMeter(pr, getMaterial(x.material).density) * x.length) / 1000;
     counts.set(x.profile, e);
   }
   const tot = [...counts.values()].reduce((s, e) => s + e.kg, 0);
