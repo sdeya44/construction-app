@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { addFrame, removeFrame, respaceFrames, setBuilding, setFrameY, setMeta, setSettings } from '../commands/commands';
-import type { BuildingParams, RhsTrussParams, RidgeReinfParams } from '../model/types';
+import type { BuildingParams, PortalBraceParams, RhsTrussParams, RidgeReinfParams } from '../model/types';
+import { defaultPortal } from '../geometry/portal';
 import { defaultRhsTruss } from '../geometry/hbrace';
 import { defaultRidgeReinf } from '../model/defaults';
 import { resolveBays } from '../geometry/bracing';
 import { catalogNames } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
-import { LenField, NumField, TextField } from './fields';
+import { LenField, NumField, ProfilePicker, TextField } from './fields';
 import { Icon } from './icons';
 import { SectionEditor } from './SectionEditor';
 
@@ -88,8 +89,8 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
       </>}
       {show('profiles') && <>
       <div className="panel-title">חתכים וחומר</div>
-      <div className="field"><label>עמודים</label><TextField ltr list="profiles" testId="columnProfile" value={b.columnProfile} onCommit={(v) => set({ columnProfile: v.toUpperCase().replace(/\s/g, '') })} /></div>
-      <div className="field"><label>קורות גג</label><TextField ltr list="profiles" testId="rafterProfile" value={b.rafterProfile} onCommit={(v) => set({ rafterProfile: v.toUpperCase().replace(/\s/g, '') })} /></div>
+      <div className="field prof"><label>עמודים</label><ProfilePicker testId="columnProfile" value={b.columnProfile} families={['HEA', 'HEB', 'HEM', 'IPE', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ columnProfile: v })} /></div>
+      <div className="field prof"><label>קורות גג</label><ProfilePicker testId="rafterProfile" value={b.rafterProfile} families={['IPE', 'HEA', 'HEB', 'RHS', 'UPN']} onCommit={(v) => set({ rafterProfile: v })} /></div>
       <div className="field"><label>חומר</label>
         <select className="inp" value={b.material} onChange={(e) => set({ material: e.target.value })}>
           {MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -154,10 +155,28 @@ function RhsFields() {
   const set = (patch: Partial<RhsTrussParams>) => store.exec(setBuilding({ bracing: { ...br, roof: { ...br.roof, rhs: { ...r, ...patch } } } }));
   return (
     <>
-      <div className="field"><label>מוט (לאורך Y)</label><TextField ltr list="profiles" testId="rhs-strut" value={r.strut} onCommit={(v) => set({ strut: v.toUpperCase().replace(/\s/g, '') })} /></div>
-      <div className="field"><label>אלכסון</label><TextField ltr list="profiles" testId="rhs-diag" value={r.diag} onCommit={(v) => set({ diag: v.toUpperCase().replace(/\s/g, '') })} /></div>
+      <div className="field prof"><label>מוט (לאורך Y)</label><ProfilePicker testId="rhs-strut" value={r.strut} families={['RHS', 'SHS', 'CHS']} onCommit={(v) => set({ strut: v })} /></div>
+      <div className="field prof"><label>אלכסון</label><ProfilePicker testId="rhs-diag" value={r.diag} families={['RHS', 'SHS', 'CHS']} onCommit={(v) => set({ diag: v })} /></div>
       <div className="field"><label>פנלים בשיפוע (0 = אוטו׳)</label><NumField value={r.panels} onCommit={(v) => set({ panels: Math.max(0, Math.round(v)) })} /></div>
       <div className="hint">פח מרותך לווב הקורה בכל צומת; לשונית {r.tongueT} מ"מ בחריץ ה-RHS; {r.boltsPerEnd}×M{r.bolt.d} בשטח. המוט מעל הפח, האלכסון מתחתיו.</div>
+    </>
+  );
+}
+
+function PortalFields() {
+  const br = useStore((s) => s.project.building.bracing);
+  const p = br.walls.portal ?? defaultPortal();
+  const set = (patch: Partial<PortalBraceParams>) => store.exec(setBuilding({ bracing: { ...br, walls: { ...br.walls, portal: { ...p, ...patch } } } }));
+  return (
+    <>
+      <div className="field prof"><label>קורת אגד</label><ProfilePicker testId="pb-beam" value={p.beam} families={['RHS', 'SHS', 'CHS', 'IPE', 'HEA', 'UPN']} onCommit={(v) => set({ beam: v })} /></div>
+      <div className="field prof"><label>אלכסונים</label><ProfilePicker testId="pb-brace" value={p.brace} families={['RHS', 'SHS', 'CHS']} onCommit={(v) => set({ brace: v })} /></div>
+      <div className="field"><label>מרווח מתחת לקורה הראשית</label><NumField testId="pb-gap" value={p.gap} suffix='מ"מ' onCommit={(v) => set({ gap: Math.max(0, v) })} /></div>
+      <div className="field"><label>ירידה על העמוד</label><NumField testId="pb-drop" value={p.drop} suffix='מ"מ' onCommit={(v) => set({ drop: Math.max(200, v) })} /></div>
+      <div className="field"><label>זווית אלכסון</label><NumField testId="pb-angle" value={p.angle} suffix="°" onCommit={(v) => set({ angle: Math.max(20, Math.min(70, v)) })} /></div>
+      <div className="field"><label>עובי פלטות</label><NumField value={p.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: v })} /></div>
+      <div className="field"><label>קוטר בורג</label><NumField value={p.bolt.d} suffix="M" onCommit={(v) => set({ bolt: { ...p.bolt, d: Math.round(v) } })} /></div>
+      <div className="hint">קורה בין העמודים בפלטות קצה (4 ברגים לווב העמוד), ושני אלכסונים קטנים מהעמודים לתחתית הקורה; בקורה — פח רפידה רחב מה-RHS כדי שהברגים יהיו מחוץ לו. ריתוך במסגריה, ברגים בשטח.</div>
     </>
   );
 }
@@ -180,7 +199,7 @@ function RidgeReinfEditor() {
         <div className="field"><label>עובי פלטת חיזוק</label><NumField value={rr.stiffT} suffix='מ"מ' onCommit={(v) => set({ stiffT: v })} /></div>
       </>}
       {rr.type === 'tie' && <>
-        <div className="field"><label>חתך הפרופיל</label><TextField ltr list="profiles" testId="rr-tie" value={rr.tieProfile} onCommit={(v) => set({ tieProfile: v.toUpperCase().replace(/\s/g, '') })} /></div>
+        <div className="field prof"><label>חתך הפרופיל</label><ProfilePicker testId="rr-tie" value={rr.tieProfile} families={['IPE', 'UPN', 'HEA', 'RHS']} onCommit={(v) => set({ tieProfile: v })} /></div>
         <div className="field"><label>מרווח מתחת לקורות ברכס</label><NumField testId="rr-gap" value={rr.tieGap} suffix='מ"מ' onCommit={(v) => set({ tieGap: v })} /></div>
       </>}
       {!hasRidge && rr.type !== 'none' && <div className="hint">אין רכס במודל (גג חד־שיפועי או רכס מעל עמוד) — החיזוק לא נבנה.</div>}
@@ -206,22 +225,29 @@ function BracingEditor() {
           </select>
         </div>
         {(br.roof.type ?? 'x') === 'x'
-          ? <div className="field"><label>חתך</label><TextField ltr list="profiles" value={br.roof.profile} onCommit={(v) => set({ roof: { ...br.roof, profile: v.toUpperCase().replace(/\s/g, '') } })} /></div>
+          ? <div className="field prof"><label>חתך</label><ProfilePicker value={br.roof.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ roof: { ...br.roof, profile: v } })} /></div>
           : <RhsFields />}
         <div className="field"><label>מפתחים</label><BayPicker testId="br-roof-bays" bays={br.roof.bays} count={nb} onChange={(x) => set({ roof: { ...br.roof, bays: x } })} /></div>
       </>}
-      <div className="panel-title">קושרות X – קירות
+      <div className="panel-title">קשיחות לאורך – קירות
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-walls" checked={br.walls.enabled} onChange={(e) => set({ walls: { ...br.walls, enabled: e.target.checked } })} />פעיל</label>
       </div>
       {br.walls.enabled && <>
-        <div className="field"><label>חתך</label><TextField ltr list="profiles" value={br.walls.profile} onCommit={(v) => set({ walls: { ...br.walls, profile: v.toUpperCase().replace(/\s/g, '') } })} /></div>
+        <div className="field"><label>סוג</label>
+          <select className="inp" data-testid="br-walls-type" value={br.walls.type ?? 'x'} onChange={(e) => set({ walls: { ...br.walls, type: e.target.value as 'x' | 'portal', portal: br.walls.portal ?? defaultPortal() } })}>
+            <option value="x">X מזוויתנים (מתיחה)</option><option value="portal">אגד B — קורת RHS + שני אלכסונים</option>
+          </select>
+        </div>
+        {(br.walls.type ?? 'x') === 'x'
+          ? <div className="field prof"><label>חתך</label><ProfilePicker value={br.walls.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ walls: { ...br.walls, profile: v } })} /></div>
+          : <PortalFields />}
         <div className="field"><label>ציר א (שמאל)</label><BayPicker testId="br-wl" bays={br.walls.left} count={nb} onChange={(x) => set({ walls: { ...br.walls, left: x } })} /></div>
         <div className="field"><label>ציר ב (ימין)</label><BayPicker testId="br-wr" bays={br.walls.right} count={nb} onChange={(x) => set({ walls: { ...br.walls, right: x } })} /></div>
       </>}
       <div className="panel-title">שורת קשירה לפטות
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-ties" checked={br.purlinTies.enabled} onChange={(e) => set({ purlinTies: { ...br.purlinTies, enabled: e.target.checked } })} />פעיל</label>
       </div>
-      {br.purlinTies.enabled && <div className="field"><label>חתך</label><TextField ltr list="profiles" value={br.purlinTies.profile} onCommit={(v) => set({ purlinTies: { ...br.purlinTies, profile: v.toUpperCase().replace(/\s/g, '') } })} /></div>}
+      {br.purlinTies.enabled && <div className="field prof"><label>חתך</label><ProfilePicker value={br.purlinTies.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ purlinTies: { ...br.purlinTies, profile: v } })} /></div>}
       <RidgeReinfEditor />
       {(br.roof.enabled || br.walls.enabled) && <>
         <div className="panel-title">חיבור קושרות X</div>

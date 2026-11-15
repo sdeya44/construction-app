@@ -4,6 +4,7 @@ import type { BoltInfo, BraceConnParams, BuildingParams, Connection, Member, Val
 import { zAt, type SectionTopology } from '../model/section';
 import { hw, makeBolt } from './connections';
 import { defaultRhsTruss, rhsTruss } from './hbrace';
+import { buildPortal, defaultPortal } from './portal';
 import { localFrame } from './frame';
 import { bolt } from '../model/defaults';
 
@@ -108,6 +109,11 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         const f0 = frames[bay], f1 = frames[bay + 1];
         const z0 = b.baseElevation + 300, z1 = eave - rafV - 60 - 150;
         if (z1 - z0 < 1000) { res.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `קושרת קיר ציר ${l.label} מפתח ${bay + 1}: גובה קטן מדי` }); continue; }
+        if ((br.walls.type ?? 'x') === 'portal') {
+          buildPortal(res, br.walls.portal ?? defaultPortal(), `${bay + 1}.${side}`, `אגד B ציר ${l.label} מפתח ${bay + 1}`, x, f0.y, f1.y,
+            [`${f0.id}.COL.${l.id}`, `${f1.id}.COL.${l.id}`], b.columnProfile, b.baseElevation, eave - rafV - 60, mat);
+          continue;
+        }
         xbrace(`W${bay + 1}.${side}`, `קושרת קיר ציר ${l.label} מפתח ${bay + 1}`, br.walls.profile, v3(x, 0, z0), v3(1, 0, 0), v3(0, 0, 1),
           { y: f0.y, w: 0 }, { y: f1.y, w: z1 - z0 }, f0.y + ctw / 2, f1.y - ctw / 2, `${f0.id}.COL.${l.id}`, `${f1.id}.COL.${l.id}`);
       }

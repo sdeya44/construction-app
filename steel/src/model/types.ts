@@ -90,11 +90,28 @@ export interface BracingParams {
     type?: 'x' | 'rhs';
     rhs?: RhsTrussParams;
   };
-  walls: { enabled: boolean; profile: string; left: number[]; right: number[] };
+  walls: {
+    enabled: boolean; profile: string; left: number[]; right: number[];
+    /** x = קושרות X (ברירת מחדל); portal = אגד B: קורת RHS בין העמודים + שני אלכסונים קטנים */
+    type?: 'x' | 'portal';
+    portal?: PortalBraceParams;
+  };
   /** שורת קשירה לאגף התחתון של הפטות, באמצע כל מפתח */
   purlinTies: { enabled: boolean; profile: string };
   /** חיבורי קושרות X: פח חיבור מרותך לקורה/עמוד במסגריה, הזוויתן מוברג בשטח; בורג בהצטלבות עם פח מילוי */
   conn: BraceConnParams;
+}
+
+/** אגד B — קשיחות לאורך במפתח קיר: קורה + שני אלכסונים לעמודים */
+export interface PortalBraceParams {
+  beam: string; brace: string;
+  /** מרווח מתחתית הקורה הראשית לראש קורת האגד */
+  gap: Mm;
+  /** ירידת נקודת החיבור על העמוד מתחתית קורת האגד */
+  drop: Mm;
+  /** זווית האלכסון מהאופק */
+  angle: number;
+  plateT: Mm; bolt: BoltSpec; pitch: Mm; weldSize: Mm;
 }
 
 /** סבכה אופקית בגג מ-RHS (במקום X) */
@@ -190,6 +207,9 @@ export interface KneeBraceParams {
   /** מרחק נקודת החיבור על העמוד מתחתית הקורה (אנכי) ועל הקורה מציר העמוד (אופקי) */
   drop: Mm;
   reach: Mm;
+  /** angle (ברירת מחדל, 45° מהאופק): נקודת החיבור לקורה נגזרת מהזווית; reach: מרחק אופקי קבוע */
+  mode?: 'angle' | 'reach';
+  angle?: number;
   /** פלטות קצה: אחת מרותכת לאלכסון ואחת למארח, מוברגות */
   plateT: Mm; plateW: Mm; plateL: Mm;
   bolt: BoltSpec; gauge: Mm; pitch: Mm;

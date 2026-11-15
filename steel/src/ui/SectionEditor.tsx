@@ -1,8 +1,9 @@
+import { useRef, useState } from 'react';
 import { setKneeBraces, setSection } from '../commands/commands';
 import { defaultKneeBraces } from '../geometry/knee';
-import { lineLabel, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
+import { lineLabel, moveLines, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
 import { store, useStore } from '../store';
-import { LenField, NumField, TextField } from './fields';
+import { LenField, NumField, ProfilePicker } from './fields';
 import { Icon } from './icons';
 
 /**
@@ -45,13 +46,13 @@ export function SectionEditor() {
 
 function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' | 'mm'; apply: (s: CustomSection, label?: string) => void }) {
   const lines = [...sec.lines].sort((a, b) => a.x - b.x);
-  const setLine = (id: string, x: number) => apply({ ...sec, template: undefined, lines: sec.lines.map((l) => (l.id === id ? { ...l, x } : l)) });
+  const setLine = (id: string, x: number) => apply(moveLines(sec, new Map([[id, x]])), 'הזזת ציר');
   const setPlane = (id: string, patch: Partial<RoofPlaneDef>) => apply({ ...sec, template: undefined, planes: sec.planes.map((pl) => (pl.id === id ? { ...pl, ...patch } : pl)) });
   const newId = (pre: string, used: string[]) => { let i = 1; while (used.includes(`${pre}${i}`)) i++; return `${pre}${i}`; };
   const slope = (pl: RoofPlaneDef) => ((pl.z1 - pl.z0) / (pl.x1 - pl.x0)) * 100;
   return (
     <>
-      <div className="sec-prev"><SectionPreview section={sec} /></div>
+      <div className="sec-prev"><InteractiveSection sec={sec} apply={apply} /></div>
       <div className="panel-title">צירי עמודים ({lines.length})
         <button className="btn small" data-testid="sec-add-line" onClick={() => {
           const last = lines[lines.length - 1];
@@ -67,13 +68,14 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
               <td><LenField mm={l.x} unit={u} testId={`sec-x-${i}`} onCommit={(v) => setLine(l.id, v)} /></td>
               <td>{i > 0 ? <LenField mm={l.x - lines[i - 1].x} unit={u} min={500} onCommit={(v) => {
                 const delta = v - (l.x - lines[i - 1].x);
-                apply({ ...sec, template: undefined, lines: sec.lines.map((q) => (q.x >= l.x ? { ...q, x: q.x + delta } : q)) });
+                apply(moveLines(sec, new Map(sec.lines.filter((q) => q.x >= l.x).map((q) => [q.id, q.x + delta]))), 'שינוי מרווח צירים');
               }} /> : <span className="hint">—</span>}</td>
               <td>{lines.length > 1 && <button className="icon-btn" title="מחיקת ציר" onClick={() => apply({ ...sec, lines: sec.lines.filter((q) => q.id !== l.id) }, 'מחיקת ציר')}><Icon name="x" /></button>}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      <Overhangs sec={sec} unit={u} apply={apply} />
       <div className="panel-title">מישורי גג ({sec.planes.length})
         <button className="btn small" data-testid="sec-add-plane" onClick={() => {
           const xs = lines.map((l) => l.x);
@@ -96,16 +98,36 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
           </div>
           <div className="row">
             <span className="hint" style={{ margin: 0 }}>שיפוע</span>
-            <div style={{ width: 90 }}><NumField value={+slope(pl).toFixed(3)} suffix="%" onCommit={(v) => setPlane(pl.id, pl.start === 'x1' ? { z0: pl.z1 - (v / 100) * (pl.x1 - pl.x0) } : { z1: pl.z0 + (v / 100) * (pl.x1 - pl.x0) })} /></div>
-            <span className="hint" style={{ margin: 0 }}>פטות מתחילות</span>
+            <div style={{ width: 90 }}><NumField testId={`pl-slope-${i}`} value={+slope(pl).toFixed(3)} suffix="%" onCommit={(v) => setPlane(pl.id, (pl.fixed ?? pl.start) === 'x1' ? { z0: pl.z1 - (v / 100) * (pl.x1 - pl.x0) } : { z1: pl.z0 + (v / 100) * (pl.x1 - pl.x0) })} /></div>
+            <span className="hint" style={{ margin: 0 }}>גובה קבוע</span>
             <div className="seg">
-              <button className={`tbtn${pl.start === 'x0' ? ' on' : ''}`} onClick={() => setPlane(pl.id, { start: 'x0' })}>משמאל</button>
-              <button className={`tbtn${pl.start === 'x1' ? ' on' : ''}`} onClick={() => setPlane(pl.id, { start: 'x1' })}>מימין</button>
+              <button className={`tbtn${(pl.fixed ?? pl.start) === 'x0' ? ' on' : ''}`} data-testid={`pl-fix0-${i}`} onClick={() => setPlane(pl.id, { fixed: 'x0' })}>שמאל</button>
+              <button className={`tbtn${(pl.fixed ?? pl.start) === 'x1' ? ' on' : ''}`} data-testid={`pl-fix1-${i}`} onClick={() => setPlane(pl.id, { fixed: 'x1' })}>ימין</button>
             </div>
           </div>
         </div>
       ))}
-      <div className="hint">גבהים = פני עליון של קורת הגג. מישור שעובר מעל עמוד יושב עליו (ראש עמוד); מישור שמסתיים בעמוד שממשיך למעלה מתחבר לצדו; שני קצוות באותה נקודה ללא עמוד = רכס. שינוי שיפוע שומר על הגובה בקצה ההתחלה של הפטות.</div>
+      <div className="hint">גבהים = פני עליון של קורת הגג. מישור שעובר מעל עמוד יושב עליו (ראש עמוד); מישור שמסתיים בעמוד שממשיך למעלה מתחבר לצדו; שני קצוות באותה נקודה ללא עמוד = רכס. שינוי שיפוע שומר על הגובה בצד הקבוע. צד התחלת הפטות — בגג ופטות.</div>
+    </>
+  );
+}
+
+/** קונזולות שמאל/ימין: מעבר קורות הגג מעבר לציר העמודים הקיצוני (שינוי מזיז את קצה המישור לאורך השיפוע) */
+function Overhangs({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' | 'mm'; apply: (s: CustomSection, label?: string) => void }) {
+  const xs = sec.lines.map((l) => l.x);
+  const xa = Math.min(...xs), xb = Math.max(...xs);
+  const left = sec.planes.reduce((p, q) => (q.x0 < p.x0 ? q : p));
+  const right = sec.planes.reduce((p, q) => (q.x1 > p.x1 ? q : p));
+  const setEnd = (pl: RoofPlaneDef, end: 'x0' | 'x1', x: number) => {
+    const s = (pl.z1 - pl.z0) / (pl.x1 - pl.x0);
+    const patch = end === 'x0' ? { x0: x, z0: pl.z1 - s * (pl.x1 - x) } : { x1: x, z1: pl.z0 + s * (x - pl.x0) };
+    apply({ ...sec, template: undefined, planes: sec.planes.map((q) => (q.id === pl.id ? { ...q, ...patch } : q)) }, 'שינוי קונזולה');
+  };
+  return (
+    <>
+      <div className="panel-title">קונזולות</div>
+      <div className="field"><label>קונזולה שמאל (מציר {lineLabel(0)})</label><LenField testId="ovh-left" mm={Math.max(0, xa - left.x0)} unit={u} onCommit={(v) => setEnd(left, 'x0', xa - v)} /></div>
+      <div className="field"><label>קונזולה ימין (מציר {lineLabel(xs.length - 1)})</label><LenField testId="ovh-right" mm={Math.max(0, right.x1 - xb)} unit={u} onCommit={(v) => setEnd(right, 'x1', xb + v)} /></div>
     </>
   );
 }
@@ -120,9 +142,17 @@ function KneeEditor() {
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="kb-on" checked={kb.enabled} onChange={(e) => set({ enabled: e.target.checked })} />פעיל {kb.enabled ? `(${n})` : ''}</label>
       </div>
       {kb.enabled && <>
-        <div className="field"><label>חתך</label><TextField ltr list="profiles" testId="kb-profile" value={kb.profile} onCommit={(v) => set({ profile: v.toUpperCase().replace(/\s/g, '') })} /></div>
+        <div className="field prof"><label>חתך</label><ProfilePicker testId="kb-profile" value={kb.profile} families={['RHS', 'SHS', 'CHS', 'L', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>
         <div className="field"><label>ירידה על העמוד</label><NumField testId="kb-drop" value={kb.drop} suffix='מ"מ' onCommit={(v) => set({ drop: v })} /></div>
-        <div className="field"><label>מרחק על הקורה (אופקי)</label><NumField testId="kb-reach" value={kb.reach} suffix='מ"מ' onCommit={(v) => set({ reach: v })} /></div>
+        <div className="field"><label>קביעת הנקודה על הקורה</label>
+          <div className="seg">
+            <button className={`tbtn${(kb.mode ?? 'angle') === 'angle' ? ' on' : ''}`} data-testid="kb-mode-angle" onClick={() => set({ mode: 'angle' })}>זווית</button>
+            <button className={`tbtn${kb.mode === 'reach' ? ' on' : ''}`} data-testid="kb-mode-reach" onClick={() => set({ mode: 'reach' })}>מרחק אופקי</button>
+          </div>
+        </div>
+        {(kb.mode ?? 'angle') === 'angle'
+          ? <div className="field"><label>זווית מהאופק</label><NumField testId="kb-angle" value={kb.angle ?? 45} suffix="°" onCommit={(v) => set({ angle: Math.max(15, Math.min(75, v)) })} /></div>
+          : <div className="field"><label>מרחק על הקורה (אופקי)</label><NumField testId="kb-reach" value={kb.reach} suffix='מ"מ' onCommit={(v) => set({ reach: v })} /></div>}
         <div className="field"><label>פלטת קצה (עובי×רוחב×אורך)</label><span className="readonly">{kb.plateT}×{kb.plateW}×{kb.plateL}</span></div>
         <div className="field"><label>ברגים</label><span className="readonly">4×M{kb.bolt.d} · {kb.gauge}/{kb.pitch}</span></div>
         <div className="hint">בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. פלטת קצה מרותכת לאלכסון ומוברגת לאגף העמוד/הקורה (האום בתוך הפרופיל). לפי פרט התוכנית: RHS80/80/4, פלטה 180×280×14, 4×M16. אין בדיקת חוזק.</div>
@@ -147,5 +177,109 @@ export function SectionPreview({ section, small }: { section: CustomSection; sma
       {lines.map((l, i) => <g key={l.id}><line x1={X(l.x)} y1={Y(0)} x2={X(l.x)} y2={Y(topAt(l.x))} className="c" />{!small && <text x={X(l.x)} y={H - 2} className="t">{lineLabel(i)}</text>}</g>)}
       {section.planes.map((p) => <line key={p.id} x1={X(p.x0)} y1={Y(p.z0)} x2={X(p.x1)} y2={Y(p.z1)} className="r" />)}
     </svg>
+  );
+}
+
+/**
+ * עורך חתך אינטראקטיבי: גרירת צירים (הצמדה ל-100 מ"מ, Shift = 10 מ"מ), מידות בין צירים, קונזולות וגבהים —
+ * לחיצה על מידה פותחת שדה להקלדה. שינוי נשמר כפקודה אחת (ביטול אחד).
+ */
+export function InteractiveSection({ sec, apply }: { sec: CustomSection; apply: (s: CustomSection, label?: string) => void }) {
+  const W = 300, H = 170, padX = 18, padTop = 26, padBot = 40;
+  const [drag, setDrag] = useState<{ id: string; x: number } | null>(null);
+  const [edit, setEdit] = useState<{ kind: 'span' | 'ovl' | 'ovr' | 'z'; key: string; at: { x: number; y: number }; value: number } | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const lines0 = [...sec.lines].sort((a, b) => a.x - b.x);
+  const lines = lines0.map((l) => (drag && l.id === drag.id ? { ...l, x: drag.x } : l));
+  const xs = [...lines.map((l) => l.x), ...sec.planes.flatMap((p) => [p.x0, p.x1])];
+  const zs = [0, ...sec.planes.flatMap((p) => [p.z0, p.z1])];
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), z1 = Math.max(...zs);
+  const k = Math.min((W - 2 * padX) / (x1 - x0 || 1), (H - padTop - padBot) / (z1 || 1));
+  const X = (x: number) => padX + (x - x0) * k, Y = (z: number) => H - padBot - z * k;
+  const toModelX = (clientX: number) => {
+    const r = svgRef.current!.getBoundingClientRect();
+    return x0 + ((clientX - r.left) * (W / r.width) - padX) / k;
+  };
+  const topAt = (x: number) => Math.max(0, ...sec.planes.filter((p) => p.x0 - 1 <= x && x <= p.x1 + 1).map((p) => p.z0 + ((p.z1 - p.z0) * (x - p.x0)) / (p.x1 - p.x0)));
+  const commitLines = (nl: { id: string; x: number }[], label: string) => apply(moveLines(sec, new Map(nl.map((q) => [q.id, q.x]))), label);
+  const onDown = (id: string) => (e: React.PointerEvent) => { (e.target as Element).setPointerCapture(e.pointerId); setDrag({ id, x: lines0.find((l) => l.id === id)!.x }); };
+  const onMove = (e: React.PointerEvent) => {
+    if (!drag) return;
+    const step = e.shiftKey ? 10 : 100;
+    setDrag({ ...drag, x: Math.round(toModelX(e.clientX) / step) * step });
+  };
+  const onUp = () => {
+    if (!drag) return;
+    const orig = lines0.find((l) => l.id === drag.id)!;
+    if (Math.abs(orig.x - drag.x) > 0.5) commitLines([{ id: drag.id, x: drag.x }], 'הזזת ציר');
+    setDrag(null);
+  };
+  const svgPt = (sx: number, sy: number) => ({ x: (sx / W) * 100, y: (sy / H) * 100 });
+  const openEdit = (kind: 'span' | 'ovl' | 'ovr' | 'z', key: string, sx: number, sy: number, value: number) => setEdit({ kind, key, at: svgPt(sx, sy), value });
+  const commitEdit = (v: number) => {
+    if (!edit) return;
+    if (edit.kind === 'span') {
+      // מרווח בין ציר i לציר i+1: מזיז את כל הצירים שמימין
+      const i = Number(edit.key);
+      const delta = v - (lines0[i + 1].x - lines0[i].x);
+      commitLines(lines0.map((l, j) => ({ id: l.id, x: j > i ? l.x + delta : l.x })), 'שינוי מרווח צירים');
+    } else if (edit.kind === 'ovl' || edit.kind === 'ovr') {
+      const pl = edit.kind === 'ovl' ? sec.planes.reduce((p, q) => (q.x0 < p.x0 ? q : p)) : sec.planes.reduce((p, q) => (q.x1 > p.x1 ? q : p));
+      const s = (pl.z1 - pl.z0) / (pl.x1 - pl.x0);
+      const patch = edit.kind === 'ovl' ? { x0: lines0[0].x - v, z0: pl.z1 - s * (pl.x1 - (lines0[0].x - v)) } : { x1: lines0[lines0.length - 1].x + v, z1: pl.z0 + s * (lines0[lines0.length - 1].x + v - pl.x0) };
+      apply({ ...sec, template: undefined, planes: sec.planes.map((q) => (q.id === pl.id ? { ...q, ...patch } : q)) }, 'שינוי קונזולה');
+    } else {
+      const [pid, end] = edit.key.split(':');
+      apply({ ...sec, template: undefined, planes: sec.planes.map((q) => (q.id === pid ? { ...q, [end === 'x0' ? 'z0' : 'z1']: v } : q)) }, 'שינוי גובה');
+    }
+    setEdit(null);
+  };
+  const m = (v: number) => (v / 1000).toFixed(2);
+  const yDim = H - padBot + 16, yOv = H - padBot + 30;
+  return (
+    <div className="isec" data-testid="isec">
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="sec-svg isec-svg" onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} role="img" aria-label="עורך חתך">
+        <line x1={0} y1={Y(0)} x2={W} y2={Y(0)} className="g" />
+        {sec.planes.map((p) => <line key={p.id} x1={X(p.x0)} y1={Y(p.z0)} x2={X(p.x1)} y2={Y(p.z1)} className="r" />)}
+        {lines.map((l, i) => (
+          <g key={l.id} className={`isec-ax${drag?.id === l.id ? ' on' : ''}`} onPointerDown={onDown(l.id)} data-testid={`isec-ax-${i}`}>
+            <line x1={X(l.x)} y1={Y(0)} x2={X(l.x)} y2={Y(topAt(l.x))} className="c" />
+            <line x1={X(l.x)} y1={Y(0) + 3} x2={X(l.x)} y2={Y(topAt(l.x)) - 2} className="hit" />
+            <circle cx={X(l.x)} cy={Y(0) + 9} r={6} className="bub" /><text x={X(l.x)} y={Y(0) + 12} className="t b">{lineLabel(i)}</text>
+          </g>
+        ))}
+        {lines.slice(1).map((l, i) => {
+          const a = X(lines[i].x), b = X(l.x);
+          return (
+            <g key={`d${l.id}`} className="isec-dim" onClick={() => openEdit('span', String(i), (a + b) / 2, yDim, l.x - lines[i].x)} data-testid={`isec-span-${i}`}>
+              <line x1={a} y1={yDim} x2={b} y2={yDim} /><text x={(a + b) / 2} y={yDim - 2} className="t">{m(l.x - lines[i].x)}</text>
+            </g>
+          );
+        })}
+        {(() => {
+          const L0 = Math.min(...sec.planes.map((p) => p.x0)), R1 = Math.max(...sec.planes.map((p) => p.x1));
+          const a = lines[0].x, b = lines[lines.length - 1].x;
+          return <>
+            <g className="isec-dim" onClick={() => openEdit('ovl', '', (X(L0) + X(a)) / 2, yOv, a - L0)} data-testid="isec-ovl"><line x1={X(L0)} y1={yOv} x2={X(a)} y2={yOv} /><text x={(X(L0) + X(a)) / 2} y={yOv - 2} className="t">{m(a - L0)}</text></g>
+            <g className="isec-dim" onClick={() => openEdit('ovr', '', (X(b) + X(R1)) / 2, yOv, R1 - b)} data-testid="isec-ovr"><line x1={X(b)} y1={yOv} x2={X(R1)} y2={yOv} /><text x={(X(b) + X(R1)) / 2} y={yOv - 2} className="t">{m(R1 - b)}</text></g>
+          </>;
+        })()}
+        {sec.planes.flatMap((p) => (['x0', 'x1'] as const).map((e) => {
+          const x = p[e], z = e === 'x0' ? p.z0 : p.z1;
+          return (
+            <g key={`${p.id}${e}`} className="isec-dim z" onClick={() => openEdit('z', `${p.id}:${e}`, X(x), Y(z) - 10, z)} data-testid={`isec-z-${p.id}-${e}`}>
+              <text x={X(x) + (e === 'x0' ? 2 : -2)} y={Y(z) - 5} className={`t ${e === 'x0' ? 'st' : 'en'}`}>{m(z)}</text>
+            </g>
+          );
+        }))}
+        {drag && <text x={X(drag.x)} y={padTop - 10} className="t b">{m(drag.x)}</text>}
+      </svg>
+      {edit && (
+        <input className="inp num isec-inp" autoFocus defaultValue={(edit.value / 1000).toFixed(3)} style={{ left: `${edit.at.x}%`, top: `${edit.at.y}%` }} data-testid="isec-input"
+          onKeyDown={(e) => { if (e.key === 'Enter') { const v = Number((e.target as HTMLInputElement).value.replace(',', '.')); if (Number.isFinite(v)) commitEdit(v * 1000); else setEdit(null); } if (e.key === 'Escape') setEdit(null); }}
+          onBlur={(e) => { const v = Number(e.target.value.replace(',', '.')); if (Number.isFinite(v) && Math.abs(v * 1000 - edit.value) > 0.5) commitEdit(v * 1000); else setEdit(null); }} />
+      )}
+      <div className="hint" style={{ margin: '2px 4px' }}>גרור ציר להזזה (Shift = דיוק 10 מ"מ) · לחץ על מידה או גובה כדי להקליד ערך (מטר)</div>
+    </div>
   );
 }

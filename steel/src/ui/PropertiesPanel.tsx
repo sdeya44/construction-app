@@ -7,7 +7,7 @@ import { cutLength } from '../geometry/solid';
 import { massPerMeter, tryProfile } from '../profiles/library';
 import { getMaterial, MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
-import { NumField, TextField } from './fields';
+import { NumField, ProfilePicker } from './fields';
 import { KIND_LABEL } from './TreePanel';
 import { SpliceEditor } from './SpliceEditor';
 import { ConnectionEditor, MemberConnections } from './ConnectionEditor';
@@ -60,7 +60,7 @@ function PropertiesInner() {
     return (
       <div className="panel-body" data-testid="props-multi">
         <div className="el-head"><div className="k">מאפיינים משותפים</div><div className="t"><b><span data-testid="sel-count">{ms.length}</span> אלמנטים</b></div></div>
-        <div className="field"><label>חתך</label><TextField ltr list="profiles" testId="multi-profile" placeholder={profiles.length > 1 ? 'משתנה' : undefined} varies={profiles.length > 1} value={profiles.length === 1 ? profiles[0] : ''} onCommit={(v) => v.trim() && store.exec(setMemberProps(ids, { profile: v.toUpperCase().replace(/\s/g, '') }))} /></div>
+        <div className="field prof"><label>חתך</label><ProfilePicker testId="multi-profile" placeholder={profiles.length > 1 ? 'משתנה' : undefined} varies={profiles.length > 1} value={profiles.length === 1 ? profiles[0] : ''} onCommit={(v) => store.exec(setMemberProps(ids, { profile: v }))} /></div>
         <div className="field"><label>חומר</label>
           <select className={`inp${mats.length > 1 ? ' varies' : ''}`} value={mats.length === 1 ? mats[0] : ''} data-testid="multi-material" onChange={(e) => e.target.value && store.exec(setMemberProps(ids, { material: e.target.value }))}>
             {mats.length > 1 && <option value="">משתנה</option>}{MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -120,7 +120,7 @@ function PropertiesInner() {
               <div><button className="btn small" style={{ marginTop: 4 }} onClick={() => store.exec(resetOverrides([m.id]))}>החזר לפרמטרי</button></div></div>
           </div>
         )}
-        <div className="field"><label>חתך</label><TextField ltr list="profiles" testId="prop-profile" value={m.profile} onCommit={(v) => store.exec(setMemberProps([m.id], { profile: v.toUpperCase().replace(/\s/g, '') }))} /></div>
+        <div className="field prof"><label>חתך</label><ProfilePicker testId="prop-profile" value={m.profile} onCommit={(v) => store.exec(setMemberProps([m.id], { profile: v }))} /></div>
         <div className="field"><label>חומר</label>
           <select className="inp" value={m.material} onChange={(e) => store.exec(setMemberProps([m.id], { material: e.target.value }))}>
             {MATERIALS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}

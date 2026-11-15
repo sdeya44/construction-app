@@ -8,7 +8,10 @@ import { downloadText, pickFile, safeFileName } from '../persist/files';
 import { deleteProject, listProjects, listSnapshots, loadProject, loadSnapshot, type ProjectSummary, type SnapshotInfo } from '../persist/idb';
 import { store, useStore } from '../store';
 import { cachedSolid } from '../view/scene';
-import { LenField, NumField, TextField } from './fields';
+import { LenField, NumField, ProfilePicker } from './fields';
+import { SECTION_TEMPLATES } from '../model/section';
+import { SectionPreview } from './SectionEditor';
+import { defaultKneeBraces } from '../geometry/knee';
 import { Icon } from './icons';
 
 export function Dialog({ title, onClose, children, footer, wide, testId }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean; testId?: string }) {
@@ -39,6 +42,9 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const [b, setB] = useState<BuildingParams>(defaultBuilding());
   const [length, setLength] = useState(30000);
   const [count, setCount] = useState(6);
+  /** סוג המבנה: gable / mono (קלאסי) או מזהה תבנית מודולרית */
+  const [kind, setKind] = useState<string>('gable');
+  const [knee, setKnee] = useState(false);
   const u: 'm' = 'm';
   const set = (p: Partial<BuildingParams>) => setB({ ...b, ...p });
   const build = (): BuildingParams | null => {
@@ -48,9 +54,11 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const cand = build();
   const issues = cand ? validateBuilding(cand) : [{ code: 'FRAMES', severity: 'error' as const, message: 'מספר מסגרות 2–200' }];
   const errors = issues.filter((i) => i.severity === 'error');
+  const tpl = SECTION_TEMPLATES.find((t) => t.id === kind);
   const create = () => {
     if (!cand || errors.length) return;
-    const p = newProject(name, cand);
+    const bb: BuildingParams = tpl ? { ...cand, section: tpl.make(), kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined } : { ...cand, kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined };
+    const p = newProject(name, bb);
     p.meta.number = number; p.meta.client = client;
     store.loadProject(p, true);
     void store.saveNow('יצירת פרויקט');
@@ -58,7 +66,7 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
     setTimeout(() => (window as any).__ksp?.viewport?.fitAll(), 50);
   };
   return (
-    <Dialog title="מבנה חדש" onClose={onClose} wide testId="new-dialog"
+    <Dialog title="פרויקט חדש" onClose={onClose} wide testId="new-dialog"
       footer={<><button className="btn primary" disabled={!!errors.length} onClick={create} data-testid="create">יצירת מבנה</button><button className="btn" onClick={onClose}>ביטול</button></>}>
       <div className="grid2">
         <div>
@@ -66,25 +74,32 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
           <div className="field wide"><label>שם</label><input className="inp" value={name} onChange={(e) => setName(e.target.value)} data-testid="np-name" /></div>
           <div className="field wide"><label>מספר</label><input className="inp" value={number} onChange={(e) => setNumber(e.target.value)} /></div>
           <div className="field wide"><label>לקוח</label><input className="inp" value={client} onChange={(e) => setClient(e.target.value)} /></div>
-          <div className="panel-title">סוג גג</div>
-          <div className="choice">
-            <button className={b.roofType === 'gable' ? 'on' : ''} onClick={() => set({ roofType: 'gable', eaveRight: b.eaveLeft, ridgeX: b.width / 2, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 300 } } })} data-testid="np-gable"><GableSvg />דו־שיפועי</button>
-            <button className={b.roofType === 'mono' ? 'on' : ''} onClick={() => set({ roofType: 'mono', eaveRight: b.eaveLeft + 1000, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 0 } } })} data-testid="np-mono"><MonoSvg />חד־שיפועי</button>
+          <div className="panel-title">סוג מבנה</div>
+          <div className="tpl-grid np-types">
+            <button className={`tpl${kind === 'gable' ? ' on' : ''}`} onClick={() => { setKind('gable'); set({ roofType: 'gable', eaveRight: b.eaveLeft, ridgeX: b.width / 2, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 300 } } }); }} data-testid="np-gable"><GableSvg /><span>דו־שיפועי (2 צירים)</span></button>
+            <button className={`tpl${kind === 'mono' ? ' on' : ''}`} onClick={() => { setKind('mono'); set({ roofType: 'mono', eaveRight: b.eaveLeft + 1000, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 0 } } }); }} data-testid="np-mono"><MonoSvg /><span>חד־שיפועי (2 צירים)</span></button>
+            {SECTION_TEMPLATES.map((t) => (
+              <button key={t.id} className={`tpl${kind === t.id ? ' on' : ''}`} title={t.desc} data-testid={`np-${t.id}`} onClick={() => { setKind(t.id); setKnee(true); }}><SectionPreview section={t.make()} small /><span>{t.name}</span></button>
+            ))}
           </div>
+          <label className="row" style={{ marginTop: 6 }}><input type="checkbox" checked={knee} data-testid="np-knee" onChange={(e) => setKnee(e.target.checked)} />אלכסוני עמוד-קורה (RHS, 45°)</label>
         </div>
         <div>
           <div className="panel-title">ממדים</div>
-          <div className="field"><label>רוחב</label><LenField testId="np-width" mm={b.width} unit={u} onCommit={(v) => set(b.roofType === 'gable' ? { width: v, ridgeX: v / 2 } : { width: v })} /></div>
+          {tpl && <div className="sec-prev"><SectionPreview section={tpl.make()} /><div className="hint" style={{ margin: '2px 4px' }}>{tpl.desc}. צירים, גבהים, קונזולות ושיפועים — נערכים אחרי היצירה במבנה ← גיאומטריה (כולל גרירה בתצוגה).</div></div>}
           <div className="field"><label>אורך</label><LenField testId="np-length" mm={length} unit={u} onCommit={setLength} /></div>
           <div className="field"><label>מספר מסגרות</label><NumField testId="np-count" value={count} onCommit={(v) => setCount(Math.round(v))} /></div>
+          {!tpl && <>
+          <div className="field"><label>רוחב</label><LenField testId="np-width" mm={b.width} unit={u} onCommit={(v) => set(b.roofType === 'gable' ? { width: v, ridgeX: v / 2 } : { width: v })} /></div>
           <div className="field"><label>גובה ציר א (שמאל)</label><LenField testId="np-eaveL" mm={b.eaveLeft} unit={u} onCommit={(v) => set(b.roofType === 'gable' && b.eaveLeft === b.eaveRight ? { eaveLeft: v, eaveRight: v } : { eaveLeft: v })} /></div>
           <div className="field"><label>גובה ציר ב (ימין)</label><LenField testId="np-eaveR" mm={b.eaveRight} unit={u} onCommit={(v) => set({ eaveRight: v })} /></div>
           {b.roofType === 'gable' && <>
             <div className="field"><label>מיקום רכס</label><LenField mm={b.ridgeX} unit={u} onCommit={(v) => set({ ridgeX: v })} /></div>
             <div className="field"><label>שיפוע שמאל</label><NumField testId="np-slope" value={b.slopeLeftPct} suffix="%" onCommit={(v) => set({ slopeLeftPct: v })} /></div>
           </>}
-          <div className="field"><label>חתך עמוד</label><TextField ltr list="profiles" value={b.columnProfile} onCommit={(v) => set({ columnProfile: v.toUpperCase().replace(/\s/g, '') })} /></div>
-          <div className="field"><label>חתך קורה</label><TextField ltr list="profiles" value={b.rafterProfile} onCommit={(v) => set({ rafterProfile: v.toUpperCase().replace(/\s/g, '') })} /></div>
+          </>}
+          <div className="field prof"><label>חתך עמוד</label><ProfilePicker value={b.columnProfile} families={['HEA', 'HEB', 'HEM', 'IPE', 'RHS', 'SHS']} onCommit={(v) => set({ columnProfile: v })} /></div>
+          <div className="field prof"><label>חתך קורה</label><ProfilePicker value={b.rafterProfile} families={['IPE', 'HEA', 'HEB', 'RHS']} onCommit={(v) => set({ rafterProfile: v })} /></div>
         </div>
       </div>
       {issues.map((i, k) => <div key={k} className={`issue ${i.severity}`}><span className="ic">{i.severity === 'error' ? '✕' : '!'}</span>{i.message}</div>)}

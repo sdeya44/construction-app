@@ -17,7 +17,7 @@ export const VIEW_LABEL: Record<ViewName, string> = {
   iso: 'איזומטרי', front: 'חזית', back: 'אחור', left: 'שמאל', right: 'ימין', top: 'תוכנית',
 };
 
-interface Label { p: THREE.Vector3; text: string; cls: string; dir?: THREE.Vector3 }
+interface Label { p: THREE.Vector3; text: string; cls: string; dir?: THREE.Vector3; edit?: string; value?: number }
 
 class Pane {
   el: HTMLDivElement;
@@ -52,6 +52,15 @@ class Pane {
     this.el.addEventListener('pointerdown', (e) => { this.down = { x: e.clientX, y: e.clientY, t: performance.now(), b: e.button }; });
     this.el.addEventListener('pointerup', (e) => this.onUp(e));
     this.el.addEventListener('contextmenu', (e) => e.preventDefault());
+    // מידה ניתנת לעריכה: לחיצה על התווית (לא מעבירה בחירה למודל)
+    const isEdit = (e: Event) => (e.target as HTMLElement)?.dataset?.edit;
+    this.labelLayer.addEventListener('pointerdown', (e) => { if (isEdit(e)) e.stopPropagation(); });
+    this.labelLayer.addEventListener('pointerup', (e) => {
+      const t = e.target as HTMLElement;
+      if (!t?.dataset?.edit) return;
+      e.stopPropagation();
+      this.vp.onDimEdit?.(t.dataset.edit, Number(t.dataset.value), e.clientX, e.clientY);
+    });
   }
 
   get camera(): THREE.Camera { return this.projection === 'ortho' ? this.ortho : this.persp; }
@@ -177,8 +186,9 @@ class Pane {
       if (!s.visible || s.x < -50 || s.y < -50 || s.x > this.rect.w + 50 || s.y > this.rect.h + 50) continue;
       let el = this.labelPool[i];
       if (!el) { el = document.createElement('div'); this.labelLayer.appendChild(el); this.labelPool[i] = el; }
-      el.className = `vp-label ${l.cls}`;
+      el.className = `vp-label ${l.cls}${l.edit ? ' editable' : ''}`;
       el.textContent = l.text;
+      if (l.edit) { el.dataset.edit = l.edit; el.dataset.value = String(l.value ?? 0); el.title = 'לחיצה לשינוי המידה'; } else { delete el.dataset.edit; el.removeAttribute('title'); }
       el.style.transform = `translate(${s.x}px, ${s.y}px) translate(-50%, -50%)`;
       el.style.display = '';
       i++;
@@ -374,17 +384,19 @@ export class Viewport {
     }
     if (s.view.dims) {
       const pts: number[] = [];
-      const dimLine = (a: Vec3, c: Vec3, tick: Vec3, text: string) => {
+      const dimLine = (a: Vec3, c: Vec3, tick: Vec3, text: string, edit?: string, value?: number) => {
         pts.push(a.x, a.y, a.z, c.x, c.y, c.z);
         for (const p of [a, c]) pts.push(p.x - tick.x, p.y - tick.y, p.z - tick.z, p.x + tick.x, p.y + tick.y, p.z + tick.z);
         const dir = new THREE.Vector3(c.x - a.x, c.y - a.y, c.z - a.z).normalize();
-        this.labels.push({ p: new THREE.Vector3((a.x + c.x) / 2, (a.y + c.y) / 2, (a.z + c.z) / 2), text, cls: 'dim', dir });
+        this.labels.push({ p: new THREE.Vector3((a.x + c.x) / 2, (a.y + c.y) / 2, (a.z + c.z) / 2), text, cls: 'dim', dir, edit, value });
       };
       const off = 1400;
-      // רוחב, לפני המסגרת הראשונה
-      dimLine({ x: x0, y: y0 - off, z }, { x: x1, y: y0 - off, z }, { x: 0, y: 200, z: 0 }, fmt(x1 - x0));
-      // מרווחי מסגרות וסה"כ אורך לאורך ציר א
-      for (let i = 1; i < ys.length; i++) dimLine({ x: x0 - off, y: ys[i - 1], z }, { x: x0 - off, y: ys[i], z }, { x: 200, y: 0, z: 0 }, fmt(ys[i] - ys[i - 1]));
+      // מרווחים בין צירי העמודים (לחיצה = עריכה) ורוחב כולל, לפני המסגרת הראשונה
+      const xsS = [...xs].sort((p, q) => p - q);
+      if (xsS.length > 2) for (let i = 1; i < xsS.length; i++) dimLine({ x: xsS[i - 1], y: y0 - off, z }, { x: xsS[i], y: y0 - off, z }, { x: 0, y: 200, z: 0 }, fmt(xsS[i] - xsS[i - 1]), `x:${i - 1}`, xsS[i] - xsS[i - 1]);
+      dimLine({ x: x0, y: y0 - off * (xsS.length > 2 ? 2 : 1), z }, { x: x1, y: y0 - off * (xsS.length > 2 ? 2 : 1), z }, { x: 0, y: 200, z: 0 }, fmt(x1 - x0), xsS.length > 2 ? undefined : 'w', x1 - x0);
+      // מרווחי מסגרות (לחיצה = עריכה) וסה"כ אורך לאורך ציר א
+      for (let i = 1; i < ys.length; i++) dimLine({ x: x0 - off, y: ys[i - 1], z }, { x: x0 - off, y: ys[i], z }, { x: 200, y: 0, z: 0 }, fmt(ys[i] - ys[i - 1]), `y:${i - 1}`, ys[i] - ys[i - 1]);
       if (ys.length > 2) dimLine({ x: x0 - 2 * off, y: y0, z }, { x: x0 - 2 * off, y: y1, z }, { x: 200, y: 0, z: 0 }, fmt(y1 - y0));
       // גבהים במסגרת הראשונה
       // גובה פני עליון בכל ציר עמודים במסגרת הראשונה, וגובה רכס
@@ -541,6 +553,9 @@ export class Viewport {
     const id = r.ids[idx];
     store.select([id], e.ctrlKey || e.metaKey ? 'toggle' : e.shiftKey ? 'add' : 'replace');
   }
+
+  /** לחיצה על מידה ניתנת לעריכה בתצוגה: key = 'x:i' (מרווח צירים) / 'y:i' (מרווח מסגרות) / 'w' (רוחב) */
+  onDimEdit?: (key: string, value: number, clientX: number, clientY: number) => void;
 
   /** לחיצה ימנית ללא גרירה: בחירת האלמנט שמתחת (אם אינו בבחירה) ופתיחת התפריט המעגלי. */
   onContext?: (clientX: number, clientY: number) => void;

@@ -395,6 +395,22 @@ export function proposeSplicesFor(ids: string[]): Command {
   };
 }
 
+/** החלת מידות תומך על כל תומכי הפטות בכל השיפועים, וביטול התאמות בודדות (החלטת משתמש) */
+export function setCleatAll(cleat: CleatParams): Command {
+  return {
+    label: 'עדכון כל תומכי הפטות',
+    run: (p) => {
+      const n = clone(p);
+      const pu = n.building.purlins;
+      pu.left = { ...pu.left, cleat: clone(cleat) };
+      pu.right = { ...pu.right, cleat: clone(cleat) };
+      if (pu.planes) pu.planes = Object.fromEntries(Object.entries(pu.planes).map(([k, v]) => [k, { ...v, cleat: clone(cleat) }]));
+      n.cleatOverrides = {};
+      return n;
+    },
+  };
+}
+
 /** עדכון פרמטרי תומך ברירת מחדל לצד, או לתומך בודד (cleatId). */
 export function setCleat(side: string, patch: Partial<CleatParams>, cleatId?: string): Command {
   return {

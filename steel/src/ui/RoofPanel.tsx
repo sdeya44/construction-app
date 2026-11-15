@@ -1,11 +1,11 @@
-import { proposeSplicesFor, setCleat, setPurlinSide, setPurlinSystem, type Command } from '../commands/commands';
+import { proposeSplicesFor, setCleat, setPurlinSide, setPurlinSystem, setSection, type Command } from '../commands/commands';
 import { NumField } from './fields';
 import { fromMm } from '../core/units';
 import type { Member, PurlinSideParams } from '../model/types';
 import { MATERIALS } from '../profiles/materials';
 import { purlinParams } from '../geometry/purlins';
 import { store, useStore } from '../store';
-import { LenField, TextField } from './fields';
+import { LenField, ProfilePicker } from './fields';
 
 const OPENING: Record<'up' | 'down', string> = { up: 'לכיוון הרכס / הצד הגבוה', down: 'לכיוון המרזב / הצד הנמוך' };
 
@@ -25,7 +25,7 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
         </label>
       </div>
       {prm.enabled && <>
-        <div className="field"><label>חתך</label><TextField ltr list="profiles" testId={tid('profile')} value={prm.profile} onCommit={(v) => set({ profile: v.toUpperCase().replace(/\s/g, '') })} /></div>
+        <div className="field prof"><label>חתך הפטה</label><ProfilePicker testId={tid('profile')} value={prm.profile} families={['C', 'Z', 'RHS', 'IPE', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>
         <div className="field"><label>{mono ? 'מרחק ראשון מקצה ההתחלה' : 'מרחק ראשון מהרכס'}</label><LenField testId={tid('first')} mm={prm.first} unit={u} onCommit={(v) => set({ first: v })} /></div>
         <div className="field"><label>חלוקה</label>
           <select className="inp" data-testid={tid('mode')} value={prm.layout ?? 'fixed'} onChange={(e) => set({ layout: e.target.value as 'fixed' | 'even' })}>
@@ -127,6 +127,22 @@ function SideIssues({ pkey }: { pkey: string }) {
   );
 }
 
+/** חתך מודולרי: מאיזה צד מתחילה פריסת הפטות במישור (הועבר לכאן מעורך החתך — החלטת משתמש) */
+function PlaneStart({ planeId }: { planeId: string }) {
+  const sec = useStore((s) => s.project.building.section);
+  const pl = sec?.planes.find((q) => q.id === planeId);
+  if (!sec || !pl) return null;
+  const set = (start: 'x0' | 'x1') => store.exec(setSection({ ...sec, planes: sec.planes.map((q) => (q.id === planeId ? { ...q, start, fixed: q.fixed ?? q.start } : q)) }, 'צד התחלת פטות'));
+  return (
+    <div className="field" style={{ marginTop: 12 }}><label>פטות מתחילות מ{sec.planes.length > 1 ? ` (${pl.id})` : ''}</label>
+      <div className="seg">
+        <button className={`tbtn${pl.start === 'x0' ? ' on' : ''}`} data-testid={`ps-start0-${planeId}`} onClick={() => set('x0')}>שמאל</button>
+        <button className={`tbtn${pl.start === 'x1' ? ' on' : ''}`} data-testid={`ps-start1-${planeId}`} onClick={() => set('x1')}>ימין</button>
+      </div>
+    </div>
+  );
+}
+
 export type RoofSection = 'system' | 'left' | 'right' | 'splices';
 export function RoofPanel({ section }: { section?: RoofSection } = {}) {
   const show = (k: RoofSection) => !section || section === k;
@@ -157,7 +173,7 @@ export function RoofPanel({ section }: { section?: RoofSection } = {}) {
       <div className="hint">הפריסה מתחילה {p.building.roofType === 'gable' ? 'ברכס, לכל צד בנפרד,' : 'בקצה שנבחר'} ומתקדמת עד הקצה החיצוני של קורת הגג כולל הקונזולה. הפטה האחרונה בקצה, והשארית נשארת במפתח האחרון בלבד.</div>
       </>}
       {p.building.section
-        ? (show('left') || show('right')) && planes.map((pl) => <SideEditor key={pl.id} side={pl.params} title={`פטות ${pl.label}`} freeStart={pl.startFree} items={purlins.filter((m) => m.purlin!.side === pl.id)} />)
+        ? (show('left') || show('right')) && planes.map((pl) => <div key={pl.id}><PlaneStart planeId={pl.id} /><SideEditor side={pl.params} title={`פטות ${pl.label}`} freeStart={pl.startFree} items={purlins.filter((m) => m.purlin!.side === pl.id)} /></div>)
         : p.building.roofType === 'gable'
         ? <>{show('left') && <SideEditor side="left" title="שיפוע שמאל" items={L} />}{show('right') && <SideEditor side="right" title="שיפוע ימין" items={R} />}</>
         : (show('left') || show('right')) && <SideEditor side="left" title="שיפוע הגג" items={M} />}

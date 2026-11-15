@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { deleteMembers, restoreDeleted } from '../commands/commands';
+import { deleteMembers, restoreDeleted, setBuilding, setSection } from '../commands/commands';
 import { fromMm } from '../core/units';
 import { store, useStore, type ViewName } from '../store';
 import { VIEW_LABEL, Viewport } from '../view/viewport';
@@ -12,6 +12,7 @@ import { CatalogDialog } from './CatalogDialog';
 import { ProductionView } from './ProductionView';
 import { CommandPalette, ConnCard, ContextBar, MarkingMenu, connectionsOf, type Cmd } from './Overlays';
 import { KIND_LABEL } from './TreePanel';
+import { moveLines } from '../model/section';
 import { SideNav, type NavKey } from './SideNav';
 import { EaveCheckDialog } from './EaveCheckDialog';
 import { LayersMenu } from './LayersMenu';
@@ -41,6 +42,27 @@ export function App() {
   const [palette, setPalette] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [vpObj, setVpObj] = useState<Viewport | null>(null);
+  const [dimEdit, setDimEdit] = useState<{ key: string; value: number; x: number; y: number } | null>(null);
+  /** עריכת מידה מהתצוגה: מרווח צירים / מרווח מסגרות / רוחב — מזיז את כל מה שאחרי */
+  const commitDim = (key: string, v: number) => {
+    const bb = store.state.project.building;
+    const [k0, si] = key.split(':');
+    // רוחב בחתך מודולרי עם שני צירים = מרווח הצירים
+    const k = k0 === 'w' && bb.section ? 'x' : k0;
+    const i = k0 === 'w' ? 0 : Number(si);
+    if (!(v > 0)) return;
+    if (k === 'y') {
+      const fr = [...bb.frames].sort((a, c) => a.y - c.y);
+      const delta = v - (fr[i + 1].y - fr[i].y);
+      store.exec(setBuilding({ frames: fr.map((f, j) => (j > i ? { ...f, y: f.y + delta } : f)) }));
+    } else if (k === 'x' && bb.section) {
+      const ls = [...bb.section.lines].sort((a, c) => a.x - c.x);
+      const delta = v - (ls[i + 1].x - ls[i].x);
+      store.exec(setSection(moveLines(bb.section, new Map(ls.filter((_, j) => j > i).map((l) => [l.id, l.x + delta]))), 'שינוי מרווח צירים'));
+    } else if (k === 'w') {
+      store.exec(setBuilding(bb.roofType === 'gable' && Math.abs(bb.ridgeX - bb.width / 2) < 1 ? { width: v, ridgeX: v / 2 } : { width: v }));
+    }
+  };
   const s = useStore((x) => x);
   const sel = s.selection;
   const v = s.view;
@@ -53,6 +75,7 @@ export function App() {
     vp.current = viewport;
     setVpObj(viewport);
     viewport.onContext = (x, y) => setMenu({ x, y });
+    viewport.onDimEdit = (key, value, x, y) => setDimEdit({ key, value, x, y });
     window.__ksp = { store, viewport };
     return () => viewport.dispose();
   }, []);
@@ -193,7 +216,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.6</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.7</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -324,6 +347,11 @@ export function App() {
 
       {menu && ms.length > 0 && <MarkingMenu x={menu.x} y={menu.y} title={ms.length === 1 ? (ms[0]!.id.length > 12 ? KIND_LABEL[ms[0]!.kind] : ms[0]!.id) : String(ms.length)} items={menuItems()} onClose={() => setMenu(null)} />}
       <EaveCheckDialog />
+      {dimEdit && (
+        <input className="inp num dim-edit" autoFocus data-testid="dim-edit" defaultValue={(dimEdit.value / 1000).toFixed(3)} style={{ left: dimEdit.x, top: dimEdit.y }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { const v = Number((e.target as HTMLInputElement).value.replace(',', '.')); const d0 = dimEdit; setDimEdit(null); if (Number.isFinite(v)) commitDim(d0.key, v * 1000); } if (e.key === 'Escape') setDimEdit(null); }}
+          onBlur={() => setDimEdit(null)} />
+      )}
       {palette && <CommandPalette cmds={cmds} onClose={() => setPalette(false)} onPickElement={pickElement} />}
       {dialog === 'new' && <NewProjectDialog onClose={() => setDialog(null)} />}
       {dialog === 'open' && <OpenDialog onClose={() => setDialog(null)} />}

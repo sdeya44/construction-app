@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  applyTemplate, resetCleat, resetConnection, saveTemplate, setCleat, setConnection, setConnectionDefault,
+  applyTemplate, resetCleat, resetConnection, saveTemplate, setCleat, setCleatAll, setConnection, setConnectionDefault,
 } from '../commands/commands';
 import { effCleat } from '../geometry/connections';
 import type { Vec3 } from '../core/vec';
@@ -162,7 +162,10 @@ export function ConnectionEditor() {
         <div className="field"><label>מרווח בין שורות</label><LenField mm={cl.rowPitch} unit="mm" onCommit={(v) => setC({ rowPitch: v })} /></div>
         <div className="field"><label>גובה חורים (ריק = אמצע)</label><LenField mm={cl.holeHeight ?? 0} unit="mm" onCommit={(v) => setC({ holeHeight: v > 0 ? v : null })} /></div>
         <div className="field"><label>ריתוך לקורה a</label><LenField mm={cl.weldSize} unit="mm" onCommit={(v) => setC({ weldSize: v })} /></div>
-        <div className="hint">השינויים כאן חלים על תומך זה בלבד. ברירת המחדל לכל הצד — בלשונית "גג ופטות".</div>
+        <div className="hint">השינויים כאן חלים על תומך זה בלבד.</div>
+        <div className="row">
+          <button className="btn primary small" data-testid="cl-apply-all" onClick={() => confirm('להחיל את מידות התומך הזה על כל תומכי הפטות בכל השיפועים? התאמות בודדות יבוטלו.') && store.exec(setCleatAll(cl))}>החל על כל התומכים ({d.connections.filter((x) => x.type === 'purlin-cleat').length})</button>
+        </div>
       </>}
 
       <div className="panel-title">ברגים ({c.bolts.length})</div>

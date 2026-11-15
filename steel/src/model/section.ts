@@ -18,6 +18,8 @@ export interface RoofPlaneDef {
   start: 'x0' | 'x1';
   /** סט פרמטרי הפטות: 'left' / 'right' (משותפים) או מזהה מישור עם פרמטרים משלו */
   purlins?: string;
+  /** הקצה שגובהו נשמר כששינוי שיפוע (ברירת מחדל: קצה ההתחלה של הפטות) */
+  fixed?: 'x0' | 'x1';
 }
 export interface CustomSection { lines: SectionLineDef[]; planes: RoofPlaneDef[]; template?: string }
 
@@ -221,4 +223,22 @@ export function sectionTopology(sec: NSection, colHalf: number, minExt: number):
     if (Math.abs(p.a.x - p.b.x) < 100) issues.push({ code: 'PLANE_SHORT', severity: 'error', message: `${p.label}: מישור קצר מדי` });
   }
   return { sec, junctions, ridges, colTop, issues };
+}
+
+/**
+ * הזזת צירים בחתך מודולרי: כל קצה מישור "שייך" לציר הקרוב אליו (לפני ההזזה) וזז איתו באותו מרחק — כך
+ * קונזולות, רכס מעל עמוד וחיבורי צד נשמרים. הגבהים (z) של הקצוות נשמרים; השיפוע מתעדכן בהתאם.
+ */
+export function moveLines(sec: CustomSection, moves: Map<string, number>): CustomSection {
+  const old = new Map(sec.lines.map((l) => [l.id, l.x]));
+  const delta = (x: number) => {
+    let best: string | null = null, bd = Infinity;
+    for (const [id, lx] of old) { const d = Math.abs(lx - x); if (d < bd) { bd = d; best = id; } }
+    return best && moves.has(best) ? moves.get(best)! - old.get(best)! : 0;
+  };
+  return {
+    ...sec, template: undefined,
+    lines: sec.lines.map((l) => (moves.has(l.id) ? { ...l, x: moves.get(l.id)! } : l)),
+    planes: sec.planes.map((p) => ({ ...p, x0: p.x0 + delta(p.x0), x1: p.x1 + delta(p.x1) })),
+  };
 }

@@ -7,7 +7,7 @@ import { hw, makeBolt } from './connections';
 /** ברירת מחדל לפי תוכניות הלקוח: RHS80/80/4, פלטת קצה 180×280×14 בכל קצה, 4×M16 (שתי עמודות × שתי שורות) */
 export function defaultKneeBraces(): KneeBraceParams {
   return {
-    enabled: false, profile: 'RHS80x80x4', drop: 800, reach: 900, plateT: 14, plateW: 180, plateL: 280,
+    enabled: false, profile: 'RHS80x80x4', drop: 800, reach: 900, mode: 'angle', angle: 45, plateT: 14, plateW: 180, plateL: 280,
     bolt: { d: 16, grade: '8.8', standard: 'ISO 4017', clearance: 2 }, gauge: 80, pitch: 200, weldSize: 5, exclude: [],
   };
 }
@@ -43,7 +43,20 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
       for (const s of sides) {
         const key = `${jn.line.id}.${pl.id}.${s < 0 ? 'L' : 'R'}`;
         if (kb.exclude.includes(key)) continue;
-        const xR = jn.line.x + s * kb.reach;
+        // נקודת החיבור לקורה: לפי זווית מהאופק (ברירת מחדל 45°) או מרחק אופקי קבוע
+        let xR = jn.line.x + s * kb.reach;
+        if ((kb.mode ?? 'angle') === 'angle') {
+          const sl0 = (pl.b.z - pl.a.z) / (pl.b.x - pl.a.x);
+          const hv0 = rp.props.h * Math.sqrt(1 + sl0 * sl0);
+          const xF = jn.line.x + s * cp.props.h / 2;
+          const und0 = (x: number) => (raf.anchor === 'top' ? zAt(pl, x) : zAt(pl, x) + hv0 / 2) - hv0;
+          const zC0 = und0(xF) - kb.drop;
+          const tA = Math.tan((Math.max(15, Math.min(75, kb.angle ?? 45)) * Math.PI) / 180);
+          // zC0 + tA·|x−xF| = und0(x) ⇒ פתרון ליניארי לאורך הצד s
+          const slopeS = sl0 * s; // שינוי גובה תחתית הקורה לכל מ"מ בכיוון s
+          const dx = (und0(xF) - zC0) / (tA - slopeS);
+          if (dx > 0) xR = xF + s * dx;
+        }
         // הקורה חייבת להמשיך מעבר לנקודת החיבור + חצי פלטה
         if (xR - kb.plateL / 2 < lo - 1 || xR + kb.plateL / 2 > hi + 1) continue;
         const sl = (pl.b.z - pl.a.z) / (pl.b.x - pl.a.x);
