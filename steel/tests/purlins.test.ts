@@ -32,7 +32,7 @@ describe('ROOF – פריסת פטות', () => {
     // מרחק אמיתי במרחב בין שתי פטות עוקבות = 1500
     const L = purl(geo(), 'L');
     // פטה אחרונה יושבת כולה על הקורה המוארכת: פני האגף (78.5 מ"מ מציר הווב, פתיחה לכיוון המרזב) בקצה הקורה
-    expect(L[L.length - 1].purlin!.sSlope).toBeCloseTo(Math.hypot(9170, 917) - 78.5, 6);
+    expect(L[L.length - 1].purlin!.sSlope).toBeCloseTo(Math.hypot(9170, 917) + 30 - 78.5, 6); // +30: פני הקורה העליונים בולטים בחיתוך 90° במרזב
     expect(Math.hypot(L[1].start.x - L[0].start.x, L[1].start.z - L[0].start.z)).toBeCloseTo(1500, 6);
   });
   it('ROOF-03: שינוי מרווח שמאל אינו משנה את ימין', () => {
@@ -46,7 +46,7 @@ describe('ROOF – פריסת פטות', () => {
     const p = geo();
     p.building.rafterOverhangLeft = 800;
     const L = purl(p, 'L');
-    const Ls = Math.hypot(9800, 980);
+    const Ls = Math.hypot(9800, 980) + 30; // קצה הפנים העליונות (חיתוך 90°)
     expect(L[L.length - 1].purlin!.sSlope).toBeCloseTo(Ls - 78.5, 6); // פני הפטה בקצה החיצוני של הקונזולה
     const spans = L.slice(1).map((m) => m.purlin!.spanBefore);
     for (const s of spans.slice(0, -1)) expect(s).toBeCloseTo(1500, 9);

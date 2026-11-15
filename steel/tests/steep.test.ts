@@ -12,6 +12,7 @@ function checkSeats(p: ReturnType<typeof newProject>) {
   // EAVE_FIT בשיפוע תלול — הצעת מידות פלטה נפרדת (חלון בדיקת פלטה); כאן נבדקת ישיבת הפטות
   expect(d.issues.filter((i) => i.severity === 'error' && i.code !== 'EAVE_FIT')).toEqual([]);
   let n = 0;
+  const gaps = new Map<string, number>();
   for (const pu of d.members.filter((m) => m.purlin)) {
     const sp = d.supports.find((s) => s.purlinId === pu.id);
     if (!sp) continue;
@@ -24,12 +25,25 @@ function checkSeats(p: ReturnType<typeof newProject>) {
     const tp = memberSolid(pu).startRing.map((q) => dot(sub({ ...q, y: raf.start.y }, raf.start), ex));
     expect(Math.min(...tp)).toBeGreaterThanOrEqual(Math.min(...ts) - 0.5);
     expect(Math.max(...tp)).toBeLessThanOrEqual(Math.max(...ts) + 0.5);
+    // הפטה האחרונה בקצה המרזב (edgeOffset 0): צמודה לקצה הפנים העליונות — ללא רווח (בקשת משתמש)
+    if (pu.purlin!.isLast && !gaps.has(pu.purlin!.side)) {
+      const gap = Math.min(Math.abs(Math.min(...tp) - Math.min(...ts)), Math.abs(Math.max(...ts) - Math.max(...tp)));
+      gaps.set(pu.purlin!.side, gap);
+    }
     n++;
   }
   expect(n).toBeGreaterThan(4);
+  // הפטה הצמודה לקצה: הצד הקרוב שלה (פטה או רגל התומך) על קצה הקורה; מותר רק רגל התומך שבולטת מהפטה
+  for (const [, g] of gaps) expect(g).toBeLessThan(1);
 }
 
 describe('שיפוע תלול: הפטה הראשונה/האחרונה על הקורה', () => {
+  it('דו־שיפועי 12.5%, C120 — הפטה במרזב צמודה לקצה הקורה', () => {
+    const p = newProject('t', defaultBuilding());
+    p.building.slopeLeftPct = 12.5;
+    for (const k of ['left', 'right'] as const) p.building.purlins[k] = { ...p.building.purlins[k], profile: 'C120x50x13x2' };
+    checkSeats(p);
+  });
   it('חד־שיפועי 45° (100%), C120, מרחק ראשון 0', () => {
     const p = newProject('t', defaultBuilding());
     Object.assign(p.building, { roofType: 'mono', eaveRight: 6000 + 18000 });

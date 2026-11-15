@@ -16,7 +16,7 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     await page.getByTestId('right-mode').selectOption('fixed');
     const L = await purl(page, 'L'), R = await purl(page, 'R');
     expect(L[0][0]).toBe('PL.L.01'); expect(R[0][0]).toBe('PL.R.01');
-    expect(L.map((x: any) => Math.round(x[3]))).toEqual([300, 1800, 3300, 4800, 6300, 7800, 9137]); // הפטה האחרונה יושבת כולה על הקורה (78.5 מ"מ פנימה מהקצה)
+    expect(L.map((x: any) => Math.round(x[3]))).toEqual([300, 1800, 3300, 4800, 6300, 7800, 9167]); // הפטה האחרונה צמודה לקצה הפנים העליונות של הקורה (חיתוך 90°, +30 מ"מ)
     await expect(page.getByTestId('left-layout')).toContainText('שארית');
     await shot(page, 'ROOF_panel_iso');
     await page.getByTestId('left-spacing').fill('1.2'); await page.getByTestId('left-spacing').press('Enter');

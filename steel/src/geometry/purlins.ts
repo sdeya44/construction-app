@@ -112,7 +112,21 @@ export function buildPurlins(b: BuildingParams, sec: NSection, deleted: Set<stri
     const hi = S.z >= E.z ? S : E, lo = hi === S ? E : S;
     const up = Math.abs(S.z - E.z) < 1e-6 ? norm(v3(S.x - E.x, 0, 0)) : norm(v3(hi.x - lo.x, 0, hi.z - lo.z));
     const label = sec.custom ? `פטות ${pl.label}` : pl.id === 'L' ? 'פטות שמאל' : pl.id === 'R' ? 'פטות ימין' : 'פטות';
-    return { side: pl.id, params: purlinParams(pu, pl.params), paramKey: pl.params, free: pl.startFree, S, E, up, rafterId: pl.rafterId, label };
+    // קצה חופשי של קורת הגג נחתך 90° דרך הפינה החיצונית (generate): בקצה הנמוך הפנים העליונות בולטות מעבר לקצה המישור.
+    // הפטה הקיצונית נמדדת מהקצה האמיתי של הפנים העליונות — אחרת נשאר רווח שגדל עם השיפוע (12.5% ≈ 25 מ"מ ב-C120)
+    const raf = tryProfile(b.rafterProfile);
+    const colH = tryProfile(b.columnProfile)?.props.h ?? 200;
+    const L0 = Math.hypot(E.x - S.x, E.z - S.z);
+    const dir = { x: (E.x - S.x) / L0, z: (E.z - S.z) / L0 };
+    const hv = raf ? raf.props.h * Math.sqrt(1 + (dir.z / (dir.x || 1e-9)) ** 2) : 0;
+    const joined = (P: { x: number; z: number }) =>
+      sec.planes.some((q) => q !== pl && [q.a, q.b].some((Q) => Math.abs(Q.x - P.x) < 1 && Math.abs(Q.z - P.z) < 1))
+      || sec.lines.some((l) => Math.abs(l.x - P.x) <= colH / 2 + 1);
+    const topExt = (P: { x: number; z: number }, out: { x: number; z: number }) => (joined(P) ? 0 : Math.max(0, -(b.heightRef === 'TOS' ? hv : hv / 2) * out.z));
+    const eE = topExt(E, dir), eS = pl.startFree ? topExt(S, { x: -dir.x, z: -dir.z }) : 0;
+    const E2 = eE > 0.01 ? { x: E.x + dir.x * eE, z: E.z + dir.z * eE } : E;
+    const S2 = eS > 0.01 ? { x: S.x - dir.x * eS, z: S.z - dir.z * eS } : S;
+    return { side: pl.id, params: purlinParams(pu, pl.params), paramKey: pl.params, free: pl.startFree, S: S2, E: E2, up, rafterId: pl.rafterId, label };
   });
   const ys = b.frames.map((f) => f.y);
   const y0 = Math.min(...ys) - b.purlinOverhangStart, y1 = Math.max(...ys) + b.purlinOverhangEnd;
