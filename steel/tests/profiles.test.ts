@@ -12,7 +12,8 @@ describe('ספריית חתכים', () => {
     expect(p.props.Iy / 1e4).toBeGreaterThan(1900);
     expect(p.props.Iy / 1e4).toBeLessThan(1960);
     expect(kgPerMeter(p.props.area, 7850)).toBeCloseTo(22.4, 0);
-    expect(p.verified).toBe(false);
+    expect(p.verified).toBe(true); // קטלוג פרופילים מובנה (CSV המשתמש)
+    expect(p.catalogMass).toBeCloseTo(22.4, 0);
   });
   it('SHS160x6 ו-SHS160x160x6 הם אותו חתך', () => {
     expect(getProfile('SHS160x160x6').name).toBe('SHS160x6');

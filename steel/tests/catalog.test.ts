@@ -46,7 +46,7 @@ describe('ייבוא קטלוג חתכים', () => {
     expect(p.props.area).toBeCloseTo(2848, 6);
     expect(p.props.Iy).toBeCloseTo(1943e4, 0);
     expect(massPerMeter(p, 7850)).toBe(22.4);
-    expect(getProfile('IPE240').verified).toBe(false); // לא בטבלה
+    expect(getProfile('C200x80x20x3').verified).toBe(false); // לא בקטלוג המובנה ולא בטבלה
   });
   it('CSV עם נקודה-פסיק, ושם סדרה בשורה נפרדת ("IPE" ואז "200")', () => {
     const csv = '﻿פרופיל;h;b;A\nIPE;;;\n200;200;100;28,48\n220;220;110;33,37\n';

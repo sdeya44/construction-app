@@ -1,5 +1,6 @@
 import { I_SERIES, U_SERIES, type ITuple } from './catalog';
 import { catalogRow, getUserCatalog } from './userCatalog';
+import BUILTIN_RAW from './data/builtin.json';
 import {
   chsShape, cShape, iShape, lShape, plateShape, rhsShape, sectionProps, uShape, zShape,
   type Outline, type SectionProps,
@@ -36,7 +37,8 @@ export class ProfileError extends Error {}
 
 /** נרמול שם: אותיות גדולות, ללא רווחים, '*'/'×' → 'x'. */
 export function normalizeName(raw: string): string {
-  return raw.trim().toUpperCase().replace(/\s+/g, '').replace(/,/g, '.').replace(/(\d)[*×X](?=\d)/g, '$1x');
+  // סיומת ייצור (CF מכופף בקר / HF גמר חם) מושמטת — הקטלוג המובנה בוחר גרסה אחת לכל מידה
+  return raw.trim().toUpperCase().replace(/\s+/g, '').replace(/,/g, '.').replace(/(\d)[*×X](?=\d)/g, '$1x').replace(/(\d)(CF|HF)$/, '$1');
 }
 
 function nums(s: string): number[] {
@@ -48,11 +50,55 @@ function positive(...v: number[]) {
   if (v.some((x) => !(x > 0))) throw new ProfileError('כל המידות חייבות להיות חיוביות');
 }
 
+/** שורת קטלוג מובנה (מקובץ נתוני הפרופילים של המשתמש; scripts/import_profiles.py). יחידות mm. */
+interface BuiltinRow {
+  n: string; f: Family; src: string; d: string; m: string;
+  h?: number; b?: number; b2?: number; tw?: number; tf?: number; t?: number; r?: number; ro?: number; c?: number;
+  A: number; G?: number; Iy?: number; Iz?: number; Wy?: number; Wz?: number; iy?: number; iz?: number; It?: number; rv?: boolean;
+}
+const BUILTIN = BUILTIN_RAW as BuiltinRow[];
+const builtinIdx = new Map<string, BuiltinRow>();
+for (const r of BUILTIN) {
+  builtinIdx.set(r.n, r);
+  const alias = normalizeName(r.d.replace(/\s+(CF|HF)$/i, ''));
+  if (!builtinIdx.has(alias)) builtinIdx.set(alias, r);
+  // RHS ריבועי בשמות התוכנה (RHS80x80x4) = SHS בקטלוג
+  if (r.f === 'SHS' && r.h && r.t && !builtinIdx.has(`RHS${r.h}x${r.h}x${r.t}`)) builtinIdx.set(`RHS${r.h}x${r.h}x${r.t}`, r);
+}
+export const builtinRow = (name: string) => builtinIdx.get(normalizeName(name));
+
+/** חתך מתוך שורת הקטלוג המובנה: גיאומטריה מהמידות, תכונות חתך ומשקל מהטבלה */
+function fromBuiltin(key: string, r: BuiltinRow): Profile {
+  const fam: Family = r.f === 'SHS' && key.startsWith('RHS') ? 'RHS' : r.f;
+  const h = r.h ?? 0, b = r.b ?? h, t = r.t ?? 0;
+  let outline: Outline, dims: Record<string, number>, note: string | undefined;
+  if (fam in I_SERIES || fam in U_SERIES) {
+    const isU = fam === 'UPN' || fam === 'UPE';
+    dims = { h, b, tw: r.tw ?? 0, tf: r.tf ?? 0, r: r.r ?? 0 };
+    outline = isU ? uShape(h, b, dims.tw, dims.tf, dims.r) : iShape(h, b, dims.tw, dims.tf, dims.r);
+    if (fam === 'INP' || fam === 'UPN') note = 'אגפים משופעים מיוצגים בעובי ממוצע (התכונות מהטבלה)';
+  } else if (fam === 'RHS' || fam === 'SHS') { dims = { h, b, t }; outline = rhsShape(h, b, t); }
+  else if (fam === 'CHS') { dims = { d: h, t }; outline = chsShape(h, t); }
+  else if (fam === 'L') { dims = { a: h, b, t }; outline = lShape(h, b, t); }
+  else if (fam === 'C' || fam === 'Z') {
+    dims = { h, b, c: r.c ?? 0, t };
+    outline = fam === 'C' ? cShape(h, b, r.c ?? 0, t) : zShape(h, b, r.c ?? 0, t);
+    note = r.src === 'SIGMA' ? 'פרופיל סיגמה — הגיאומטריה בקירוב C; התכונות מהטבלה' : r.b2 ? `אגפים לא שווים (${b}/${r.b2}) — הגיאומטריה בקירוב; התכונות מהטבלה` : undefined;
+  } else return build(key);
+  const g = sectionProps(outline);
+  const props = { ...g, area: r.A, Iy: r.Iy ?? g.Iy, Iz: r.Iz ?? g.Iz, Wy: r.Wy ?? g.Wy, Wz: r.Wz ?? g.Wz, iy: r.iy ?? g.iy, iz: r.iz ?? g.iz };
+  return {
+    name: fam === 'RHS' && r.f === 'SHS' ? key : r.n, family: fam, dims, outline, props, catalogMass: r.G, note,
+    verified: !r.rv, source: `קטלוג פרופילים (${r.d}${r.m === 'CF' ? ', מכופף בקר' : r.m === 'HF' ? ', גמר חם' : ''})${r.rv ? ' — דורש בדיקה' : ''}`,
+  };
+}
+
 export function getProfile(raw: string): Profile {
   const key = normalizeName(raw);
   const hit = cache.get(key);
   if (hit) return hit;
-  const p = applyCatalog(build(key));
+  const br = builtinIdx.get(key);
+  const p = applyCatalog(br ? fromBuiltin(key, br) : build(key));
   cache.set(key, p);
   cache.set(p.name, p);
   return p;
@@ -167,18 +213,15 @@ function build(key: string): Profile {
 
 /** שמות לדפדוף בספרייה (סדרות טבלאיות) ודוגמאות לסדרות פרמטריות. */
 export function catalogNames(): { family: Family; names: string[] }[] {
-  const out: { family: Family; names: string[] }[] = [];
-  for (const [f, t] of Object.entries({ ...I_SERIES, ...U_SERIES })) {
-    out.push({ family: f as Family, names: Object.keys(t).map((k) => `${f}${k}`) });
-  }
-  out.push({ family: 'RHS', names: ['RHS40x40x3', 'RHS50x50x3', 'RHS60x60x4', 'RHS70x70x4', 'RHS80x80x4', 'RHS90x90x4', 'RHS100x100x4', 'RHS100x100x5', 'RHS120x120x5', 'RHS120x120x6', 'RHS140x140x6', 'RHS150x150x6', 'RHS160x160x6', 'RHS180x180x8', 'RHS200x200x5', 'RHS200x200x8', 'RHS250x250x8', 'RHS100x50x4', 'RHS120x60x4', 'RHS120x80x5', 'RHS150x100x5', 'RHS160x80x5', 'RHS200x100x5', 'RHS250x150x6', 'RHS300x200x8'] });
-  out.push({ family: 'SHS', names: ['SHS60x4', 'SHS80x4', 'SHS100x4', 'SHS120x5', 'SHS150x6', 'SHS160x6', 'SHS200x8'] });
-  out.push({ family: 'CHS', names: ['CHS48.3x3.2', 'CHS60.3x3.2', 'CHS76.1x3.2', 'CHS88.9x4', 'CHS114.3x4', 'CHS139.7x5', 'CHS168.3x5', 'CHS219.1x6'] });
-  out.push({ family: 'L', names: ['L40x4', 'L45x5', 'L50x5', 'L60x6', 'L65x7', 'L70x7', 'L75x8', 'L80x8', 'L90x9', 'L100x10', 'L120x12'] });
-  out.push({ family: 'C', names: ['C100x50x15x2', 'C120x50x20x2', 'C150x60x20x2', 'C150x60x20x2.5', 'C180x70x20x2.5', 'C200x70x20x2.5', 'C200x80x20x3', 'C250x80x20x3', 'C300x80x25x3'] });
-  out.push({ family: 'Z', names: ['Z150x60x20x2', 'Z180x70x20x2.5', 'Z200x70x20x2.5', 'Z200x80x20x3', 'Z250x80x20x3'] });
-  out.push({ family: 'PL', names: ['PL100x10', 'PL150x10', 'PL200x15', 'PL230x20', 'PL300x20'] });
-  return out;
+  const by = new Map<Family, string[]>();
+  for (const r of BUILTIN) { if (!by.has(r.f)) by.set(r.f, []); by.get(r.f)!.push(r.n); }
+  // RHS ריבועי זמין גם בשמות התוכנה (RHS80x80x4)
+  const sq = BUILTIN.filter((r) => r.f === 'SHS' && r.h && r.t).map((r) => `RHS${r.h}x${r.h}x${r.t}`);
+  by.set('RHS', [...(by.get('RHS') ?? []), ...sq]);
+  for (const [f, t] of Object.entries({ ...I_SERIES, ...U_SERIES })) if (!by.has(f as Family)) by.set(f as Family, Object.keys(t).map((k) => `${f}${k}`));
+  by.set('PL', ['PL100x10', 'PL150x10', 'PL200x15', 'PL230x20', 'PL300x20']);
+  const order: Family[] = ['IPE', 'HEA', 'HEB', 'HEM', 'INP', 'UPN', 'UPE', 'RHS', 'SHS', 'CHS', 'L', 'C', 'Z', 'PL'];
+  return order.filter((f) => by.has(f)).map((f) => ({ family: f, names: by.get(f)! }));
 }
 
 /** משקל למטר: מהקטלוג המאומת אם קיים, אחרת שטח × צפיפות. */
