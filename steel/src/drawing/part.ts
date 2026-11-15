@@ -135,7 +135,10 @@ export function partSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: st
     if (sloped) {
       dimH(PF(Math.max(0, sTop), 0).x, PF(Math.min(L, eTop), 0).x, PF(0, vmax).y + 7, `${Math.round(Math.min(L, eTop) - Math.max(0, sTop))} (צד עליון)`);
       dimH(PF(Math.max(0, sBot), 0).x, PF(Math.min(L, eBot), 0).x, PF(0, vmin).y - 7, `${Math.round(Math.min(L, eBot) - Math.max(0, sBot))} (צד תחתון)`);
-      rows.push(`חיתוך בשיפוע: גובה החתך ${Math.round(hv)} — הפרש ${Math.round(Math.abs(eTop - eBot) + Math.abs(sTop - sBot))} מ"מ בין הצדדים`);
+      const aS = Math.max(0, (sTop + sBot) / 2), aE = Math.min(L, (eTop + eBot) / 2);
+      dimH(PF(aS, 0).x, PF(aE, 0).x, PF(0, vmax).y + 14, `${Math.round(aE - aS)} (בציר)`);
+      rows.push(`חיתוך בשיפוע: גובה החתך ${Math.round(hv)} — הפרש ${Math.round(Math.abs(eTop - eBot) + Math.abs(sTop - sBot))} מ"מ בין הצדדים; באמצע — אורך בציר`);
+      if (m.kind === 'column') rows.push('גובה עמוד בציר = גובה פני עליון קורת הגג (TOS) בציר − עומק הקורה האנכי − שתי פלטות ראש העמוד');
     } else dimH(PF(0, 0).x, PF(L, 0).x, PF(0, vmax).y + 7, `${Math.round(L)}`);
     // חורים: שרשרת לאורך t מתחת למבט החזית, ומיקום רוחבי
     const webH = part.holes.filter((h) => h.face === 'web'), flH = part.holes.filter((h) => h.face === 'flange');
