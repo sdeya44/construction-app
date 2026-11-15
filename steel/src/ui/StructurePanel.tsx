@@ -156,7 +156,16 @@ function BracingEditor() {
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-ties" checked={br.purlinTies.enabled} onChange={(e) => set({ purlinTies: { ...br.purlinTies, enabled: e.target.checked } })} />פעיל</label>
       </div>
       {br.purlinTies.enabled && <div className="field"><label>חתך</label><TextField ltr list="profiles" value={br.purlinTies.profile} onCommit={(v) => set({ purlinTies: { ...br.purlinTies, profile: v.toUpperCase().replace(/\s/g, '') } })} /></div>}
-      <div className="hint">קושרות X עובדות במתיחה בלבד. שורת קשירה באמצע כל מפתח, צמודה לאגף התחתון של הפטות (נגד יניקת רוח). פחי חיבור והצטלבויות — דורש תכנון.</div>
+      {(br.roof.enabled || br.walls.enabled) && <>
+        <div className="panel-title">חיבור קושרות X</div>
+        <div className="field"><label>קוטר בורג</label><NumField testId="brc-d" value={br.conn.bolt.d} suffix="M" onCommit={(v) => set({ conn: { ...br.conn, bolt: { ...br.conn.bolt, d: Math.round(v) } } })} /></div>
+        <div className="field"><label>ברגים בכל קצה</label><NumField testId="brc-n" value={br.conn.boltsPerEnd} onCommit={(v) => set({ conn: { ...br.conn, boltsPerEnd: Math.max(1, Math.round(v)) } })} /></div>
+        <div className="field"><label>מרווח ברגים</label><NumField value={br.conn.pitch} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, pitch: v } })} /></div>
+        <div className="field"><label>מרחק קצה</label><NumField value={br.conn.endDist} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, endDist: v } })} /></div>
+        <div className="field"><label>עובי פח חיבור</label><NumField value={br.conn.gussetT} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, gussetT: v } })} /></div>
+        <div className="field"><label>בורג בהצטלבות</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="brc-cross" checked={br.conn.crossBolt} onChange={(e) => set({ conn: { ...br.conn, crossBolt: e.target.checked } })} />{br.conn.crossBolt ? 'כן' : 'לא'}</label></div>
+      </>}
+      <div className="hint">קושרות X עובדות במתיחה בלבד. פח החיבור מרותך לווב הקורה/העמוד במסגריה, הזוויתן מוברג בשטח; בהצטלבות פח מילוי ובורג. שורת קשירה באמצע כל מפתח, צמודה לאגף התחתון של הפטות. בדיקת חוזק — אינה מבוצעת.</div>
     </>
   );
 }

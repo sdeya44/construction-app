@@ -235,6 +235,55 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
     }
   }
 
+  // ---- חיבור המשך פטה: פלטה בצד הפנימי של הווב (מול הזוויתן), 2 ברגים בכל פטה (שטח). החלטת משתמש 15.11.2026
+  const splicePlates = new Map<string, { id: string; y0: number; y1: number; T: number }[]>();
+  const sp0 = b.purlins.splice;
+  for (const pur of members) {
+    if (!pur.purlin || !isGen(pur)) continue;
+    const ts = [...new Set(project.splices[pur.id] ?? [])].sort((a, c) => a - c);
+    if (!ts.length) continue;
+    const pp = tryProfile(pur.profile);
+    if (!pp || (pp.family !== 'C' && pp.family !== 'Z')) continue;
+    const lf = localFrame(pur);
+    const n = lf.v, tw = pp.dims.t;
+    const d = pp.family === 'Z' ? lf.u : scale(lf.u, -1); // צד הזוויתן
+    const back = scale(d, -1);
+    const h = pp.props.h;
+    const H = sp0.plateH ?? Math.floor((h - 4 * tw - 20) / 10) * 10;
+    const gV = H - 2 * sp0.edge;
+    const side = pur.purlin.side === 'R' ? 'right' : 'left';
+    const cl = b.purlins[side].cleat;
+    const supT = supports.filter((x) => x.purlinId === pur.id).map((x) => dot(sub(x.p, pur.start), lf.ex));
+    ts.forEach((t, k) => {
+      if (!(t > 100 && t < lf.length - 100)) return; // נבדק ב-buildParts (SPLICE_RANGE)
+      const id = `C.PS.${pur.id}.${k + 1}`;
+      const pid = `${id}.PL`;
+      const nearSup = cl.enabled && supT.some((st) => Math.abs(st - t) < cl.width / 2 + sp0.jointOffset);
+      const o = nearSup ? Math.max(sp0.jointOffset, cl.width / 2 + sp0.edge + 5) : sp0.jointOffset;
+      const L = 2 * (o + sp0.edge);
+      const J = add(pur.start, scale(lf.ex, t));
+      const C = add(add(J, scale(n, h / 2)), scale(back, tw / 2 + sp0.plateT / 2));
+      res.members.push(partMember(pid, 'plate', `PL${H}x${sp0.plateT}`, sub(C, scale(lf.ex, L / 2)), add(C, scale(lf.ex, L / 2)), back, 'center', id,
+        `פלטת המשך פטה PL${sp0.plateT}×${H}×${L}`, b.purlins.material));
+      const bolts: BoltInfo[] = [];
+      [-1, 1].forEach((sg, si) => [-gV / 2, gV / 2].forEach((zz, zi) => {
+        const head = add(add(add(J, scale(lf.ex, sg * o)), scale(n, h / 2 + zz)), scale(d, tw / 2));
+        bolts.push(makeBolt(`${id}.B${si + 1}${zi + 1}`, id, head, back, sp0.bolt, tw + sp0.plateT, 'site', [pur.id, pid], n, res.members));
+      }));
+      const d0 = sp0.bolt.d + sp0.bolt.clearance;
+      const label = `חיבור המשך ${pur.label} (${(t / 1000).toFixed(3)} מ')`;
+      edgeChecks(label, id, d0, sp0.edge, sp0.edge, gV, null, res.issues);
+      if (o < 1.2 * d0) issue({ code: 'BOLT_EDGE', severity: 'warning', elementId: id, message: `${label}: מרחק הבורג מקצה הפטה ${o} מ"מ < 1.2·d0` });
+      const flat0 = 2 * tw, flat1 = h - 2 * tw;
+      if (h / 2 - gV / 2 - d0 / 2 < flat0 || h / 2 + gV / 2 + d0 / 2 > flat1) issue({ code: 'HOLE_FLAT', severity: 'warning', elementId: id, message: `${label}: חור מחוץ לאזור השטוח של ווב הפטה` });
+      if (pp.family === 'C' && H > h - 2 * tw - 2 * (pp.dims.r ?? tw)) issue({ code: 'PLATE_WIDE', severity: 'warning', elementId: id, message: `${label}: גובה הפלטה ${H} גדול מהאזור השטוח בין האגפים` });
+      const arr = splicePlates.get(pur.id) ?? [];
+      arr.push({ id: pid, y0: t - L / 2, y1: t + L / 2, T: sp0.plateT });
+      splicePlates.set(pur.id, arr);
+      res.connections.push({ id, type: 'purlin-splice', label, members: [pur.id], parts: [pid, ...bolts.map((x) => x.id)], bolts, welds: [], status: statusOf(project, id), fixity: 'pinned', overridden: false });
+    });
+  }
+
   // ---- פטה-קורה: זוויתן L מרותך לקורה (מסגריה), מוברג לווב הפטה (שטח)
   for (const sp of supports) {
     const pur = byId.get(sp.purlinId), raf = byId.get(sp.rafterId);
@@ -274,7 +323,10 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
     for (let r = 0; r < prm.rows; r++) {
       grid(prm.perRow, prm.pitch).forEach((gy, ci) => {
         const head = add(add(add(Q, scale(d, prm.thickness)), scale(n, hh0 + r * prm.rowPitch)), scale(Y, gy));
-        bolts.push(makeBolt(`${id}.B${r + 1}${ci + 1}`, id, head, backD, prm.bolt, prm.thickness + tw, 'site', [cid, pur.id], n, res.members));
+        // בורג התומך שעובר גם בפלטת חיבור המשך (תפר מעל התומך)
+        const tb = dot(sub(head, pur.start), lf.ex);
+        const spl = (splicePlates.get(pur.id) ?? []).find((q) => tb > q.y0 + 1 && tb < q.y1 - 1);
+        bolts.push(makeBolt(`${id}.B${r + 1}${ci + 1}`, id, head, backD, prm.bolt, prm.thickness + tw + (spl?.T ?? 0), 'site', spl ? [cid, pur.id, spl.id] : [cid, pur.id], n, res.members));
       });
     }
     const d0 = prm.bolt.d + prm.bolt.clearance;

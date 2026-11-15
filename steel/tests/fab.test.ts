@@ -68,10 +68,12 @@ describe('מספור, מכלולים, כמויות', () => {
     expect(c200.count).toBe(12 + 2 * 4); // 12 קווים בחלק אחד + 2 קווים בארבעה חלקים
     expect(c200.length).toBeCloseTo(14 * 30100, 6);
     const cleatBolts = bom.bolts.find((b) => b.d === 12 && b.length === 35)!;
-    expect(cleatBolts.qty).toBe(84 * 2);
+    // 2 קווים × 3 תפרים מעל תומכים: 2 ברגי תומך בכל תפר עוברים גם בפלטת ההמשך (ארוכים יותר)
+    expect(cleatBolts.qty).toBe(84 * 2 - 2 * 3 * 2);
+    expect(bom.bolts.filter((b) => b.d === 12).reduce((s, b) => s + b.qty, 0)).toBe(84 * 2 + 5 * 14 + 2 * 3 * 4);
     expect(cleatBolts.location).toBe('site');
     const tieBolts = bom.bolts.find((b) => b.d === 12 && b.length === 30)!;
-    expect(tieBolts.qty).toBe(5 * 14); // שורת קשירה: בורג בכל הצטלבות
+    expect(tieBolts.qty).toBe(5 * 14 + 2 * 3 * 4); // שורת קשירה: בורג בכל הצטלבות + ברגי פלטות המשך (אותו אורך)
     // שינוי חתך הפטה — משקל, כמות וחיתוך מתעדכנים
     const p2 = setPurlinSide('left', { profile: 'C250x80x20x3' }).run(p);
     const r2 = fabOf(p2), bom2 = computeBom(r2.d, r2.f);

@@ -1,7 +1,7 @@
-import { add, norm, scale, sub, v3, type Vec3 } from '../core/vec';
+import { add, dot, norm, scale, sub, v3, type Vec3 } from '../core/vec';
 import { getProfile, tryProfile } from '../profiles/library';
-import type { BoltInfo, BuildingParams, Connection, Member, RoofInfo, ValidationIssue } from '../model/types';
-import { makeBolt } from './connections';
+import type { BoltInfo, BraceConnParams, BuildingParams, Connection, Member, RoofInfo, ValidationIssue, WeldInfo } from '../model/types';
+import { hw, makeBolt } from './connections';
 import { localFrame } from './frame';
 import { bolt } from '../model/defaults';
 
@@ -23,8 +23,8 @@ const mk = (id: string, label: string, profile: string, start: Vec3, end: Vec3, 
 });
 
 /**
- * קושרות X בגג ובקירות ושורות קשירה לפטות. קושרות X עובדות במתיחה בלבד (לפי תוכנית K-02);
- * פחי החיבור והחיבור בהצטלבות מסומנים "דורש תכנון" — אין גיאומטריית חיבור בשלב זה.
+ * קושרות X בגג ובקירות ושורות קשירה לפטות. קושרות X עובדות במתיחה בלבד (לפי תוכנית K-02).
+ * חיבור: פח מרותך במסגריה, זוויתן מוברג בשטח (M16), בורג בהצטלבות — החלטת משתמש 15.11.2026.
  */
 export function buildBracing(b: BuildingParams, roof: RoofInfo, purlins: Member[], eff: BuildingParams): BracingResult {
   const res: BracingResult = { members: [], connections: [], issues: [] };
@@ -34,54 +34,53 @@ export function buildBracing(b: BuildingParams, roof: RoofInfo, purlins: Member[
   const mat = b.material;
   const raf = getProfile(b.rafterProfile), col = getProfile(b.columnProfile);
   const tw = raf.dims.tw ?? raf.dims.t ?? 6;
-  const conn = (id: string, label: string, parts: string[]) => res.connections.push({
-    id, type: 'brace', label, members: [], parts, bolts: [], welds: [], status: 'not-verified', fixity: 'pinned', overridden: false,
-  });
   for (const [key, prof] of [['roof', br.roof.profile], ['walls', br.walls.profile], ['ties', br.purlinTies.profile]] as const) {
     if (!tryProfile(prof)) res.issues.push({ code: 'PROFILE', severity: 'error', message: `חתך קושרת לא מוכר (${key}): ${prof}` });
   }
   if (res.issues.length) return res;
 
-  // ---- קושרות גג: במישור ציר קורת הגג, בין פני הווב של שתי מסגרות סמוכות
+  const bc = br.conn;
+  const xbrace = (key: string, label: string, profile: string, plane0: Vec3, n: Vec3, wDir: Vec3,
+    pA: { y: number; w: number }, pC: { y: number; w: number }, yFace0: number, yFace1: number, host0: string, host1: string) =>
+    xBrace(res, b, bc, key, label, profile, plane0, n, wDir, pA, pC, yFace0, yFace1, host0, host1);
+
+  // ---- קושרות גג: במישור אמצע גובה קורת הגג, פח חיבור מרותך לווב הקורה בכל קצה
   if (br.roof.enabled) {
     const slopes: { side: string; a: { x: number; z: number }; c: { x: number; z: number } }[] = [];
     const tosZ = (x: number) => (b.roofType === 'gable'
       ? (x <= b.ridgeX ? b.eaveLeft + roof.slopeLeft * x : roof.ridgeZ! - roof.slopeRight * (x - b.ridgeX))
       : b.eaveLeft + roof.slopeLeft * x);
+    const ridgeGap = 150 + bc.gussetEdge;
     if (b.roofType === 'gable') {
-      slopes.push({ side: 'L', a: { x: 0, z: tosZ(0) }, c: { x: b.ridgeX - 150, z: tosZ(b.ridgeX - 150) } });
-      slopes.push({ side: 'R', a: { x: b.width, z: tosZ(b.width) }, c: { x: b.ridgeX + 150, z: tosZ(b.ridgeX + 150) } });
+      slopes.push({ side: 'L', a: { x: 0, z: tosZ(0) }, c: { x: b.ridgeX - ridgeGap, z: tosZ(b.ridgeX - ridgeGap) } });
+      slopes.push({ side: 'R', a: { x: b.width, z: tosZ(b.width) }, c: { x: b.ridgeX + ridgeGap, z: tosZ(b.ridgeX + ridgeGap) } });
     } else slopes.push({ side: 'M', a: { x: 0, z: tosZ(0) }, c: { x: b.width, z: tosZ(b.width) } });
     for (const bay of resolveBays(br.roof.bays, nb)) {
-      const y0 = frames[bay].y + tw / 2, y1 = frames[bay + 1].y - tw / 2;
-      const ids: string[] = [];
+      const f0 = frames[bay], f1 = frames[bay + 1];
       for (const sl of slopes) {
         const dir = norm(v3(sl.c.x - sl.a.x, 0, sl.c.z - sl.a.z));
         const n = norm(v3(-dir.z * Math.sign(dir.x), 0, Math.abs(dir.x)));
-        const ax = (x: number, z: number, y: number, off: number) => add(v3(x, y, z), scale(n, -raf.props.h / 2 + off));
-        const id1 = `BR.R${bay + 1}.${sl.side}.1`, id2 = `BR.R${bay + 1}.${sl.side}.2`;
-        // שתי האלכסונים מוסטים בניצב למישור הגג כדי לא לחדור זה בזה בהצטלבות
-        res.members.push(mk(id1, `קושרת גג מפתח ${bay + 1}`, br.roof.profile, ax(sl.a.x, sl.a.z, y0, 30), ax(sl.c.x, sl.c.z, y1, 30), n, mat, 'center', true));
-        res.members.push(mk(id2, `קושרת גג מפתח ${bay + 1}`, br.roof.profile, ax(sl.a.x, sl.a.z, y1, -30), ax(sl.c.x, sl.c.z, y0, -30), n, mat, 'center', true));
-        ids.push(id1, id2);
+        // מישור הקושרות: אמצע גובה הקורה (קו הייחוס הוא פני עליון)
+        const o = add(v3(sl.a.x, 0, sl.a.z), scale(n, -raf.props.h / 2));
+        const L = Math.hypot(sl.c.x - sl.a.x, sl.c.z - sl.a.z);
+        const rid = (f: string) => (b.roofType === 'gable' ? `${f}.RAF.${sl.side}` : `${f}.RAF`);
+        xbrace(`R${bay + 1}.${sl.side}`, `קושרת גג מפתח ${bay + 1}`, br.roof.profile, o, n, dir,
+          { y: f0.y, w: 0 }, { y: f1.y, w: L }, f0.y + tw / 2, f1.y - tw / 2, rid(f0.id), rid(f1.id));
       }
-      conn(`C.BR.ROOF.${bay + 1}`, `קושרות גג מפתח ${bay + 1} — פחי חיבור והצטלבות: דורש תכנון`, ids);
     }
   }
 
-  // ---- קושרות קיר: במישור ציר העמודים, בין שפות האגפים של שני עמודים סמוכים
+  // ---- קושרות קיר: במישור ציר העמודים, פח חיבור מרותך לווב העמוד בכל קצה
   if (br.walls.enabled) {
     const rafV = raf.props.h * Math.sqrt(1 + roof.slopeLeft * roof.slopeLeft);
+    const ctw = col.dims.tw ?? col.dims.t ?? 6;
     for (const [side, x, eave, bays] of [['L', 0, b.eaveLeft, br.walls.left], ['R', b.width, b.eaveRight, br.walls.right]] as const) {
       for (const bay of resolveBays(bays, nb)) {
-        const y0 = frames[bay].y + col.props.b / 2, y1 = frames[bay + 1].y - col.props.b / 2;
+        const f0 = frames[bay], f1 = frames[bay + 1];
         const z0 = b.baseElevation + 300, z1 = eave - rafV - 60 - 150;
         if (z1 - z0 < 1000) { res.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `קושרת קיר ${side} מפתח ${bay + 1}: גובה קטן מדי` }); continue; }
-        const X = v3(1, 0, 0);
-        const id1 = `BR.W${bay + 1}.${side}.1`, id2 = `BR.W${bay + 1}.${side}.2`;
-        res.members.push(mk(id1, `קושרת קיר ${side === 'L' ? 'ציר א' : 'ציר ב'} מפתח ${bay + 1}`, br.walls.profile, v3(x + 30, y0, z0), v3(x + 30, y1, z1), X, mat, 'center', true));
-        res.members.push(mk(id2, `קושרת קיר ${side === 'L' ? 'ציר א' : 'ציר ב'} מפתח ${bay + 1}`, br.walls.profile, v3(x - 30, y1, z0), v3(x - 30, y0, z1), X, mat, 'center', true));
-        conn(`C.BR.WALL.${side}.${bay + 1}`, `קושרות קיר ${side === 'L' ? 'ציר א' : 'ציר ב'} מפתח ${bay + 1} — פחי חיבור והצטלבות: דורש תכנון`, [id1, id2]);
+        xbrace(`W${bay + 1}.${side}`, `קושרת קיר ${side === 'L' ? 'ציר א' : 'ציר ב'} מפתח ${bay + 1}`, br.walls.profile, v3(x, 0, z0), v3(1, 0, 0), v3(0, 0, 1),
+          { y: f0.y, w: 0 }, { y: f1.y, w: z1 - z0 }, f0.y + ctw / 2, f1.y - ctw / 2, `${f0.id}.COL.${side}`, `${f1.id}.COL.${side}`);
       }
     }
   }
@@ -123,4 +122,121 @@ export function buildBracing(b: BuildingParams, roof: RoofInfo, purlins: Member[
   }
   void eff;
   return res;
+}
+
+/** קו ברגים סטנדרטי מגב זוויתן לפי רוחב הרגל (מקובל; אינו מאומת מקטלוג). */
+export function angleGauge(leg: number): number {
+  const T: Record<number, number> = { 40: 22, 45: 25, 50: 28, 60: 35, 65: 35, 70: 40, 75: 40, 80: 45, 90: 50, 100: 55, 120: 50 };
+  return T[leg] ?? Math.round(leg * 0.55);
+}
+
+/**
+ * קושרת X אחת: שני זוויתנים במישור P (נקודה plane0, נורמל n). נקודות העבודה pA/pC בקואורדינטות (y, w)
+ * כאשר w לאורך wDir במישור. זוויתן 1 מעל המישור, זוויתן 2 מתחתיו — הרגל השטוחה צמודה לפח החיבור (עובי tg במישור).
+ * כל קצה: פח חיבור מרותך לווב (מסגריה) ו-boltsPerEnd ברגים (שטח). בהצטלבות: פח מילוי ובורג אחד.
+ * הקושרות עובדות במתיחה בלבד (לפי K-02). בדיקת חוזק — אינה מבוצעת.
+ */
+function xBrace(res: BracingResult, b: BuildingParams, bc: BraceConnParams, key: string, label: string, profile: string,
+  plane0: Vec3, n: Vec3, wDir: Vec3, pA: { y: number; w: number }, pC: { y: number; w: number },
+  yFace0: number, yFace1: number, host0: string, host1: string) {
+  const mat = b.material;
+  const prof = getProfile(profile);
+  const leg = prof.props.b, t = prof.dims.t ?? 5;
+  const g = bc.gauge ?? angleGauge(leg);
+  const tg = bc.gussetT;
+  const d0 = bc.bolt.d + bc.bolt.clearance;
+  const P = (y: number, w: number) => add(add(plane0, v3(0, y, 0)), scale(wDir, w));
+  const issues = res.issues;
+  if (leg - g < 1.2 * d0 - 0.01 || g - t < hw(bc.bolt.d).s / 2 + 2) {
+    issues.push({ code: 'BOLT_EDGE', severity: 'warning', message: `${label}: קו ברגים ${g} מ"מ ברגל ${leg} — מרחק שפה/מרווח מפתח לבדיקה` });
+  }
+  if (bc.pitch < 2.2 * d0 - 0.01 && bc.boltsPerEnd > 1) issues.push({ code: 'BOLT_EDGE', severity: 'warning', message: `${label}: מרווח ברגים ${bc.pitch} < 2.2·d0 (מינימום מקובל)` });
+  if (bc.endDist < 1.2 * d0 - 0.01) issues.push({ code: 'BOLT_EDGE', severity: 'warning', message: `${label}: מרחק קצה ${bc.endDist} < 1.2·d0 (מינימום מקובל)` });
+
+  // שני האלכסונים: 1 מ-(A, y0) ל-(C, y1); 2 מ-(A, y1) ל-(C, y0)
+  const diag = [
+    { k: 1, s: { y: pA.y, w: pA.w }, e: { y: pC.y, w: pC.w }, side: 1 },
+    { k: 2, s: { y: pC.y, w: pA.w }, e: { y: pA.y, w: pC.w }, side: -1 },
+  ];
+  const lines: { id: string; S: Vec3; ex: Vec3 }[] = [];
+  for (const dg of diag) {
+    const id = `BR.${key}.${dg.k}`;
+    const S = P(dg.s.y, dg.s.w), E = P(dg.e.y, dg.e.w);
+    const ex = norm(sub(E, S));
+    const vUp = scale(n, dg.side);
+    const lf = localFrame({ start: S, end: E, refUp: vUp, rollDeg: 0, mirror: false });
+    // u: כיוון הרגל השטוחה. חתך הזוויתן ביחס לקו הברגים: u ∈ [-g, leg-g]
+    const yLo = Math.min(-g * lf.u.y, (leg - g) * lf.u.y), yHi = Math.max(-g * lf.u.y, (leg - g) * lf.u.y);
+    // קצוות ריבועיים: כל פינות החתך במרחק clearance לפחות מפני הווב
+    const ey = ex.y; // ≠ 0
+    const y0 = Math.min(yFace0, yFace1), y1 = Math.max(yFace0, yFace1);
+    const sAt = (y: number) => (y - S.y) / ey;
+    const sS = ey > 0 ? sAt(y0 + bc.clearance - yLo) : sAt(y1 - bc.clearance - yHi);
+    const sE = ey > 0 ? sAt(y1 - bc.clearance - yHi) : sAt(y0 + bc.clearance - yLo);
+    const len = Math.hypot(E.x - S.x, E.y - S.y, E.z - S.z);
+    if (!(sE - sS > 2 * (bc.endDist + (bc.boltsPerEnd - 1) * bc.pitch) + 100) || sS < -len) {
+      issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `${label}: מפתח קצר מדי לקושרת עם פחי חיבור` });
+      return;
+    }
+    const off = add(scale(lf.u, -g), scale(n, dg.side * tg / 2));
+    const a0 = add(add(S, scale(ex, sS)), off), a1 = add(add(S, scale(ex, sE)), off);
+    const m = mk(id, label, profile, a0, a1, vUp, mat, 'corner');
+    res.members.push(m);
+    lines.push({ id, S, ex });
+
+    // קצוות: פח חיבור + ברגים
+    for (const [endKey, sEnd, dirIn, yFace, host] of [['S', sS, 1, ey > 0 ? y0 : y1, ey > 0 ? host0 : host1], ['E', sE, -1, ey > 0 ? y1 : y0, ey > 0 ? host1 : host0]] as const) {
+      const cid = `C.BR.${key}.${dg.k}${endKey}`;
+      const gid = `${cid}.PL`;
+      const bolts: BoltInfo[] = [];
+      const pts: Vec3[] = [];
+      for (let i = 0; i < bc.boltsPerEnd; i++) {
+        const s = sEnd + dirIn * (bc.endDist + i * bc.pitch);
+        const onPlane = add(S, scale(ex, s));
+        pts.push(onPlane);
+        const head = add(onPlane, scale(n, dg.side * (tg / 2 + t)));
+        bolts.push(makeBolt(`${cid}.B${i + 1}`, cid, head, scale(n, -dg.side), bc.bolt, t + tg, 'site', [id, gid], ex, res.members));
+      }
+      // פח חיבור: מלבן במישור (y, w) — מפני הווב ועד מעבר לבורג האחרון + מרחק שפה
+      const ys = pts.map((p) => p.y), ws = pts.map((p) => dot(sub(p, plane0), wDir));
+      const yIn = yFace === y0 ? Math.max(...ys) + bc.gussetEdge : Math.min(...ys) - bc.gussetEdge;
+      const ya = Math.min(yFace, yIn), yb = Math.max(yFace, yIn);
+      const wa = Math.min(...ws) - bc.gussetEdge, wb = Math.max(...ws) + bc.gussetEdge;
+      const W = Math.ceil((yb - ya) / 5) * 5, Lg = Math.ceil((wb - wa) / 5) * 5;
+      const yc = yFace === y0 ? ya + W / 2 : yb - W / 2;
+      const wc = (wa + wb) / 2;
+      const gs = add(P(yc, wc), scale(wDir, -Lg / 2)), ge = add(P(yc, wc), scale(wDir, Lg / 2));
+      res.members.push({
+        id: gid, kind: 'plate', label: `פח חיבור קושרת PL${tg}×${W}×${Lg}`, start: gs, end: ge, profile: `PL${W}x${tg}`, material: mat,
+        rollDeg: 0, mirror: false, anchor: 'center', refUp: n, source: 'generated', manualPlacement: false, connId: cid, partDesc: `פח חיבור קושרת PL${tg}×${W}×${Lg}`,
+      });
+      const wf = P(yFace, wa), wt = P(yFace, wa + Lg);
+      const welds: WeldInfo[] = [{ id: `${cid}.W1`, connId: cid, type: 'fillet', a: bc.weldSize, length: 2 * Lg, location: 'shop', between: [host, gid], from: wf, to: wt }];
+      res.connections.push({
+        id: cid, type: 'brace-end', label: `${label} — פח חיבור ${endKey === 'S' ? 'התחלה' : 'סוף'} אלכסון ${dg.k}`,
+        members: [host, id], parts: [gid, ...bolts.map((x) => x.id)], bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: false,
+      });
+    }
+  }
+  // הצטלבות: חיתוך קווי הברגים במישור; פח מילוי בעובי פח החיבור ובורג אחד
+  if (bc.crossBolt && lines.length === 2) {
+    const [l1, l2] = lines;
+    const a = l1.ex, c = l2.ex, r = sub(l2.S, l1.S);
+    const aa = dot(a, a), ac = dot(a, c), cc = dot(c, c), ar = dot(a, r), cr = dot(c, r);
+    const den = aa * cc - ac * ac;
+    if (Math.abs(den) > 1e-9) {
+      const s1 = (ar * cc - ac * cr) / den;
+      const X = add(l1.S, scale(a, s1));
+      const cid = `C.BR.${key}.X`;
+      const fid = `${cid}.PL`;
+      const fw = Math.ceil((d0 + 2 * bc.gussetEdge) / 5) * 5;
+      res.members.push({
+        id: fid, kind: 'plate', label: `פח מילוי PL${tg}×${fw}×${fw}`, start: add(X, scale(a, -fw / 2)), end: add(X, scale(a, fw / 2)), profile: `PL${fw}x${tg}`, material: mat,
+        rollDeg: 0, mirror: false, anchor: 'center', refUp: n, source: 'generated', manualPlacement: false, connId: cid, partDesc: `פח מילוי PL${tg}×${fw}×${fw}`,
+      });
+      const head = add(X, scale(n, tg / 2 + t));
+      const bo = makeBolt(`${cid}.B1`, cid, head, scale(n, -1), bc.bolt, 2 * t + tg, 'site', [l1.id, fid, l2.id], a, res.members);
+      res.connections.push({ id: cid, type: 'brace-cross', label: `${label} — הצטלבות`, members: [l1.id, l2.id], parts: [fid, bo.id], bolts: [bo], welds: [], status: 'not-verified', fixity: 'pinned', overridden: false });
+    }
+  }
 }

@@ -11,7 +11,7 @@ import { LenField, NumField } from './fields';
 import { Icon } from './icons';
 
 const STATUS: Record<ApprovalStatus, string> = { 'not-verified': 'לא מאומת', 'for-review': 'לבדיקה', approved: 'מאושר' };
-const TYPE: Record<Connection['type'], string> = { eave: 'קורה-עמוד (פלטת כיפה)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות' };
+const TYPE: Record<Connection['type'], string> = { eave: 'קורה-עמוד (פלטת כיפה)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה' };
 const BOLT_D = [10, 12, 16, 20, 24];
 
 /** רשימת החיבורים של אלמנט + כפתור פתיחת עורך. */

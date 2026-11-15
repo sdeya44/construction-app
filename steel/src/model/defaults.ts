@@ -1,5 +1,5 @@
 import { uid } from '../core/ids';
-import type { BoltSpec, BracingParams, BuildingParams, CleatParams, ConnectionDefaults, FrameDef, Project, PurlinSideParams, PurlinSystem } from './types';
+import type { BoltSpec, BraceConnParams, BracingParams, PurlinSpliceParams, BuildingParams, CleatParams, ConnectionDefaults, FrameDef, Project, PurlinSideParams, PurlinSystem } from './types';
 import { SCHEMA_VERSION } from './types';
 
 /** יוצר מסגרות במרווח אחיד או לפי רשימת מרווחים. */
@@ -43,7 +43,17 @@ export function defaultConnections(): ConnectionDefaults {
 }
 
 export function defaultPurlins(): PurlinSystem {
-  return { material: 'S235', left: defaultPurlinSide(), right: defaultPurlinSide(), monoStart: 'high' };
+  return { material: 'S235', left: defaultPurlinSide(), right: defaultPurlinSide(), monoStart: 'high', splice: defaultPurlinSplice() };
+}
+
+/** חיבור קושרת (החלטת משתמש 15.11.2026): פח t=8 מרותך במסגריה, 2×M16 בכל קצה, בורג M16 בהצטלבות. */
+export function defaultBraceConn(): BraceConnParams {
+  return { bolt: bolt(16), boltsPerEnd: 2, pitch: 50, endDist: 30, gauge: null, gussetT: 8, gussetEdge: 30, clearance: 15, weldSize: 5, crossBolt: true };
+}
+
+/** חיבור המשך פטה (החלטת משתמש 15.11.2026): פלטת חיבור ו-4 ברגים, 2 בכל פטה. */
+export function defaultPurlinSplice(): PurlinSpliceParams {
+  return { plateT: 6, plateH: null, bolt: bolt(12), jointOffset: 60, edge: 30 };
 }
 
 export function defaultBracing(): BracingParams {
@@ -51,6 +61,7 @@ export function defaultBracing(): BracingParams {
     roof: { enabled: true, profile: 'L50x5', bays: [0, -1] },
     walls: { enabled: true, profile: 'L50x5', left: [0, -1], right: [0, -1] },
     purlinTies: { enabled: true, profile: 'L40x4' },
+    conn: defaultBraceConn(),
   };
 }
 

@@ -19,7 +19,7 @@ export function axialExtent(m: Member): { tMin: number; tMax: number } {
  * חלוקת מכלול לחלקי ייצור לפי מיקומי חיבורי המשך. קו/מכלול רציף אינו משתנה —
  * רק רשימת החלקים. חיבור המשך מסומן "דורש תכנון" (אין אישור הנדסי אוטומטי).
  */
-export function buildParts(members: Member[], project: Project): { parts: FabPart[]; splices: SpliceInfo[]; issues: ValidationIssue[] } {
+export function buildParts(members: Member[], project: Project, conns?: Map<string, unknown>): { parts: FabPart[]; splices: SpliceInfo[]; issues: ValidationIssue[] } {
   const parts: FabPart[] = [], splices: SpliceInfo[] = [], issues: ValidationIssue[] = [];
   const stock = project.settings.stockLength;
   for (const m of members) {
@@ -42,10 +42,16 @@ export function buildParts(members: Member[], project: Project): { parts: FabPar
         issues.push({ code: 'PART_STOCK', severity: 'warning', elementId: m.id, message: `${m.label}: חלק ${i + 1} באורך ${(length / 1000).toFixed(3)} מ' ארוך מחומר הגלם (${(stock / 1000).toFixed(2)} מ') — הוסף חיבור המשך או שנה אורך חומר גלם` });
       }
     }
-    valid.forEach((t, i) => splices.push({ id: `${m.id}.S${i + 1}`, memberId: m.id, t, p: add(m.start, scale(f.ex, t)), status: 'requires-design' }));
+    valid.forEach((t, i) => {
+      const k = ts.indexOf(t) + 1;
+      const cid = `C.PS.${m.id}.${k}`;
+      const bolted = !!conns?.has(cid);
+      splices.push({ id: `${m.id}.S${i + 1}`, memberId: m.id, t, p: add(m.start, scale(f.ex, t)), status: bolted ? 'bolted' : 'requires-design', ...(bolted ? { connId: cid } : {}) });
+    });
   }
-  if (splices.length) {
-    issues.push({ code: 'SPLICE_DESIGN', severity: 'info', message: `${splices.length} חיבורי המשך מסומנים "דורש תכנון" — אין אישור הנדסי אוטומטי לחיבור המשך` });
+  const rd = splices.filter((x) => x.status === 'requires-design').length;
+  if (rd) {
+    issues.push({ code: 'SPLICE_DESIGN', severity: 'info', message: `${rd} חיבורי המשך מסומנים "דורש תכנון" — אין אישור הנדסי אוטומטי לחיבור המשך` });
   }
   return { parts, splices, issues };
 }

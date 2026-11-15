@@ -177,8 +177,9 @@ describe('SPL / BEAM – חלקים וחיבורי המשך', () => {
     // קו 30.1 מ' (הארכה 50 מ"מ מעבר למסגרות הקיצוניות); חיבורים מעל מסגרות בלבד
     expect(parts.map((x) => Math.round(x.length))).toEqual([6050, 12000, 6000, 6050]);
     expect(parts.every((x) => x.length <= 12000)).toBe(true);
-    expect(d.splices.filter((s) => s.memberId === 'PL.L.03').every((s) => s.status === 'requires-design')).toBe(true);
-    expect(d.issues.some((i) => i.code === 'SPLICE_DESIGN')).toBe(true);
+    // פטה C: חיבור המשך מוברג (פלטה + 4 ברגים) — החלטת משתמש 15.11.2026
+    expect(d.splices.filter((s) => s.memberId === 'PL.L.03').every((s) => s.status === 'bolted')).toBe(true);
+    expect(d.issues.some((i) => i.code === 'SPLICE_DESIGN')).toBe(false);
   });
   it('SPL-01: בלי חיבורים — חלק אחד של 30 מ\' ואזהרה על חומר גלם', () => {
     const d = generate(geo());
@@ -218,7 +219,7 @@ describe('מיגרציה v1 → v2', () => {
     const p: any = geo();
     delete p.building.purlins; delete p.splices; p.schemaVersion = 1;
     const m = migrate(JSON.parse(JSON.stringify(p)));
-    expect(m.schemaVersion).toBe(5);
+    expect(m.schemaVersion).toBe(6);
     expect(m.marks.parts).toEqual({});
     expect(m.settings.kerf).toBe(3);
     expect(m.building.bracing.roof.enabled).toBe(true);

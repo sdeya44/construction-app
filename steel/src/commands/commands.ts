@@ -280,7 +280,7 @@ export function setPurlinSide(side: 'left' | 'right', patch: Partial<PurlinSideP
   };
 }
 
-export function setPurlinSystem(patch: Partial<Pick<PurlinSystem, 'material' | 'monoStart'>>): Command {
+export function setPurlinSystem(patch: Partial<Pick<PurlinSystem, 'material' | 'monoStart' | 'splice'>>): Command {
   return {
     label: 'עדכון מערכת פטות',
     run: (p) => {

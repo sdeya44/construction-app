@@ -133,7 +133,10 @@ export function RoofPanel() {
         ? <><SideEditor side="left" title="שיפוע שמאל" items={L} /><SideEditor side="right" title="שיפוע ימין" items={R} /></>
         : <SideEditor side="left" title="שיפוע הגג" items={M} />}
       <div className="panel-title">חלוקה לחלקי ייצור</div>
-      <div className="hint">אורך חומר גלם: {(p.settings.stockLength / 1000).toFixed(2)} מ'. ההצעה ממקמת חיבורי המשך מעל מסגרות, רק במקום הנדרש — לא בכל מסגרת. כל חיבור מסומן "דורש תכנון".</div>
+      <div className="hint">אורך חומר גלם: {(p.settings.stockLength / 1000).toFixed(2)} מ'. ההצעה ממקמת חיבורי המשך מעל מסגרות, רק במקום הנדרש — לא בכל מסגרת. חיבור המשך בפטת C/Z: פלטה בצד הפנימי של הווב ו-4 ברגים, 2 בכל פטה.</div>
+      <div className="field"><label>עובי פלטת המשך</label><NumField testId="ps-t" value={pu.splice.plateT} suffix='מ"מ' onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, plateT: v } }))} /></div>
+      <div className="field"><label>קוטר בורג</label><NumField testId="ps-d" value={pu.splice.bolt.d} suffix="M" onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, bolt: { ...pu.splice.bolt, d: Math.round(v) } } }))} /></div>
+      <div className="field"><label>מרחק ברגים מהתפר</label><NumField value={pu.splice.jointOffset} suffix='מ"מ' onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, jointOffset: v } }))} /></div>
       <div className="row">
         <button className="btn" data-testid="propose-purlin-splices" onClick={() => exec(proposeSplicesFor(purlins.map((m) => m.id)))}>הצעת חיבורי המשך לכל הפטות</button>
         <button className="btn" disabled={!nSpl} onClick={() => exec({

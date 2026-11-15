@@ -37,7 +37,7 @@ describe('שרטוטים', () => {
   const { p, d, fab, bom, cat } = setup();
   it('קטלוג: GA, תוכנית גג, 6 חתכי מסגרת, 2 חזיתות, 4 פרטי חיבור, מכלולים וחלקים', () => {
     const t = (x: string) => cat.filter((c) => c.type === x).length;
-    expect([t('ga'), t('roof-plan'), t('frame'), t('side'), t('connection')]).toEqual([1, 1, 6, 2, 4]);
+    expect([t('ga'), t('roof-plan'), t('frame'), t('side'), t('connection')]).toEqual([1, 1, 6, 2, 6]);
     expect(t('part')).toBe(new Set(fab.parts.map((x) => x.mark)).size);
     expect(t('assembly')).toBe(new Set(fab.assemblies.map((x) => x.mark)).size);
     expect(new Set(cat.map((c) => c.id)).size).toBe(cat.length);

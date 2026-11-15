@@ -19,7 +19,7 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
   p.building.frames.forEach((f, i) => out.push({ id: `D-FRAME-${f.id}`, type: 'frame', number: `F-${String(i + 1).padStart(2, '0')}`, title: `חתך מסגרת – ציר ${i + 1}`, ref: f.id }));
   out.push({ id: 'D-SIDE-L', type: 'side', number: 'E-01', title: 'חזית צד – ציר א', ref: 'L' });
   out.push({ id: 'D-SIDE-R', type: 'side', number: 'E-02', title: 'חזית צד – ציר ב', ref: 'R' });
-  const types: [string, string][] = [['eave', 'פרט חיבור קורה-עמוד'], ['ridge', 'פרט חיבור רכס'], ['base', 'פרט פלטת בסיס'], ['purlin-cleat', 'פרט תומך פטה']];
+  const types: [string, string][] = [['eave', 'פרט חיבור קורה-עמוד'], ['ridge', 'פרט חיבור רכס'], ['base', 'פרט פלטת בסיס'], ['purlin-cleat', 'פרט תומך פטה'], ['purlin-splice', 'פרט חיבור המשך פטה'], ['brace-end', 'פרט פח חיבור קושרת'], ['brace-cross', 'פרט הצטלבות קושרות']];
   types.forEach(([t, title], i) => {
     const c = d.connections.find((x) => x.type === t);
     if (c) out.push({ id: `D-CONN-${t}`, type: 'connection', number: `D-${String(i + 1).padStart(2, '0')}`, title, ref: c.id });
@@ -242,24 +242,34 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       const cen = [...fs.startRing, ...fs.endRing].reduce((a, q) => ({ x: a.x + q.x, y: a.y + q.y, z: a.z + q.z }), { x: 0, y: 0, z: 0 });
       const n = fs.startRing.length * 2;
       const C = { x: cen.x / n, y: cen.y / n, z: cen.z / n };
-      const R = c.type === 'purlin-cleat' ? 300 : c.type === 'base' ? 600 : 600;
-      const pr: Proj = (q) => ({ x: q.x, y: q.z });
-      const box = { x0: C.x - R, x1: C.x + R, y0: C.z - R, y1: C.z + R };
+      // חיבורים מישוריים (פלטת המשך, פחי קושרות): מבט בניצב לפלטה; האחרים — חתך במישור המסגרת
+      const planar = c.type === 'purlin-splice' || c.type === 'brace-end' || c.type === 'brace-cross';
+      const R = c.type === 'purlin-cleat' ? 300 : planar ? 220 : 600;
+      let pr: Proj = (q) => ({ x: q.x, y: q.z });
+      let Cp = { x: C.x, y: C.z };
+      if (planar) {
+        const lf = localFrame(first);
+        const e1 = lf.ex, e2 = lf.u; // בסיס במישור הפלטה (v = נורמל הפלטה)
+        pr = (q) => ({ x: dot(sub(q, C), e1), y: dot(sub(q, C), e2) });
+        Cp = { x: 0, y: 0 };
+      }
+      const box = { x0: Cp.x - R, x1: Cp.x + R, y0: Cp.y - R, y1: Cp.y + R };
       const v = placeView(sh, box, { ...area, x1: area.x1 - 120 }); setScale(v);
       const clipBox = (a: Vec3, bb: Vec3): [Vec3, Vec3] | null => {
-        // קיטום לחלון (בקואורדינטות x,z)
+        // קיטום לחלון (בקואורדינטות המבט; ההיטל ליניארי)
         let t0 = 0, t1 = 1;
-        const dx = bb.x - a.x, dz = bb.z - a.z;
-        for (const [pp, q] of [[-dx, a.x - box.x0], [dx, box.x1 - a.x], [-dz, a.z - box.y0], [dz, box.y1 - a.z]]) {
+        const pa = pr(a), pb = pr(bb);
+        const dx = pb.x - pa.x, dz = pb.y - pa.y;
+        for (const [pp, q] of [[-dx, pa.x - box.x0], [dx, box.x1 - pa.x], [-dz, pa.y - box.y0], [dz, box.y1 - pa.y]]) {
           if (pp === 0) { if (q < 0) return null; continue; }
           const r = q / pp;
           if (pp < 0) { if (r > t1) return null; t0 = Math.max(t0, r); } else { if (r < t0) return null; t1 = Math.min(t1, r); }
         }
-        const L = (t: number) => ({ x: a.x + dx * t, y: a.y + (bb.y - a.y) * t, z: a.z + dz * t });
+        const L = (t: number) => ({ x: a.x + (bb.x - a.x) * t, y: a.y + (bb.y - a.y) * t, z: a.z + (bb.z - a.z) * t });
         return [L(t0), L(t1)];
       };
       for (const m of ms) {
-        const poly = cutAtY(m, C.y);
+        const poly = planar ? null : cutAtY(m, C.y);
         if (poly && (m.kind === 'purlin' || m.kind === 'cleat')) { v.poly(poly, true, 'CUT', true); continue; }
         edges(m, pr, v, m.kind === 'bolt' || m.kind === 'anchor' ? 'THIN' : 'OUTLINE', clipBox);
       }
@@ -277,7 +287,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         const pm = fab.parts.find((x) => x.memberId === pid);
         if (pm) T(`${pm.mark}: ${pm.desc}`);
       }
-      T('מבט: חתך במישור המסגרת (לאורך Y). חלקים חתוכים – ממולאים.');
+      T(planar ? 'מבט: בניצב למישור הפלטה.' : 'מבט: חתך במישור המסגרת (לאורך Y). חלקים חתוכים – ממולאים.');
       T('גיאומטריה בלבד — אין בדיקת חוזק לברגים, ריתוכים ופלטות.');
       break;
     }

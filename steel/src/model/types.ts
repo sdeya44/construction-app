@@ -2,7 +2,7 @@ import type { Mm } from '../core/units';
 import type { Plane, Vec3 } from '../core/vec';
 
 /** גרסת סכמת קובץ הפרויקט. כל שינוי שובר מחייב מיגרציה ב-model/migrate.ts */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export type RoofType = 'gable' | 'mono';
 /** לאן מתייחסים גובהי העמודים/הרכס: פני עליון של קורת הגג (TOS) או ציר הקורה. */
@@ -72,6 +72,7 @@ export interface PurlinSystem {
   right: PurlinSideParams;
   /** גג חד־שיפועי: מאיזה קצה מתחילה הפריסה */
   monoStart: 'low' | 'high';
+  splice: PurlinSpliceParams;
 }
 
 /** מערכת קושרות ושורות קשירה לפטות. מפתחים (bays) לפי אינדקס: 0 = בין מסגרת 1 ל-2. */
@@ -80,6 +81,40 @@ export interface BracingParams {
   walls: { enabled: boolean; profile: string; left: number[]; right: number[] };
   /** שורת קשירה לאגף התחתון של הפטות, באמצע כל מפתח */
   purlinTies: { enabled: boolean; profile: string };
+  /** חיבורי קושרות X: פח חיבור מרותך לקורה/עמוד במסגריה, הזוויתן מוברג בשטח; בורג בהצטלבות עם פח מילוי */
+  conn: BraceConnParams;
+}
+
+export interface BraceConnParams {
+  bolt: BoltSpec;
+  /** ברגים בכל קצה, בשורה לאורך ציר הזוויתן */
+  boltsPerEnd: number;
+  pitch: Mm;
+  /** מרחק קצה הזוויתן מהבורג הראשון */
+  endDist: Mm;
+  /** קו ברגים מגב הזוויתן. null = אוטומטי לפי רוחב הרגל */
+  gauge: Mm | null;
+  /** עובי פח החיבור (וגם עובי פח המילוי בהצטלבות) */
+  gussetT: Mm;
+  /** מרחק שפה מינימלי בפח החיבור */
+  gussetEdge: Mm;
+  /** מרווח בין קצה הזוויתן לפני הווב */
+  clearance: Mm;
+  weldSize: Mm;
+  /** בורג בהצטלבות האלכסונים */
+  crossBolt: boolean;
+}
+
+/** חיבור המשך לפטה: פלטה בצד הפנימי של הווב, 2 ברגים בכל פטה (סה"כ 4) */
+export interface PurlinSpliceParams {
+  plateT: Mm;
+  /** גובה הפלטה. null = אוטומטי לפי גובה הפטה */
+  plateH: Mm | null;
+  bolt: BoltSpec;
+  /** מרחק עמודת הברגים מקו המפגש (מוגדל אוטומטית אם התפר מעל תומך) */
+  jointOffset: Mm;
+  /** מרחק שפה בפלטה */
+  edge: Mm;
 }
 
 export interface BuildingParams {
@@ -135,7 +170,7 @@ export interface MemberOverride {
 
 export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'cleat' | 'plate' | 'bolt' | 'anchor';
 
-export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace';
+export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice';
 export type ApprovalStatus = 'not-verified' | 'for-review' | 'approved';
 
 /** חיבור מבוסס פלטה וקבוצת ברגים (קורה-עמוד, רכס, פלטת בסיס). */
@@ -362,7 +397,9 @@ export interface SpliceInfo {
   memberId: string;
   t: Mm;
   p: Vec3;
-  status: 'requires-design';
+  /** requires-design: מיקום בלבד; bolted: חיבור המשך מוברג שנבנה (פטות) */
+  status: 'requires-design' | 'bolted';
+  connId?: string;
 }
 
 export interface ModelNode { id: string; p: Vec3; frameId: string; role: string }

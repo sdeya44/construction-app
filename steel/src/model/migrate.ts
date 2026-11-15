@@ -1,6 +1,6 @@
 import type { Project } from './types';
 import { SCHEMA_VERSION } from './types';
-import { emptyMarks, defaultBracing, defaultCleat, defaultConnections, defaultPurlins, defaultPurlinSide } from './defaults';
+import { emptyMarks, defaultBraceConn, defaultPurlinSplice, defaultBracing, defaultCleat, defaultConnections, defaultPurlins, defaultPurlinSide } from './defaults';
 
 /**
  * מיגרציות סכמה. כל מפתח N ממיר קובץ מגרסה N לגרסה N+1.
@@ -33,6 +33,15 @@ const MIGRATIONS: Record<number, (d: any) => any> = {
     ...d, schemaVersion: 5,
     settings: { stockLengths: [6000, 12000], kerf: 3, checkedBy: '', approvedBy: '', ...d.settings },
     marks: emptyMarks(), revision: { current: 'A', locked: false, log: [] }, drawings: [],
+  }),
+  // v5 → v6: פחי חיבור לקושרות ובורג בהצטלבות; חיבור המשך פטה בפלטה ו-4 ברגים (החלטת משתמש 15.11.2026)
+  5: (d) => ({
+    ...d, schemaVersion: 6,
+    building: {
+      ...d.building,
+      bracing: { ...d.building.bracing, conn: defaultBraceConn() },
+      purlins: { ...d.building.purlins, splice: defaultPurlinSplice() },
+    },
   }),
 };
 
@@ -85,7 +94,8 @@ export function assertProject(d: any): asserts d is Project {
   need(d.revision && typeof d.revision.current === 'string', 'revision');
   need(Array.isArray(d.drawings), 'drawings');
   const br = d.building.bracing;
-  need(br && br.roof && br.walls && br.purlinTies && Array.isArray(br.roof.bays), 'bracing');
+  need(br && br.roof && br.walls && br.purlinTies && Array.isArray(br.roof.bays) && br.conn && br.conn.bolt, 'bracing');
+  need(pu.splice && Number.isFinite(pu.splice.plateT), 'purlins.splice');
 }
 
 /** קובץ JSON נייד: מעטפת עם שם פורמט וגרסת סכמה. */
