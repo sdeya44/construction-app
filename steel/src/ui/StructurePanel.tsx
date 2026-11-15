@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { addFrame, removeFrame, respaceFrames, setBuilding, setFrameY, setMeta, setSettings } from '../commands/commands';
-import type { BuildingParams } from '../model/types';
+import type { BuildingParams, RhsTrussParams, RidgeReinfParams } from '../model/types';
+import { defaultRhsTruss } from '../geometry/hbrace';
+import { defaultRidgeReinf } from '../model/defaults';
 import { resolveBays } from '../geometry/bracing';
 import { catalogNames } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
@@ -146,6 +148,47 @@ function BayPicker({ bays, count, onChange, testId }: { bays: number[]; count: n
   );
 }
 
+function RhsFields() {
+  const br = useStore((s) => s.project.building.bracing);
+  const r = br.roof.rhs ?? defaultRhsTruss();
+  const set = (patch: Partial<RhsTrussParams>) => store.exec(setBuilding({ bracing: { ...br, roof: { ...br.roof, rhs: { ...r, ...patch } } } }));
+  return (
+    <>
+      <div className="field"><label>מוט (לאורך Y)</label><TextField ltr list="profiles" testId="rhs-strut" value={r.strut} onCommit={(v) => set({ strut: v.toUpperCase().replace(/\s/g, '') })} /></div>
+      <div className="field"><label>אלכסון</label><TextField ltr list="profiles" testId="rhs-diag" value={r.diag} onCommit={(v) => set({ diag: v.toUpperCase().replace(/\s/g, '') })} /></div>
+      <div className="field"><label>פנלים בשיפוע (0 = אוטו׳)</label><NumField value={r.panels} onCommit={(v) => set({ panels: Math.max(0, Math.round(v)) })} /></div>
+      <div className="hint">פח מרותך לווב הקורה בכל צומת; לשונית {r.tongueT} מ"מ בחריץ ה-RHS; {r.boltsPerEnd}×M{r.bolt.d} בשטח. המוט מעל הפח, האלכסון מתחתיו.</div>
+    </>
+  );
+}
+
+function RidgeReinfEditor() {
+  const rr = useStore((s) => s.project.building.ridgeReinf) ?? defaultRidgeReinf();
+  const hasRidge = useStore((s) => s.derived.connections.some((c) => c.type === 'ridge'));
+  const set = (patch: Partial<RidgeReinfParams>) => store.exec(setBuilding({ ridgeReinf: { ...rr, ...patch } }));
+  return (
+    <>
+      <div className="panel-title">חיזוק רכס</div>
+      <div className="field"><label>שיטה</label>
+        <select className="inp" data-testid="ridge-reinf" value={rr.type} onChange={(e) => set({ type: e.target.value as RidgeReinfParams['type'] })}>
+          <option value="none">ללא</option><option value="plate">פלטה מוגבהת + פלטות חיזוק</option><option value="tie">פרופיל אופקי מתחת לרכס</option>
+        </select>
+      </div>
+      {rr.type === 'plate' && <>
+        <div className="field"><label>עומק הגבהה מתחת לקורה</label><NumField testId="rr-depth" value={rr.depth} suffix='מ"מ' onCommit={(v) => set({ depth: v })} /></div>
+        <div className="field"><label>אורך החיזוק מהרכס</label><NumField value={rr.length} suffix='מ"מ' onCommit={(v) => set({ length: v })} /></div>
+        <div className="field"><label>עובי פלטת חיזוק</label><NumField value={rr.stiffT} suffix='מ"מ' onCommit={(v) => set({ stiffT: v })} /></div>
+      </>}
+      {rr.type === 'tie' && <>
+        <div className="field"><label>חתך הפרופיל</label><TextField ltr list="profiles" testId="rr-tie" value={rr.tieProfile} onCommit={(v) => set({ tieProfile: v.toUpperCase().replace(/\s/g, '') })} /></div>
+        <div className="field"><label>מרווח מתחת לקורות ברכס</label><NumField testId="rr-gap" value={rr.tieGap} suffix='מ"מ' onCommit={(v) => set({ tieGap: v })} /></div>
+      </>}
+      {!hasRidge && rr.type !== 'none' && <div className="hint">אין רכס במודל (גג חד־שיפועי או רכס מעל עמוד) — החיזוק לא נבנה.</div>}
+      <div className="hint">פלטה: פלטות הקצה ברכס מוגבהות ונוספת שורת ברגים; פלטה משולשת מרותכת מתחת לכל קורה. פרופיל: קורה אופקית בין שתי קורות הגג, מוברגת לפחים מרותכים לתחתית הקורות. אין בדיקת חוזק.</div>
+    </>
+  );
+}
+
 function BracingEditor() {
   const b = useStore((s) => s.project.building);
   const br = b.bracing;
@@ -157,7 +200,14 @@ function BracingEditor() {
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-roof" checked={br.roof.enabled} onChange={(e) => set({ roof: { ...br.roof, enabled: e.target.checked } })} />פעיל</label>
       </div>
       {br.roof.enabled && <>
-        <div className="field"><label>חתך</label><TextField ltr list="profiles" value={br.roof.profile} onCommit={(v) => set({ roof: { ...br.roof, profile: v.toUpperCase().replace(/\s/g, '') } })} /></div>
+        <div className="field"><label>סוג</label>
+          <select className="inp" data-testid="br-roof-type" value={br.roof.type ?? 'x'} onChange={(e) => set({ roof: { ...br.roof, type: e.target.value as 'x' | 'rhs', rhs: br.roof.rhs ?? defaultRhsTruss() } })}>
+            <option value="x">X מזוויתנים (מתיחה)</option><option value="rhs">סבכה אופקית RHS (מוטות + אלכסונים)</option>
+          </select>
+        </div>
+        {(br.roof.type ?? 'x') === 'x'
+          ? <div className="field"><label>חתך</label><TextField ltr list="profiles" value={br.roof.profile} onCommit={(v) => set({ roof: { ...br.roof, profile: v.toUpperCase().replace(/\s/g, '') } })} /></div>
+          : <RhsFields />}
         <div className="field"><label>מפתחים</label><BayPicker testId="br-roof-bays" bays={br.roof.bays} count={nb} onChange={(x) => set({ roof: { ...br.roof, bays: x } })} /></div>
       </>}
       <div className="panel-title">קושרות X – קירות
@@ -172,6 +222,7 @@ function BracingEditor() {
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-ties" checked={br.purlinTies.enabled} onChange={(e) => set({ purlinTies: { ...br.purlinTies, enabled: e.target.checked } })} />פעיל</label>
       </div>
       {br.purlinTies.enabled && <div className="field"><label>חתך</label><TextField ltr list="profiles" value={br.purlinTies.profile} onCommit={(v) => set({ purlinTies: { ...br.purlinTies, profile: v.toUpperCase().replace(/\s/g, '') } })} /></div>}
+      <RidgeReinfEditor />
       {(br.roof.enabled || br.walls.enabled) && <>
         <div className="panel-title">חיבור קושרות X</div>
         <div className="field"><label>קוטר בורג</label><NumField testId="brc-d" value={br.conn.bolt.d} suffix="M" onCommit={(v) => set({ conn: { ...br.conn, bolt: { ...br.conn.bolt, d: Math.round(v) } } })} /></div>

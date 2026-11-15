@@ -142,3 +142,15 @@ test('SEC-01: חתך מודולרי — תבנית גג מדורג, הוספת �
   await setView(page, 'front');
   await shot(page, 'SEC-01_stepped');
 });
+
+test('BR-02: סבכה אופקית RHS וחיזוק רכס בשתי השיטות דרך הממשק', async ({ page }) => {
+  await boot(page);
+  await page.getByTestId('nav-s:bracing').click();
+  await page.getByTestId('br-roof-type').selectOption('rhs');
+  const q = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { hb: d.members.filter((m: any) => m.id.startsWith('HB.') && m.kind === 'brace').length, x: d.members.filter((m: any) => m.id.startsWith('BR.R')).length, tie: d.connections.filter((c: any) => c.type === 'ridge-tie').length, st: d.members.filter((m: any) => /C\.RIDGE\..*\.ST/.test(m.id)).length, clash: d.issues.filter((i: any) => i.code === 'CLASH').length }; });
+  expect(await q()).toMatchObject({ hb: 12, x: 0, clash: 0 });
+  await page.getByTestId('ridge-reinf').selectOption('plate');
+  expect(await q()).toMatchObject({ st: 12, clash: 0 });
+  await page.getByTestId('ridge-reinf').selectOption('tie');
+  expect(await q()).toMatchObject({ st: 0, tie: 6, clash: 0 });
+});

@@ -1,6 +1,6 @@
 import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
-import { cachedSolidPure } from './solidCache';
+import { cachedSolidPure, silhouetteEdges } from './solidCache';
 import { assemblySheet, renderIso } from './assembly';
 import { purlinParams } from '../geometry/purlins';
 import { getProfile } from '../profiles/library';
@@ -21,7 +21,7 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
   p.building.frames.forEach((f, i) => out.push({ id: `D-FRAME-${f.id}`, type: 'frame', number: `F-${String(i + 1).padStart(2, '0')}`, title: `חתך מסגרת – ציר ${i + 1}`, ref: f.id }));
   out.push({ id: 'D-SIDE-L', type: 'side', number: 'E-01', title: 'חזית צד – ציר א', ref: 'L' });
   out.push({ id: 'D-SIDE-R', type: 'side', number: 'E-02', title: 'חזית צד – ציר ב', ref: 'R' });
-  const types: [string, string][] = [['eave', 'פרט חיבור קורה-עמוד'], ['ridge', 'פרט חיבור רכס'], ['base', 'פרט פלטת בסיס'], ['purlin-cleat', 'פרט תומך פטה'], ['purlin-splice', 'פרט חיבור המשך פטה'], ['brace-end', 'פרט פח חיבור קושרת'], ['brace-cross', 'פרט הצטלבות קושרות']];
+  const types: [string, string][] = [['eave', 'פרט חיבור קורה-עמוד'], ['ridge', 'פרט חיבור רכס'], ['base', 'פרט פלטת בסיס'], ['purlin-cleat', 'פרט תומך פטה'], ['purlin-splice', 'פרט חיבור המשך פטה'], ['brace-end', 'פרט פח חיבור קושרת'], ['brace-cross', 'פרט הצטלבות קושרות'], ['rafter-side', 'פרט חיבור קורה לצד עמוד'], ['knee', 'פרט אלכסון עמוד-קורה'], ['ridge-tie', 'פרט חיזוק רכס אופקי']];
   types.forEach(([t, title], i) => {
     const c = d.connections.find((x) => x.type === t);
     if (c) out.push({ id: `D-CONN-${t}`, type: 'connection', number: `D-${String(i + 1).padStart(2, '0')}`, title, ref: c.id });
@@ -50,13 +50,16 @@ type Proj = (q: Vec3) => P;
 /** קווי מתאר של מוצק בהיטל, בלי צלעות שמתנוונות לנקודה. */
 function edges(m: Member, pr: Proj, v: View, layer: 'OUTLINE' | 'THIN' = 'OUTLINE', clip?: (a: Vec3, b: Vec3) => [Vec3, Vec3] | null) {
   const s = cachedSolidPure(m);
-  for (let i = 0; i < s.edges.length; i += 6) {
-    let a: Vec3 = { x: s.edges[i], y: s.edges[i + 1], z: s.edges[i + 2] }, b: Vec3 = { x: s.edges[i + 3], y: s.edges[i + 4], z: s.edges[i + 5] };
-    if (clip) { const c = clip(a, b); if (!c) continue; [a, b] = c; }
+  const seg = (a0: Vec3, b0: Vec3) => {
+    let a = a0, b = b0;
+    if (clip) { const c = clip(a, b); if (!c) return; [a, b] = c; }
     const pa = pr(a), pb = pr(b);
-    if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < 0.5) continue;
+    if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < 0.5) return;
     v.line(pa, pb, layer);
-  }
+  };
+  for (let i = 0; i < s.edges.length; i += 6) seg({ x: s.edges[i], y: s.edges[i + 1], z: s.edges[i + 2] }, { x: s.edges[i + 3], y: s.edges[i + 4], z: s.edges[i + 5] });
+  // צללית לחתכים מעוגלים (RHS/CHS)
+  for (const [i, j] of silhouetteEdges(m, pr)) seg(s.startRing[i], s.endRing[j]);
 }
 
 /** חתך אמיתי של מוצק במישור y = y0 (לאלמנטים לאורך Y), מוחזר כפוליגון במבט (x, z). */

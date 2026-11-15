@@ -3,6 +3,7 @@ import { getProfile, tryProfile } from '../profiles/library';
 import type { BoltInfo, BraceConnParams, BuildingParams, Connection, Member, ValidationIssue, WeldInfo } from '../model/types';
 import { zAt, type SectionTopology } from '../model/section';
 import { hw, makeBolt } from './connections';
+import { defaultRhsTruss, rhsTruss } from './hbrace';
 import { localFrame } from './frame';
 import { bolt } from '../model/defaults';
 
@@ -70,7 +71,9 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         const o = add(v3(sl.a.x, 0, sl.a.z), scale(n, -raf.props.h / 2));
         const L = Math.hypot(sl.c.x - sl.a.x, sl.c.z - sl.a.z);
         const rid = sl.rid;
-        xbrace(`R${bay + 1}.${sl.side}`, `קושרת גג מפתח ${bay + 1}`, br.roof.profile, o, n, dir,
+        if (br.roof.type === 'rhs') rhsTruss({ res, mat: b.material }, br.roof.rhs ?? defaultRhsTruss(), `R${bay + 1}.${sl.side}`, `סבכה אופקית מפתח ${bay + 1}`, o, n, dir, L,
+          f0.y, f1.y, f0.y + tw / 2, f1.y - tw / 2, rid(f0.id), rid(f1.id));
+        else xbrace(`R${bay + 1}.${sl.side}`, `קושרת גג מפתח ${bay + 1}`, br.roof.profile, o, n, dir,
           { y: f0.y, w: 0 }, { y: f1.y, w: L }, f0.y + tw / 2, f1.y - tw / 2, rid(f0.id), rid(f1.id));
       }
     }

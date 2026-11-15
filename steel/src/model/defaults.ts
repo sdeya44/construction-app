@@ -1,5 +1,5 @@
 import { uid } from '../core/ids';
-import type { PlateConnParams, BoltSpec, BraceConnParams, BracingParams, PurlinSpliceParams, BuildingParams, CleatParams, ConnectionDefaults, FrameDef, Project, PurlinSideParams, PurlinSystem } from './types';
+import type { RidgeReinfParams, PlateConnParams, BoltSpec, BraceConnParams, BracingParams, PurlinSpliceParams, BuildingParams, CleatParams, ConnectionDefaults, FrameDef, Project, PurlinSideParams, PurlinSystem } from './types';
 import { SCHEMA_VERSION } from './types';
 
 /** יוצר מסגרות במרווח אחיד או לפי רשימת מרווחים. */
@@ -60,6 +60,10 @@ export function defaultPurlinSplice(): PurlinSpliceParams {
 /** חיבור קורה לצד עמוד (גג מדורג / רכס מעל עמוד): פלטת קצה PL15×160, 2×2 M16, הפלטה בגובה הקורה */
 export function defaultSideConn(): PlateConnParams {
   return { enabled: true, t: 15, w: 160, l: 0, bolt: bolt(16), cols: 2, rows: 2, gauge: 90, pitch: 0, weldSize: 6 };
+}
+
+export function defaultRidgeReinf(): RidgeReinfParams {
+  return { type: 'none', depth: 250, length: 900, stiffT: 10, tieProfile: 'IPE160', tieGap: 200, gussetT: 10, bolt: bolt(16), gauge: 70, pitch: 70, edge: 35, weldSize: 5 };
 }
 
 export function defaultBracing(): BracingParams {

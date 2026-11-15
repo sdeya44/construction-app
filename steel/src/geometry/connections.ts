@@ -181,7 +181,12 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
         const sl = Math.abs((rl!.end.z - rl!.start.z) / (rl!.end.x - rl!.start.x));
         const sr = Math.abs((rr!.end.z - rr!.start.z) / (rr!.end.x - rr!.start.x));
         const hv = Math.max(rp.props.h * Math.sqrt(1 + sl * sl), getProfile(rr!.profile).props.h * Math.sqrt(1 + sr * sr));
-        const Hp = hv + prm.l;
+        const rr0 = b.ridgeReinf;
+        const haunch = rr0?.type === 'plate';
+        // שיטת הפלטה: פלטת הקצה מוגבהת מתחת לקורות לעומק ההגבהה, ושורת ברגים נוספת
+        const ext = haunch ? Math.max(prm.l, rr0!.depth) : prm.l;
+        const Hp = hv + ext;
+        const rows = haunch ? Math.max(prm.rows, 3) : prm.rows;
         const top = v3(rg.x, f.y, rg.z); // נקודת הרכס על קו הייחוס
         const X = v3(1, 0, 0);
         setCut(rl!, e0, { point: sub(top, scale(X, prm.t)), normal: X });
@@ -190,7 +195,7 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
         res.members.push(partMember(pl, 'plate', `PL${prm.w}x${Hp.toFixed(1)}`, sub(top, scale(X, prm.t)), top, Z, 'top', id, `פלטת קצה PL${prm.t}×${prm.w}×${Math.ceil(Hp)}`, mat));
         res.members.push(partMember(pr, 'plate', `PL${prm.w}x${Hp.toFixed(1)}`, top, add(top, scale(X, prm.t)), Z, 'top', id, `פלטת קצה PL${prm.t}×${prm.w}×${Math.ceil(Hp)}`, mat));
         const e = Math.max(40, 1.5 * (prm.bolt.d + prm.bolt.clearance));
-        const zs = prm.rows <= 1 ? [Hp / 2] : Array.from({ length: prm.rows }, (_, i) => e + ((Hp - 2 * e) * i) / (prm.rows - 1));
+        const zs = rows <= 1 ? [Hp / 2] : Array.from({ length: rows }, (_, i) => e + ((Hp - 2 * e) * i) / (rows - 1));
         const bolts: BoltInfo[] = [];
         grid(prm.cols, prm.gauge).forEach((gy, ci) => zs.forEach((zz, ri) => {
           const head = add(sub(top, scale(X, prm.t)), v3(0, gy, -zz));
@@ -201,11 +206,38 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
         edgeChecks(label, id, d0, e, prm.w / 2 - ((prm.cols - 1) / 2) * prm.gauge, null, prm.cols > 1 ? prm.gauge : null, res.issues);
         const tf = rp.dims.tf ?? 10;
         for (const zz of zs) {
-          const toFlange = Math.min(zz - tf, Hp - prm.l - tf - zz);
+          const toFlange = haunch ? zz - tf : Math.min(zz - tf, Hp - prm.l - tf - zz);
           if (toFlange < hw(prm.bolt.d).s / 2 + 2) issue({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `${label}: שורת ברגים קרובה לאגף הקורה (${toFlange.toFixed(1)} מ"מ) — מרווח אום/מפתח לבדיקה` });
         }
         const welds: WeldInfo[] = [rl!, rr!].map((r, k) => ({ id: `${id}.W${k + 1}`, connId: id, type: 'fillet' as const, a: prm.weldSize, length: outlinePerimeter(r.profile), location: 'shop' as const, between: [r.id, k ? pr : pl] as [string, string], from: top, to: top }));
-        res.connections.push({ id, type: 'ridge', label, members: [rl!.id, rr!.id], parts: [pl, pr, ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'rigid', overridden: !!project.connectionOverrides[id] });
+        const extra: string[] = [];
+        if (haunch) {
+          // פלטת חיזוק משולשת מתחת לכל קורה: מתחתית פלטת הקצה עד תחתית הקורה במרחק length מהרכס
+          for (const [k, r, sgn, plId] of [[1, rl!, -1, pl], [2, rr!, 1, pr]] as const) {
+            const sid = `${id}.ST${k}`;
+            const slope = (r.end.z - r.start.z) / (r.end.x - r.start.x);
+            const rph = getProfile(r.profile);
+            const hvr = rph.props.h * Math.sqrt(1 + slope * slope);
+            const x0 = rg.x + sgn * prm.t, x1 = rg.x + sgn * rr0!.length;
+            const under = (x: number) => rg.z + slope * (x - rg.x) - hvr; // תחתית הקורה (TOS − עומק אנכי)
+            const B = v3(x0, f.y, under(x0)), Cp = v3(x1, f.y, under(x1));
+            const A = v3(x0, f.y, top.z - Hp);
+            const ex = norm(sub(Cp, B));
+            const a = Math.ceil(under(x0) - A.z); // גובה המשולש בפלטת הקצה (מעוגל — הקצה העליון בדיוק בתחתית הקורה)
+            let nUp = norm(sub(Z, scale(ex, dot(Z, ex)))); if (nUp.z < 0) nUp = scale(nUp, -1);
+            const off = scale(nUp, -a / 2);
+            const nCut = norm(cross(sub(Cp, A), v3(0, 1, 0)));
+            const nOut = dot(nCut, ex) > 0 ? nCut : scale(nCut, -1);
+            const len = Math.hypot(x1 - x0, Cp.z - B.z) + a;
+            res.members.push({ id: sid, kind: 'plate', label: `פלטת חיזוק רכס PL${rr0!.stiffT}`, start: add(B, off), end: add(add(B, off), scale(ex, len)), profile: `PL${Math.ceil(a)}x${rr0!.stiffT}`, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: v3(0, 1, 0), source: 'generated', manualPlacement: false, connId: id, startCut: { point: B, normal: scale(X, -sgn) }, endCut: { point: Cp, normal: nOut }, partDesc: `פלטת חיזוק רכס משולשת PL${rr0!.stiffT}×${Math.ceil(a)}×${Math.ceil(Math.abs(x1 - x0))}` });
+            extra.push(sid);
+            welds.push({ id: `${sid}.W1`, connId: id, type: 'fillet', a: rr0!.weldSize, length: 2 * Math.abs(x1 - x0), location: 'shop', between: [r.id, sid], from: B, to: Cp });
+            welds.push({ id: `${sid}.W2`, connId: id, type: 'fillet', a: rr0!.weldSize, length: 2 * a, location: 'shop', between: [plId, sid], from: A, to: B });
+          }
+          issue({ code: 'RIDGE_HAUNCH', severity: 'info', elementId: id, message: `${label}: חיזוק רכס בשיטת הפלטה — פלטת קצה מוגבהת ${Math.round(ext)} מ"מ ופלטות חיזוק משולשות (גיאומטריה בלבד)` });
+        }
+        res.connections.push({ id, type: 'ridge', label, members: [rl!.id, rr!.id], parts: [pl, pr, ...extra, ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'rigid', overridden: !!project.connectionOverrides[id] });
+        if (rr0?.type === 'tie') buildRidgeTie(res, project, f.id, fi, rg.x, rg.z, rl!, rr!, top.z - hv, mat);
       }
     }
 
@@ -474,7 +506,7 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
       // ראשי ברגים ואומים מול הקורה
       for (const bo of c.bolts) { test(byId.get(`${bo.id}.H`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(pid), ' (אום מול חתך הפטה)'); }
     } else {
-      for (const part of c.parts.filter((x) => byId.get(x)?.kind === 'plate')) for (const mid of c.members) test(byId.get(part), byId.get(mid));
+      for (const part of c.parts.filter((x) => ['plate', 'beam'].includes(byId.get(x)?.kind ?? ''))) for (const mid of c.members) test(byId.get(part), byId.get(mid));
     }
   }
   // קושרות ושורות קשירה מול עמודים, קורות, פטות, תומכים וקושרות אחרות (סינון לפי תיבה חוסמת)
@@ -491,6 +523,22 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
       }
     }
   }
+  // סבכה אופקית (RHS): מוטות, אלכסונים, לשוניות ופחים מול כל השאר. לשונית בתוך ה-RHS שלה — מותר (חריץ)
+  for (const c of conns.filter((x) => x.id.startsWith('C.HB.'))) {
+    const own = new Set([...c.parts, ...c.members]);
+    for (const pid of [...c.parts, ...c.members.filter((m) => byId.get(m)?.kind === 'brace')]) {
+      const a = byId.get(pid);
+      if (!a || a.kind === 'bolt') continue;
+      const ba = boxes.get(pid) ?? aabb(a);
+      for (const o of others) {
+        if (o.id === pid) continue;
+        const ownPair = own.has(o.id) && (a.kind === 'plate' || o.kind === 'plate');
+        const tongueOfOther = (a.kind === 'brace' && o.id.startsWith(`${a.id}.T`)) || (o.kind === 'brace' && pid.startsWith(`${o.id}.T`));
+        if (ownPair || tongueOfOther || c.members[0] === o.id && a.kind === 'plate' && pid.endsWith('.PL')) continue;
+        if (aabbOverlap(ba, boxes.get(o.id)!)) test(a, o, ' (סבכה אופקית)');
+      }
+    }
+  }
   // אזור הרכס: פטות ותומכים של שני הצדדים
   const ridgeP = [...byId.values()].filter((m) => m.purlin?.index === 1 && m.purlin.side !== 'M');
   const all = [...ridgeP, ...ridgeGroup];
@@ -501,4 +549,69 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
     test(a, b, ' (אזור הרכס)');
   }
   return out;
+}
+
+/**
+ * חיזוק רכס בפרופיל אופקי: קורה אופקית בין שתי קורות הגג מתחת לרכס (פני עליון tieGap מתחת לתחתית הקורות ברכס).
+ * בכל קצה פח אנכי מרותך לתחתית הקורה (מסגריה); ווב הפרופיל מוברג לפח (שטח, 2×2 ברגים). גיאומטריה בלבד.
+ */
+function buildRidgeTie(res: ConnResult, project: Project, fid: string, fi: number, xr: number, ztos: number, rl: Member, rr: Member, underRidge: number, mat: string) {
+  const r = project.building.ridgeReinf!;
+  const tp = tryProfile(r.tieProfile);
+  if (!tp) { res.issues.push({ code: 'PROFILE', severity: 'error', message: `חיזוק רכס: חתך לא מוכר ${r.tieProfile}` }); return; }
+  const id = `C.RT.${fid}`;
+  const Y = v3(0, 1, 0), X = v3(1, 0, 0);
+  const h = tp.props.h, tw = tp.dims.tw ?? tp.dims.t ?? 6;
+  const zTop = underRidge - r.tieGap, zc = zTop - h / 2;
+  const sides = [[rl, -1], [rr, 1]] as const;
+  const ends: { x: number; r: Member; s: -1 | 1; nUp: Vec3; slope: number }[] = [];
+  for (const [m, s] of sides) {
+    const slope = (m.end.z - m.start.z) / (m.end.x - m.start.x);
+    const hv = getProfile(m.profile).props.h * Math.sqrt(1 + slope * slope);
+    const under = (x: number) => ztos + slope * (x - xr) - hv;
+    // קצה הפרופיל: היכן שתחתית הקורה גבוהה מפני הפרופיל ב-20 מ"מ
+    const ds = Math.abs(slope);
+    if (ds < 1e-3) { res.issues.push({ code: 'RIDGE_TIE', severity: 'error', message: `חיזוק רכס מסגרת ${fi}: קורה שטוחה — אין מפגש לפרופיל אופקי` }); return; }
+    const dx = (r.tieGap - 20) / ds;
+    void under;
+    const exr = norm(v3(1, 0, slope));
+    let nUp = norm(sub(v3(0, 0, 1), scale(exr, exr.z))); if (nUp.z < 0) nUp = scale(nUp, -1);
+    // לפחות מקום לשתי עמודות ברגים בין הקצה לרכס
+    ends.push({ x: xr + s * Math.max(dx, 2 * r.edge + r.pitch + 60), r: m, s, nUp, slope });
+  }
+  // קצה הפרופיל במקום שבו תחתית הקורה 20 מ"מ מעל פני הפרופיל; הברגים פנימה (לכיוון הרכס)
+  const xL = ends[0].x, xR = ends[1].x;
+  const tid = `RT.${fid}`;
+  res.members.push({ id: tid, kind: 'beam', label: `חיזוק רכס אופקי מסגרת ${fi}`, start: v3(xL, 0, zc), end: v3(xR, 0, zc), profile: r.tieProfile, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: v3(0, 0, 1), source: 'generated', manualPlacement: false, connId: id, partDesc: `חיזוק רכס ${r.tieProfile}` });
+  // y של המסגרת: מהקורות
+  const fy = rl.start.y;
+  const tm = res.members[res.members.length - 1];
+  tm.start = { ...tm.start, y: fy }; tm.end = { ...tm.end, y: fy };
+  const bolts: BoltInfo[] = [], welds: WeldInfo[] = [], parts: string[] = [tid];
+  for (const e of ends) {
+    const gid = `${id}.${e.s < 0 ? 'L' : 'R'}`;
+    // עמודות ברגים: מקצה הפרופיל פנימה
+    const xEnd = e.s < 0 ? xL : xR;
+    const bx = [xEnd - e.s * r.edge, xEnd - e.s * (r.edge + r.pitch)];
+    const zb = [zc - r.gauge / 2, zc + r.gauge / 2];
+    const gx0 = Math.min(...bx) - r.edge, gx1 = Math.max(...bx) + r.edge;
+    const zBot = zb[0] - r.edge;
+    const yg = fy + tw / 2 + r.gussetT / 2;
+    const xc = (gx0 + gx1) / 2;
+    const zTopG = ztos + e.slope * (xc - xr) + Math.abs(e.slope) * (gx1 - gx0); // מעל תחתית הקורה — נחתך במישור התחתון
+    const hvR = getProfile(e.r.profile).props.h * Math.sqrt(1 + e.slope * e.slope);
+    const underPl = { point: v3(xr, fy, ztos - hvR), normal: e.nUp };
+    res.members.push({ id: gid, kind: 'plate', label: `פח חיזוק רכס PL${r.gussetT}`, start: v3(xc, yg, zBot), end: v3(xc, yg, zTopG), profile: `PL${Math.ceil(gx1 - gx0)}x${r.gussetT}`, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: Y, source: 'generated', manualPlacement: false, connId: id, endCut: underPl, partDesc: `פח חיזוק רכס PL${r.gussetT}×${Math.ceil(gx1 - gx0)}` });
+    parts.push(gid);
+    welds.push({ id: `${gid}.W`, connId: id, type: 'fillet', a: r.weldSize, length: 2 * (gx1 - gx0), location: 'shop', between: [e.r.id, gid], from: v3(gx0, fy, zTopG), to: v3(gx1, fy, zTopG) });
+    bx.forEach((xx, ci) => zb.forEach((zz, ri) => {
+      const head = v3(xx, fy + tw / 2 + r.gussetT, zz);
+      bolts.push(makeBolt(`${gid}.B${ci + 1}${ri + 1}`, id, head, scale(Y, -1), r.bolt, tw + r.gussetT, 'site', [gid, tid], X, res.members));
+    }));
+    if (zTopG - zBot < 60) res.issues.push({ code: 'RIDGE_TIE', severity: 'warning', elementId: id, message: `חיזוק רכס מסגרת ${fi}: פח קצר מדי` });
+  }
+  const inner = h - 2 * (tp.dims.tf ?? 8);
+  if (r.gauge + (r.bolt.d + r.bolt.clearance) + 2 * hw(r.bolt.d).s / Math.sqrt(3) > inner + 10) res.issues.push({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `חיזוק רכס מסגרת ${fi}: הברגים קרובים לאגפי ${r.tieProfile} — הקטן מרווח או הגדל חתך` });
+  parts.push(...bolts.map((b) => b.id));
+  res.connections.push({ id, type: 'ridge-tie', label: `חיזוק רכס אופקי מסגרת ${fi}`, members: [rl.id, rr.id], parts, bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: false });
 }

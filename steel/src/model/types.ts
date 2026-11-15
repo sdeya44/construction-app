@@ -82,12 +82,27 @@ export interface PurlinSystem {
 
 /** מערכת קושרות ושורות קשירה לפטות. מפתחים (bays) לפי אינדקס: 0 = בין מסגרת 1 ל-2. */
 export interface BracingParams {
-  roof: { enabled: boolean; profile: string; bays: number[] };
+  roof: {
+    enabled: boolean; profile: string; bays: number[];
+    /** x = אלכסוני זוויתן במתיחה (ברירת מחדל); rhs = סבכה אופקית: מוטות RHS ואלכסונים RHS */
+    type?: 'x' | 'rhs';
+    rhs?: RhsTrussParams;
+  };
   walls: { enabled: boolean; profile: string; left: number[]; right: number[] };
   /** שורת קשירה לאגף התחתון של הפטות, באמצע כל מפתח */
   purlinTies: { enabled: boolean; profile: string };
   /** חיבורי קושרות X: פח חיבור מרותך לקורה/עמוד במסגריה, הזוויתן מוברג בשטח; בורג בהצטלבות עם פח מילוי */
   conn: BraceConnParams;
+}
+
+/** סבכה אופקית בגג מ-RHS (במקום X) */
+export interface RhsTrussParams {
+  strut: string; diag: string;
+  /** מספר פנלים לאורך השיפוע; 0 = אוטומטי (אלכסון ≈ 45°) */
+  panels: number;
+  tongueT: Mm; insert: Mm;
+  bolt: BoltSpec; boltsPerEnd: number; pitch: Mm; endDist: Mm; edge: Mm;
+  gussetT: Mm; clearance: Mm; weldSize: Mm;
 }
 
 export interface BraceConnParams {
@@ -150,6 +165,20 @@ export interface BuildingParams {
   section?: CustomSection;
   /** אלכסוני עמוד-קורה (קנה/knee brace) */
   kneeBraces?: KneeBraceParams;
+  /** חיזוק רכס לקבלת העומסים */
+  ridgeReinf?: RidgeReinfParams;
+}
+
+/**
+ * חיזוק רכס (החלטת משתמש 15.11.2026): plate = פלטת קצה מוגבהת מתחת לקורות + פלטת חיזוק משולשת מתחת לכל קורה;
+ * tie = פרופיל אופקי בין שתי קורות הגג מתחת לרכס, מוברג לפחים מרותכים לקורות.
+ */
+export interface RidgeReinfParams {
+  type: 'none' | 'plate' | 'tie';
+  /** plate: עומק ההגבהה מתחת לתחתית הקורה, אורך המשולש (אופקי מהרכס), עובי פלטת החיזוק */
+  depth: Mm; length: Mm; stiffT: Mm;
+  /** tie: חתך, מרווח בין פני עליון של הפרופיל לתחתית הקורות ברכס, עובי פח, ברגים */
+  tieProfile: string; tieGap: Mm; gussetT: Mm; bolt: BoltSpec; gauge: Mm; pitch: Mm; edge: Mm; weldSize: Mm;
 }
 
 /** אלכסון בין עמוד לקורת גג (החלטת משתמש 15.11.2026, לפי התוכניות: RHS80/80/4, פלטות 180×280×14, 4×M16) */
@@ -194,7 +223,7 @@ export interface MemberOverride {
 
 export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'cleat' | 'plate' | 'bolt' | 'anchor';
 
-export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee';
+export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee' | 'ridge-tie';
 export type ApprovalStatus = 'not-verified' | 'for-review' | 'approved';
 
 /** חיבור מבוסס פלטה וקבוצת ברגים (קורה-עמוד, רכס, פלטת בסיס). */

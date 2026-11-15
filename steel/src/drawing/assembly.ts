@@ -2,7 +2,7 @@ import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import type { Fabrication, MarkedPart } from '../fab/marks';
 import type { DerivedModel, Member } from '../model/types';
-import { cachedSolidPure } from './solidCache';
+import { cachedSolidPure, silhouetteEdges } from './solidCache';
 import { fitScale, type P, type Sheet } from './sheet';
 
 /**
@@ -61,6 +61,13 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
       }
       const pa = proj(a), pb = proj(b);
       if (Math.hypot(pa.x - pb.x, pa.y - pb.y) > 0.15) line(pa, pb, layer);
+    }
+    // צללית לחתכים מעוגלים (RHS/CHS) — ללא קיטום מדויק: רק כשכל האלמנט בתחום
+    const p2 = (q: Vec3) => proj(loc(q));
+    for (const [i, j] of silhouetteEdges(m, p2)) {
+      const a = loc(s.startRing[i]), b = loc(s.endRing[j]);
+      if (tr && (Math.min(a.t, b.t) < tr[0] || Math.max(a.t, b.t) > tr[1])) continue;
+      line(proj(a), proj(b), layer);
     }
   };
   const dimH = (xa: number, xb: number, y: number, label: string, tick = 1.2) => {
