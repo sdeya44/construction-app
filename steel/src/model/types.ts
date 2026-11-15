@@ -316,7 +316,11 @@ export interface Project {
     /** stock = מוט מלא והשלמה (ברירת מחדל); equal = חלקים שווים */
     spliceMode?: 'stock' | 'equal';
     /** פלטות חיזוק משולשות בחיבור המשך של קורת I */
-    spliceStiffeners?: boolean };
+    spliceStiffeners?: boolean;
+    /** שרטוטים בצבע (מסך); ברירת מחדל: שחור-לבן להדפסה */
+    drawingColor?: boolean;
+    /** דרגת ביצוע לפי EN 1090-2 */
+    execClass?: 'EXC1' | 'EXC2' | 'EXC3' };
   building: BuildingParams;
   memberOverrides: Record<string, MemberOverride>;
   manualMembers: ManualMember[];
@@ -359,7 +363,7 @@ export interface MarkRegistry {
 export interface RevisionEntry { rev: string; date: string; note: string; status: 'approved' | 'draft'; snapshot?: string }
 export interface RevisionState { current: string; locked: boolean; log: RevisionEntry[] }
 
-export type DrawingType = 'roof-plan' | 'anchor-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga';
+export type DrawingType = 'cover' | 'roof-plan' | 'anchor-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga';
 export interface DrawingRecord {
   id: string;
   number: string;

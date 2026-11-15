@@ -1,16 +1,10 @@
 import { PDFDocument, rgb, degrees, LineCapStyle, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { KSP_BOLD, KSP_REGULAR } from './font/fontData';
-import { visualRuns, type Layer, type Sheet } from './sheet';
+import { fillOf, penOf, visualRuns, type Sheet } from './sheet';
 import { shadeTuple } from './svg';
 
 const MM = 72 / 25.4;
-const COLOR: Record<Layer, [number, number, number, number, number[]?]> = {
-  FRAME: [0.07, 0.07, 0.07, 0.7], TITLE: [0.07, 0.07, 0.07, 0.35], OUTLINE: [0.07, 0.09, 0.13, 0.5], THIN: [0.3, 0.36, 0.41, 0.25],
-  HIDDEN: [0.3, 0.36, 0.41, 0.25, [3, 1.5]], AXIS: [0.64, 0.2, 0.2, 0.18, [8, 1.5, 1.5, 1.5]], DIM: [0.12, 0.37, 0.66, 0.18],
-  TEXT: [0.07, 0.07, 0.07, 0.2], HOLE: [0.69, 0, 0.13, 0.35], MARK: [0.54, 0.25, 0, 0.25], CUT: [0.07, 0.09, 0.13, 0.5],
-};
-
 function b64(s: string): Uint8Array {
   if (typeof atob === 'function') return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
   return new Uint8Array(Buffer.from(s, 'base64'));
@@ -31,7 +25,8 @@ export async function sheetsToPdf(sheets: Sheet[], meta: { title: string; author
 function drawSheet(page: PDFPage, sh: Sheet, reg: PDFFont, bold: PDFFont) {
   const P = (x: number, y: number) => ({ x: x * MM, y: y * MM });
   for (const e of sh.ents) {
-    const [r, g, b, w, dash] = COLOR[e.layer];
+    const mono = sh.mono !== false;
+    const [[r, g, b], w, dash] = penOf(e.layer, mono);
     const color = rgb(r, g, b);
     const opts = { thickness: w * MM, color, dashArray: dash?.map((x) => x * MM), lineCap: LineCapStyle.Round };
     if (e.k === 'line') page.drawLine({ start: P(e.a.x, e.a.y), end: P(e.b.x, e.b.y), ...opts });
@@ -39,11 +34,11 @@ function drawSheet(page: PDFPage, sh: Sheet, reg: PDFFont, bold: PDFFont) {
       const pts = e.closed ? [...e.pts, e.pts[0]] : e.pts;
       if (e.shade !== undefined && e.pts.length > 2) {
         const d = e.pts.map((q, i) => `${i ? 'L' : 'M'} ${(q.x * MM).toFixed(2)} ${(-q.y * MM).toFixed(2)}`).join(' ') + ' Z';
-        const [sr, sg, sb] = shadeTuple(e.shade);
+        const [sr, sg, sb] = shadeTuple(e.shade, mono);
         page.drawSvgPath(d, { x: 0, y: 0, color: rgb(sr, sg, sb), borderColor: rgb(sr, sg, sb), borderWidth: 0.06 * MM });
       } else if (e.fill && e.pts.length > 2) {
         const d = e.pts.map((q, i) => `${i ? 'L' : 'M'} ${(q.x * MM).toFixed(2)} ${(-q.y * MM).toFixed(2)}`).join(' ') + ' Z';
-        page.drawSvgPath(d, { x: 0, y: 0, color: rgb(0.81, 0.84, 0.87), borderColor: color, borderWidth: w * MM });
+        page.drawSvgPath(d, { x: 0, y: 0, color: rgb(...fillOf(mono)), borderColor: color, borderWidth: w * MM });
       } else for (let i = 1; i < pts.length; i++) page.drawLine({ start: P(pts[i - 1].x, pts[i - 1].y), end: P(pts[i].x, pts[i].y), ...opts });
     } else if (e.k === 'circle') page.drawCircle({ ...P(e.c.x, e.c.y), size: e.r * MM, borderColor: color, borderWidth: w * MM });
     else {

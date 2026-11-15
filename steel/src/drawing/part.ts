@@ -27,7 +27,7 @@ export function partSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: st
   const R = { x0: area.x0 + 8, x1: area.x1 - 118, y0: area.y0 + 4, y1: area.y1 - 4 };
   const E = sh.ents;
   const line = (a: P, b: P, layer: 'OUTLINE' | 'THIN' | 'DIM' | 'HIDDEN' | 'AXIS' | 'HOLE' = 'OUTLINE') => E.push({ k: 'line', a, b, layer });
-  const text = (p: P, str: string, h = 2.2, align: 'left' | 'center' | 'right' = 'center', layer: 'TEXT' | 'DIM' | 'MARK' = 'TEXT', bold = false, rot = 0) => E.push({ k: 'text', p, s: str, h, align, layer, bold, rot });
+  const text = (p: P, str: string, h = 2.5, align: 'left' | 'center' | 'right' = 'center', layer: 'TEXT' | 'DIM' | 'MARK' = 'TEXT', bold = false, rot = 0) => E.push({ k: 'text', p, s: str, h, align, layer, bold, rot });
   const dimH = (xa: number, xb: number, y: number, label: string) => {
     if (Math.abs(xb - xa) < 0.01) return;
     line({ x: xa, y }, { x: xb, y }, 'DIM');
@@ -55,6 +55,16 @@ export function partSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: st
       } else if (a.t < -0.5 || a.t > L + 0.5) continue;
       const pa = proj(a.t, a[axis]), pb = proj(b.t, b[axis]);
       if (Math.hypot(pa.x - pb.x, pa.y - pb.y) > 0.15) line(pa, pb);
+    }
+    // צללית לחתכים מעוגלים (RHS/CHS): קווי קצה לאורך האלמנט בנקודות הקיצון של החתך
+    const r0 = s.startRing.map(loc), r1 = s.endRing.map(loc);
+    if (r0.length && r0.length === r1.length) {
+      const ws = r0.map((q) => q[axis]);
+      for (const i of [ws.indexOf(Math.min(...ws)), ws.indexOf(Math.max(...ws))]) {
+        const a = r0[i], b = r1[i];
+        const t0 = Math.max(0, Math.min(a.t, b.t)), t1 = Math.min(L, Math.max(a.t, b.t));
+        line(proj(t0, a[axis]), proj(t1, b[axis]));
+      }
     }
   };
   const holeCircle = (c: P, dmm: number, sc: number) => {
@@ -94,13 +104,13 @@ export function partSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: st
       const c0 = PF(g.holes[0].x, g.holes[0].y);
       const lp = { x: PF(g.x0, 0).x - 6, y: PF(0, g.y0).y - 3 };
       line(c0, lp, 'DIM');
-      text({ x: lp.x - 1, y: lp.y - 1 }, `${holeNote(g.holes)} — חור עובר`, 2.2, 'right', 'DIM');
+      text({ x: lp.x - 1, y: lp.y - 1 }, `${holeNote(g.holes)} — חור עובר`, 2.5, 'right', 'DIM');
     }
     const yE = PF(0, g.y0).y - 22;
     const PE = (x: number, z: number): P => ({ x: cx + (x - (g.x0 + g.x1) / 2) / sc, y: yE - z / sc });
     for (const [a, b] of g.edge) line(PE(a.x, a.y), PE(b.x, b.y));
     dimV(PE(g.x1, 0).x + 7, PE(0, 0).y, PE(0, T).y, `${Math.round(T)}`);
-    text({ x: R.x0, y: yE + 4 }, 'מבט קצה (עובי)', 2.2, 'left');
+    text({ x: R.x0, y: yE + 4 }, 'מבט קצה (עובי)', 2.5, 'left');
     rows.push(`פלטה ${Math.round(T)}×${Math.round(W)}×${Math.round(Lp)} מ"מ`);
   } else {
     // ---- פרופיל: מבט חזית (t, v) ומבט עליון (t, u)
@@ -112,7 +122,7 @@ export function partSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: st
     if ((hv + hu) / sy > avH) sy = fitScale(1, hv + hu, 1e9, avH);
     scaleLabel = sx === sy ? `1:${sx}` : `1:${sx} / 1:${sy}*`;
     sh.scale = sx;
-    if (sx !== sy) text({ x: R.x0, y: R.y0 + 2 }, `* קנ"מ אורכי 1:${sx}, קנ"מ רוחבי 1:${sy} — לייצור לפי המידות בלבד`, 2.1, 'left');
+    if (sx !== sy) text({ x: R.x0, y: R.y0 + 2 }, `* קנ"מ אורכי 1:${sx}, קנ"מ רוחבי 1:${sy} — לייצור לפי המידות בלבד`, 2.5, 'left');
     const ox = R.x0 + 8;
     const yF0 = R.y1 - 22; // ראש מבט החזית (v = vmax)
     const PF = (t: number, v: number): P => ({ x: ox + t / sx, y: yF0 - (vmax - v) / sy });
@@ -162,15 +172,17 @@ export function partSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: st
     const PC = (uu: number, vv: number): P => ({ x: sxC + (uu - (umin + umax) / 2) / ssc, y: syC + (vv - (vmin + vmax) / 2) / ssc });
     E.push({ k: 'poly', pts: ring0.map((q) => PC(q.u, q.v)), closed: true, layer: 'CUT', fill: true });
     for (const h of part.holes.filter((x) => x.face === 'section')) E.push({ k: 'circle', c: PC(h.c, h.c2 ?? 0), r: h.d / 2 / ssc, layer: 'HOLE' });
-    text({ x: sxC, y: syC - hv / 2 / ssc - 6 }, `חתך ${pr0.name} 1:${ssc}`, 2.2, 'center');
+    text({ x: sxC, y: syC - hv / 2 / ssc - 6 }, `חתך ${pr0.name} 1:${ssc}`, 2.5, 'center');
   }
   rows.unshift(`סימון: ${part.mark}   כמות: ${qty}`, `תיאור: ${part.desc}`, `חתך: ${part.profile}   חומר: ${part.material}`,
     m.kind === 'plate' ? `משקל יח': ${part.weight.toFixed(2)} ק"ג   סה"כ: ${(part.weight * qty).toFixed(1)} ק"ג` : `אורך: ${Math.round(part.length)} מ"מ   משקל יח': ${part.weight.toFixed(2)} ק"ג   סה"כ: ${(part.weight * qty).toFixed(1)} ק"ג`);
   if (part.cutStart || part.cutEnd) rows.push(`חיתוך קצה: התחלה ${part.cutStart}° · סוף ${part.cutEnd}° (מהניצב)`);
-  rows.push(`חורים: ${holeNote(part.holes) || 'אין'}`);
+  { const bh = part.holes.filter((h) => !h.boltId.startsWith('VENT')), vh = part.holes.filter((h) => h.boltId.startsWith('VENT'));
+    rows.push(`חורים: ${holeNote(bh) || 'אין'}`);
+    if (vh.length) rows.push(`חורי אוורור/ניקוז לגלוון: ${holeNote(vh)} — בפינות נגדיות`); }
   if (part.provisional) rows.push('⚠ סימון זמני — יש להריץ "מספור" לפני הפצה');
   let y = m.kind === 'plate' ? area.y1 - 10 : area.y1 - 110;
-  for (const r of rows) { text({ x: area.x1 - 4, y }, r, 2.4, 'right'); y -= 4.4; }
+  for (const r of rows) { text({ x: area.x1 - 4, y }, r, 2.5, 'right'); y -= 4.4; }
   return scaleLabel;
 }
 

@@ -1,4 +1,4 @@
-import { dot, sub } from '../core/vec';
+import { add, dot, scale, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import { memberSolid } from '../geometry/solid';
 import { axialExtent } from '../geometry/parts';
@@ -55,6 +55,60 @@ function boltsThrough(d: DerivedModel, id: string) {
   return idx.get(id) ?? [];
 }
 
+const HOLLOW = new Set(['RHS', 'SHS', 'CHS']);
+/** קוטר חור אוורור/ניקוז לגלוון לפי המידה הגדולה של החתך (הנחיה מקובלת, ISO 14713-2 — לאישור המגלוון) */
+export function ventDia(D: number): number { return D <= 40 ? 10 : D <= 80 ? 12 : D <= 120 ? 16 : D <= 200 ? 20 : 25; }
+
+export interface VentHole { p: Vec3; axis: Vec3; d: number; t: number; c: number; c2: number }
+const ventCache = new WeakMap<DerivedModel, Map<string, VentHole[]>>();
+/**
+ * חורי אוורור/ניקוז לגלוון בפרופיל סגור (RHS/SHS/CHS) שקצהו אטום בפלטה מרותכת במסגריה:
+ * שני חורים בכל קצה אטום, על פאות נגדיות ובפינות נגדיות (אוויר יוצא למעלה, אבץ מתנקז למטה).
+ */
+export function ventHoles(m: Member, d: DerivedModel): VentHole[] {
+  let cache = ventCache.get(d);
+  if (!cache) { cache = new Map(); ventCache.set(d, cache); }
+  const hit = cache.get(m.id); if (hit) return hit;
+  const out: VentHole[] = [];
+  cache.set(m.id, out);
+  const pr = getProfile(m.profile);
+  if (!HOLLOW.has(pr.family) || m.kind === 'plate') return out;
+  const f = localFrame(m);
+  const { tMin, tMax } = axialExtent(m);
+  const s = memberSolid(m);
+  const cen = s.startRing.reduce((a, q) => add(a, q), { x: 0, y: 0, z: 0 } as Vec3);
+  const c0 = scale(cen, 1 / Math.max(1, s.startRing.length));
+  const r0 = sub(c0, m.start);
+  const uC = dot(r0, f.u), vC = dot(r0, f.v);
+  const h = pr.props.h, b = pr.props.b ?? h, tw = pr.dims.t ?? 4;
+  const D = Math.max(h, b), dd = ventDia(D);
+  const welded = new Set<string>();
+  for (const c of d.connections) for (const w of c.welds) if (w.location === 'shop' && w.between.includes(m.id)) for (const x of w.between) if (x !== m.id) welded.add(x);
+  let startFace: number | null = null, endFace: number | null = null;
+  for (const id of welded) {
+    const pm = d.byId.get(id);
+    if (!pm || pm.kind !== 'plate') continue;
+    const ps = memberSolid(pm);
+    const vs = [...ps.startRing, ...ps.endRing].map((q) => { const r = sub(q, m.start); return { t: dot(r, f.ex), u: dot(r, f.u) - uC, v: dot(r, f.v) - vC }; });
+    const tLo = Math.min(...vs.map((q) => q.t)), tHi = Math.max(...vs.map((q) => q.t));
+    const uR = Math.max(...vs.map((q) => q.u)) - Math.min(...vs.map((q) => q.u)), vR = Math.max(...vs.map((q) => q.v)) - Math.min(...vs.map((q) => q.v));
+    if (uR < 0.8 * b || vR < 0.8 * h) continue; // לא מכסה את החתך (לשונית, פח צד)
+    const tc = (tLo + tHi) / 2;
+    if (Math.abs(tc - tMin) < 120 + (tHi - tLo) / 2) startFace = Math.max(startFace ?? -Infinity, Math.min(tHi, tMin + 400));
+    else if (Math.abs(tc - tMax) < 120 + (tHi - tLo) / 2) endFace = Math.min(endFace ?? Infinity, Math.max(tLo, tMax - 400));
+  }
+  const cu = Math.max(0, b / 2 - tw - dd / 2 - 4);
+  const push = (t: number) => {
+    for (const sg of [1, -1] as const) {
+      const c = uC + sg * cu, c2 = vC + sg * (h / 2);
+      out.push({ p: add(add(add(m.start, scale(f.ex, t)), scale(f.u, c)), scale(f.v, c2)), axis: scale(f.v, -sg), d: dd, t, c, c2 });
+    }
+  };
+  if (startFace !== null) push(Math.max(startFace, tMin) + dd / 2 + 15);
+  if (endFace !== null) push(Math.min(endFace, tMax) - dd / 2 - 15);
+  return out;
+}
+
 /** חורים באלמנט מכל הברגים שעוברים בו. */
 export function memberHoles(m: Member, d: DerivedModel): Hole[] {
   const out: Hole[] = [];
@@ -72,6 +126,7 @@ export function memberHoles(m: Member, d: DerivedModel): Hole[] {
     const cc = throughV ? dot(r, f.u) : dot(r, f.v);
     out.push({ t, c: cc, c2: throughV ? dot(r, f.v) : dot(r, f.u), d: b.hole, face: throughV ? 'flange' : 'web', boltId: b.id });
   }
+  ventHoles(m, d).forEach((v, i) => out.push({ t: v.t, c: v.c, c2: v.c2, d: v.d, face: 'flange', boltId: `VENT.${i + 1}` }));
   return out.sort((a, b) => a.t - b.t || a.c - b.c);
 }
 

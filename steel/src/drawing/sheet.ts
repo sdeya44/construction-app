@@ -20,9 +20,25 @@ export interface TitleInfo {
   rev: string; scale: string; date: string; status: string; drawnBy: string; checkedBy: string; approvedBy: string; note: string;
   /** יומן מהדורות (האחרונות), לטבלת המהדורות בגיליון */
   revisions?: { rev: string; date: string; note: string }[];
+  /** שדות ISO 7200: חומר, גימור, דרגת ביצוע, משקל, גיליון X/Y */
+  material?: string; finish?: string; exec?: string; weight?: string; sheetNo?: string;
 }
 
-export interface Sheet { size: SheetSize; w: number; h: number; ents: Ent[]; title: TitleInfo; scale: number }
+export interface Sheet { size: SheetSize; w: number; h: number; ents: Ent[]; title: TitleInfo; scale: number; /** הדפסה בשחור-לבן (ברירת מחדל) */ mono?: boolean }
+
+/** עט לכל שכבה: [r,g,b] 0..1, עובי מ"מ (ISO 128), מקף. מצב שחור-לבן: הבחנה בעובי וסוג קו בלבד. */
+export function penOf(layer: Layer, mono: boolean): [[number, number, number], number, number[]?] {
+  const K: [number, number, number] = [0, 0, 0];
+  const T: Record<Layer, [[number, number, number], number, number[]?]> = {
+    FRAME: [K, 0.7], TITLE: [K, 0.35], OUTLINE: [mono ? K : [0.07, 0.09, 0.13], 0.5], THIN: [mono ? K : [0.3, 0.36, 0.41], 0.25],
+    HIDDEN: [mono ? K : [0.3, 0.36, 0.41], 0.25, [3, 1.5]], AXIS: [mono ? K : [0.64, 0.2, 0.2], 0.18, [8, 1.5, 1.5, 1.5]],
+    DIM: [mono ? K : [0.12, 0.37, 0.66], 0.18], TEXT: [K, 0.25], HOLE: [mono ? K : [0.69, 0, 0.13], 0.35],
+    MARK: [mono ? K : [0.54, 0.25, 0], 0.25], CUT: [mono ? K : [0.07, 0.09, 0.13], 0.5],
+  };
+  return T[layer];
+}
+/** מילוי לחתך ומבט מוצלל */
+export function fillOf(mono: boolean): [number, number, number] { return mono ? [0.86, 0.86, 0.86] : [0.81, 0.84, 0.87]; }
 
 export const STD_SCALES = [1, 2, 5, 10, 15, 20, 25, 50, 75, 100, 150, 200, 250, 500, 1000];
 
@@ -74,7 +90,7 @@ export class View {
     const mid = { x: (sa.x + sb.x) / 2 + n.x * 1.4, y: (sa.y + sb.y) / 2 + n.y * 1.4 };
     let rot = (Math.atan2(dir.y, dir.x) * 180) / Math.PI;
     if (rot > 90.1) rot -= 180; if (rot < -89.9) rot += 180;
-    this.sheet.ents.push({ k: 'text', p: mid, s: label ?? String(Math.round(val)), h: 2.2, align: 'center', layer: 'DIM', rot });
+    this.sheet.ents.push({ k: 'text', p: mid, s: label ?? String(Math.round(val)), h: 2.5, align: 'center', layer: 'DIM', rot });
     return val;
   }
   /** סימון מפלס (משולש על קו ההתייחסות + ערך במטרים), lenPaper = אורך קו ההובלה */
@@ -86,7 +102,7 @@ export class View {
     this.sheet.ents.push({ k: 'line', a: c, b: e, layer: 'DIM' });
     const tx = c.x + side * (lenPaper - 3);
     this.sheet.ents.push({ k: 'poly', pts: [{ x: tx - 1.3, y: c.y + 2 }, { x: tx + 1.3, y: c.y + 2 }, { x: tx, y: c.y }], closed: true, layer: 'DIM', fill: true });
-    this.sheet.ents.push({ k: 'text', p: { x: tx + side * 2, y: c.y + 0.8 }, s, h: 2.4, align: side > 0 ? 'left' : 'right', layer: 'DIM', bold: true });
+    this.sheet.ents.push({ k: 'text', p: { x: tx + side * 2, y: c.y + 0.8 }, s, h: 2.5, align: side > 0 ? 'left' : 'right', layer: 'DIM', bold: true });
   }
   /** בועת ציר */
   bubble(at: P, label: string) {
@@ -105,7 +121,7 @@ export function newSheet(size: SheetSize, title: TitleInfo, scale: number): Shee
 export function drawArea(s: Sheet) {
   return { x0: 20, y0: 10 + TB_H + 4, x1: s.w - 10, y1: s.h - 10 };
 }
-export const TB_W = 185, TB_H = 58;
+export const TB_W = 185, TB_H = 67;
 /** גובה טבלת המהדורות (פינה ימנית תחתונה) — גיליונות עם טבלאות בפינה זו מתחילים מעליה */
 export const revBandH = (t: TitleInfo) => 4.6 * (Math.min(5, Math.max(1, t.revisions?.length ?? 0)) + 1) + 2;
 
@@ -120,34 +136,46 @@ export function frameAndTitle(s: Sheet) {
   const bx = x0, by = y0, bw = TB_W, bh = TB_H;
   s.ents.push({ k: 'poly', pts: [{ x: bx, y: by }, { x: bx + bw, y: by }, { x: bx + bw, y: by + bh }, { x: bx, y: by + bh }], closed: true, layer: 'FRAME' });
   const t = s.title;
-  // שורות: מלמעלה למטה
-  const rows = [bh - 9, bh - 18, bh - 27, bh - 36, bh - 45];
-  for (const r of rows) L({ x: bx, y: by + r }, { x: bx + bw, y: by + r });
+  // שורות (מלמעלה): חברה · פרויקט · לקוח · כותרת · נתוני ייצור · מספר/מהדורה · חתימות
+  const R = 9;
+  for (let k = 1; k <= 6; k++) L({ x: bx, y: by + bh - k * R }, { x: bx + bw, y: by + bh - k * R }, k === 4 || k === 6 ? 'FRAME' : 'TITLE');
   const cx = bx + bw;
-  T(cx - 2, by + bh - 6.5, t.company, 4.2, 'right', true);
-  T(bx + 2, by + bh - 6.5, 'KAYAN STEEL PRO', 2.6, 'left');
-  T(cx - 2, by + bh - 15.5, `פרויקט: ${t.project}`, 3, 'right', true);
-  T(bx + 2, by + bh - 15.5, `מס' פרויקט: ${t.projectNo || '—'}`, 2.5, 'left');
-  T(cx - 2, by + bh - 24.5, `לקוח: ${t.client || '—'}`, 2.6);
-  T(bx + 2, by + bh - 24.5, `תאריך: ${t.date}`, 2.5, 'left');
-  T(cx - 2, by + bh - 33.5, t.title, 3.6, 'right', true);
-  // שורת מספר/מהדורה/קנ"מ/סטטוס
-  const cells = [['מס\' שרטוט', t.number], ['מהדורה', t.rev], ['קנ"מ', t.scale], ['סטטוס', t.status]];
-  const cw = bw / cells.length;
-  cells.forEach(([k, v], i) => {
-    const x = cx - i * cw;
-    if (i) L({ x, y: by + bh - 45 }, { x, y: by + bh - 36 });
-    T(x - 1.5, by + bh - 39.3, k, 1.9);
-    T(x - cw / 2, by + bh - 43.6, v, 2.8, 'center', true);
-  });
+  const rowY = (k: number) => by + bh - k * R + 2.6; // קו בסיס טקסט בשורה k (1..)
+  T(cx - 2, rowY(1), t.company, 4.2, 'right', true);
+  T(bx + 2, rowY(1), 'KAYAN STEEL PRO', 2.6, 'left');
+  // סמל שיטת ההיטל — זווית ראשונה (ISO 5456-2, שיטה E): חרוט קטום משמאל, מבט קצה מימין
+  {
+    const px = bx + 52, py = by + bh - R / 2;
+    s.ents.push({ k: 'poly', pts: [{ x: px - 6, y: py - 1.4 }, { x: px - 1, y: py - 2.8 }, { x: px - 1, y: py + 2.8 }, { x: px - 6, y: py + 1.4 }], closed: true, layer: 'TITLE' });
+    s.ents.push({ k: 'circle', c: { x: px + 4, y: py }, r: 2.8, layer: 'TITLE' }, { k: 'circle', c: { x: px + 4, y: py }, r: 1.4, layer: 'TITLE' });
+    L({ x: px - 7, y: py }, { x: px + 7.6, y: py }, 'AXIS');
+  }
+  T(cx - 2, rowY(2), `פרויקט: ${t.project}`, 3, 'right', true);
+  T(bx + 2, rowY(2), `מס' פרויקט: ${t.projectNo || '—'}`, 2.5, 'left');
+  T(cx - 2, rowY(3), `לקוח: ${t.client || '—'}`, 2.6);
+  T(bx + 2, rowY(3), `תאריך: ${t.date}`, 2.5, 'left');
+  T(cx - 2, rowY(4) + 0.4, t.title, 3.6, 'right', true);
+  const cellRow = (k: number, cells: [string, string][], wts: number[], big: number) => {
+    const sum = wts.reduce((a, x) => a + x, 0);
+    let x = cx;
+    cells.forEach(([lab, v], i) => {
+      const w = (bw * wts[i]) / sum;
+      if (i) L({ x, y: by + bh - k * R }, { x, y: by + bh - (k - 1) * R }, 'TITLE');
+      T(x - 1.2, by + bh - (k - 1) * R - 2.6, lab, 1.8);
+      T(x - w / 2, by + bh - k * R + 1.6, v || '—', big, 'center', true);
+      x -= w;
+    });
+  };
+  cellRow(5, [['חומר', t.material ?? 'S235JR'], ['גימור', t.finish ?? 'גלוון חם ISO 1461'], ['דרגת ביצוע', t.exec ?? 'EXC2'], ['משקל', t.weight ?? ''], ['יחידות', 'מ"מ']], [16, 26, 13, 15, 10], 2.4);
+  cellRow(6, [['מס\' שרטוט', t.number], ['מהדורה', t.rev], ['קנ"מ', t.scale], ['גיליון', t.sheetNo ?? ''], ['סטטוס', t.status]], [20, 10, 16, 12, 18], 2.8);
   // חתימות
   const sig = [['שרטט', t.drawnBy], ['בדק', t.checkedBy], ['אישר', t.approvedBy]];
   const sw = bw / 3;
   sig.forEach(([k, v], i) => {
     const x = cx - i * sw;
-    if (i) L({ x, y: by }, { x, y: by + bh - 45 });
-    T(x - 1.5, by + bh - 48.3, k, 1.9);
-    T(x - sw / 2, by + 4, v || '—', 2.6, 'center');
+    if (i) L({ x, y: by }, { x, y: by + bh - 6 * R }, 'TITLE');
+    T(x - 1.2, by + bh - 6 * R - 2.6, k, 1.8);
+    T(x - sw / 2, by + 3, v || '—', 2.6, 'center');
   });
   // טבלת מהדורות: מימין לבלוק הכותרת, צמודה לתחתית המסגרת
   {
@@ -159,7 +187,7 @@ export function frameAndTitle(s: Sheet) {
     s.ents.push({ k: 'poly', pts: [{ x: rx0, y: y0 }, { x: rx1, y: y0 }, { x: rx1, y: top }, { x: rx0, y: top }], closed: true, layer: 'TITLE' });
     const row = (vals: string[], bold = false) => {
       let x = rx1;
-      vals.forEach((v, i) => { s.ents.push({ k: 'text', p: { x: i === 2 ? x - 1.5 : x - cw[i] / 2, y: y - rh + 1.4 }, s: v, h: 2.1, align: i === 2 ? 'right' : 'center', layer: 'TITLE', bold }); x -= cw[i]; });
+      vals.forEach((v, i) => { s.ents.push({ k: 'text', p: { x: i === 2 ? x - 1.5 : x - cw[i] / 2, y: y - rh + 1.4 }, s: v, h: 2.3, align: i === 2 ? 'right' : 'center', layer: 'TITLE', bold }); x -= cw[i]; });
       y -= rh; if (y > y0 + 0.1) L({ x: rx0, y }, { x: rx1, y }, 'TITLE');
     };
     row(['מהדורה', 'תאריך', 'תיאור השינוי'], true);

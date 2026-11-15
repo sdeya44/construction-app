@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { numberParts, setDrawing } from '../commands/commands';
+import { numberParts, setDrawing, setSettings } from '../commands/commands';
 import { buildSheet, drawingCatalog, sheetHash, type DrawingDef } from '../drawing/views';
 import { sheetToSvg } from '../drawing/svg';
 import { sheetToDxf } from '../drawing/dxf';
@@ -11,7 +11,7 @@ import { store, useStore } from '../store';
 import { Icon } from './icons';
 
 const GROUPS: [DrawingDef['type'][], string][] = [
-  [['ga', 'roof-plan', 'anchor-plan', 'frame', 'side'], 'תוכניות, חזיתות וחתכים'],
+  [['cover', 'ga', 'roof-plan', 'anchor-plan', 'frame', 'side'], 'תוכניות, חזיתות וחתכים'],
   [['connection'], 'פרטי חיבור'],
   [['assembly'], 'שרטוטי מכלול'],
   [['part'], 'שרטוטי חלק'],
@@ -98,6 +98,12 @@ export function DrawingsView() {
           </select>
           <select className="inp" style={{ width: 110 }} data-testid="dwg-set-status" value={rec?.status ?? 'draft'} onChange={(e) => setStatus(e.target.value as DrawingRecord['status'])}>
             <option value="draft">טיוטה</option><option value="for-review">לבדיקה</option><option value="approved">מאושר לייצור</option>
+          </select>
+          <select className="inp" style={{ width: 92 }} data-testid="dwg-color" title="הדפסה בשחור-לבן (ברירת מחדל) או בצבע" value={p.settings.drawingColor ? 'color' : 'mono'} onChange={(e) => store.exec(setSettings({ drawingColor: e.target.value === 'color' }))}>
+            <option value="mono">שחור-לבן</option><option value="color">צבע</option>
+          </select>
+          <select className="inp" style={{ width: 74 }} data-testid="dwg-exc" title="דרגת ביצוע לפי EN 1090-2" value={p.settings.execClass ?? 'EXC2'} onChange={(e) => store.exec(setSettings({ execClass: e.target.value as 'EXC1' | 'EXC2' | 'EXC3' }))}>
+            <option>EXC1</option><option>EXC2</option><option>EXC3</option>
           </select>
           <button className="btn small" onClick={() => setZoom((z) => Math.min(8, z * 1.4))}>+</button>
           <button className="btn small" onClick={() => setZoom((z) => Math.max(0.5, z / 1.4))}>−</button>

@@ -17,6 +17,7 @@ const num = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true }
 /** קטלוג השרטוטים הנגזר מהמודל. המזהים יציבים; מספרי השרטוטים נגזרים מהמזהה. */
 export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): DrawingDef[] {
   const out: DrawingDef[] = [];
+  out.push({ id: 'D-COVER', type: 'cover', number: 'G-00', title: 'גיליון שער — רשימת שרטוטים והערות כלליות' });
   out.push({ id: 'D-GA', type: 'ga', number: 'G-01', title: 'שרטוט כללי והרכבה – איזומטריה' });
   out.push({ id: 'D-ROOF', type: 'roof-plan', number: 'R-01', title: 'תוכנית גג ופריסת פטות' });
   if (d.connections.some((c) => c.type === 'base')) out.push({ id: 'D-ANCHOR', type: 'anchor-plan', number: 'B-01', title: 'תוכנית ברגי עיגון ופלטות בסיס' });
@@ -108,7 +109,7 @@ function table(sh: Sheet, x1: number, yTop: number, cw: number[], title: string,
   const yHead = y;
   const cell = (vals: string[], bold = false) => {
     let x = x1;
-    vals.forEach((t, i) => { sh.ents.push({ k: 'text', p: { x: x - cw[i] / 2, y: y - rh + 1.3 }, s: t, h: 2.2, align: 'center', layer: 'TEXT', bold }); x -= cw[i]; });
+    vals.forEach((t, i) => { sh.ents.push({ k: 'text', p: { x: x - cw[i] / 2, y: y - rh + 1.3 }, s: t, h: 2.5, align: 'center', layer: 'TEXT', bold }); x -= cw[i]; });
     y -= rh; line({ x: x0, y }, { x: x1, y });
   };
   cell(head, true);
@@ -122,6 +123,22 @@ function table(sh: Sheet, x1: number, yTop: number, cw: number[], title: string,
 export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrication, bom: Bom, rec?: DrawingRecord): Sheet {
   const size: SheetSize = rec?.sheet ?? 'A3';
   const sh = newSheet(size, titleOf(p, def, rec, ''), 1);
+  sh.mono = !p.settings.drawingColor;
+  {
+    const cat = drawingCatalog(p, d, fab);
+    const i = cat.findIndex((x) => x.id === def.id);
+    sh.title.sheetNo = i >= 0 ? `${i + 1}/${cat.length}` : '';
+    sh.title.exec = p.settings.execClass ?? 'EXC2';
+    const mats = [...new Set(d.members.filter((m) => m.kind !== 'bolt' && m.kind !== 'anchor').map((m) => m.material))];
+    sh.title.material = mats.length === 1 ? mats[0] : mats.slice(0, 2).join(' / ');
+    if (def.type === 'assembly') {
+      const a = fab.assemblies.find((x) => x.mark === def.ref);
+      if (a) sh.title.weight = `${a.weight.toFixed(1)} ק"ג`;
+    } else if (def.type === 'part') {
+      const pt = fab.parts.find((x) => x.mark === def.ref);
+      if (pt) { sh.title.weight = `${pt.weight.toFixed(2)} ק"ג`; sh.title.material = pt.material; }
+    } else sh.title.weight = `${(bom.assemblies.reduce((a1, r) => a1 + r.unitWeight * r.qty, 0) / 1000).toFixed(2)} טון`;
+  }
   const area = drawArea(sh);
   let scaleLabel = '';
   const setScale = (v: View) => { scaleLabel = `1:${v.scale}`; sh.scale = v.scale; };
@@ -151,7 +168,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         const q = v.p(at.x, at.y), dirP = v.pd({ x: 0, y: 1 });
         sh.ents.push({ k: 'line', a: q, b: { x: q.x + dirP.x * 4, y: q.y + dirP.y * 4 }, layer: 'MARK' });
         sh.ents.push({ k: 'poly', pts: [{ x: q.x + dirP.x * 4 + dirP.y * 1.2, y: q.y + dirP.y * 4 - dirP.x * 1.2 }, { x: q.x + dirP.x * 6, y: q.y + dirP.y * 6 }, { x: q.x + dirP.x * 4 - dirP.y * 1.2, y: q.y + dirP.y * 4 + dirP.x * 1.2 }], closed: true, layer: 'MARK', fill: true });
-        sh.ents.push({ k: 'text', p: { x: q.x + 1.5, y: q.y + 1.5 }, s: `F-${String(i + 1).padStart(2, '0')}`, h: 2.2, align: 'left', layer: 'MARK', bold: true });
+        sh.ents.push({ k: 'text', p: { x: q.x + 1.5, y: q.y + 1.5 }, s: `F-${String(i + 1).padStart(2, '0')}`, h: 2.5, align: 'left', layer: 'MARK', bold: true });
       });
       const raf = getProfile(b.rafterProfile);
       for (const m of d.members.filter((x) => x.kind === 'rafter')) {
@@ -160,7 +177,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         v.poly([{ x: xs[0], y: m.start.y - hb }, { x: xs[1], y: m.start.y - hb }, { x: xs[1], y: m.start.y + hb }, { x: xs[0], y: m.start.y + hb }], true, 'OUTLINE');
         // סימון הרכבה על כל קורה
         const mk = asmOf(m.id);
-        if (mk) v.text({ x: xs[0] + (xs[1] - xs[0]) * 0.3, y: m.start.y + hb + 220 }, mk, 2.2, 'center', 'MARK', 0, true);
+        if (mk) v.text({ x: xs[0] + (xs[1] - xs[0]) * 0.3, y: m.start.y + hb + 220 }, mk, 2.5, 'center', 'MARK', 0, true);
       }
       for (const m of d.members.filter((x) => x.kind === 'column')) {
         const c = getProfile(m.profile);
@@ -182,7 +199,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         const xsS = ls.map((m) => m.start.x).sort((a1, a2) => a1 - a2);
         const near = xsS.reduce((bst, x) => (Math.abs(x - xm) < Math.abs(bst - xm) ? x : bst), xsS[0]);
         const nxt = xsS.find((x) => x > near + 1) ?? xsS.slice().reverse().find((x) => x < near - 1) ?? near + 600;
-        v.text({ x: (near + nxt) / 2, y: ym }, `פטות ${ls[0].profile} (${marks.join(', ')})`, 2.4, 'center', 'MARK');
+        v.text({ x: (near + nxt) / 2, y: ym }, `פטות ${ls[0].profile} (${marks.join(', ')})`, 2.5, 'center', 'MARK');
       }
       for (const sp of d.splices.filter((x) => x.memberId.startsWith('PL.'))) {
         const q = v.p(sp.p.x, sp.p.y);
@@ -221,9 +238,9 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       { // הערה מתחת לתצוגה, בקואורדינטות דף (לא מסתובבת עם התצוגה)
         const cs = [v.p(bx.x0, bx.y0), v.p(bx.x1, bx.y1), v.p(bx.x0, bx.y1), v.p(bx.x1, bx.y0)];
         const px = (Math.min(...cs.map((c) => c.x)) + Math.max(...cs.map((c) => c.x))) / 2, py = Math.min(...cs.map((c) => c.y)) - 14;
-        sh.ents.push({ k: 'text', p: { x: px, y: py }, s: 'מידות פטות לאורך השיפוע (מ"מ); * מרווח שאריתי; × חיבור המשך – דורש תכנון', h: 2.4, align: 'center', layer: 'TEXT' });
+        sh.ents.push({ k: 'text', p: { x: px, y: py }, s: 'מידות פטות לאורך השיפוע (מ"מ); * מרווח שאריתי; × חיבור המשך – דורש תכנון', h: 2.5, align: 'center', layer: 'TEXT' });
       }
-      if (0) v.text({ x: (bx.x0 + bx.x1) / 2, y: ytop + 1500 }, 'מידות פטות לאורך השיפוע (מ"מ); * מרווח שאריתי; × חיבור המשך – דורש תכנון', 2.4, 'center', 'TEXT');
+      if (0) v.text({ x: (bx.x0 + bx.x1) / 2, y: ytop + 1500 }, 'מידות פטות לאורך השיפוע (מ"מ); * מרווח שאריתי; × חיבור המשך – דורש תכנון', 2.5, 'center', 'TEXT');
       break;
     }
     case 'frame': {
@@ -249,12 +266,12 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       // גובה פני עליון קורת הגג בכל ציר עמודים (מקור: קו הייחוס של העמוד)
       colsF.forEach((c, i) => v.dim({ x: c.start.x, y: b.baseElevation }, { x: c.start.x, y: c.end.z }, { x: 0, y: 1 }, i === 0 ? 14 : i === colsF.length - 1 ? -14 : 8));
       for (const nd of d.nodes.filter((x) => x.frameId === f.id && x.role === 'רכס')) v.dim({ x: nd.p.x, y: b.baseElevation }, { x: nd.p.x, y: nd.p.z }, { x: 0, y: 1 }, 0);
-      const lbl = (m?: Member) => m && v.text({ x: (m.start.x + m.end.x) / 2, y: (m.start.z + m.end.z) / 2 + 250 }, `${asmOf(m.id)} ${m.profile}`, 2.4, 'center', 'MARK');
+      const lbl = (m?: Member) => m && v.text({ x: (m.start.x + m.end.x) / 2, y: (m.start.z + m.end.z) / 2 + 250 }, `${asmOf(m.id)} ${m.profile}`, 2.5, 'center', 'MARK');
       for (const m of own.filter((x) => x.kind === 'rafter')) lbl(m);
       // עמודים: תווית אנכית לצד העמוד (לא על הקו)
-      for (const m of colsF) v.text({ x: m.start.x + (m.start.x < b.width / 2 ? 450 : -450), y: (m.start.z + m.end.z) / 2 }, `${asmOf(m.id)} ${m.profile}`, 2.4, 'center', 'MARK', 90);
+      for (const m of colsF) v.text({ x: m.start.x + (m.start.x < b.width / 2 ? 450 : -450), y: (m.start.z + m.end.z) / 2 }, `${asmOf(m.id)} ${m.profile}`, 2.5, 'center', 'MARK', 90);
       const slopesTxt = (d.section?.planes ?? []).map((q) => `${Math.abs(((q.b.z - q.a.z) / (q.b.x - q.a.x)) * 100).toFixed(1)}%`).join(' / ');
-      v.text({ x: (bx.x0 + bx.x1) / 2, y: bx.y1 - 300 }, `שיפוע ${slopesTxt}  ·  מבט לאורך Y, מסגרת ${fi}`, 2.4, 'center', 'TEXT');
+      v.text({ x: (bx.x0 + bx.x1) / 2, y: bx.y1 - 300 }, `שיפוע ${slopesTxt}  ·  מבט לאורך Y, מסגרת ${fi}`, 2.5, 'center', 'TEXT');
       // מפלסים
       const xL = (xsF[0] ?? 0) - 1400;
       v.level({ x: xL, y: b.baseElevation }, 0, -1);
@@ -325,6 +342,69 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       v.text({ x: (ys[0] + ys[ys.length - 1]) / 2, y: eave + 900 }, `חזית ציר ${lineS?.label ?? (side === 'L' ? 'א' : 'ב')} (x=${x0})`, 2.6, 'center', 'TEXT');
       break;
     }
+    case 'cover': {
+      scaleLabel = 'ללא';
+      // ---- רשימת שרטוטים (עמודות לפי הצורך), בצד ימין
+      const cat = drawingCatalog(p, d, fab);
+      const recs = new Map(p.drawings.map((r) => [r.id, r]));
+      const rowsAll = cat.map((c) => [c.number, c.title, recs.get(c.id)?.rev ?? p.revision.current, STATUS_HE[recs.get(c.id)?.status ?? 'draft']]);
+      const perCol = Math.floor((area.y1 - area.y0 - 14) / 4.4) - 1;
+      const cw = [16, 62, 10, 16], W = cw.reduce((a1, x) => a1 + x, 0);
+      const nCol = Math.ceil(rowsAll.length / perCol);
+      let xr = area.x1 - 2;
+      for (let c = 0; c < nCol; c++) {
+        table(sh, xr, area.y1 - 2, cw, c === 0 ? `רשימת שרטוטים (${cat.length} גיליונות)` : 'רשימת שרטוטים — המשך', ['מס\'', 'כותרת', 'מהד\'', 'סטטוס'], rowsAll.slice(c * perCol, (c + 1) * perCol).map((r) => [r[0], r[1].length > 34 ? r[1].slice(0, 33) + '…' : r[1], r[2], r[3]]));
+        xr -= W + 4;
+      }
+      // ---- הערות כלליות (משמאל, מעל בלוק הכותרת)
+      const hollow = d.members.some((m) => /^(RHS|SHS|CHS)/.test(m.profile));
+      const mats = [...new Set(d.members.filter((m) => m.kind !== 'bolt' && m.kind !== 'anchor').map((m) => m.material))].join(', ');
+      const exec = p.settings.execClass ?? 'EXC2';
+      const notes = [
+        'כל המידות במ"מ ומפלסים במטרים. אין למדוד מהשרטוט — לעבוד לפי המידות הרשומות בלבד.',
+        `פלדה: ${mats} לפי EN 10025-2 (פרופילים חמים ופלטות)${hollow ? '; פרופילים סגורים לפי EN 10219' : ''}. תעודות חומר 3.1 לפי EN 10204.`,
+        'ברגים: דרגה 8.8 (ISO 4014/4017), אומים דרגה 8 (ISO 4032), דסקיות ISO 7089 — מגולוונים בחם (ISO 10684).',
+        `ייצור והרכבה לפי EN 1090-2, דרגת ביצוע ${exec}. סבולות ייצור והרכבה — סבולות חיוניות לפי EN 1090-2.`,
+        'ריתוך במסגריה בלבד, לפי EN ISO 3834 ו-EN 1090-2; רמת איכות C לפי EN ISO 5817. ריתוכים פינתיים רציפים ואטומים.',
+        'סמלי ריתוך לפי ISO 2553 (שיטה A); גודל a = עובי גרון. ריתוך היקפי מסומן בעיגול.',
+        `גלוון חם לפי EN ISO 1461 לאחר השלמת כל הריתוכים${hollow ? '; חורי אוורור וניקוז בפרופילים סגורים לפי EN ISO 14713-2 — לאישור המגלוון' : ''}.`,
+        'חורים לברגים: קוטר הבורג + 2 מ"מ, אלא אם צוין אחרת. אין לחרור או לקדוח בשטח.',
+        'הרכבה בשטח בברגים בלבד. אין לרתך או לחתוך בשטח ללא אישור בכתב מהמתכנן; תיקון גלוון בשטח בצבע עשיר אבץ.',
+        'מוטות עיגון ופלטות בסיס לפי תוכנית B-01; פילוס ומילוי גראוט לא מתכווץ לפי המתכנן.',
+        'שרטוטי הייצור מבוססים על נתוני התכן שהוזנו; אין בהם בדיקת חוזק. נדרש אישור מהנדס הקונסטרוקציה לפני ייצור.',
+      ];
+      const nx1 = xr - 2; // שפה ימנית של אזור ההערות (משמאל לטבלאות)
+      const nx0 = area.x0 + 2;
+      let ny = area.y1 - 6;
+      sh.ents.push({ k: 'text', p: { x: nx1, y: ny }, s: 'הערות כלליות', h: 3.5, align: 'right', layer: 'TEXT', bold: true });
+      ny -= 7;
+      const maxCh = Math.max(40, Math.floor((nx1 - nx0) / 1.45));
+      notes.forEach((t, i) => {
+        // שבירת שורות לפי רוחב האזור
+        const words = t.split(' '); const lines: string[] = []; let cur = '';
+        for (const w of words) { if ((cur + ' ' + w).trim().length > maxCh) { lines.push(cur); cur = w; } else cur = (cur + ' ' + w).trim(); }
+        if (cur) lines.push(cur);
+        lines.forEach((ln, j) => { sh.ents.push({ k: 'text', p: { x: nx1, y: ny }, s: j === 0 ? `${i + 1}. ${ln}` : `    ${ln}`, h: 2.5, align: 'right', layer: 'TEXT' }); ny -= 4.2; });
+        ny -= 0.8;
+      });
+      // ---- רשימת ברגי שטח לפי סוג חיבור
+      const TYPE_HE: Record<string, string> = { brace: 'אלכסון / אגד', eave: 'קורה-עמוד', ridge: 'רכס', base: 'פלטת בסיס', 'purlin-cleat': 'תומך פטה', 'purlin-splice': 'המשך פטה', 'brace-end': 'קושרת', 'brace-cross': 'הצטלבות קושרות', 'rafter-side': 'קורה לצד עמוד', knee: 'אלכסון עמוד-קורה', 'ridge-tie': 'חיזוק רכס', 'beam-splice': 'המשך קורה' };
+      const grp = new Map<string, { type: string; d: number; len: number; grade: string; std: string; n: number }>();
+      for (const c of d.connections) for (const bt of c.bolts) {
+        if (bt.location !== 'site') continue;
+        const key = `${c.type}|${bt.d}|${Math.round(bt.length)}|${bt.grade}`;
+        const g = grp.get(key) ?? { type: TYPE_HE[c.type] ?? c.type, d: bt.d, len: Math.round(bt.length), grade: bt.grade, std: bt.standard, n: 0 };
+        g.n++; grp.set(key, g);
+      }
+      const brows = [...grp.values()].sort((a1, b1) => a1.d - b1.d || a1.len - b1.len).map((g) => [g.type, `M${g.d}×${g.len}`, g.grade, g.std, String(g.n)]);
+      const tot = [...grp.values()].reduce((a1, g) => a1 + g.n, 0);
+      if (brows.length) {
+        const bw = [30, 22, 12, 22, 12];
+        const yTop = Math.min(ny - 4, area.y0 + 4.4 * (brows.length + 2) + 10);
+        table(sh, nx1, yTop, bw, 'רשימת ברגי שטח (בהזמנה להוסיף 10% רזרבה)', ['חיבור', 'בורג', 'דרגה', 'תקן', 'כמות'], brows, ['סה"כ', '', '', '', String(tot)]);
+      }
+      break;
+    }
     case 'anchor-plan': {
       const pr: Proj = (q) => ({ x: q.x, y: q.y });
       const bases = d.connections.filter((c) => c.type === 'base');
@@ -382,7 +462,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         for (let i = 1; i < chY.length; i++) dv.dim({ x: pb.x1, y: chY[i - 1] }, { x: pb.x1, y: chY[i] }, { x: 0, y: 1 }, -7);
         dv.dim({ x: pb.x1, y: pb.y0 }, { x: pb.x1, y: pb.y1 }, { x: 0, y: 1 }, -13);
         sh.ents.push({ k: 'text', p: { x: (det.x0 + det.x1) / 2, y: det.y1 - 4 }, s: `פרט פלטת בסיס טיפוסי  1:${sc}`, h: 2.8, align: 'center', layer: 'TEXT', bold: true });
-        sh.ents.push({ k: 'text', p: { x: (det.x0 + det.x1) / 2, y: det.y0 + 3 }, s: `${an.length} × ${c0.bolts.length ? 'M' : 'Φ'}${dia} — ${pm.partDesc ?? pm.profile}`, h: 2.3, align: 'center', layer: 'TEXT' });
+        sh.ents.push({ k: 'text', p: { x: (det.x0 + det.x1) / 2, y: det.y0 + 3 }, s: `${an.length} × ${c0.bolts.length ? 'M' : 'Φ'}${dia} — ${pm.partDesc ?? pm.profile}`, h: 2.5, align: 'center', layer: 'TEXT' });
       }
       // טבלת פלטות ועוגנים
       const groups = new Map<string, { mk: string; n: number; plate: string; anchors: number; dia: string; len: string }>();
@@ -400,7 +480,46 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       const yEnd = table(sh, area.x1 - 2, area.y1 - 86, [12, 30, 11, 17, 13, 17], 'פלטות בסיס ועוגנים', ['סימון', 'פלטה', 'כמות', 'עוגנים/פלטה', 'קוטר', 'אורך [מ"מ]'], rows,
         ['סה"כ', '', String(bases.length), String(bases.reduce((a1, c) => a1 + anchorsOf(c).length, 0)), '', '']);
       const notes = ['הערות:', '1. מפלס פני פלטה ±0.00 = מפלס בסיס העמודים.', '2. מידות לצירים במ"מ; סימון ופילוס לפני יציקה.', '3. סטיית מיקום עוגן מותרת ±3 מ"מ (EN 1090-2).', '4. מילוי גראוט לא מתכווץ מתחת לפלטה, לפי המתכנן.'];
-      notes.forEach((t, i) => sh.ents.push({ k: 'text', p: { x: area.x1 - 2, y: yEnd - 6 - i * 4.2 }, s: t, h: 2.3, align: 'right', layer: 'TEXT', bold: i === 0 }));
+      notes.forEach((t, i) => sh.ents.push({ k: 'text', p: { x: area.x1 - 2, y: yEnd - 6 - i * 4.2 }, s: t, h: 2.5, align: 'right', layer: 'TEXT', bold: i === 0 }));
+      // חתך אנכי טיפוסי בפלטת הבסיס: פלטה, עוגנים, תחתית העמוד, מפלס ±0.00, אורכי עיגון
+      {
+        const c0b = bases[0], pmb = plateOf(c0b), colb = d.byId.get(c0b.members[0]);
+        const yTopS = yEnd - 6 - notes.length * 4.2 - 4;
+        const box = { x0: area.x1 - colW + 4, x1: area.x1 - 2, y0: area.y0 + 2, y1: yTopS };
+        if (pmb && colb && box.y1 - box.y0 > 40) {
+          const anc = c0b.parts.map((id) => d.byId.get(id)).filter((m): m is Member => !!m && (m.kind === 'anchor' || m.kind === 'bolt'));
+          const z0 = colb.start.z;
+          const ancZ = anc.flatMap((m) => [m.start.z, m.end.z]);
+          const zLo = Math.min(z0 - 50, ...ancZ), zHi = z0 + 250;
+          const xc = colb.start.x;
+          const pbx = boxOf(solidPts([pmb], (q) => ({ x: q.x, y: q.z })));
+          const wX = Math.max(pbx.x1 - pbx.x0, 300) + 300;
+          const ssc = fitScale(wX, zHi - zLo + 60, box.x1 - box.x0 - 26, box.y1 - box.y0 - 10);
+          const sv = new View(sh, ssc, { x: (box.x0 + box.x1) / 2 - 6, y: (box.y0 + box.y1) / 2 - 4 }, { x: xc, y: (zLo + zHi) / 2 });
+          const prS: Proj = (q) => ({ x: q.x, y: q.z });
+          const clipZ = (a: Vec3, b2: Vec3): [Vec3, Vec3] | null => {
+            if (a.z > zHi && b2.z > zHi) return null;
+            const cl = (p1: Vec3, p2: Vec3) => p1.z <= zHi ? p1 : { x: p2.x + (p1.x - p2.x) * (zHi - p2.z) / (p1.z - p2.z), y: p2.y + (p1.y - p2.y) * (zHi - p2.z) / (p1.z - p2.z), z: zHi };
+            return [cl(a, b2), cl(b2, a)];
+          };
+          edges(pmb, prS, sv, 'OUTLINE');
+          edges(colb, prS, sv, 'THIN', clipZ);
+          for (const m of anc) edges(m, prS, sv, 'THIN');
+          // פני בטון/יציקה
+          const xL = pbx.x0 - 220, xR = pbx.x1 + 220;
+          const zC = z0 - (pmb.partDesc?.includes('מבוטנת') ? 0 : 30);
+          sv.line({ x: xL, y: zC }, { x: xR, y: zC }, 'OUTLINE');
+          for (let x = xL; x < xR - 40; x += 60) sv.line({ x, y: zC }, { x: x + 40, y: zC - 40 }, 'THIN');
+          sv.line({ x: xc, y: zLo - 40 }, { x: xc, y: zHi }, 'AXIS');
+          sv.level({ x: pbx.x1 + 60, y: z0 }, z0 - b.baseElevation, 1, 10);
+          if (anc.length) {
+            const a0 = anc[0];
+            const zb = Math.min(a0.start.z, a0.end.z), zt = Math.max(a0.start.z, a0.end.z);
+            sv.dim({ x: pbx.x0 - 120, y: zb }, { x: pbx.x0 - 120, y: zt }, { x: 0, y: 1 }, 4);
+          }
+          sh.ents.push({ k: 'text', p: { x: (box.x0 + box.x1) / 2, y: box.y1 - 3 }, s: `חתך טיפוסי בפלטת בסיס  1:${ssc}`, h: 2.8, align: 'center', layer: 'TEXT', bold: true });
+        }
+      }
       break;
     }
     case 'ga': {
@@ -436,7 +555,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         line({ x: tx0, y }, { x: tx1, y }, 'TITLE');
         const cell = (vals: string[], bold = false) => {
           let x = tx1;
-          vals.forEach((t, i) => { sh.ents.push({ k: 'text', p: { x: x - cw[i] / 2, y: y - rh + 1.3 }, s: t, h: 2.2, align: 'center', layer: 'TEXT', bold }); x -= cw[i]; });
+          vals.forEach((t, i) => { sh.ents.push({ k: 'text', p: { x: x - cw[i] / 2, y: y - rh + 1.3 }, s: t, h: 2.5, align: 'center', layer: 'TEXT', bold }); x -= cw[i]; });
           y -= rh; line({ x: tx0, y }, { x: tx1, y });
         };
         cell(['סימון', 'כמות', 'יח\' [ק"ג]', 'סה"כ [ק"ג]'], true);
@@ -480,7 +599,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       if (plateMarks.length) {
         const sx0 = area.x0, sx1 = area.x1 - 124, w = (sx1 - sx0) / plateMarks.length;
         plateMarks.forEach((pm, i) => plateFaceInBox(sh, pm, d, { x0: sx0 + i * w, x1: sx0 + (i + 1) * w - 3, y0: area.y0, y1: stripY1 }));
-        sh.ents.push({ k: 'text', p: { x: sx1, y: stripY1 + 2 }, s: 'פלטות החיבור — מידות במ"מ, מרכזי חורים מהשפות', h: 2.2, align: 'right', layer: 'TEXT', bold: true });
+        sh.ents.push({ k: 'text', p: { x: sx1, y: stripY1 + 2 }, s: 'פלטות החיבור — מידות במ"מ, מרכזי חורים מהשפות', h: 2.5, align: 'right', layer: 'TEXT', bold: true });
       }
       const clipBox = (a: Vec3, bb: Vec3): [Vec3, Vec3] | null => {
         // קיטום לחלון (בקואורדינטות המבט; ההיטל ליניארי)
@@ -640,7 +759,7 @@ function connDims(v: View, c: Connection, d: DerivedModel, pr: (q: Vec3) => P, p
       const ang = Math.abs((Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI);
       v.dim(a, { x: a.x, y: b.y }, { x: 0, y: 1 }, a.x < b.x ? -12 : 12, undefined);
       v.dim(a, { x: b.x, y: a.y }, { x: 1, y: 0 }, -10, undefined);
-      v.text({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, `${Math.round(Math.min(ang, 180 - ang))}°`, 2.4, 'center', 'DIM');
+      v.text({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, `${Math.round(Math.min(ang, 180 - ang))}°`, 2.5, 'center', 'DIM');
     }
   }
   if (c.type === 'eave' || c.type === 'base') {
