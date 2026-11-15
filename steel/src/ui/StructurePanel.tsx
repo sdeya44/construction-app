@@ -7,6 +7,7 @@ import { MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
 import { LenField, NumField, TextField } from './fields';
 import { Icon } from './icons';
+import { SectionEditor } from './SectionEditor';
 
 export function ProfileDatalist() {
   return (
@@ -45,7 +46,9 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
       </>}
 
       {show('geometry') && <>
+      <SectionEditor />
       <div className="panel-title">גיאומטריית מבנה</div>
+      {!b.section && <>
       <div className="field"><label>סוג גג</label>
         <select className="inp" value={b.roofType} data-testid="roofType" onChange={(e) => {
           const t = e.target.value as BuildingParams['roofType'];
@@ -66,13 +69,16 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
         {roof.ridgeZ !== undefined && <><dt>גובה רכס (נגזר)</dt><dd>{(roof.ridgeZ / (u === 'm' ? 1000 : 1)).toFixed(u === 'm' ? 3 : 0)}</dd></>}
         <dt>{b.roofType === 'gable' ? 'שיפוע ימין (נגזר)' : 'שיפוע (נגזר)'}</dt><dd>{(roof.slopeRight * 100).toFixed(2)}%</dd>
       </dl>
+      </>}
       <div className="field"><label>ייחוס גבהים</label>
         <select className="inp" value={b.heightRef} onChange={(e) => set({ heightRef: e.target.value as BuildingParams['heightRef'] })}>
           <option value="TOS">פני עליון קורת גג (TOS)</option><option value="AXIS">ציר קורת הגג</option>
         </select>
       </div>
+      {!b.section && <>
       <div className="field"><label>קונזולת קורה שמאל</label><LenField mm={b.rafterOverhangLeft} unit={u} onCommit={(v) => set({ rafterOverhangLeft: v })} /></div>
       <div className="field"><label>קונזולת קורה ימין</label><LenField mm={b.rafterOverhangRight} unit={u} onCommit={(v) => set({ rafterOverhangRight: v })} /></div>
+      </>}
       <div className="field"><label>קונזולת פטות – התחלה (Y)</label><LenField mm={b.purlinOverhangStart} unit={u} onCommit={(v) => set({ purlinOverhangStart: v })} /></div>
       <div className="field"><label>קונזולת פטות – סוף (Y)</label><LenField mm={b.purlinOverhangEnd} unit={u} onCommit={(v) => set({ purlinOverhangEnd: v })} /></div>
       <div className="field"><label>מפלס בסיס</label><LenField mm={b.baseElevation} unit={u} onCommit={(v) => set({ baseElevation: v })} /></div>

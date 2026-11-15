@@ -387,21 +387,27 @@ export class Viewport {
       for (let i = 1; i < ys.length; i++) dimLine({ x: x0 - off, y: ys[i - 1], z }, { x: x0 - off, y: ys[i], z }, { x: 200, y: 0, z: 0 }, fmt(ys[i] - ys[i - 1]));
       if (ys.length > 2) dimLine({ x: x0 - 2 * off, y: y0, z }, { x: x0 - 2 * off, y: y1, z }, { x: 200, y: 0, z: 0 }, fmt(y1 - y0));
       // גבהים במסגרת הראשונה
-      dimLine({ x: x0 - off, y: y0, z }, { x: x0 - off, y: y0, z: b.eaveLeft }, { x: 200, y: 0, z: 0 }, fmt(b.eaveLeft - z));
-      dimLine({ x: x1 + off, y: y0, z }, { x: x1 + off, y: y0, z: b.eaveRight }, { x: 200, y: 0, z: 0 }, fmt(b.eaveRight - z));
-      if (d.roof.ridgeZ !== undefined) {
-        dimLine({ x: b.ridgeX, y: y0 - off, z }, { x: b.ridgeX, y: y0 - off, z: d.roof.ridgeZ }, { x: 200, y: 0, z: 0 }, fmt(d.roof.ridgeZ - z));
+      // גובה פני עליון בכל ציר עמודים במסגרת הראשונה, וגובה רכס
+      const f0 = b.frames[0]?.id;
+      for (const c of d.members.filter((m) => m.kind === 'column' && m.frameId === f0)) {
+        const outside = c.start.x <= x0 + 1 ? -off : c.start.x >= x1 - 1 ? off : 0;
+        dimLine({ x: c.start.x + outside, y: y0 - (outside ? 0 : off), z }, { x: c.start.x + outside, y: y0 - (outside ? 0 : off), z: c.end.z }, { x: 200, y: 0, z: 0 }, fmt(c.end.z - z));
+      }
+      for (const nd of d.nodes.filter((n) => n.frameId === f0 && n.role === 'רכס')) {
+        dimLine({ x: nd.p.x, y: y0 - off, z }, { x: nd.p.x, y: y0 - off, z: nd.p.z }, { x: 200, y: 0, z: 0 }, fmt(nd.p.z - z));
       }
       // פריסת פטות: מידות לאורך השיפוע, לפני המסגרת הראשונה, מעט מעל מישור הגג
       const purl = d.members.filter((m) => m.purlin).sort((a, b) => a.purlin!.index - b.purlin!.index);
-      for (const side of ['L', 'R', 'M'] as const) {
+      for (const side of [...new Set(purl.map((m) => m.purlin!.side))]) {
         const ls = purl.filter((m) => m.purlin!.side === side);
         if (!ls.length) continue;
         const n = ls[0].purlin!.roofNormal;
         const yy = Math.min(...ys) - b.purlinOverhangStart - 900;
         const lift = 450;
         const at = (x: number, zz: number) => ({ x: x + n.x * lift, y: yy, z: zz + n.z * lift });
-        let prev = side === 'M' ? null : { x: b.ridgeX, z: d.roof.ridgeZ ?? 0 };
+        const plS = d.section?.planes.find((q) => q.id === side);
+        const sp = plS ? (plS.startAt === 'b' ? plS.b : plS.a) : { x: b.ridgeX, z: d.roof.ridgeZ ?? 0 };
+        let prev = (ls[0].purlin!.startFree ?? side === 'M') ? null : { x: sp.x, z: sp.z };
         for (const m of ls) {
           const cur = { x: m.start.x, z: m.start.z };
           if (prev) {

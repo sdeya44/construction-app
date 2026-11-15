@@ -123,3 +123,22 @@ test('UX-06: שינוי פרופיל עמוד/קורה — חלון בדיקת �
   const n = await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'EAVE_FIT').length);
   expect(n).toBe(0);
 });
+
+test('SEC-01: חתך מודולרי — תבנית גג מדורג, הוספת ציר, אלכסונים; שגיאה כשמישור עובר דרך עמוד גבוה', async ({ page }) => {
+  await boot(page);
+  page.on('dialog', (d) => d.accept());
+  await page.getByTestId('nav-s:geometry').click();
+  await page.getByTestId('tpl-stepped').click();
+  const n = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { cols: d.members.filter((m: any) => m.kind === 'column').length, side: d.connections.filter((c: any) => c.type === 'rafter-side').length, err: d.issues.filter((i: any) => i.severity === 'error').length, knee: d.connections.filter((c: any) => c.type === 'knee').length }; });
+  expect(await n()).toEqual({ cols: 18, side: 6, err: 0, knee: 0 });
+  await page.getByTestId('kb-on').check();
+  expect((await n()).knee).toBe(24);
+  // ציר חדש ב-26 מ' — מחוץ לכל מישור גג: שגיאת טופולוגיה מדווחת (ואין גיאומטריה עד לתיקון)
+  await page.getByTestId('sec-add-line').click();
+  expect((await n()).err).toBeGreaterThan(0);
+  await expect(page.getByTestId('chip-errors')).toBeVisible();
+  await page.getByTestId('btn-undo').click();
+  expect((await n()).err).toBe(0);
+  await setView(page, 'front');
+  await shot(page, 'SEC-01_stepped');
+});

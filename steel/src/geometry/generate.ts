@@ -175,7 +175,7 @@ export function generate(project: Project): DerivedModel {
   const valid = out.filter((m) => m.kind !== 'bolt' && getProfileSafe(m.profile));
   const pp = buildParts(valid, project, new Map(connections.map((c) => [c.id, c])));
   issues.push(...pp.issues);
-  return { members: out, nodes, grid, roof, issues, byId, supports, parts: pp.parts, splices: pp.splices, connections, connById: new Map(connections.map((c) => [c.id, c])) };
+  return { members: out, nodes, grid, roof, issues, byId, supports, parts: pp.parts, splices: pp.splices, connections, connById: new Map(connections.map((c) => [c.id, c])), section: sec ?? undefined };
 }
 
 function getProfileSafe(n: string) { try { return getProfile(n); } catch { return null; } }

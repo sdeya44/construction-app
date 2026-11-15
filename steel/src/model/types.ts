@@ -473,4 +473,6 @@ export interface DerivedModel {
   splices: SpliceInfo[];
   connections: Connection[];
   connById: Map<string, Connection>;
+  /** חתך מנורמל (צירים ומישורי גג) */
+  section?: import('./section').NSection;
 }

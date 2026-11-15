@@ -3,18 +3,19 @@ import { NumField } from './fields';
 import { fromMm } from '../core/units';
 import type { Member, PurlinSideParams } from '../model/types';
 import { MATERIALS } from '../profiles/materials';
+import { purlinParams } from '../geometry/purlins';
 import { store, useStore } from '../store';
 import { LenField, TextField } from './fields';
 
 const OPENING: Record<'up' | 'down', string> = { up: 'לכיוון הרכס / הצד הגבוה', down: 'לכיוון המרזב / הצד הנמוך' };
 
-function SideEditor({ side, title, items }: { side: 'left' | 'right'; title: string; items: Member[] }) {
+function SideEditor({ side, title, items, freeStart }: { side: string; title: string; items: Member[]; freeStart?: boolean }) {
   const p = useStore((s) => s.project);
-  const prm = p.building.purlins[side];
+  const prm = purlinParams(p.building.purlins, side);
   const u = p.displayUnit;
   const set = (patch: Partial<PurlinSideParams>) => store.exec(setPurlinSide(side, patch));
   const f = (mm: number) => (u === 'm' ? fromMm(mm, 'm').toFixed(3) : mm.toFixed(0));
-  const mono = p.building.roofType === 'mono';
+  const mono = freeStart ?? p.building.roofType === 'mono';
   const tid = (k: string) => `${side}-${k}`;
   return (
     <>
@@ -113,6 +114,7 @@ export function RoofPanel({ section }: { section?: RoofSection } = {}) {
   const pu = p.building.purlins;
   const purlins = d.members.filter((m) => m.purlin).sort((a, b) => a.purlin!.index - b.purlin!.index);
   const L = purlins.filter((m) => m.purlin!.side === 'L'), R = purlins.filter((m) => m.purlin!.side === 'R'), M = purlins.filter((m) => m.purlin!.side === 'M');
+  const planes = d.section?.planes ?? [];
   const nSpl = d.splices.filter((s) => s.memberId.startsWith('PL.')).length;
   const exec = (c: Command) => store.exec(c);
   return (
@@ -133,7 +135,9 @@ export function RoofPanel({ section }: { section?: RoofSection } = {}) {
       )}
       <div className="hint">הפריסה מתחילה {p.building.roofType === 'gable' ? 'ברכס, לכל צד בנפרד,' : 'בקצה שנבחר'} ומתקדמת עד הקצה החיצוני של קורת הגג כולל הקונזולה. הפטה האחרונה בקצה, והשארית נשארת במפתח האחרון בלבד.</div>
       </>}
-      {p.building.roofType === 'gable'
+      {p.building.section
+        ? (show('left') || show('right')) && planes.map((pl) => <SideEditor key={pl.id} side={pl.params} title={`פטות ${pl.label}`} freeStart={pl.startFree} items={purlins.filter((m) => m.purlin!.side === pl.id)} />)
+        : p.building.roofType === 'gable'
         ? <>{show('left') && <SideEditor side="left" title="שיפוע שמאל" items={L} />}{show('right') && <SideEditor side="right" title="שיפוע ימין" items={R} />}</>
         : (show('left') || show('right')) && <SideEditor side="left" title="שיפוע הגג" items={M} />}
       {show('splices') && <>

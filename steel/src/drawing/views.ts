@@ -2,6 +2,7 @@ import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import { cachedSolidPure } from './solidCache';
 import { assemblySheet, renderIso } from './assembly';
+import { purlinParams } from '../geometry/purlins';
 import { getProfile } from '../profiles/library';
 import type { Bom } from '../fab/bom';
 import type { Fabrication, MarkedPart } from '../fab/marks';
@@ -112,7 +113,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         if (g.dir === 'X') { v.line({ x: g.pos, y: bx.y0 + 800 }, { x: g.pos, y: bx.y1 - 800 }, 'AXIS'); v.bubble({ x: g.pos, y: bx.y1 - 300 }, g.label); }
         else { v.line({ x: bx.x0 + 800, y: g.pos }, { x: bx.x1 - 800, y: g.pos }, 'AXIS'); v.bubble({ x: bx.x0 + 300, y: g.pos }, g.label); }
       }
-      if (b.roofType === 'gable') v.line({ x: b.ridgeX, y: bx.y0 + 1500 }, { x: b.ridgeX, y: bx.y1 - 1500 }, 'AXIS');
+      for (const rx of ridgeXs(d)) v.line({ x: rx, y: bx.y0 + 1500 }, { x: rx, y: bx.y1 - 1500 }, 'AXIS');
       const raf = getProfile(b.rafterProfile);
       for (const m of d.members.filter((x) => x.kind === 'rafter')) {
         const hb = raf.props.b / 2;
@@ -146,18 +147,20 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       const xr = bx.x1 - 1800;
       for (let i = 1; i < ys.length; i++) v.dim({ x: xr, y: ys[i - 1] }, { x: xr, y: ys[i] }, { x: 0, y: 1 }, 0);
       v.dim({ x: xr, y: ys[0] }, { x: xr, y: ys[ys.length - 1] }, { x: 0, y: 1 }, 8);
-      v.dim({ x: 0, y: bx.y0 + 1200 }, { x: b.width, y: bx.y0 + 1200 }, { x: 1, y: 0 }, -6);
+      { const [lx0, lx1] = lineSpan(d); v.dim({ x: lx0, y: bx.y0 + 1200 }, { x: lx1, y: bx.y0 + 1200 }, { x: 1, y: 0 }, -6); }
       // פריסת פטות: שרשרת מידות מעל, הטקסט = מרחק לאורך השיפוע (או אופקי, מסומן)
       const ytop = Math.max(...ys) + b.purlinOverhangEnd + 900;
-      for (const side of ['L', 'R', 'M'] as const) {
+      for (const side of [...new Set(purl.map((m) => m.purlin!.side))]) {
         const ls = purl.filter((m) => m.purlin!.side === side).sort((a1, a2) => a1.purlin!.index - a2.purlin!.index);
-        let prevX = side === 'M' ? null : b.ridgeX;
+        const plS = d.section?.planes.find((q) => q.id === side);
+        const free = ls[0]?.purlin!.startFree ?? side === 'M';
+        let prevX: number | null = free ? null : plS ? (plS.startAt === 'b' ? plS.b.x : plS.a.x) : b.ridgeX;
         let prevS = 0;
         ls.forEach((m) => {
           const pi = m.purlin!;
           if (prevX !== null) {
             const span = pi.sSlope - prevS;
-            const rem = pi.isLast && pi.index > 1 && Math.abs(span - (side === 'R' ? b.purlins.right.spacing : b.purlins.left.spacing)) > 0.5;
+            const rem = pi.isLast && pi.index > 1 && Math.abs(span - purlinParams(b.purlins, pi.paramKey ?? (side === 'R' ? 'right' : 'left')).spacing) > 0.5;
             v.dim({ x: prevX, y: ytop }, { x: m.start.x, y: ytop }, { x: 1, y: 0 }, 4, `${Math.round(span)}${rem ? '*' : ''}`);
           }
           prevX = m.start.x; prevS = pi.sSlope;
@@ -180,33 +183,41 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         if (poly) v.poly(poly, true, 'CUT', true);
       }
       for (const g of d.grid.filter((x) => x.dir === 'X')) { v.line({ x: g.pos, y: b.baseElevation - 800 }, { x: g.pos, y: bx.y1 - 400 }, 'AXIS'); v.bubble({ x: g.pos, y: b.baseElevation - 1100 }, g.label); }
-      v.dim({ x: 0, y: b.baseElevation }, { x: b.width, y: b.baseElevation }, { x: 1, y: 0 }, -14);
-      v.dim({ x: 0, y: b.baseElevation }, { x: 0, y: b.eaveLeft }, { x: 0, y: 1 }, 14);
-      v.dim({ x: b.width, y: b.baseElevation }, { x: b.width, y: b.eaveRight }, { x: 0, y: 1 }, -14);
-      if (d.roof.ridgeZ !== undefined) v.dim({ x: b.ridgeX, y: b.baseElevation }, { x: b.ridgeX, y: d.roof.ridgeZ }, { x: 0, y: 1 }, 0);
+      const colsF = own.filter((x) => x.kind === 'column').sort((a1, a2) => a1.start.x - a2.start.x);
+      const xsF = colsF.map((c) => c.start.x);
+      if (xsF.length > 1) {
+        v.dim({ x: xsF[0], y: b.baseElevation }, { x: xsF[xsF.length - 1], y: b.baseElevation }, { x: 1, y: 0 }, -20);
+        for (let i = 1; i < xsF.length && xsF.length > 2; i++) v.dim({ x: xsF[i - 1], y: b.baseElevation }, { x: xsF[i], y: b.baseElevation }, { x: 1, y: 0 }, -13);
+      }
+      // גובה פני עליון קורת הגג בכל ציר עמודים (מקור: קו הייחוס של העמוד)
+      colsF.forEach((c, i) => v.dim({ x: c.start.x, y: b.baseElevation }, { x: c.start.x, y: c.end.z }, { x: 0, y: 1 }, i === 0 ? 14 : i === colsF.length - 1 ? -14 : 8));
+      for (const nd of d.nodes.filter((x) => x.frameId === f.id && x.role === 'רכס')) v.dim({ x: nd.p.x, y: b.baseElevation }, { x: nd.p.x, y: nd.p.z }, { x: 0, y: 1 }, 0);
       const lbl = (m?: Member) => m && v.text({ x: (m.start.x + m.end.x) / 2, y: (m.start.z + m.end.z) / 2 + 250 }, `${asmOf(m.id)} ${m.profile}`, 2.4, 'center', 'MARK');
       for (const m of own.filter((x) => x.kind === 'column' || x.kind === 'rafter')) lbl(m);
-      v.text({ x: b.ridgeX ?? b.width / 2, y: bx.y1 - 300 }, `שיפוע ${(d.roof.slopeLeft * 100).toFixed(1)}%${b.roofType === 'gable' ? ` / ${(d.roof.slopeRight * 100).toFixed(1)}%` : ''}  ·  מבט לאורך Y, מסגרת ${fi}`, 2.4, 'center', 'TEXT');
+      const slopesTxt = (d.section?.planes ?? []).map((q) => `${Math.abs(((q.b.z - q.a.z) / (q.b.x - q.a.x)) * 100).toFixed(1)}%`).join(' / ');
+      v.text({ x: (bx.x0 + bx.x1) / 2, y: bx.y1 - 300 }, `שיפוע ${slopesTxt}  ·  מבט לאורך Y, מסגרת ${fi}`, 2.4, 'center', 'TEXT');
       v.text({ x: 0, y: b.baseElevation - 1400 }, `±${(b.baseElevation / 1000).toFixed(2)}`, 2.2, 'center', 'TEXT');
       break;
     }
     case 'side': {
       const side = def.ref as 'L' | 'R';
-      const x0 = side === 'L' ? 0 : b.width;
+      const lnS = [...(d.section?.lines ?? [])].sort((a1, a2) => a1.x - a2.x);
+      const lineS = side === 'L' ? lnS[0] : lnS[lnS.length - 1];
+      const x0 = lineS?.x ?? (side === 'L' ? 0 : b.width);
       const pr: Proj = (q) => ({ x: q.y, y: q.z });
-      const ms = d.members.filter((m) => (m.kind === 'column' && m.side === side) || (m.id.startsWith('BR.W') && m.id.includes(`.${side}.`)));
+      const ms = d.members.filter((m) => (m.kind === 'column' && (m.lineId === lineS?.id || m.side === side)) || (m.id.startsWith('BR.W') && (m.id.includes(`.${side}.`) || (lineS && m.id.includes(`.${lineS.id}.`)))));
       const bx = boxOf(solidPts(ms, pr));
       bx.x0 -= 2500; bx.x1 += 2500; bx.y0 -= 1500; bx.y1 += 1500;
       const v = placeView(sh, bx, area); setScale(v);
       for (const m of ms) edges(m, pr, v);
       const ys = b.frames.map((f) => f.y);
-      const eave = side === 'L' ? b.eaveLeft : b.eaveRight;
+      const eave = Math.max(...ms.filter((m) => m.kind === 'column').map((m) => m.end.z), b.baseElevation + 1000);
       v.line({ x: Math.min(...ys) - b.purlinOverhangStart, y: eave }, { x: Math.max(...ys) + b.purlinOverhangEnd, y: eave }, 'THIN');
       d.grid.filter((g) => g.dir === 'Y').forEach((g) => { v.line({ x: g.pos, y: b.baseElevation - 600 }, { x: g.pos, y: eave + 600 }, 'AXIS'); v.bubble({ x: g.pos, y: b.baseElevation - 900 }, g.label); });
       for (let i = 1; i < ys.length; i++) v.dim({ x: ys[i - 1], y: b.baseElevation }, { x: ys[i], y: b.baseElevation }, { x: 1, y: 0 }, -12);
       v.dim({ x: ys[0], y: b.baseElevation }, { x: ys[ys.length - 1], y: b.baseElevation }, { x: 1, y: 0 }, -20);
       v.dim({ x: ys[0], y: b.baseElevation }, { x: ys[0], y: eave }, { x: 0, y: 1 }, 12);
-      v.text({ x: (ys[0] + ys[ys.length - 1]) / 2, y: eave + 900 }, `חזית ציר ${side === 'L' ? 'א' : 'ב'} (x=${x0})`, 2.6, 'center', 'TEXT');
+      v.text({ x: (ys[0] + ys[ys.length - 1]) / 2, y: eave + 900 }, `חזית ציר ${lineS?.label ?? (side === 'L' ? 'א' : 'ב')} (x=${x0})`, 2.6, 'center', 'TEXT');
       break;
     }
     case 'ga': {
@@ -446,3 +457,8 @@ function trimNear(m: Member, C: Vec3, r: number): Member {
   const at = (k: number) => ({ x: m.start.x + f.ex.x * k, y: m.start.y + f.ex.y * k, z: m.start.z + f.ex.z * k });
   return { ...m, id: `${m.id}#trim`, start: at(t0), end: at(t1), startCut: t0 > 0 ? undefined : m.startCut, endCut: t1 < f.length ? undefined : m.endCut };
 }
+
+/** מיקומי רכס (x) מתוך צמתי המודל */
+function ridgeXs(d: DerivedModel): number[] { return [...new Set(d.nodes.filter((n) => n.role === 'רכס').map((n) => Math.round(n.p.x)))]; }
+/** תחום צירי העמודים */
+function lineSpan(d: DerivedModel): [number, number] { const xs = (d.section?.lines ?? []).map((l) => l.x); return xs.length ? [Math.min(...xs), Math.max(...xs)] : [0, 0]; }

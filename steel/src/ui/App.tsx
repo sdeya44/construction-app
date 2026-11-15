@@ -192,7 +192,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.3</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.4</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -334,8 +334,9 @@ export function App() {
 function clipRange(a: 'X' | 'Y' | 'Z'): [number, number] {
   const b = store.state.project.building;
   const ys = b.frames.map((f) => f.y);
-  if (a === 'X') return [-b.rafterOverhangLeft - 500, b.width + b.rafterOverhangRight + 500];
+  if (a === 'X') { const xs = store.state.derived.members.filter((m) => m.kind === 'rafter').flatMap((m) => [m.start.x, m.end.x]); return xs.length ? [Math.min(...xs) - 500, Math.max(...xs) + 500] : [-500, b.width + 500]; }
   if (a === 'Y') return [Math.min(...ys) - 500, Math.max(...ys) + 500];
-  return [b.baseElevation, (store.state.derived.roof.ridgeZ ?? Math.max(b.eaveLeft, b.eaveRight)) + 500];
+  const zs = store.state.derived.members.filter((m) => m.kind === 'rafter').flatMap((m) => [m.start.z, m.end.z]);
+  return [b.baseElevation, (zs.length ? Math.max(...zs) : Math.max(b.eaveLeft, b.eaveRight)) + 500];
 }
 function clipDefault(a: 'X' | 'Y' | 'Z') { const [lo, hi] = clipRange(a); return Math.round((lo + hi) / 2 / 50) * 50; }

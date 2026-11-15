@@ -1,5 +1,5 @@
 import { uid } from '../core/ids';
-import type { BoltSpec, BraceConnParams, BracingParams, PurlinSpliceParams, BuildingParams, CleatParams, ConnectionDefaults, FrameDef, Project, PurlinSideParams, PurlinSystem } from './types';
+import type { PlateConnParams, BoltSpec, BraceConnParams, BracingParams, PurlinSpliceParams, BuildingParams, CleatParams, ConnectionDefaults, FrameDef, Project, PurlinSideParams, PurlinSystem } from './types';
 import { SCHEMA_VERSION } from './types';
 
 /** יוצר מסגרות במרווח אחיד או לפי רשימת מרווחים. */
@@ -55,6 +55,11 @@ export function defaultBraceConn(): BraceConnParams {
 /** חיבור המשך פטה (החלטת משתמש 15.11.2026): פלטת חיבור ו-4 ברגים, 2 בכל פטה. */
 export function defaultPurlinSplice(): PurlinSpliceParams {
   return { plateT: 6, plateH: null, bolt: bolt(12), jointOffset: 60, edge: 30 };
+}
+
+/** חיבור קורה לצד עמוד (גג מדורג / רכס מעל עמוד): פלטת קצה PL15×160, 2×2 M16, הפלטה בגובה הקורה */
+export function defaultSideConn(): PlateConnParams {
+  return { enabled: true, t: 15, w: 160, l: 0, bolt: bolt(16), cols: 2, rows: 2, gauge: 90, pitch: 0, weldSize: 6 };
 }
 
 export function defaultBracing(): BracingParams {

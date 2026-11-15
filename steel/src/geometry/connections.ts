@@ -7,7 +7,9 @@ import type {
 import { localFrame } from './frame';
 import { aabb, aabbOverlap, clash } from './clash';
 import { checkEavePlate } from './eavePlate';
-import type { SectionTopology } from '../model/section';
+import { zAt, type SectionTopology } from '../model/section';
+import { defaultSideConn } from '../model/defaults';
+import { buildKneeBraces } from './knee';
 import { purlinParams } from './purlins';
 
 /** מידות בורג/אום/דיסקית לפי ISO 4017/4032/7089 (מידע גיאומטרי בלבד — לא מאומת). */
@@ -32,9 +34,9 @@ export type ConnResult = { members: Member[]; connections: Connection[]; issues:
 
 const Z = v3(0, 0, 1);
 
-function effPlate(p: Project, type: 'eave' | 'ridge' | 'base', id: string): PlateConnParams {
+function effPlate(p: Project, type: 'eave' | 'ridge' | 'base' | 'side', id: string): PlateConnParams {
   const o = p.connectionOverrides[id] ?? {};
-  const base = p.connectionDefaults[type];
+  const base = type === 'side' ? (p.connectionDefaults.side ?? defaultSideConn()) : p.connectionDefaults[type];
   const { status: _s, fixity: _f, ...rest } = o;
   void _s; void _f;
   return { ...base, ...rest, bolt: { ...base.bolt, ...(rest.bolt ?? {}) } };
@@ -207,6 +209,50 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       }
     }
 
+    // ---- חיבור צד: קורה שמסתיימת בעמוד שממשיך מעליה (גג מדורג / רכס מעל עמוד).
+    //      פלטת קצה מרותכת לקורה (מסגריה), מוברגת לאגף העמוד (שטח) — אום בין האגף לווב העמוד.
+    for (const jn of topo.junctions.filter((j) => j.kind === 'side')) {
+      const id = `C.SIDE.${f.id}.${jn.line.id}.${jn.plane.id}`;
+      const col = byId.get(`${f.id}.COL.${jn.line.id}`), raf = byId.get(jn.plane.rafterId(f.id));
+      const prm = effPlate(project, 'side', id);
+      if (!prm.enabled || !isGen(col) || !isGen(raf)) continue;
+      const cp = getProfile(col!.profile), rp = getProfile(raf!.profile);
+      const X = v3(1, 0, 0);
+      const sgn = jn.side;
+      const xFace = jn.line.x + sgn * cp.props.h / 2;
+      const cut: Plane = { point: v3(xFace + sgn * prm.t, f.y, 0), normal: X };
+      if (jn.end === 'b') raf!.endCut = cut; else raf!.startCut = cut;
+      const pl = jn.plane;
+      const sl = (pl.b.z - pl.a.z) / (pl.b.x - pl.a.x);
+      const hv = rp.props.h * Math.sqrt(1 + sl * sl);
+      const zRef = zAt(pl, xFace);
+      const tos = raf!.anchor === 'top' ? zRef : zRef + hv / 2;
+      const zTop = tos + prm.l, zBot = tos - hv - prm.l; // l = הארכת הפלטה מעל/מתחת לקורה
+      const Hp = zTop - zBot;
+      const pid = `${id}.PL`;
+      // פלטה: עובי לאורך X, רוחב לאורך Y, גובה לאורך Z — קו ייחוס אנכי במרכז עובי הפלטה
+      const xc = xFace + sgn * prm.t / 2;
+      res.members.push(partMember(pid, 'plate', `PL${prm.w}x${prm.t}`, v3(xc, f.y, zBot), v3(xc, f.y, zTop), X, 'center', id, `פלטת קצה PL${prm.t}×${prm.w}×${Math.ceil(Hp)}`, mat));
+      const e = Math.max(40, 1.5 * (prm.bolt.d + prm.bolt.clearance));
+      const zs = prm.rows <= 1 ? [(zTop + zBot) / 2] : Array.from({ length: prm.rows }, (_, i) => zTop - e - ((Hp - 2 * e) * i) / (prm.rows - 1));
+      const bolts: BoltInfo[] = [];
+      const tfc = cp.dims.tf ?? cp.dims.t ?? 10;
+      grid(prm.cols, prm.gauge).forEach((gy, ci) => zs.forEach((zz, ri) => {
+        const head = v3(xFace + sgn * prm.t, f.y + gy, zz);
+        bolts.push(makeBolt(`${id}.B${ci + 1}${ri + 1}`, id, head, scale(X, -sgn), prm.bolt, prm.t + tfc, 'site', [pid, col!.id], Z, res.members));
+      }));
+      const d0 = prm.bolt.d + prm.bolt.clearance;
+      const label = `חיבור ${pl.label} לצד עמוד ציר ${jn.line.label} מסגרת ${fi}`;
+      edgeChecks(label, id, d0, e, prm.w / 2 - ((prm.cols - 1) / 2) * prm.gauge, null, prm.cols > 1 ? prm.gauge : null, res.issues);
+      if (prm.w > cp.props.b + 0.5) issue({ code: 'PLATE_WIDE', severity: 'warning', elementId: id, message: `${label}: הפלטה רחבה מאגף העמוד (${cp.props.b})` });
+      const nutR = hw(prm.bolt.d).s / Math.sqrt(3) + 2;
+      const tw = cp.dims.tw ?? 8;
+      if (prm.gauge / 2 - nutR < tw / 2 + 2) issue({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `${label}: אום בתוך העמוד קרוב לווב — הגדל מרווח ברגים` });
+      if (zTop > (col!.end.z) + 1) issue({ code: 'SIDE_ABOVE', severity: 'error', elementId: id, message: `${label}: הפלטה גבוהה מראש העמוד — הגבה את העמוד או הנמך את המישור` });
+      const welds: WeldInfo[] = [{ id: `${id}.W1`, connId: id, type: 'fillet', a: prm.weldSize, length: outlinePerimeter(raf!.profile), location: 'shop', between: [raf!.id, pid], from: v3(xc, f.y, tos), to: v3(xc, f.y, tos) }];
+      res.connections.push({ id, type: 'rafter-side', label, members: [col!.id, raf!.id], parts: [pid, ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'rigid', overridden: !!project.connectionOverrides[id] });
+    }
+
     // ---- בסיס. embedded (ברירת מחדל, לפי החלטת המשתמש): פלטה מבוטנת + מוטות עיגון מרותכים במסגריה, העמוד מרותך בשטח.
     //      bolted: פלטה מרותכת לעמוד במסגריה, ברגי עיגון בשטח.
     for (const ln of topo.sec.lines) {
@@ -322,6 +368,9 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
     });
   }
 
+  // ---- אלכסוני עמוד-קורה
+  { const kbr = buildKneeBraces(project, topo, byId); res.members.push(...kbr.members); res.connections.push(...kbr.connections); res.issues.push(...kbr.issues); }
+
   // ---- פטה-קורה: זוויתן L מרותך לקורה (מסגריה), מוברג לווב הפטה (שטח)
   for (const sp of supports) {
     const pur = byId.get(sp.purlinId), raf = byId.get(sp.rafterId);
@@ -431,7 +480,7 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
   // קושרות ושורות קשירה מול עמודים, קורות, פטות, תומכים וקושרות אחרות (סינון לפי תיבה חוסמת)
   const others = [...byId.values()].filter((m) => ['column', 'rafter', 'purlin', 'cleat', 'plate', 'brace'].includes(m.kind));
   const boxes = new Map(others.map((m) => [m.id, aabb(m)]));
-  for (const c of conns.filter((x) => x.type === 'brace')) {
+  for (const c of conns.filter((x) => x.type === 'brace' || x.type === 'knee')) {
     for (const pid of c.parts) {
       const a = byId.get(pid);
       if (!a) continue;

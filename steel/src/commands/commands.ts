@@ -1,8 +1,10 @@
 import { add, rotateAxis, sub, v3, type Vec3 } from '../core/vec';
 import { degToRad } from '../core/units';
 import { generate, placementBasis } from '../geometry/generate';
-import type { ApprovalStatus, BuildingParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
+import type { ApprovalStatus, BuildingParams, KneeBraceParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
 import { proposeSplices, purlinParams } from '../geometry/purlins';
+import { defaultKneeBraces } from '../geometry/knee';
+import type { CustomSection } from '../model/section';
 import { commitNumbering, computeFabrication } from '../fab/marks';
 import { hasErrors, validateBuilding } from '../model/validate';
 import { tryProfile } from '../profiles/library';
@@ -27,6 +29,52 @@ export function setBuilding(patch: Partial<BuildingParams>): Command {
       n.building.frames = [...n.building.frames].sort((a, b) => a.y - b.y);
       const errs = validateBuilding(n.building).filter((i) => i.severity === 'error');
       if (errs.length) throw new CommandError(errs.map((e) => e.message).join('\n'));
+      return n;
+    },
+  };
+}
+
+/** חתך מודולרי: הגדרה/החלפה/ביטול (undefined = חזרה למצב קלאסי). ולידציה מבנית; שגיאות טופולוגיה מדווחות בבעיות. */
+export function setSection(section: CustomSection | undefined, label = 'עדכון חתך המסגרת'): Command {
+  return {
+    label,
+    run: (p) => {
+      if (section) {
+        if (!section.lines.length) throw new CommandError('נדרשת לפחות שורת עמודים אחת');
+        if (!section.planes.length) throw new CommandError('נדרש לפחות מישור גג אחד');
+        const ids = new Set<string>();
+        for (const l of section.lines) {
+          if (!Number.isFinite(l.x)) throw new CommandError('מיקום ציר לא מספרי');
+          if (ids.has(l.id)) throw new CommandError(`מזהה ציר כפול: ${l.id}`);
+          ids.add(l.id);
+        }
+        const xs = [...section.lines].map((l) => l.x).sort((a, b) => a - b);
+        for (let i = 1; i < xs.length; i++) if (xs[i] - xs[i - 1] < 500) throw new CommandError('שני צירים קרובים מ-0.5 מ\'');
+        const pids = new Set<string>();
+        for (const pl of section.planes) {
+          if (![pl.x0, pl.x1, pl.z0, pl.z1].every(Number.isFinite)) throw new CommandError('ערך מישור לא מספרי');
+          if (!(pl.x1 - pl.x0 >= 500)) throw new CommandError('מישור: הקצה הימני חייב להיות מימין לשמאלי (לפחות 0.5 מ\')');
+          if (Math.min(pl.z0, pl.z1) <= p.building.baseElevation + 1000) throw new CommandError('מישור נמוך מדי');
+          if (pids.has(pl.id)) throw new CommandError(`מזהה מישור כפול: ${pl.id}`);
+          pids.add(pl.id);
+        }
+      }
+      const n = clone(p);
+      n.building = { ...n.building, section: section ? clone(section) : undefined };
+      if (!section) delete n.building.section;
+      return n;
+    },
+  };
+}
+
+export function setKneeBraces(patch: Partial<KneeBraceParams>): Command {
+  return {
+    label: 'עדכון אלכסוני עמוד-קורה',
+    run: (p) => {
+      if (patch.profile !== undefined && !tryProfile(patch.profile)) throw new CommandError(`חתך לא מוכר: ${patch.profile}`);
+      for (const [k, v] of Object.entries(patch)) if (typeof v === 'number' && !(v > 0)) throw new CommandError(`${k}: ערך חייב להיות חיובי`);
+      const n = clone(p);
+      n.building.kneeBraces = { ...defaultKneeBraces(), ...(n.building.kneeBraces ?? {}), ...clone(patch) };
       return n;
     },
   };
