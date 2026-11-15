@@ -224,7 +224,7 @@ function norm3(a: Vec3): Vec3 { const l = Math.hypot(a.x, a.y, a.z) || 1; return
  * מבט איזומטרי מוצלל בשיטת הצייר: פאות מחולקות לקטעים קצרים לאורך האלמנט כדי שמיון העומק יהיה נכון,
  * ותאורה לפי נורמל הפאה. clip: תחום t (במערכת החלק הראשי) — מציג רק את הקטעים שבתחום, עם פאת חתך בגבול.
  */
-function renderIso(sh: Sheet, ms: Member[], marks: string[], box: { x0: number; x1: number; y0: number; y1: number }, clip: [number, number] | null,
+export function renderIso(sh: Sheet, ms: Member[], marks: string[], box: { x0: number; x1: number; y0: number; y1: number }, clip: [number, number] | null,
   loc: (q: Vec3) => { t: number; u: number; v: number }, title: string) {
   const E = sh.ents;
   const C30 = Math.cos(Math.PI / 6), S30 = 0.5;
@@ -269,7 +269,7 @@ function renderIso(sh: Sheet, ms: Member[], marks: string[], box: { x0: number; 
       const cut = kk > 1e-6 && kk < 1 - 1e-6;
       faces.push({ poly: ring, edges: ring.map((q, i) => [q, ring[(i + 1) % n]] as [Vec3, Vec3]), z: ring.reduce((acc, q) => acc + depth(q), 0) / n, tone: cut ? 0.35 : base + 0.35 * Math.abs(dot(nn, Ldir)) - 0.2 });
       shown.push(...ring);
-      if (mi > 0) shownByMark.set(marks[mi], [...(shownByMark.get(marks[mi]) ?? []), ...ring]);
+      if (mi > 0 && marks[mi]) shownByMark.set(marks[mi], [...(shownByMark.get(marks[mi]) ?? []), ...ring]);
     }
   });
   if (!shown.length) return;

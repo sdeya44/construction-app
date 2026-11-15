@@ -1,7 +1,7 @@
 import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import { cachedSolidPure } from './solidCache';
-import { assemblySheet } from './assembly';
+import { assemblySheet, renderIso } from './assembly';
 import { getProfile } from '../profiles/library';
 import type { Bom } from '../fab/bom';
 import type { Fabrication, MarkedPart } from '../fab/marks';
@@ -288,6 +288,15 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         const pm = fab.parts.find((x) => x.memberId === pid);
         if (pm) T(`${pm.mark}: ${pm.desc}`);
       }
+      // תלת־ממד מוצלל של החיבור (חלקי החיבור + קטע מהאלמנטים הראשיים סביבו)
+      {
+        const near = (m: Member) => { const s0 = cachedSolidPure(m); return [...s0.startRing, ...s0.endRing].some((q) => Math.hypot(q.x - C.x, q.y - C.y, q.z - C.z) < 2500); };
+        const isoMs = ms.filter((m) => m.kind !== 'bolt' || m.id.endsWith('.S')).filter(near);
+        const clipLoc = (q: Vec3) => ({ t: Math.max(Math.abs(q.x - C.x), Math.abs(q.y - C.y), Math.abs(q.z - C.z)), u: 0, v: 0 });
+        void clipLoc;
+        renderIso(sh, isoMs.map((m) => (c.members.includes(m.id) ? trimNear(m, C, R * 1.6) : m)), isoMs.map((m) => fab.parts.find((x) => x.memberId === m.id)?.mark ?? ''),
+          { x0: area.x1 - 125, x1: area.x1 - 4, y0: area.y0 + 4, y1: y - 16 }, null, () => ({ t: 0, u: 0, v: 0 }), 'תלת־ממד (ללא קנ"מ)');
+      }
       T(planar ? 'מבט: בניצב למישור הפלטה.' : 'מבט: חתך במישור המסגרת (לאורך Y). חלקים חתוכים – ממולאים.');
       T('גיאומטריה בלבד — אין בדיקת חוזק לברגים, ריתוכים ופלטות.');
       break;
@@ -427,4 +436,13 @@ export function sheetHash(sh: Sheet): string {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
   return (h >>> 0).toString(16);
+}
+
+/** קיטום אלמנט ראשי לקטע סביב נקודה (לתלת־ממד של פרט חיבור): קו ייחוס חדש בתחום ±r לאורך הציר. */
+function trimNear(m: Member, C: Vec3, r: number): Member {
+  const f = localFrame(m);
+  const t = dot(sub(C, m.start), f.ex);
+  const t0 = Math.max(0, t - r), t1 = Math.min(f.length, t + r);
+  const at = (k: number) => ({ x: m.start.x + f.ex.x * k, y: m.start.y + f.ex.y * k, z: m.start.z + f.ex.z * k });
+  return { ...m, id: `${m.id}#trim`, start: at(t0), end: at(t1), startCut: t0 > 0 ? undefined : m.startCut, endCut: t1 < f.length ? undefined : m.endCut };
 }

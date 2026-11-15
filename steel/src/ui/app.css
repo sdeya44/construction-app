@@ -86,7 +86,7 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line-st
 .seg .tbtn:first-child { border-inline-start: 0; }
 
 /* סביבת עבודה */
-.workspace { display: grid; grid-template-columns: 290px 1fr 330px; min-height: 0; }
+.workspace { display: grid; grid-template-columns: 330px 1fr 330px; min-height: 0; }
 .center { position: relative; min-width: 0; min-height: 0; display: grid; }
 .center > .viewport-host { grid-area: 1 / 1; }
 .side { background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
@@ -354,3 +354,29 @@ select.inp { padding: 0 6px; }
 .link-btn { border: 0; background: none; color: var(--brand); cursor: pointer; font-size: 12px; padding: 0 4px; font-family: var(--font); }
 .link-btn:hover { text-decoration: underline; }
 .viewbar > *, .ctxbar > * { flex: none; }
+
+/* עץ תפריטים בצד ימין: עץ למעלה, טבלה/טופס מתחת */
+.sidenav { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.nav-tree { flex: none; max-height: 44%; overflow: auto; padding: 8px 8px 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.nav-group { margin-bottom: 2px; }
+.nav-head { display: flex; align-items: center; gap: 2px; border-radius: 8px; }
+.nav-head.on { background: var(--brand-soft); }
+.nav-head.on .nav-lbl { color: var(--brand); }
+.nav-chev { width: 22px; height: 28px; border: 0; background: none; color: var(--muted); cursor: pointer; flex: none; }
+.nav-lbl { flex: 1; text-align: start; border: 0; background: none; height: 28px; font-weight: 700; cursor: pointer; padding: 0 2px; }
+.nav-head .count { font-size: 11px; border-radius: 9px; padding: 0 6px; margin-inline-end: 6px; }
+.nav-head .count.err { background: var(--err-soft); color: var(--err); } .nav-head .count.warn { background: var(--warn-soft); color: var(--warn); }
+.nav-item { display: flex; justify-content: space-between; align-items: center; width: 100%; border: 0; background: none; text-align: start; padding: 4px 10px; padding-inline-start: 30px; border-radius: 7px; cursor: pointer; color: var(--text); font-size: 13px; }
+.nav-item:hover { background: var(--panel-2); }
+.nav-item.on { background: var(--brand); color: #fff; }
+.nav-item.on .nav-n { background: rgba(255,255,255,.2); color: #fff; }
+.nav-n { font-size: 11px; background: var(--panel-2); color: var(--muted); border-radius: 9px; padding: 0 7px; font-family: var(--mono); }
+.nav-n.err { background: var(--err-soft); color: var(--err); } .nav-n.warn { background: var(--warn-soft); color: var(--warn); }
+.nav-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.nav-content > .panel-body { flex: 1; }
+.nav-tbl td { cursor: pointer; padding: 4px 4px; }
+.nav-tbl td.n { direction: ltr; text-align: right; font-family: var(--mono); font-size: 11.5px; white-space: nowrap; }
+.nav-tbl tr:hover td { background: var(--panel-2); }
+.nav-tbl tr.sel td { background: var(--brand-soft); }
+.nav-tbl th.sortable { cursor: pointer; user-select: none; }
+.nav-tbl thead th { position: sticky; top: -10px; background: var(--panel); z-index: 1; }

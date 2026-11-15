@@ -8,7 +8,7 @@ test('UX-01: סרגל הקשרי וכרטיס חיבור לאלמנט בודד; 
   await expect(page.getByTestId('ctxbar')).toBeVisible();
   await expect(page.getByTestId('ctx-profile')).toContainText('IPE300');
   await expect(page.getByTestId('conncard')).toBeVisible();
-  await expect(page.getByTestId('cc-title')).toContainText('פלטת כיפה');
+  await expect(page.getByTestId('cc-title')).toContainText('שתי פלטות');
   await shot(page, 'UX-01_single');
   // שינוי חתך מהסרגל ההקשרי
   await page.getByTestId('ctx-profile').click();
@@ -87,4 +87,22 @@ test('UX-04: לשונית חיבורים — חיבורי המשך ופחי קו
   await page.getByText('C.BR.R1.L.X', { exact: true }).click();
   await expect(page.getByTestId('conn-id')).toHaveText('C.BR.R1.L.X');
   await shot(page, 'UX-04_brace_cross');
+});
+
+test('UX-05: עץ תפריטים — בחירת צומת מציגה טבלה; שורה בוחרת אלמנט / פותחת חיבור', async ({ page }) => {
+  await boot(page);
+  await page.getByTestId('tab-tree').click();
+  await page.getByTestId('nav-k:column').click();
+  await expect(page.getByTestId('table-column')).toContainText('F1.COL.L');
+  await page.getByTestId('table-column').getByText('F3.COL.R', { exact: true }).click();
+  expect(await selection(page)).toEqual(['F3.COL.R']);
+  await page.getByTestId('tab-conns').click();
+  await page.getByTestId('nav-c:eave').click();
+  await page.getByTestId('ctable-eave').getByText('EAVE.F2.L', { exact: true }).click();
+  await expect(page.getByTestId('conn-id')).toHaveText('C.EAVE.F2.L');
+  await expect(page.getByTestId('cp-split')).toHaveValue('1');
+  await page.getByTestId('nav-s:frames').click();
+  await expect(page.getByTestId('frames-table')).toBeVisible();
+  await expect(page.getByTestId('width')).toHaveCount(0); // צומת משני מציג רק את החלק שלו
+  await shot(page, 'UX-05_tree');
 });
