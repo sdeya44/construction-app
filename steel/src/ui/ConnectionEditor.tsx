@@ -11,7 +11,7 @@ import { LenField, NumField } from './fields';
 import { Icon } from './icons';
 
 const STATUS: Record<ApprovalStatus, string> = { 'not-verified': 'לא מאומת', 'for-review': 'לבדיקה', approved: 'מאושר' };
-export const CONN_TYPE: Record<Connection['type'], string> = { eave: 'עמוד-קורה (שתי פלטות מוברגות)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה' };
+export const CONN_TYPE: Record<Connection['type'], string> = { eave: 'עמוד-קורה (שתי פלטות מוברגות)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה', 'rafter-side': 'קורה לצד עמוד (פלטת קצה)', knee: 'אלכסון עמוד-קורה' };
 const BOLT_D = [10, 12, 16, 20, 24];
 
 /** רשימת החיבורים של אלמנט + כפתור פתיחת עורך. */
@@ -50,7 +50,7 @@ export function ConnectionEditor() {
   const issues = d.issues.filter((i) => i.elementId === id || c.parts.includes(i.elementId ?? '') || (i.code === 'CLASH' && c.parts.some((x) => i.message.includes(x))));
   const isCleat = c.type === 'purlin-cleat';
   const cleatId = isCleat ? c.parts[0] : '';
-  const side = isCleat ? (d.byId.get(c.members[0])?.purlin?.side === 'R' ? 'right' : 'left') : 'left';
+  const side = isCleat ? (d.byId.get(c.members[0])?.purlin?.paramKey ?? (d.byId.get(c.members[0])?.purlin?.side === 'R' ? 'right' : 'left')) : 'left';
   const plateType = c.type === 'eave' || c.type === 'ridge' || c.type === 'base' ? c.type : null;
   const eff: PlateConnParams | null = plateType ? { ...p.connectionDefaults[plateType], ...(p.connectionOverrides[id] ?? {}), bolt: { ...p.connectionDefaults[plateType].bolt, ...(p.connectionOverrides[id]?.bolt ?? {}) } } as PlateConnParams : null;
   const cl: CleatParams | null = isCleat ? effCleat(p, side, cleatId) : null;

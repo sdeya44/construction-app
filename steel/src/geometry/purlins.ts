@@ -1,6 +1,7 @@
 import { cross, dot, norm, v3, type Vec3 } from '../core/vec';
 import { tryProfile } from '../profiles/library';
-import type { BuildingParams, Member, PurlinSideParams, RoofInfo, SupportPoint, ValidationIssue } from '../model/types';
+import type { BuildingParams, Member, PurlinSideParams, PurlinSystem, SupportPoint, ValidationIssue } from '../model/types';
+import type { NSection } from '../model/section';
 
 const TOL = 1; // mm
 
@@ -73,12 +74,16 @@ export function webCenterU(profile: string): number {
 }
 
 interface SlopeLine {
-  side: 'L' | 'R' | 'M';
+  /** מזהה מישור הגג (קלאסי: L / R / M) */
+  side: string;
   params: PurlinSideParams;
+  paramKey: string;
+  /** קצה ההתחלה חופשי (לא רכס) */
+  free: boolean;
   /** נקודת ההתחלה ונקודת הקצה של קו פני העליון של הקורה (x,z) */
   S: { x: number; z: number };
   E: { x: number; z: number };
-  /** כיוון "מעלה השיפוע" (לכיוון הרכס / הצד הגבוה) */
+  /** כיוון "מעלה השיפוע" (לכיוון הצד הגבוה; בשיפוע 0 — לכיוון ההתחלה) */
   up: Vec3;
   rafterId: (frameId: string) => string;
   label: string;
@@ -86,27 +91,22 @@ interface SlopeLine {
 
 export interface PurlinResult { members: Member[]; supports: SupportPoint[]; issues: ValidationIssue[] }
 
+/** פרמטרי פטות לפי מפתח: left / right / מזהה מישור (חתך מודולרי) */
+export function purlinParams(pu: PurlinSystem, key: string): PurlinSideParams {
+  return key === 'left' ? pu.left : key === 'right' ? pu.right : pu.planes?.[key] ?? pu.left;
+}
+
 /** בניית קווי פטות, נקודות תמיכה וולידציות. גיאומטריה טהורה ודטרמיניסטית. */
-export function buildPurlins(b: BuildingParams, roof: RoofInfo, deleted: Set<string>): PurlinResult {
+export function buildPurlins(b: BuildingParams, sec: NSection, deleted: Set<string>): PurlinResult {
   const out: PurlinResult = { members: [], supports: [], issues: [] };
   const pu = b.purlins;
-  const lines: SlopeLine[] = [];
-  if (b.roofType === 'gable') {
-    const R = { x: b.ridgeX, z: roof.ridgeZ! };
-    const A = { x: -b.rafterOverhangLeft, z: b.eaveLeft - roof.slopeLeft * b.rafterOverhangLeft };
-    const B = { x: b.width + b.rafterOverhangRight, z: b.eaveRight - roof.slopeRight * b.rafterOverhangRight };
-    lines.push({ side: 'L', params: pu.left, S: R, E: A, up: norm(v3(1, 0, roof.slopeLeft)), rafterId: (f) => `${f}.RAF.L`, label: 'פטות שמאל' });
-    lines.push({ side: 'R', params: pu.right, S: R, E: B, up: norm(v3(-1, 0, roof.slopeRight)), rafterId: (f) => `${f}.RAF.R`, label: 'פטות ימין' });
-  } else {
-    const s = roof.slopeLeft;
-    const A = { x: -b.rafterOverhangLeft, z: b.eaveLeft - s * b.rafterOverhangLeft };
-    const B = { x: b.width + b.rafterOverhangRight, z: b.eaveRight + s * b.rafterOverhangRight };
-    const lowIsA = A.z <= B.z;
-    const low = lowIsA ? A : B, high = lowIsA ? B : A;
-    const [S, E] = pu.monoStart === 'low' ? [low, high] : [high, low];
-    const up = norm(v3(high.x - low.x, 0, high.z - low.z));
-    lines.push({ side: 'M', params: pu.left, S, E, up, rafterId: (f) => `${f}.RAF`, label: 'פטות' });
-  }
+  const lines: SlopeLine[] = sec.planes.map((pl) => {
+    const S = pl.startAt === 'b' ? pl.b : pl.a, E = pl.startAt === 'b' ? pl.a : pl.b;
+    const hi = S.z >= E.z ? S : E, lo = hi === S ? E : S;
+    const up = Math.abs(S.z - E.z) < 1e-6 ? norm(v3(S.x - E.x, 0, 0)) : norm(v3(hi.x - lo.x, 0, hi.z - lo.z));
+    const label = sec.custom ? `פטות ${pl.label}` : pl.id === 'L' ? 'פטות שמאל' : pl.id === 'R' ? 'פטות ימין' : 'פטות';
+    return { side: pl.id, params: purlinParams(pu, pl.params), paramKey: pl.params, free: pl.startFree, S, E, up, rafterId: pl.rafterId, label };
+  });
   const ys = b.frames.map((f) => f.y);
   const y0 = Math.min(...ys) - b.purlinOverhangStart, y1 = Math.max(...ys) + b.purlinOverhangEnd;
   const ex = v3(0, 1, 0);
@@ -125,19 +125,20 @@ export function buildPurlins(b: BuildingParams, roof: RoofInfo, deleted: Set<str
     // היקף החתך (ותומך) לכיוון קצה הקו — כדי שהפטה האחרונה תשב על הקורה
     const n0 = n;
     const u0 = cross(n0, ex);
+    const sDir = norm(v3(ln.S.x - ln.E.x, 0, ln.S.z - ln.E.z)); // לכיוון ההתחלה
     const mirror0 = (dot(u0, ln.up) > 0) !== (prm.opening === 'up');
     const wc0 = webCenterU(prm.profile);
     const us0 = prof.outline.outer.map((q) => (mirror0 ? -(q.u - wc0) : q.u - wc0));
     // ln.up מצביע מהקצה לכיוון ההתחלה (רכס/צד גבוה); הקצה בכיוון -up
-    let towardEnd = dot(u0, ln.up) > 0 ? -Math.min(...us0) : Math.max(...us0);
-    const cleatToStart0 = prm.cleat.enabled && (prof.family === 'Z' ? prm.opening === 'up' : prm.opening === 'down');
+    let towardEnd = dot(u0, sDir) > 0 ? -Math.min(...us0) : Math.max(...us0);
+    const cleatToStart0 = prm.cleat.enabled && (prof.family === 'Z' ? prm.opening === 'up' : prm.opening === 'down') === (dot(ln.up, sDir) > 0);
     if (prm.cleat.enabled && !cleatToStart0) {
       const wb0 = prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2;
       towardEnd = Math.max(towardEnd, wb0 + prm.cleat.base);
     }
     let towardStart0 = 0;
-    if (ln.side === 'M') {
-      towardStart0 = dot(u0, ln.up) > 0 ? Math.max(...us0) : -Math.min(...us0);
+    if (ln.free) {
+      towardStart0 = dot(u0, sDir) > 0 ? Math.max(...us0) : -Math.min(...us0);
       if (cleatToStart0) towardStart0 = Math.max(towardStart0, (prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2) + prm.cleat.base);
     }
     const lay = layoutPositions(Ls, cosA, prm, ln.label, Math.max(0, towardEnd), Math.max(0, towardStart0));
@@ -150,17 +151,17 @@ export function buildPurlins(b: BuildingParams, roof: RoofInfo, deleted: Set<str
     // היקף החתך לכיוון נקודת ההתחלה (לבדיקת חציית רכס)
     const wc = webCenterU(prm.profile);
     const us = prof.outline.outer.map((q) => (mirror ? -(q.u - wc) : q.u - wc));
-    let towardStart = ln.side === 'M' ? 0 : dot(u, ln.up) > 0 ? Math.max(...us) : -Math.min(...us);
+    let towardStart = ln.free ? 0 : dot(u, sDir) > 0 ? Math.max(...us) : -Math.min(...us);
     // התומך (זוויתן) בצד הרחוק מהאגף התחתון: אם הוא פונה לרכס, גם רגל הבסיס שלו נבדקת מול קו הרכס
-    const cleatToStart = prm.cleat.enabled && (prof.family === 'Z' ? prm.opening === 'up' : prm.opening === 'down');
-    if (ln.side !== 'M' && cleatToStart) {
+    const cleatToStart = prm.cleat.enabled && (prof.family === 'Z' ? prm.opening === 'up' : prm.opening === 'down') === (dot(ln.up, sDir) > 0);
+    if (!ln.free && cleatToStart) {
       const wb = prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2;
       towardStart = Math.max(towardStart, wb + prm.cleat.base);
     }
     lay.s.forEach((s, i) => {
       const id = `PL.${ln.side}.${String(i + 1).padStart(2, '0')}`;
       if (deleted.has(id)) return;
-      if (i === 0 && ln.side !== 'M' && s - towardStart < 0) {
+      if (i === 0 && !ln.free && s - towardStart < 0) {
         out.issues.push({ code: 'PURLIN_RIDGE', severity: 'error', elementId: id, message: `${ln.label}: הפטה הראשונה או התומך שלה חוצים את קו הרכס — הגדל את המרחק הראשון` });
       }
       const P = { x: ln.S.x + dir.x * s, z: ln.S.z + dir.z * s };
@@ -171,7 +172,7 @@ export function buildPurlins(b: BuildingParams, roof: RoofInfo, deleted: Set<str
         profile: prm.profile, material: pu.material, rollDeg: 0, mirror,
         anchor: 'purlin', refUp: n, source: 'generated', manualPlacement: false,
         purlin: {
-          side: ln.side, index: i + 1, count: lay.s.length, sSlope: s, sHoriz: lay.h[i],
+          side: ln.side, startFree: ln.free, paramKey: ln.paramKey, index: i + 1, count: lay.s.length, sSlope: s, sHoriz: lay.h[i],
           spanBefore: i ? s - lay.s[i - 1] : 0, isLast: i === lay.s.length - 1,
           roofNormal: n, opening: prm.opening, measure: prm.measure,
         },

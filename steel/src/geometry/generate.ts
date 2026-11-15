@@ -4,6 +4,7 @@ import type {
   DerivedModel, GridLine, Member, ModelNode, Project, RoofInfo, ValidationIssue,
 } from '../model/types';
 import { derivedRoof, hasErrors, validateBuilding } from '../model/validate';
+import { normalizeSection, sectionTopology, type NSection, type SectionTopology } from '../model/section';
 import { buildParts } from './parts';
 import { buildPurlins } from './purlins';
 import type { Connection, SupportPoint } from '../model/types';
@@ -30,6 +31,8 @@ export function generate(project: Project): DerivedModel {
   const nodes: ModelNode[] = [];
   const grid: GridLine[] = [];
   const roof: RoofInfo = hasErrors(issues) ? { slopeLeft: 0, slopeRight: 0 } : derivedRoof(b);
+  let sec: NSection | null = null;
+  let topo: SectionTopology | null = null;
 
   // קצה קורת הגג: לפחות עד קצה פלטת הכיפה (או הפנים החיצוניות של העמוד), גם כשהקונזולה 0
   let bEff = b;
@@ -57,65 +60,56 @@ export function generate(project: Project): DerivedModel {
     const underOffset = tos ? raf.props.h : raf.props.h / 2;
     const anchor = tos ? 'top' : 'center';
 
-    grid.push({ id: 'GX0', label: xAxisLabel(0), dir: 'X', pos: 0 });
-    grid.push({ id: 'GX1', label: xAxisLabel(1), dir: 'X', pos: b.width });
+    const col0 = getProfile(b.columnProfile);
+    const eaveP = project.connectionDefaults.eave;
+    sec = normalizeSection(b, roof);
+    topo = sectionTopology(sec, col0.props.h / 2, eaveP.enabled ? eaveP.l / 2 : col0.props.h / 2);
+    issues.push(...topo.issues.filter((i) => sec!.custom || i.code !== 'RAFTER_EXT'));
+    if (topo.issues.some((i) => i.severity === 'error')) { /* שגיאת טופולוגיה — ללא גיאומטריה */ } else {
+    for (const l of sec.lines) grid.push({ id: `GX-${l.id}`, label: l.label, dir: 'X', pos: l.x });
+    const T = topo;
 
     b.frames.forEach((f, fi) => {
       const y = f.y;
       grid.push({ id: `GY-${f.id}`, label: String(fi + 1), dir: 'Y', pos: y });
       const base = b.baseElevation;
-      const eL = v3(0, y, b.eaveLeft), eR = v3(b.width, y, b.eaveRight);
-      nodes.push({ id: `${f.id}.N.BL`, p: v3(0, y, base), frameId: f.id, role: 'בסיס שמאל' });
-      nodes.push({ id: `${f.id}.N.BR`, p: v3(b.width, y, base), frameId: f.id, role: 'בסיס ימין' });
-      nodes.push({ id: `${f.id}.N.EL`, p: eL, frameId: f.id, role: 'ראש עמוד שמאל' });
-      nodes.push({ id: `${f.id}.N.ER`, p: eR, frameId: f.id, role: 'ראש עמוד ימין' });
-
-      const rafters: { id: string; side?: 'L' | 'R'; s: Vec3; e: Vec3; startCut: Plane; endCut: Plane }[] = [];
-      let underL: Plane, underR: Plane;
-      if (b.roofType === 'gable') {
-        const rz = roof.ridgeZ!;
-        const ridge = v3(b.ridgeX, y, rz);
-        nodes.push({ id: `${f.id}.N.RG`, p: ridge, frameId: f.id, role: 'רכס' });
-        const sL = roof.slopeLeft, sR = roof.slopeRight;
-        const aL = v3(-b.rafterOverhangLeft, y, b.eaveLeft - sL * b.rafterOverhangLeft);
-        const aR = v3(b.width + b.rafterOverhangRight, y, b.eaveRight - sR * b.rafterOverhangRight);
-        const ridgePlane: Plane = { point: ridge, normal: X };
-        rafters.push({ id: `${f.id}.RAF.L`, side: 'L', s: aL, e: ridge, startCut: { point: aL, normal: X }, endCut: ridgePlane });
-        rafters.push({ id: `${f.id}.RAF.R`, side: 'R', s: aR, e: ridge, startCut: { point: aR, normal: X }, endCut: ridgePlane });
-        underL = underPlane(aL, ridge, underOffset);
-        underR = underPlane(aR, ridge, underOffset);
-      } else {
-        const s = roof.slopeLeft;
-        const aL = v3(-b.rafterOverhangLeft, y, b.eaveLeft - s * b.rafterOverhangLeft);
-        const aR = v3(b.width + b.rafterOverhangRight, y, b.eaveRight + s * b.rafterOverhangRight);
-        rafters.push({ id: `${f.id}.RAF`, s: aL, e: aR, startCut: { point: aL, normal: X }, endCut: { point: aR, normal: X } });
-        underL = underR = underPlane(aL, aR, underOffset);
-      }
-      for (const r of rafters) {
+      const under = new Map<string, Plane>();
+      for (const pl of sec!.planes) {
+        const A = v3(pl.a.x, y, pl.a.z), B = v3(pl.b.x, y, pl.b.z);
+        under.set(pl.id, underPlane(A, B, underOffset));
+        const side = pl.id === 'L' || pl.id === 'R' ? pl.id : undefined;
         members.push({
-          id: r.id, kind: 'rafter', frameId: f.id, side: r.side,
-          label: `קורת גג ${r.side === 'L' ? 'שמאל' : r.side === 'R' ? 'ימין' : ''} מסגרת ${fi + 1}`.replace('  ', ' '),
-          start: r.s, end: r.e, profile: b.rafterProfile, material: b.material, rollDeg: 0, mirror: false,
-          anchor, refUp: Z, startCut: r.startCut, endCut: r.endCut, source: 'generated', manualPlacement: false,
+          id: pl.rafterId(f.id), kind: 'rafter', frameId: f.id, side, planeId: pl.id,
+          label: sec!.custom ? `קורת גג ${pl.label} מסגרת ${fi + 1}` : `קורת גג ${side === 'L' ? 'שמאל' : side === 'R' ? 'ימין' : ''} מסגרת ${fi + 1}`.replace('  ', ' '),
+          start: A, end: B, profile: b.rafterProfile, material: b.material, rollDeg: 0, mirror: false,
+          anchor, refUp: Z, startCut: { point: A, normal: X }, endCut: { point: B, normal: X }, source: 'generated', manualPlacement: false,
         });
       }
-      for (const [side, x, top, under] of [['L', 0, eL, underL], ['R', b.width, eR, underR]] as const) {
+      for (const r of T.ridges) nodes.push({ id: sec!.custom ? `${f.id}.N.RG.${r.pa.id}.${r.pb.id}` : `${f.id}.N.RG`, p: v3(r.x, y, r.z), frameId: f.id, role: 'רכס' });
+      for (const l of sec!.lines) {
+        const ct = T.colTop.get(l.id);
+        if (!ct) continue;
+        const top = v3(l.x, y, ct.z);
+        const side = !sec!.custom ? (l.id as 'L' | 'R') : undefined;
+        nodes.push({ id: `${f.id}.N.B${l.id}`, p: v3(l.x, y, base), frameId: f.id, role: `בסיס ציר ${l.label}` });
+        nodes.push({ id: `${f.id}.N.E${l.id}`, p: top, frameId: f.id, role: `ראש עמוד ציר ${l.label}` });
         members.push({
-          id: `${f.id}.COL.${side}`, kind: 'column', frameId: f.id, side,
-          label: `עמוד ${side === 'L' ? 'שמאל' : 'ימין'} מסגרת ${fi + 1}`,
-          start: v3(x, y, base), end: top, profile: b.columnProfile, material: b.material,
+          id: `${f.id}.COL.${l.id}`, kind: 'column', frameId: f.id, side, lineId: l.id,
+          label: sec!.custom ? `עמוד ציר ${l.label} מסגרת ${fi + 1}` : `עמוד ${side === 'L' ? 'שמאל' : 'ימין'} מסגרת ${fi + 1}`,
+          start: v3(l.x, y, base), end: top, profile: b.columnProfile, material: b.material,
           rollDeg: 0, mirror: false, anchor: 'center', refUp: X,
-          endCut: under, source: 'generated', manualPlacement: false,
+          endCut: ct.cap ? under.get(ct.cap.id)! : { point: top, normal: Z }, source: 'generated', manualPlacement: false,
         });
       }
     });
+    }
   }
 
   // פטות ונקודות תמיכה
   const deleted = new Set(project.deleted);
   let supports: SupportPoint[] = [];
-  if (!hasErrors(issues)) {
-    const pr = buildPurlins(bEff, roof, deleted);
+  if (!hasErrors(issues) && sec) {
+    const pr = buildPurlins(bEff, sec, deleted);
     members.push(...pr.members);
     supports = pr.supports;
     issues.push(...pr.issues);
@@ -165,13 +159,13 @@ export function generate(project: Project): DerivedModel {
   supports = supports.filter((sp) => byId.has(sp.purlinId) && byId.has(sp.rafterId));
   // חיבורים: משנים חיתוכי קצה של עמודים/קורות לפי עובי פלטות, ומוסיפים זוויתנים, פלטות וברגים
   let connections: Connection[] = [];
-  if (!hasErrors(issues)) {
-    const cr = buildConnections(project, out, byId, supports.filter((sp) => getProfileSafe(byId.get(sp.purlinId)!.profile)));
+  if (!hasErrors(issues) && topo) {
+    const cr = buildConnections(project, out, byId, supports.filter((sp) => getProfileSafe(byId.get(sp.purlinId)!.profile)), topo);
     const hidden = new Set(project.deleted);
     out.push(...cr.members.filter((m) => !hidden.has(m.id)));
     connections = cr.connections;
     issues.push(...cr.issues);
-    const bb = buildBracing(b, roof, out.filter((m) => m.purlin), bEff);
+    const bb = buildBracing(b, topo, out.filter((m) => m.purlin), bEff);
     out.push(...bb.members.filter((m) => !hidden.has(m.id)));
     connections.push(...bb.connections);
     issues.push(...bb.issues);

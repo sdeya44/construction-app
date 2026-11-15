@@ -1,6 +1,7 @@
 import { add, dot, norm, scale, sub, v3, type Vec3 } from '../core/vec';
 import { getProfile, tryProfile } from '../profiles/library';
-import type { BoltInfo, BraceConnParams, BuildingParams, Connection, Member, RoofInfo, ValidationIssue, WeldInfo } from '../model/types';
+import type { BoltInfo, BraceConnParams, BuildingParams, Connection, Member, ValidationIssue, WeldInfo } from '../model/types';
+import { zAt, type SectionTopology } from '../model/section';
 import { hw, makeBolt } from './connections';
 import { localFrame } from './frame';
 import { bolt } from '../model/defaults';
@@ -26,7 +27,7 @@ const mk = (id: string, label: string, profile: string, start: Vec3, end: Vec3, 
  * קושרות X בגג ובקירות ושורות קשירה לפטות. קושרות X עובדות במתיחה בלבד (לפי תוכנית K-02).
  * חיבור: פח מרותך במסגריה, זוויתן מוברג בשטח (M16), בורג בהצטלבות — החלטת משתמש 15.11.2026.
  */
-export function buildBracing(b: BuildingParams, roof: RoofInfo, purlins: Member[], eff: BuildingParams): BracingResult {
+export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: Member[], eff: BuildingParams): BracingResult {
   const res: BracingResult = { members: [], connections: [], issues: [] };
   const br = b.bracing;
   const frames = b.frames;
@@ -46,15 +47,20 @@ export function buildBracing(b: BuildingParams, roof: RoofInfo, purlins: Member[
 
   // ---- קושרות גג: במישור אמצע גובה קורת הגג, פח חיבור מרותך לווב הקורה בכל קצה
   if (br.roof.enabled) {
-    const slopes: { side: string; a: { x: number; z: number }; c: { x: number; z: number } }[] = [];
-    const tosZ = (x: number) => (b.roofType === 'gable'
-      ? (x <= b.ridgeX ? b.eaveLeft + roof.slopeLeft * x : roof.ridgeZ! - roof.slopeRight * (x - b.ridgeX))
-      : b.eaveLeft + roof.slopeLeft * x);
+    const slopes: { side: string; a: { x: number; z: number }; c: { x: number; z: number }; rid: (f: string) => string }[] = [];
     const ridgeGap = 150 + bc.gussetEdge;
-    if (b.roofType === 'gable') {
-      slopes.push({ side: 'L', a: { x: 0, z: tosZ(0) }, c: { x: b.ridgeX - ridgeGap, z: tosZ(b.ridgeX - ridgeGap) } });
-      slopes.push({ side: 'R', a: { x: b.width, z: tosZ(b.width) }, c: { x: b.ridgeX + ridgeGap, z: tosZ(b.ridgeX + ridgeGap) } });
-    } else slopes.push({ side: 'M', a: { x: 0, z: tosZ(0) }, c: { x: b.width, z: tosZ(b.width) } });
+    // לכל מישור: מהעמוד הקיצוני בכל צד (או מהקצה פחות מרווח, אם אין עמוד באותו חצי — רכס/חיבור צד/קונזולה)
+    for (const pl of topo.sec.planes) {
+      const lo = Math.min(pl.a.x, pl.b.x), hi = Math.max(pl.a.x, pl.b.x), mid = (lo + hi) / 2;
+      const inside = topo.sec.lines.filter((l) => l.x > lo + 1 && l.x < hi - 1);
+      const endX = (e: { x: number }) => {
+        const half = inside.filter((l) => (e.x < mid ? l.x <= mid : l.x >= mid));
+        if (half.length) return e.x < mid ? Math.min(...half.map((l) => l.x)) : Math.max(...half.map((l) => l.x));
+        return e.x < mid ? e.x + ridgeGap : e.x - ridgeGap;
+      };
+      const xa = endX(pl.a), xc = endX(pl.b);
+      slopes.push({ side: pl.id, a: { x: xa, z: zAt(pl, xa) }, c: { x: xc, z: zAt(pl, xc) }, rid: pl.rafterId });
+    }
     for (const bay of resolveBays(br.roof.bays, nb)) {
       const f0 = frames[bay], f1 = frames[bay + 1];
       for (const sl of slopes) {
@@ -63,7 +69,7 @@ export function buildBracing(b: BuildingParams, roof: RoofInfo, purlins: Member[
         // מישור הקושרות: אמצע גובה הקורה (קו הייחוס הוא פני עליון)
         const o = add(v3(sl.a.x, 0, sl.a.z), scale(n, -raf.props.h / 2));
         const L = Math.hypot(sl.c.x - sl.a.x, sl.c.z - sl.a.z);
-        const rid = (f: string) => (b.roofType === 'gable' ? `${f}.RAF.${sl.side}` : `${f}.RAF`);
+        const rid = sl.rid;
         xbrace(`R${bay + 1}.${sl.side}`, `קושרת גג מפתח ${bay + 1}`, br.roof.profile, o, n, dir,
           { y: f0.y, w: 0 }, { y: f1.y, w: L }, f0.y + tw / 2, f1.y - tw / 2, rid(f0.id), rid(f1.id));
       }
@@ -72,22 +78,30 @@ export function buildBracing(b: BuildingParams, roof: RoofInfo, purlins: Member[
 
   // ---- קושרות קיר: במישור ציר העמודים, פח חיבור מרותך לווב העמוד בכל קצה
   if (br.walls.enabled) {
-    const rafV = raf.props.h * Math.sqrt(1 + roof.slopeLeft * roof.slopeLeft);
     const ctw = col.dims.tw ?? col.dims.t ?? 6;
-    for (const [side, x, eave, bays] of [['L', 0, b.eaveLeft, br.walls.left], ['R', b.width, b.eaveRight, br.walls.right]] as const) {
+    const ls = [...topo.sec.lines].sort((p, q) => p.x - q.x);
+    const outer = ls.length > 1 ? [{ l: ls[0], bays: br.walls.left, key: 'L' }, { l: ls[ls.length - 1], bays: br.walls.right, key: 'R' }] : [{ l: ls[0], bays: br.walls.left, key: 'L' }];
+    for (const { l, bays, key } of outer) {
+      const ct = topo.colTop.get(l.id);
+      if (!ct) continue;
+      const cap = ct.cap ?? topo.junctions.find((j) => j.line === l)?.plane;
+      const sl = cap ? Math.abs((cap.b.z - cap.a.z) / (cap.b.x - cap.a.x)) : 0;
+      const rafV = raf.props.h * Math.sqrt(1 + sl * sl);
+      const side = topo.sec.custom ? l.id : key;
+      const x = l.x, eave = ct.z;
       for (const bay of resolveBays(bays, nb)) {
         const f0 = frames[bay], f1 = frames[bay + 1];
         const z0 = b.baseElevation + 300, z1 = eave - rafV - 60 - 150;
-        if (z1 - z0 < 1000) { res.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `קושרת קיר ${side} מפתח ${bay + 1}: גובה קטן מדי` }); continue; }
-        xbrace(`W${bay + 1}.${side}`, `קושרת קיר ${side === 'L' ? 'ציר א' : 'ציר ב'} מפתח ${bay + 1}`, br.walls.profile, v3(x, 0, z0), v3(1, 0, 0), v3(0, 0, 1),
-          { y: f0.y, w: 0 }, { y: f1.y, w: z1 - z0 }, f0.y + ctw / 2, f1.y - ctw / 2, `${f0.id}.COL.${side}`, `${f1.id}.COL.${side}`);
+        if (z1 - z0 < 1000) { res.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `קושרת קיר ציר ${l.label} מפתח ${bay + 1}: גובה קטן מדי` }); continue; }
+        xbrace(`W${bay + 1}.${side}`, `קושרת קיר ציר ${l.label} מפתח ${bay + 1}`, br.walls.profile, v3(x, 0, z0), v3(1, 0, 0), v3(0, 0, 1),
+          { y: f0.y, w: 0 }, { y: f1.y, w: z1 - z0 }, f0.y + ctw / 2, f1.y - ctw / 2, `${f0.id}.COL.${l.id}`, `${f1.id}.COL.${l.id}`);
       }
     }
   }
 
   // ---- שורת קשירה לאגף התחתון של הפטות, באמצע כל מפתח, לכל שיפוע
   if (br.purlinTies.enabled) {
-    for (const side of ['L', 'R', 'M'] as const) {
+    for (const side of topo.sec.planes.map((p) => p.id)) {
       const ps = purlins.filter((m) => m.purlin?.side === side).sort((a, c) => a.purlin!.index - c.purlin!.index);
       if (ps.length < 2) continue;
       const first = ps[0], last = ps[ps.length - 1];

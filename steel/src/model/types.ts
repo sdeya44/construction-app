@@ -1,5 +1,6 @@
 import type { Mm } from '../core/units';
 import type { Plane, Vec3 } from '../core/vec';
+import type { CustomSection } from './section';
 
 /** גרסת סכמת קובץ הפרויקט. כל שינוי שובר מחייב מיגרציה ב-model/migrate.ts */
 export const SCHEMA_VERSION = 7;
@@ -73,6 +74,8 @@ export interface PurlinSystem {
   /** גג חד־שיפועי: מאיזה קצה מתחילה הפריסה */
   monoStart: 'low' | 'high';
   splice: PurlinSpliceParams;
+  /** פרמטרי פטות למישורי גג בחתך מודולרי (לפי מזהה מישור); חסר = left */
+  planes?: Record<string, PurlinSideParams>;
   /** אורך קטע פטה במספר מפתחים (תפר מעל כל N מסגרות). 0/חסר = אוטומטי לפי אורך חומר הגלם */
   pieceBays?: number;
 }
@@ -143,6 +146,25 @@ export interface BuildingParams {
   baseElevation: Mm;
   purlins: PurlinSystem;
   bracing: BracingParams;
+  /** חתך מודולרי (שורות עמודים ומישורי גג). חסר = מצב קלאסי לפי roofType/width/eave/ridge */
+  section?: CustomSection;
+  /** אלכסוני עמוד-קורה (קנה/knee brace) */
+  kneeBraces?: KneeBraceParams;
+}
+
+/** אלכסון בין עמוד לקורת גג (החלטת משתמש 15.11.2026, לפי התוכניות: RHS80/80/4, פלטות 180×280×14, 4×M16) */
+export interface KneeBraceParams {
+  enabled: boolean;
+  profile: string;
+  /** מרחק נקודת החיבור על העמוד מתחתית הקורה (אנכי) ועל הקורה מציר העמוד (אופקי) */
+  drop: Mm;
+  reach: Mm;
+  /** פלטות קצה: אחת מרותכת לאלכסון ואחת למארח, מוברגות */
+  plateT: Mm; plateW: Mm; plateL: Mm;
+  bolt: BoltSpec; gauge: Mm; pitch: Mm;
+  weldSize: Mm;
+  /** חיבורים שבוטלו ידנית: מזהה "קו.מישור.צד" */
+  exclude: string[];
 }
 
 export interface ProjectMeta {
@@ -172,7 +194,7 @@ export interface MemberOverride {
 
 export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'cleat' | 'plate' | 'bolt' | 'anchor';
 
-export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice';
+export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee';
 export type ApprovalStatus = 'not-verified' | 'for-review' | 'approved';
 
 /** חיבור מבוסס פלטה וקבוצת ברגים (קורה-עמוד, רכס, פלטת בסיס). */
@@ -200,7 +222,7 @@ export interface PlateConnParams {
   mode?: 'embedded' | 'bolted';
 }
 
-export type ConnectionDefaults = Record<'eave' | 'ridge' | 'base', PlateConnParams>;
+export type ConnectionDefaults = Record<'eave' | 'ridge' | 'base', PlateConnParams> & { side?: PlateConnParams };
 
 export interface ConnectionTemplate { id: string; name: string; type: 'eave' | 'ridge' | 'base'; params: PlateConnParams }
 
@@ -292,6 +314,9 @@ export interface Member {
   label: string;
   frameId?: string;
   side?: 'L' | 'R';
+  /** חתך מודולרי: מזהה שורת העמודים / מישור הגג */
+  lineId?: string;
+  planeId?: string;
   /** קו הייחוס של האלמנט (TOS לקורת גג כאשר heightRef=TOS, אחרת ציר) */
   start: Vec3;
   end: Vec3;
@@ -313,7 +338,12 @@ export interface Member {
 }
 
 export interface PurlinInfo {
-  side: 'L' | 'R' | 'M';
+  /** מזהה מישור הגג (קלאסי: L / R / M) */
+  side: string;
+  /** קצה ההתחלה חופשי (לא רכס) */
+  startFree?: boolean;
+  /** מפתח פרמטרי הפטות */
+  paramKey?: string;
   index: number;          // 1 = הקרוב לנקודת ההתחלה
   count: number;
   /** מרחק מנקודת ההתחלה לאורך השיפוע ובהיטל אופקי */

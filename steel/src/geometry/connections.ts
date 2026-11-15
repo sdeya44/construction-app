@@ -1,4 +1,4 @@
-import { add, cross, dot, linePlaneT, norm, scale, sub, v3, type Vec3 } from '../core/vec';
+import { add, cross, dot, linePlaneT, norm, scale, sub, v3, type Plane, type Vec3 } from '../core/vec';
 import { getProfile, tryProfile } from '../profiles/library';
 import type {
   ApprovalStatus, BoltInfo, BoltSpec, CleatParams, Connection, Member, PlateConnParams, Project,
@@ -7,6 +7,8 @@ import type {
 import { localFrame } from './frame';
 import { aabb, aabbOverlap, clash } from './clash';
 import { checkEavePlate } from './eavePlate';
+import type { SectionTopology } from '../model/section';
+import { purlinParams } from './purlins';
 
 /** מידות בורג/אום/דיסקית לפי ISO 4017/4032/7089 (מידע גיאומטרי בלבד — לא מאומת). */
 const HW: Record<number, { s: number; k: number; m: number; w: number; P: number }> = {
@@ -37,8 +39,8 @@ function effPlate(p: Project, type: 'eave' | 'ridge' | 'base', id: string): Plat
   void _s; void _f;
   return { ...base, ...rest, bolt: { ...base.bolt, ...(rest.bolt ?? {}) } };
 }
-export function effCleat(p: Project, side: 'left' | 'right', cleatId: string): CleatParams {
-  const base = p.building.purlins[side].cleat;
+export function effCleat(p: Project, side: string, cleatId: string): CleatParams {
+  const base = purlinParams(p.building.purlins, side).cleat;
   const o = p.cleatOverrides[cleatId] ?? {};
   return { ...base, ...o, bolt: { ...base.bolt, ...(o.bolt ?? {}) } };
 }
@@ -91,7 +93,7 @@ function outlinePerimeter(profile: string): number {
  * עיקרון ייצור: ריתוך במסגריה בלבד, הרכבה בשטח בברגים בלבד. משנה את חיתוכי הקצה של העמודים/קורות
  * בהתאם לעובי הפלטות (מקור אמת אחד — אין גיאומטריה כפולה).
  */
-export function buildConnections(project: Project, members: Member[], byId: Map<string, Member>, supports: SupportPoint[]): ConnResult {
+export function buildConnections(project: Project, members: Member[], byId: Map<string, Member>, supports: SupportPoint[], topo: SectionTopology): ConnResult {
   const res: ConnResult = { members: [], connections: [], issues: [] };
   const b = project.building;
   const mat = b.material;
@@ -101,10 +103,12 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
   for (const f of b.frames) {
     const fi = b.frames.indexOf(f) + 1;
     // ---- ראש עמוד: פלטה מרותכת לעמוד ופלטה מרותכת לקורה (מסגריה), מוברגות זו לזו (שטח)
-    for (const side of ['L', 'R'] as const) {
+    for (const jn of topo.junctions.filter((j) => j.kind === 'cap')) {
+      const side = jn.line.id;
+      const sideName = topo.sec.custom ? `ציר ${jn.line.label}` : side === 'L' ? 'שמאל' : 'ימין';
       const id = `C.EAVE.${f.id}.${side}`;
       const col = byId.get(`${f.id}.COL.${side}`);
-      const raf = byId.get(b.roofType === 'gable' ? `${f.id}.RAF.${side}` : `${f.id}.RAF`);
+      const raf = byId.get(jn.plane.rafterId(f.id));
       const prm = effPlate(project, 'eave', id);
       if (!prm.enabled || !isGen(col) || !isGen(raf) || !col!.endCut) continue;
       const U = col!.endCut!;
@@ -129,7 +133,7 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
         bolts.push(makeBolt(`${id}.B${ci + 1}${ri + 1}`, id, head, n, prm.bolt, split ? 2 * prm.t : prm.t + tf, 'site', split ? [pid, pid2] : [pid, raf!.id], exr, res.members));
       }));
       const d0 = prm.bolt.d + prm.bolt.clearance;
-      const label = `חיבור ראש עמוד ${side === 'L' ? 'שמאל' : 'ימין'} מסגרת ${fi}`;
+      const label = `חיבור ראש עמוד ${sideName} מסגרת ${fi}`;
       const rStart = (raf!.startCut ? linePlaneT(P0, exr, raf!.startCut) : null) ?? dot(sub(raf!.start, P0), exr);
       edgeChecks(label, id, d0, prm.l / 2 - ((prm.rows - 1) / 2) * prm.pitch, prm.w / 2 - ((prm.cols - 1) / 2) * prm.gauge,
         prm.rows > 1 ? prm.pitch : null, prm.cols > 1 ? prm.gauge : null, res.issues);
@@ -161,9 +165,14 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
     }
 
     // ---- רכס: פלטות קצה מרותכות לקורות (מסגריה), מוברגות זו לזו (שטח)
-    if (b.roofType === 'gable') {
-      const id = `C.RIDGE.${f.id}`;
-      const rl = byId.get(`${f.id}.RAF.L`), rr = byId.get(`${f.id}.RAF.R`);
+    for (const rg of topo.ridges) {
+      const legacy = !topo.sec.custom;
+      const id = legacy ? `C.RIDGE.${f.id}` : `C.RIDGE.${f.id}.${rg.pa.id}.${rg.pb.id}`;
+      // rl: הקורה שמשמאל לרכס
+      const aLeft = (rg.ea === 'a' ? rg.pa.b.x : rg.pa.a.x) < rg.x;
+      const [pl0, e0, pr0, e1] = aLeft ? [rg.pa, rg.ea, rg.pb, rg.eb] : [rg.pb, rg.eb, rg.pa, rg.ea];
+      const rl = byId.get(pl0.rafterId(f.id)), rr = byId.get(pr0.rafterId(f.id));
+      const setCut = (m: Member, e: 'a' | 'b', pl: Plane) => { if (e === 'b') m.endCut = pl; else m.startCut = pl; };
       const prm = effPlate(project, 'ridge', id);
       if (prm.enabled && isGen(rl) && isGen(rr)) {
         const rp = getProfile(rl!.profile);
@@ -171,10 +180,10 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
         const sr = Math.abs((rr!.end.z - rr!.start.z) / (rr!.end.x - rr!.start.x));
         const hv = Math.max(rp.props.h * Math.sqrt(1 + sl * sl), getProfile(rr!.profile).props.h * Math.sqrt(1 + sr * sr));
         const Hp = hv + prm.l;
-        const top = rl!.end; // נקודת הרכס על קו TOS
+        const top = v3(rg.x, f.y, rg.z); // נקודת הרכס על קו הייחוס
         const X = v3(1, 0, 0);
-        rl!.endCut = { point: sub(top, scale(X, prm.t)), normal: X };
-        rr!.endCut = { point: add(top, scale(X, prm.t)), normal: X };
+        setCut(rl!, e0, { point: sub(top, scale(X, prm.t)), normal: X });
+        setCut(rr!, e1, { point: add(top, scale(X, prm.t)), normal: X });
         const pl = `${id}.PL1`, pr = `${id}.PL2`;
         res.members.push(partMember(pl, 'plate', `PL${prm.w}x${Hp.toFixed(1)}`, sub(top, scale(X, prm.t)), top, Z, 'top', id, `פלטת קצה PL${prm.t}×${prm.w}×${Math.ceil(Hp)}`, mat));
         res.members.push(partMember(pr, 'plate', `PL${prm.w}x${Hp.toFixed(1)}`, top, add(top, scale(X, prm.t)), Z, 'top', id, `פלטת קצה PL${prm.t}×${prm.w}×${Math.ceil(Hp)}`, mat));
@@ -200,14 +209,15 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
 
     // ---- בסיס. embedded (ברירת מחדל, לפי החלטת המשתמש): פלטה מבוטנת + מוטות עיגון מרותכים במסגריה, העמוד מרותך בשטח.
     //      bolted: פלטה מרותכת לעמוד במסגריה, ברגי עיגון בשטח.
-    for (const side of ['L', 'R'] as const) {
+    for (const ln of topo.sec.lines) {
+      const side = ln.id;
       const id = `C.BASE.${f.id}.${side}`;
       const col = byId.get(`${f.id}.COL.${side}`);
       const prm = effPlate(project, 'base', id);
       if (!prm.enabled || !isGen(col)) continue;
       const X = v3(1, 0, 0);
       const pid = `${id}.PL`;
-      const label = `פלטת בסיס ${side === 'L' ? 'שמאל' : 'ימין'} מסגרת ${fi}`;
+      const label = `פלטת בסיס ${topo.sec.custom ? `ציר ${ln.label}` : side === 'L' ? 'שמאל' : 'ימין'} מסגרת ${fi}`;
       const cp = getProfile(col!.profile);
       const embedded = (prm.mode ?? 'embedded') === 'embedded';
       const base = col!.start;
@@ -266,8 +276,8 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
     const h = pp.props.h;
     const H = sp0.plateH ?? Math.floor((h - 4 * tw - 20) / 10) * 10;
     const gV = H - 2 * sp0.edge;
-    const side = pur.purlin.side === 'R' ? 'right' : 'left';
-    const cl = b.purlins[side].cleat;
+    const side = pur.purlin.paramKey ?? (pur.purlin.side === 'R' ? 'right' : 'left');
+    const cl = purlinParams(b.purlins, side).cleat;
     const supT = supports.filter((x) => x.purlinId === pur.id).map((x) => dot(sub(x.p, pur.start), lf.ex));
     ts.forEach((t, k) => {
       if (!(t > 100 && t < lf.length - 100)) return; // נבדק ב-buildParts (SPLICE_RANGE)
@@ -316,7 +326,7 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
   for (const sp of supports) {
     const pur = byId.get(sp.purlinId), raf = byId.get(sp.rafterId);
     if (!pur || !raf || !pur.purlin) continue;
-    const side = pur.purlin.side === 'R' ? 'right' : 'left';
+    const side = pur.purlin.paramKey ?? (pur.purlin.side === 'R' ? 'right' : 'left');
     const cid = `CL.${sp.purlinId}.${sp.frameId}`;
     const id = `C.PC.${sp.purlinId}.${sp.frameId}`;
     const prm = effCleat(project, side, cid);

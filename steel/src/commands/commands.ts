@@ -2,7 +2,7 @@ import { add, rotateAxis, sub, v3, type Vec3 } from '../core/vec';
 import { degToRad } from '../core/units';
 import { generate, placementBasis } from '../geometry/generate';
 import type { ApprovalStatus, BuildingParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
-import { proposeSplices } from '../geometry/purlins';
+import { proposeSplices, purlinParams } from '../geometry/purlins';
 import { commitNumbering, computeFabrication } from '../fab/marks';
 import { hasErrors, validateBuilding } from '../model/validate';
 import { tryProfile } from '../profiles/library';
@@ -260,9 +260,10 @@ export function respaceFrames(count: number, spacing: number): Command {
 }
 
 /** עדכון פרמטרי פטות לצד אחד. פרמטרי צד אחד אינם משנים את הצד השני. */
-export function setPurlinSide(side: 'left' | 'right', patch: Partial<PurlinSideParams>): Command {
+/** עדכון פרמטרי פטות: side = left / right / מזהה מישור בחתך מודולרי */
+export function setPurlinSide(side: string, patch: Partial<PurlinSideParams>): Command {
   return {
-    label: `עדכון פטות ${side === 'left' ? 'שמאל' : 'ימין'}`,
+    label: `עדכון פטות ${side === 'left' ? 'שמאל' : side === 'right' ? 'ימין' : side}`,
     run: (p) => {
       if (patch.profile !== undefined && !tryProfile(patch.profile)) throw new CommandError(`חתך לא מוכר: ${patch.profile}`);
       for (const k of ['first', 'spacing', 'edgeOffset'] as const) {
@@ -272,12 +273,18 @@ export function setPurlinSide(side: 'left' | 'right', patch: Partial<PurlinSideP
       if (patch.first !== undefined && patch.first < 0) throw new CommandError('מרחק ראשון לא יכול להיות שלילי');
       if (patch.edgeOffset !== undefined && patch.edgeOffset < 0) throw new CommandError('מרחק מהקצה לא יכול להיות שלילי');
       const n = clone(p);
-      n.building.purlins[side] = { ...n.building.purlins[side], ...clone(patch) };
+      writePurlinParams(n, side, { ...purlinParams(n.building.purlins, side), ...clone(patch) });
       const errs = generate(n).issues.filter((i) => i.severity === 'error' && i.code.startsWith('PURLIN'));
       if (errs.length) throw new CommandError(errs.map((e) => e.message).join('\n'));
       return n;
     },
   };
+}
+
+function writePurlinParams(n: Project, key: string, v: PurlinSideParams) {
+  if (key === 'left') n.building.purlins.left = v;
+  else if (key === 'right') n.building.purlins.right = v;
+  else n.building.purlins.planes = { ...(n.building.purlins.planes ?? {}), [key]: v };
 }
 
 export function setPurlinSystem(patch: Partial<Pick<PurlinSystem, 'material' | 'monoStart' | 'splice' | 'pieceBays'>>): Command {
@@ -338,9 +345,9 @@ export function proposeSplicesFor(ids: string[]): Command {
 }
 
 /** עדכון פרמטרי תומך ברירת מחדל לצד, או לתומך בודד (cleatId). */
-export function setCleat(side: 'left' | 'right', patch: Partial<CleatParams>, cleatId?: string): Command {
+export function setCleat(side: string, patch: Partial<CleatParams>, cleatId?: string): Command {
   return {
-    label: cleatId ? `עדכון תומך ${cleatId}` : `עדכון תומכי פטות ${side === 'left' ? 'שמאל' : 'ימין'}`,
+    label: cleatId ? `עדכון תומך ${cleatId}` : `עדכון תומכי פטות ${side === 'left' ? 'שמאל' : side === 'right' ? 'ימין' : side}`,
     run: (p) => {
       for (const [k, v] of Object.entries(patch)) {
         if (typeof v === 'number' && !(v > 0) && k !== 'holeHeight') throw new CommandError('ערך חייב להיות חיובי');
@@ -349,7 +356,7 @@ export function setCleat(side: 'left' | 'right', patch: Partial<CleatParams>, cl
       if (patch.perRow !== undefined && !(Number.isInteger(patch.perRow) && patch.perRow >= 1 && patch.perRow <= 6)) throw new CommandError('ברגים בשורה 1–6');
       const n = clone(p);
       if (cleatId) n.cleatOverrides[cleatId] = { ...(n.cleatOverrides[cleatId] ?? {}), ...clone(patch) };
-      else n.building.purlins[side].cleat = { ...n.building.purlins[side].cleat, ...clone(patch) };
+      else { const cur = purlinParams(n.building.purlins, side); writePurlinParams(n, side, { ...cur, cleat: { ...cur.cleat, ...clone(patch) } }); }
       return n;
     },
   };
