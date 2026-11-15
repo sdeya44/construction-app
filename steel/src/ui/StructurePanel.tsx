@@ -11,6 +11,7 @@ import { store, useStore } from '../store';
 import { LenField, NumField, ProfilePicker, TextField } from './fields';
 import { Icon } from './icons';
 import { KneeEditor, SectionEditor } from './SectionEditor';
+import { MenuPic } from './pics';
 
 export function ProfileDatalist() {
   return (
@@ -107,7 +108,11 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
 
       </>}
       {show('bracing') && <BracingEditor />}
-      {show('frames') && <>
+      {(show('frames') || show('geometry')) && <>
+      <div className="panel-title">אורך המבנה ומסגרות (לאורך Y)</div>
+      <div className="field"><label>אורך המבנה</label><LenField testId="bld-length" mm={frames[frames.length - 1].y - frames[0].y} unit={u} min={1000} onCommit={(v) => store.exec(respaceFrames(frames.length, v / (frames.length - 1)))} /></div>
+      <div className="field"><label>מספר מפתחים</label><NumField testId="bld-bays" value={frames.length - 1} onCommit={(v) => { const nb = Math.max(1, Math.round(v)); store.exec(respaceFrames(nb + 1, (frames[frames.length - 1].y - frames[0].y) / nb)); }} /></div>
+      <div className="hint" style={{ marginTop: 0 }}>אורך ומספר מפתחים ⇒ מרווחים שווים. מרווחים שונים — בטבלה (שינוי מרווח מזיז את כל מה שאחריו) או בלחיצה על המידה בתלת־ממד.</div>
       <div className="panel-title">מסגרות ({frames.length})
         <button className="btn small" data-testid="add-frame" onClick={() => {
           const last = frames[frames.length - 1];
@@ -283,10 +288,13 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-walls" checked={br.walls.enabled} onChange={(e) => set({ walls: { ...br.walls, enabled: e.target.checked } })} />פעיל</label>
       </div>
       {br.walls.enabled && <>
-        <div className="field"><label>סוג</label>
-          <select className="inp" data-testid="br-walls-type" value={br.walls.type ?? 'x'} onChange={(e) => set({ walls: { ...br.walls, type: e.target.value as 'x' | 'portal', portal: br.walls.portal ?? defaultPortal() } })}>
-            <option value="x">X מזוויתנים (מתיחה)</option><option value="portal">אגד B — קורת RHS + שני אלכסונים</option>
-          </select>
+        <div className="choice2" role="radiogroup" aria-label="סוג קשיחות הקיר">
+          {([['x', 'אלכסוני X', 'קושרות X מזוויתנים — עובדות במתיחה', 'brace'], ['portal', 'אגד B', 'קורת RHS בין העמודים + שני אלכסונים קטנים', 'walls']] as const).map(([k, t, dsc, pic]) => (
+            <button key={k} role="radio" aria-checked={(br.walls.type ?? 'x') === k} className={`choice-tile${(br.walls.type ?? 'x') === k ? ' on' : ''}`} data-testid={`br-walls-${k}`}
+              onClick={() => set({ walls: { ...br.walls, type: k, portal: br.walls.portal ?? defaultPortal() } })}>
+              <MenuPic name={pic} size={44} /><b>{t}</b><span>{dsc}</span>
+            </button>
+          ))}
         </div>
         {(br.walls.type ?? 'x') === 'x'
           ? <div className="field prof"><label>חתך</label><ProfilePicker value={br.walls.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ walls: { ...br.walls, profile: v } })} /></div>

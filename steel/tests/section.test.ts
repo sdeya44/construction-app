@@ -118,3 +118,19 @@ describe('חתך מודולרי — מערכת לבניית סוגי סככות'
     expect(d.connections.some((c) => c.type === 'eave')).toBe(true);
   });
 });
+
+describe('מספר צירים', () => {
+  it('חלוקה שווה, הוספה והסרה של צירים; מזהים יציבים; רוחב חדש', async () => {
+    const { setAxisCount, SECTION_TEMPLATES: T } = await import('../src/model/section');
+    const sec = T.find((t) => t.id === 'gable-inner')!.make();
+    const ids = [...sec.lines].sort((a, b) => a.x - b.x).map((l) => l.id);
+    const s4 = setAxisCount(sec, 4);
+    const xs = [...s4.lines].sort((a, b) => a.x - b.x).map((l) => l.x);
+    expect(xs.length).toBe(4);
+    expect(xs[1] - xs[0]).toBeCloseTo(xs[3] - xs[2], 0);
+    expect(s4.lines.some((l) => l.id === ids[1])).toBe(true);
+    const s2 = setAxisCount(sec, 2, 20000);
+    const x2 = [...s2.lines].sort((a, b) => a.x - b.x).map((l) => l.x);
+    expect(x2[1] - x2[0]).toBe(20000);
+  });
+});

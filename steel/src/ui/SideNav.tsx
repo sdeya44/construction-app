@@ -66,8 +66,8 @@ export function SideNav({ nav, setNav, onOpenConn }: { nav: NavKey; setNav: (k: 
     <div className="sidenav">
       <nav className="nav-tree" aria-label="עץ תפריטים">
         {group('structure', 'מבנה', 'tab-structure', 'geometry', [
-          { key: 's:project', label: 'פרויקט והגדרות', pic: 'project' }, { key: 's:geometry', label: 'גיאומטריה וצירים', pic: 'geometry' },
-          { key: 's:profiles', label: 'חתכים וחומר', pic: 'profiles' }, { key: 's:frames', label: 'מסגרות', n: d.grid.filter((g) => g.dir === 'Y').length, pic: 'frames' },
+          { key: 's:project', label: 'פרויקט והגדרות', pic: 'project' }, { key: 's:geometry', label: 'גיאומטריה, צירים ומסגרות', pic: 'geometry' },
+          { key: 's:profiles', label: 'חתכים וחומר', pic: 'profiles' },
         ])}
         {group('roof', 'גג ופטות', 'tab-roof', 'slope', [
           { key: 'r:system', label: 'מערכת פטות', pic: 'purlins' },

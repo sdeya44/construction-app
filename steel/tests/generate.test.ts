@@ -55,7 +55,11 @@ describe('GEO-01 – סככה דו־שיפועית 18×30, 6 מסגרות, 6 מ\
     const topZ = Math.max(...s.startRing.map((p) => p.z));
     // ללא קונזולה: הקורה מוארכת עד קצה פלטת הכיפה (x=-170); פני עליון שם 6000-17; בציר העמוד — 6000
     expect(r.start.x).toBeCloseTo(-170, 6);
-    expect(topZ).toBeCloseTo(6000 - 17, 3);
+    // קצה חופשי בחיתוך 90° לציר: הפינה התחתונה בקו הקצה (x=-170), הפינה העליונה בולטת מעט החוצה
+    const bot = s.startRing.reduce((a, q) => (q.z < a.z ? q : a));
+    expect(bot.x).toBeCloseTo(-170, 3);
+    expect(topZ).toBeLessThan(6000 - 17);
+    expect(Math.abs(r.startCut!.normal.z)).toBeGreaterThan(0.09); // ניצב לציר הקורה (לא אנכי)
     expect(r.start.z + 0.1 * 170).toBeCloseTo(6000, 6);
     expect(r.anchor).toBe('top');
   });

@@ -37,7 +37,7 @@ test('SIM-01/02: בניית סככה מאפס ושינויים — מספר פע
     await click('nav-r:left'); await fill('[data-testid$="-spacing"]', '1.2');
   });
   await task('אגד B בקירות', 'חיזוקים וקשיחות ← קשיחות קירות ← סוג', async () => {
-    await click('nav-b:walls'); await select('br-walls-type', 'portal');
+    await click('nav-b:walls'); await click('br-walls-portal');
   });
   expect((await st(page)).bb).toBeGreaterThan(0);
   await task('אלכסוני עמוד-קורה: ירידה 700', 'חיזוקים וקשיחות ← אלכסוני עמוד-קורה', async () => {

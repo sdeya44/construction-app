@@ -24,7 +24,7 @@ test('USE-01: פרויקט חדש מתבנית מודולרית עם אלכסו�
 test('USE-02: אגד B בקירות דרך הממשק — קורה + 2 אלכסונים, ללא התנגשויות', async ({ page }) => {
   await boot(page);
   await page.getByTestId('nav-b:walls').click();
-  await page.getByTestId('br-walls-type').selectOption('portal');
+  await page.getByTestId('br-walls-portal').click();
   const q = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { beams: d.members.filter((m: any) => /^BB\.[^K]*$/.test(m.id)).length, k: d.members.filter((m: any) => /^BB\..*\.K\d$/.test(m.id)).length, x: d.members.filter((m: any) => m.id.startsWith('BR.W')).length, clash: d.issues.filter((i: any) => i.code === 'CLASH').length }; });
   expect(await q()).toEqual({ beams: 10, k: 8, x: 0, clash: 0 }); // קורת אגד רציפה בכל המפתחים, אלכסונים רק במפתחי האגד
   await page.getByTestId('pb-cont').uncheck();
@@ -91,4 +91,25 @@ test('USE-05: הודעות מקובצות — הסתרת סוג, תקן הכל, 
   await shot(page, 'USE-05_issues');
   await page.getByTestId('restore-all').click();
   await expect(page.getByTestId('igroup-RAFTER_EXT')).toBeVisible();
+});
+
+test('USE-06: חתך אינטראקטיבי — מספר צירים, בחירת מישור, שיפוע עם מנעול גובה', async ({ page }) => {
+  await boot(page);
+  page.on('dialog', (d) => d.accept());
+  await page.getByTestId('nav-s:geometry').click();
+  await page.getByTestId('tpl-mono-multi').click();
+  await page.getByTestId('axis-n').fill('4'); await page.getByTestId('axis-n').press('Enter');
+  const sec = () => page.evaluate(() => (window as any).__ksp.store.state.project.building.section);
+  expect((await sec()).lines.length).toBe(4);
+  const pid = (await sec()).planes[0].id;
+  await page.getByTestId(`isec-pl-${pid}`).click();
+  await expect(page.getByTestId('pl-card')).toBeVisible();
+  // נעילת הגובה הימני, ושינוי שיפוע — הגובה הימני לא משתנה
+  const z1 = (await sec()).planes[0].z1;
+  await page.getByTestId('pl-lock-x1').click();
+  await page.getByTestId('plc-slope').fill('8'); await page.getByTestId('plc-slope').press('Enter');
+  const p0 = (await sec()).planes[0];
+  expect(p0.z1).toBe(z1);
+  expect(Math.abs(((p0.z1 - p0.z0) / (p0.x1 - p0.x0)) * 100 - 8)).toBeLessThan(0.05);
+  await shot(page, 'USE-06_plane_lock');
 });

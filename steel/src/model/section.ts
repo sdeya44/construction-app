@@ -242,3 +242,23 @@ export function moveLines(sec: CustomSection, moves: Map<string, number>): Custo
     planes: sec.planes.map((p) => ({ ...p, x0: p.x0 + delta(p.x0), x1: p.x1 + delta(p.x1) })),
   };
 }
+
+/**
+ * מספר צירים (בקשת משתמש): n צירים במרווחים שווים בין הציר הראשון לאחרון (או לרוחב חדש).
+ * צירים קיימים נשמרים לפי סדר (מזהים יציבים), חסרים נוספים, עודפים פנימיים מוסרים; קצוות מישורי הגג נעים עם הצירים הקרובים.
+ */
+export function setAxisCount(sec: CustomSection, n: number, width?: number): CustomSection {
+  const ls = [...sec.lines].sort((a, b) => a.x - b.x);
+  const N = Math.max(2, Math.min(30, Math.round(n)));
+  const x0 = ls[0].x, x1 = width && width > 500 ? x0 + width : ls[ls.length - 1].x;
+  const xs = Array.from({ length: N }, (_, i) => Math.round(x0 + ((x1 - x0) * i) / (N - 1)));
+  const keepInner = ls.slice(1, -1).slice(0, N - 2);
+  const kept = [ls[0], ...keepInner, ls[ls.length - 1]];
+  const moves = new Map<string, number>();
+  kept.forEach((l, i) => moves.set(l.id, i === kept.length - 1 ? xs[N - 1] : xs[i]));
+  let out = moveLines({ ...sec, lines: kept }, moves);
+  const used = new Set(out.lines.map((l) => l.id));
+  const newId = () => { let k = 1; while (used.has(`C${k}`)) k++; used.add(`C${k}`); return `C${k}`; };
+  for (let i = kept.length - 1; i < N - 1; i++) out = { ...out, lines: [...out.lines, { id: newId(), x: xs[i] }] };
+  return { ...out, template: undefined };
+}

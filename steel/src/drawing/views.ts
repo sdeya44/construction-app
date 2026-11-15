@@ -1,11 +1,12 @@
 import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import { cachedSolidPure, silhouetteEdges } from './solidCache';
+import { partSheet, plateFaceInBox } from './part';
 import { assemblySheet, renderIso } from './assembly';
 import { purlinParams } from '../geometry/purlins';
 import { getProfile } from '../profiles/library';
 import type { Bom } from '../fab/bom';
-import type { Fabrication, MarkedPart } from '../fab/marks';
+import type { Fabrication } from '../fab/marks';
 import type { DerivedModel, DrawingRecord, DrawingType, Member, Project } from '../model/types';
 import { drawArea, fitScale, frameAndTitle, newSheet, today, View, type P, type Sheet, type SheetSize, type TitleInfo } from './sheet';
 
@@ -274,7 +275,15 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
         Cp = { x: 0, y: 0 };
       }
       const box = { x0: Cp.x - R, x1: Cp.x + R, y0: Cp.y - R, y1: Cp.y + R };
-      const v = placeView(sh, box, { ...area, x1: area.x1 - 120 }); setScale(v);
+      // פלטות החיבור (מבט פנים עם מידות וחורים) ברצועה התחתונה, והמבט הראשי מעליה
+      const plateMarks = [...new Map(c.parts.map((x) => fab.parts.find((q) => q.memberId === x)).filter((q): q is NonNullable<typeof q> => !!q && d.byId.get(q.memberId)?.kind === 'plate').map((q) => [q.mark, q])).values()].slice(0, 4);
+      const stripY1 = plateMarks.length ? area.y0 + 74 : area.y0;
+      const v = placeView(sh, box, { ...area, x1: area.x1 - 120, y0: stripY1 + 4 }); setScale(v);
+      if (plateMarks.length) {
+        const sx0 = area.x0, sx1 = area.x1 - 124, w = (sx1 - sx0) / plateMarks.length;
+        plateMarks.forEach((pm, i) => plateFaceInBox(sh, pm, d, { x0: sx0 + i * w, x1: sx0 + (i + 1) * w - 3, y0: area.y0, y1: stripY1 }));
+        sh.ents.push({ k: 'text', p: { x: sx1, y: stripY1 + 2 }, s: 'פלטות החיבור — מידות במ"מ, מרכזי חורים מהשפות', h: 2.2, align: 'right', layer: 'TEXT', bold: true });
+      }
       const clipBox = (a: Vec3, bb: Vec3): [Vec3, Vec3] | null => {
         // קיטום לחלון (בקואורדינטות המבט; ההיטל ליניארי)
         let t0 = 0, t1 = 1;
@@ -325,121 +334,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       break;
     }
     case 'part': {
-      const isAsm = false as boolean;
-      const part: MarkedPart | undefined = isAsm
-        ? (() => { const a = fab.assemblies.find((x) => x.mark === def.ref)!; return fab.byPart.get(a.main); })()
-        : fab.parts.find((x) => x.mark === def.ref);
-      if (!part) break;
-      const m = d.byId.get(part.memberId)!;
-      const f = localFrame(m);
-      const loc = (q: Vec3) => { const r = sub(q, m.start); return { t: dot(r, f.ex) - part.t0, u: dot(r, f.u), v: dot(r, f.v) }; };
-      const L = part.length;
-      const s = cachedSolidPure(m);
-      const all = [...s.startRing, ...s.endRing].map(loc);
-      const umin = Math.min(...all.map((q) => q.u)), umax = Math.max(...all.map((q) => q.u)), vmin = Math.min(...all.map((q) => q.v)), vmax = Math.max(...all.map((q) => q.v));
-      const isPlate = m.kind === 'plate';
-      // מבט חזית (t,v) ומבט עליון (t,u). קנה מידה אורכי מותאם לאורך; רוחבי — מוגדל אם צריך (ללא קנ"מ)
-      const aw = area.x1 - area.x0 - 110;
-      const sx = fitScale(L * 1.08, 1, aw, 1e9);
-      const depthPaper = (vmax - vmin) / sx;
-      const sy = depthPaper < 14 ? fitScale(1, (vmax - vmin) * 1.0, 1e9, 22) : sx;
-      scaleLabel = sx === sy ? `1:${sx}` : `1:${sx} / 1:${sy}*`;
-      if (sx !== sy) sh.ents.push({ k: 'text', p: { x: area.x0 + 16, y: area.y1 - 6 }, s: `* קנ"מ אורכי 1:${sx}, קנ"מ רוחבי 1:${sy} — לייצור לפי המידות בלבד`, h: 2.2, align: 'left', layer: 'TEXT' });
-      sh.scale = sx;
-      const ox = area.x0 + 16, oyF = area.y1 - 40, oyT = oyF - (vmax - vmin) / sy - 30 - (umax - umin) / sy;
-      const PF = (t: number, vv: number): P => ({ x: ox + t / sx, y: oyF - (vmax - vv) / sy });
-      const PT = (t: number, uu: number): P => ({ x: ox + t / sx, y: oyT + (uu - umin) / sy });
-      const ent = (a: P, b2: P, layer: 'OUTLINE' | 'THIN' | 'HIDDEN' = 'OUTLINE') => sh.ents.push({ k: 'line', a, b: b2, layer });
-      const drawMember = (mm: Member, layer: 'OUTLINE' | 'THIN') => {
-        const ss = cachedSolidPure(mm);
-        for (let i = 0; i < ss.edges.length; i += 6) {
-          const a = loc({ x: ss.edges[i], y: ss.edges[i + 1], z: ss.edges[i + 2] }), b2 = loc({ x: ss.edges[i + 3], y: ss.edges[i + 4], z: ss.edges[i + 5] });
-          // קיטום לתחום החלק
-          const t0 = Math.max(Math.min(a.t, b2.t), -1), t1 = Math.min(Math.max(a.t, b2.t), L + 1);
-          if (t1 < t0 - 0.01) continue;
-          const lerp = (q: typeof a, w: typeof a, t: number) => { const k = w.t === q.t ? 0 : (t - q.t) / (w.t - q.t); return { t, u: q.u + (w.u - q.u) * k, v: q.v + (w.v - q.v) * k }; };
-          const A = a.t === b2.t ? a : lerp(a, b2, Math.max(Math.min(a.t, b2.t), 0)), B = a.t === b2.t ? b2 : lerp(a, b2, Math.min(Math.max(a.t, b2.t), L));
-          const f1 = PF(A.t, A.v), f2 = PF(B.t, B.v);
-          if (Math.hypot(f1.x - f2.x, f1.y - f2.y) > 0.2) ent(f1, f2, layer);
-          const t1p = PT(A.t, A.u), t2p = PT(B.t, B.u);
-          if (Math.hypot(t1p.x - t2p.x, t1p.y - t2p.y) > 0.2) ent(t1p, t2p, layer);
-        }
-      };
-      drawMember(m, 'OUTLINE');
-      // חורים
-      for (const h of part.holes) {
-        if (h.face === 'web') sh.ents.push({ k: 'circle', c: PF(h.t, h.c), r: Math.max(h.d / 2 / sy, 0.9), layer: 'HOLE' });
-        if (h.face === 'flange') sh.ents.push({ k: 'circle', c: PT(h.t, h.c), r: Math.max(h.d / 2 / sy, 0.9), layer: 'HOLE' });
-      }
-      // מידות רוחביות של החורים (מציר החלק): בצד שמאל של כל מבט
-      const dimV = (x: number, y0: number, y1: number, label: string) => {
-        sh.ents.push({ k: 'line', a: { x, y: y0 }, b: { x, y: y1 }, layer: 'DIM' });
-        for (const yy of [y0, y1]) sh.ents.push({ k: 'line', a: { x: x - 1.2, y: yy }, b: { x: x + 1.2, y: yy }, layer: 'DIM' });
-        sh.ents.push({ k: 'text', p: { x: x - 1.5, y: (y0 + y1) / 2 }, s: label, h: 2, align: 'center', layer: 'DIM', rot: 90 });
-      };
-      const webC = [...new Set(part.holes.filter((h) => h.face === 'web').map((h) => Math.round(h.c * 10) / 10))].sort((a, b2) => a - b2);
-      if (webC.length) dimV(ox - 6, PF(0, vmin).y, PF(0, webC[0]).y, String(Math.round(webC[0] - vmin)));
-      const flC = [...new Set(part.holes.filter((h) => h.face === 'flange').map((h) => Math.round(h.c * 10) / 10))].sort((a, b2) => a - b2);
-      if (flC.length > 1) dimV(ox - 6, PT(0, flC[0]).y, PT(0, flC[flC.length - 1]).y, String(Math.round(flC[flC.length - 1] - flC[0])));
-      if (false) {
-      }
-      // מידות: אורך כולל, שרשרת חורים
-      const dimH = (t0: number, t1: number, y: number, label?: string) => {
-        const a = { x: ox + t0 / sx, y }, b2 = { x: ox + t1 / sx, y };
-        sh.ents.push({ k: 'line', a, b: b2, layer: 'DIM' });
-        for (const q of [a, b2]) sh.ents.push({ k: 'line', a: { x: q.x, y: q.y - 1.5 }, b: { x: q.x, y: q.y + 1.5 }, layer: 'DIM' });
-        sh.ents.push({ k: 'text', p: { x: (a.x + b2.x) / 2, y: y + 1.2 }, s: label ?? String(Math.round(t1 - t0)), h: 2, align: 'center', layer: 'DIM' });
-      };
-      const yLen = oyT - 8;
-      dimH(0, L, yLen, `${Math.round(L)}`);
-      const webT = [...new Set(part.holes.filter((h) => h.face !== 'section').map((h) => Math.round(h.t * 10) / 10))].sort((a, b2) => a - b2);
-      if (webT.length) {
-        const chain = [0, ...webT, L];
-        const yc = oyF + 8;
-        for (let i = 1; i < chain.length; i++) if (chain[i] - chain[i - 1] > 0.5) dimH(chain[i - 1], chain[i], yc);
-      }
-      // חתך (u, v) מימין, וחורים במישור החתך
-      const pr0 = getProfile(m.profile);
-      const ssc = fitScale(Math.max(umax - umin, 1), Math.max(vmax - vmin, 1), 70, 60);
-      const sxC = area.x1 - 60, syC = oyF - 30;
-      const PC = (uu: number, vv: number): P => ({ x: sxC + (uu - (umin + umax) / 2) / ssc, y: syC + (vv - (vmin + vmax) / 2) / ssc });
-      const ring = s.startRing.map(loc);
-      sh.ents.push({ k: 'poly', pts: ring.map((q) => PC(q.u, q.v)), closed: true, layer: 'CUT', fill: true });
-      for (const h of part.holes.filter((x) => x.face === 'section')) sh.ents.push({ k: 'circle', c: PC(h.c, h.c2 ?? 0), r: h.d / 2 / ssc, layer: 'HOLE' });
-      sh.ents.push({ k: 'text', p: { x: sxC, y: syC - (vmax - vmin) / 2 / ssc - 6 }, s: `חתך ${pr0.name} 1:${ssc}`, h: 2.2, align: 'center', layer: 'TEXT' });
-      // מכלול: חלקים משניים
-      const rows: string[] = [];
-      if (isAsm) {
-        const a = fab.assemblies.find((x) => x.mark === def.ref)!;
-        for (const pid of a.parts.filter((x) => x !== a.main)) {
-          const sp = fab.byPart.get(pid)!;
-          const mm = d.byId.get(sp.memberId)!;
-          drawMember(mm, 'THIN');
-          const c0 = cachedSolidPure(mm).startRing.map(loc);
-          const tc = c0.reduce((s1, q) => s1 + q.t, 0) / c0.length, vc = Math.max(...c0.map((q) => q.v));
-          sh.ents.push({ k: 'text', p: PF(tc, vc + 30 * sy), s: sp.mark, h: 2, align: 'center', layer: 'MARK' });
-        }
-        const cnt = new Map<string, { q: number; p: MarkedPart }>();
-        for (const pid of a.parts) { const sp = fab.byPart.get(pid)!; const e = cnt.get(sp.mark) ?? { q: 0, p: sp }; e.q++; cnt.set(sp.mark, e); }
-        rows.push(`מכלול ${a.mark} · משקל ${a.weight.toFixed(1)} ק"ג · כמות בפרויקט ${fab.assemblies.filter((x) => x.mark === a.mark).length}`);
-        for (const [mk, e] of [...cnt.entries()].sort((x, y) => num(x[0], y[0]))) rows.push(`${mk}  ×${e.q}   ${e.p.desc}   ${e.p.profile}   L=${Math.round(e.p.length)}   ${e.p.weight.toFixed(1)} ק"ג`);
-      } else {
-        const qty = fab.parts.filter((x) => x.mark === part.mark).length;
-        rows.push(`סימון: ${part.mark}   כמות: ${qty}`);
-        rows.push(`תיאור: ${part.desc}`);
-        rows.push(`חתך: ${part.profile}   חומר: ${part.material}`);
-        rows.push(`אורך: ${Math.round(part.length)} מ"מ   משקל יח': ${part.weight.toFixed(2)} ק"ג   סה"כ: ${(part.weight * qty).toFixed(1)} ק"ג`);
-        rows.push(`חיתוך קצה: התחלה ${part.cutStart}° · סוף ${part.cutEnd}° (מהניצב)`);
-        const hs = new Map<number, number>();
-        for (const h of part.holes) hs.set(h.d, (hs.get(h.d) ?? 0) + 1);
-        rows.push(`חורים: ${[...hs.entries()].map(([dd, q]) => `${q}×Ø${dd}`).join(', ') || 'אין'}`);
-        if (isPlate) rows.push('פלטה: מבט עליון = פני הפלטה עם החורים');
-        if (part.provisional) rows.push('⚠ סימון זמני — יש להריץ "מספור" לפני הפצה');
-      }
-      let y = syC - 45;
-      for (const r of rows) { sh.ents.push({ k: 'text', p: { x: area.x1 - 4, y }, s: r, h: 2.4, align: 'right', layer: 'TEXT' }); y -= 4.4; }
-      sh.ents.push({ k: 'text', p: { x: ox, y: oyF + 16 }, s: 'מבט חזית', h: 2.4, align: 'left', layer: 'TEXT' });
-      sh.ents.push({ k: 'text', p: { x: ox, y: oyT - 16 }, s: 'מבט עליון', h: 2.4, align: 'left', layer: 'TEXT' });
+      scaleLabel = partSheet(sh, fab, d, def.ref!);
       break;
     }
   }

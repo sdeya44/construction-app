@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { setKneeBraces, setSection } from '../commands/commands';
 import { defaultKneeBraces } from '../geometry/knee';
-import { lineLabel, moveLines, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
+import { lineLabel, moveLines, setAxisCount, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
 import { store, useStore } from '../store';
 import { LenField, NumField, ProfilePicker } from './fields';
 import { Icon } from './icons';
@@ -52,6 +52,11 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
   const slope = (pl: RoofPlaneDef) => ((pl.z1 - pl.z0) / (pl.x1 - pl.x0)) * 100;
   return (
     <>
+      <div className="axis-count" data-testid="axis-count">
+        <div className="field"><label>מספר צירי עמודים</label><NumField testId="axis-n" value={sec.lines.length} onCommit={(v) => apply(setAxisCount(sec, v), 'מספר צירים')} /></div>
+        <div className="field"><label>רוחב בין הצירים הקיצוניים</label><LenField testId="axis-w" mm={Math.max(...sec.lines.map((l) => l.x)) - Math.min(...sec.lines.map((l) => l.x))} unit={u} onCommit={(v) => apply(setAxisCount(sec, sec.lines.length, v), 'רוחב כולל')} /></div>
+        <div className="hint" style={{ margin: 0 }}>הצירים מחולקים שווה; אחר כך אפשר לשנות כל מפתח בשרטוט (לחיצה על המידה) או לגרור ציר.</div>
+      </div>
       <div className="sec-prev"><InteractiveSection sec={sec} apply={apply} /></div>
       <div className="panel-title">צירי עמודים ({lines.length})
         <button className="btn small" data-testid="sec-add-line" onClick={() => {
@@ -194,6 +199,7 @@ export function SectionPreview({ section, small }: { section: CustomSection; sma
 export function InteractiveSection({ sec, apply }: { sec: CustomSection; apply: (s: CustomSection, label?: string) => void }) {
   const W = 300, H = 170, padX = 18, padTop = 26, padBot = 40;
   const [drag, setDrag] = useState<{ id: string; x: number } | null>(null);
+  const [selPl, setSelPl] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ kind: 'span' | 'ovl' | 'ovr' | 'z'; key: string; at: { x: number; y: number }; value: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const lines0 = [...sec.lines].sort((a, b) => a.x - b.x);
@@ -247,7 +253,14 @@ export function InteractiveSection({ sec, apply }: { sec: CustomSection; apply: 
     <div className="isec" data-testid="isec">
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="sec-svg isec-svg" onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} role="img" aria-label="עורך חתך">
         <line x1={0} y1={Y(0)} x2={W} y2={Y(0)} className="g" />
-        {sec.planes.map((p) => <line key={p.id} x1={X(p.x0)} y1={Y(p.z0)} x2={X(p.x1)} y2={Y(p.z1)} className="r" />)}
+        {sec.planes.map((p) => (
+          <g key={p.id} className={`isec-pl${selPl === p.id ? ' on' : ''}`} onClick={() => setSelPl(selPl === p.id ? null : p.id)} data-testid={`isec-pl-${p.id}`}>
+            <line x1={X(p.x0)} y1={Y(p.z0)} x2={X(p.x1)} y2={Y(p.z1)} className="r" />
+            <line x1={X(p.x0)} y1={Y(p.z0)} x2={X(p.x1)} y2={Y(p.z1)} className="hit" />
+            {/* מנעול ליד הקצה שגובהו נשמר בשינוי שיפוע */}
+            <text x={X((p.fixed ?? p.start ?? 'x0') === 'x0' ? p.x0 : p.x1)} y={Y((p.fixed ?? p.start ?? 'x0') === 'x0' ? p.z0 : p.z1) + 11} className="t lock">🔒</text>
+          </g>
+        ))}
         {lines.map((l, i) => (
           <g key={l.id} className={`isec-ax${drag?.id === l.id ? ' on' : ''}`} onPointerDown={onDown(l.id)} data-testid={`isec-ax-${i}`}>
             <line x1={X(l.x)} y1={Y(0)} x2={X(l.x)} y2={Y(topAt(l.x))} className="c" />
@@ -286,7 +299,31 @@ export function InteractiveSection({ sec, apply }: { sec: CustomSection; apply: 
           onKeyDown={(e) => { if (e.key === 'Enter') { const v = Number((e.target as HTMLInputElement).value.replace(',', '.')); if (Number.isFinite(v)) commitEdit(v * 1000); else setEdit(null); } if (e.key === 'Escape') setEdit(null); }}
           onBlur={(e) => { const v = Number(e.target.value.replace(',', '.')); if (Number.isFinite(v) && Math.abs(v * 1000 - edit.value) > 0.5) commitEdit(v * 1000); else setEdit(null); }} />
       )}
-      <div className="hint" style={{ margin: '2px 4px' }}>גרור ציר להזזה (Shift = דיוק 10 מ"מ) · לחץ על מידה או גובה כדי להקליד ערך (מטר)</div>
+      {selPl && (() => {
+        const pl = sec.planes.find((q) => q.id === selPl);
+        if (!pl) return null;
+        const i = sec.planes.indexOf(pl);
+        const fixed = pl.fixed ?? pl.start ?? 'x0';
+        const slope = ((pl.z1 - pl.z0) / (pl.x1 - pl.x0)) * 100;
+        const setP = (patch: Partial<RoofPlaneDef>, label: string) => apply({ ...sec, template: undefined, planes: sec.planes.map((q) => (q.id === pl.id ? { ...q, ...patch } : q)) }, label);
+        const setSlope = (pct: number) => {
+          const sl = pct / 100, dx = pl.x1 - pl.x0;
+          setP(fixed === 'x0' ? { z1: Math.round(pl.z0 + sl * dx) } : { z0: Math.round(pl.z1 - sl * dx) }, 'שינוי שיפוע');
+        };
+        const lockBtn = (e: 'x0' | 'x1') => (
+          <button className={`lock-btn${fixed === e ? ' on' : ''}`} data-testid={`pl-lock-${e}`} title={fixed === e ? 'גובה זה נשמר כשמשנים שיפוע' : 'נעילת גובה זה'} onClick={() => setP({ fixed: e }, 'נעילת גובה')}>{fixed === e ? '🔒' : '🔓'}</button>
+        );
+        return (
+          <div className="pl-card" data-testid="pl-card">
+            <div className="pl-card-h"><b>מישור גג {i + 1}</b><button className="icon-btn" onClick={() => setSelPl(null)}>✕</button></div>
+            <div className="pl-row"><label>שיפוע</label><NumField testId="plc-slope" value={Math.round(slope * 100) / 100} suffix="%" onCommit={setSlope} /></div>
+            <div className="pl-row"><label>גובה בצד שמאל</label><LenField testId="plc-z0" mm={pl.z0} unit="m" onCommit={(v) => setP({ z0: v }, 'שינוי גובה')} />{lockBtn('x0')}</div>
+            <div className="pl-row"><label>גובה בצד ימין</label><LenField testId="plc-z1" mm={pl.z1} unit="m" onCommit={(v) => setP({ z1: v }, 'שינוי גובה')} />{lockBtn('x1')}</div>
+            <div className="hint" style={{ margin: 0 }}>🔒 = הגובה שנשאר קבוע כשמשנים את השיפוע. שינוי גובה ישירות משנה את השיפוע.</div>
+          </div>
+        );
+      })()}
+      <div className="hint" style={{ margin: '2px 4px' }}>לחץ על קו גג לשינוי שיפוע וגבהים (עם מנעול) · גרור ציר להזזה (Shift = דיוק 10 מ"מ) · לחץ על מידה כדי להקליד ערך (מטר)</div>
     </div>
   );
 }

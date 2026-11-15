@@ -1,4 +1,4 @@
-import { add, norm, sub, v3, type Plane, type Vec3 } from '../core/vec';
+import { add, dot, norm, scale, sub, v3, type Plane, type Vec3 } from '../core/vec';
 import { getProfile } from '../profiles/library';
 import type {
   DerivedModel, GridLine, Member, ModelNode, Project, RoofInfo, ValidationIssue,
@@ -78,13 +78,18 @@ export function generate(project: Project): DerivedModel {
       const under = new Map<string, Plane>();
       for (const pl of sec!.planes) {
         const A = v3(pl.a.x, y, pl.a.z), B = v3(pl.b.x, y, pl.b.z);
-        under.set(pl.id, underPlane(A, B, underOffset));
+        const up = underPlane(A, B, underOffset);
+        under.set(pl.id, up);
+        // קצה חופשי (מרזב/קונזולה): חיתוך ניצב לציר הקורה (90°), התחתון בקו הקצה — החלטת משתמש 15.11.2026.
+        // קצה ברכס או בצד עמוד — נחתך מחדש בבניית החיבור.
+        const exR = norm(sub(B, A));
+        const below = (P: Vec3) => add(P, scale(Z, dot(sub(up.point, P), up.normal) / dot(Z, up.normal)));
         const side = pl.id === 'L' || pl.id === 'R' ? pl.id : undefined;
         members.push({
           id: pl.rafterId(f.id), kind: 'rafter', frameId: f.id, side, planeId: pl.id,
           label: sec!.custom ? `קורת גג ${pl.label} מסגרת ${fi + 1}` : `קורת גג ${side === 'L' ? 'שמאל' : side === 'R' ? 'ימין' : ''} מסגרת ${fi + 1}`.replace('  ', ' '),
           start: A, end: B, profile: b.rafterProfile, material: b.material, rollDeg: 0, mirror: false,
-          anchor, refUp: Z, startCut: { point: A, normal: X }, endCut: { point: B, normal: X }, source: 'generated', manualPlacement: false,
+          anchor, refUp: Z, startCut: { point: below(A), normal: exR }, endCut: { point: below(B), normal: exR }, source: 'generated', manualPlacement: false,
         });
       }
       for (const r of T.ridges) nodes.push({ id: sec!.custom ? `${f.id}.N.RG.${r.pa.id}.${r.pb.id}` : `${f.id}.N.RG`, p: v3(r.x, y, r.z), frameId: f.id, role: 'רכס' });

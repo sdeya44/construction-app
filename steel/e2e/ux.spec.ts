@@ -106,9 +106,11 @@ test('UX-05: עץ תפריטים — בחירת צומת מציגה טבלה; ש
   await page.getByTestId('ctable-eave').getByText('EAVE.F2.L', { exact: true }).click();
   await expect(page.getByTestId('conn-id')).toHaveText('C.EAVE.F2.L');
   await expect(page.getByTestId('cp-split')).toHaveValue('1');
-  await page.getByTestId('nav-s:frames').click();
-  await expect(page.getByTestId('frames-table')).toBeVisible();
-  await expect(page.getByTestId('width')).toHaveCount(0); // צומת משני מציג רק את החלק שלו
+  await page.getByTestId('nav-s:geometry').click();
+  await expect(page.getByTestId('frames-table')).toBeVisible(); // אורך ומסגרות — חלק מהגיאומטריה
+  await expect(page.getByTestId('columnProfile')).toHaveCount(0); // צומת משני מציג רק את החלק שלו
+  await page.getByTestId('bld-length').fill('36'); await page.getByTestId('bld-length').press('Enter');
+  expect(await page.evaluate(() => { const f = (window as any).__ksp.store.state.project.building.frames; return f[f.length - 1].y - f[0].y; })).toBe(36000);
   await shot(page, 'UX-05_tree');
 });
 
