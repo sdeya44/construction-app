@@ -10,7 +10,7 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     await page.getByTestId('tab-roof').click();
     const L = await purl(page, 'L'), R = await purl(page, 'R');
     expect(L[0][0]).toBe('PL.L.01'); expect(R[0][0]).toBe('PL.R.01');
-    expect(L.map((x: any) => Math.round(x[3]))).toEqual([300, 1800, 3300, 4800, 6300, 7800, 9216]); // קצה הקורה המוארכת עד פלטת הכיפה
+    expect(L.map((x: any) => Math.round(x[3]))).toEqual([300, 1800, 3300, 4800, 6300, 7800, 9137]); // הפטה האחרונה יושבת כולה על הקורה (78.5 מ"מ פנימה מהקצה)
     await expect(page.getByTestId('left-layout')).toContainText('שארית');
     await shot(page, 'ROOF_panel_iso');
     await page.getByTestId('left-spacing').fill('1.2'); await page.getByTestId('left-spacing').press('Enter');
@@ -99,7 +99,8 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     await page.getByTestId('monoStart').selectOption('low');
     const M2 = await purl(page, 'M');
     expect(M1[0][1]).not.toBe(M2[0][1]);
-    expect(Math.round(M2[0][3])).toBe(0);
+    expect(M2[0][3]).toBeGreaterThan(0); // הפטה הראשונה בקצה חופשי יושבת על הקורה
+    expect(M2[0][3]).toBeLessThanOrEqual(90);
     await setView(page, 'front');
     await shot(page, 'ROOF05_mono');
   });

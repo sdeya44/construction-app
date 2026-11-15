@@ -27,7 +27,7 @@ function SideEditor({ side, title, items }: { side: 'left' | 'right'; title: str
         <div className="field"><label>חתך</label><TextField ltr list="profiles" testId={tid('profile')} value={prm.profile} onCommit={(v) => set({ profile: v.toUpperCase().replace(/\s/g, '') })} /></div>
         <div className="field"><label>{mono ? 'מרחק ראשון מקצה ההתחלה' : 'מרחק ראשון מהרכס'}</label><LenField testId={tid('first')} mm={prm.first} unit={u} onCommit={(v) => set({ first: v })} /></div>
         <div className="field"><label>מרווח רגיל</label><LenField testId={tid('spacing')} mm={prm.spacing} unit={u} onCommit={(v) => set({ spacing: v })} /></div>
-        <div className="field"><label>פטה אחרונה – מרחק מהקצה</label><LenField testId={tid('edge')} mm={prm.edgeOffset} unit={u} onCommit={(v) => set({ edgeOffset: v })} /></div>
+        <div className="field"><label title="מקצה קורת הגג עד הפנים החיצוניות של הפטה או התומך — הפטה יושבת כולה על הקורה">פטה אחרונה – מרווח מקצה הקורה</label><LenField testId={tid('edge')} mm={prm.edgeOffset} unit={u} onCommit={(v) => set({ edgeOffset: v })} /></div>
         <div className="field"><label>אופן מדידה</label>
           <select className="inp" value={prm.measure} data-testid={tid('measure')} onChange={(e) => set({ measure: e.target.value as PurlinSideParams['measure'] })}>
             <option value="slope">לאורך השיפוע</option><option value="horizontal">בהיטל אופקי (מסומן)</option>
@@ -142,6 +142,16 @@ export function RoofPanel({ section }: { section?: RoofSection } = {}) {
       <div className="field"><label>עובי פלטת המשך</label><NumField testId="ps-t" value={pu.splice.plateT} suffix='מ"מ' onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, plateT: v } }))} /></div>
       <div className="field"><label>קוטר בורג</label><NumField testId="ps-d" value={pu.splice.bolt.d} suffix="M" onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, bolt: { ...pu.splice.bolt, d: Math.round(v) } } }))} /></div>
       <div className="field"><label>מרחק ברגים מהתפר</label><NumField value={pu.splice.jointOffset} suffix='מ"מ' onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, jointOffset: v } }))} /></div>
+      <div className="field"><label>אורך קטע פטה</label>
+        <select className="inp" data-testid="piece-bays" value={pu.pieceBays ?? 0} onChange={(e) => exec(setPurlinSystem({ pieceBays: Number(e.target.value) }))}>
+          <option value={0}>אוטומטי לפי חומר גלם ({(p.settings.stockLength / 1000).toFixed(1)} מ')</option>
+          {[1, 2, 3, 4].map((n) => {
+            const fr = p.building.frames.map((f) => f.y).sort((a, b) => a - b);
+            const len = fr.length > n ? fr[n] - fr[0] : 0;
+            return <option key={n} value={n}>{n} {n === 1 ? 'מפתח' : 'מפתחים'}{len ? ` (≈${(len / 1000).toFixed(2)} מ')` : ''}</option>;
+          })}
+        </select>
+      </div>
       <div className="row">
         <button className="btn" data-testid="propose-purlin-splices" onClick={() => exec(proposeSplicesFor(purlins.map((m) => m.id)))}>הצעת חיבורי המשך לכל הפטות</button>
         <button className="btn" disabled={!nSpl} onClick={() => exec({

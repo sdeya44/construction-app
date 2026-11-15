@@ -6,6 +6,7 @@ import type {
 } from '../model/types';
 import { localFrame } from './frame';
 import { aabb, aabbOverlap, clash } from './clash';
+import { checkEavePlate } from './eavePlate';
 
 /** מידות בורג/אום/דיסקית לפי ISO 4017/4032/7089 (מידע גיאומטרי בלבד — לא מאומת). */
 const HW: Record<number, { s: number; k: number; m: number; w: number; P: number }> = {
@@ -133,17 +134,14 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       edgeChecks(label, id, d0, prm.l / 2 - ((prm.rows - 1) / 2) * prm.pitch, prm.w / 2 - ((prm.cols - 1) / 2) * prm.gauge,
         prm.rows > 1 ? prm.pitch : null, prm.cols > 1 ? prm.gauge : null, res.issues);
       const hwb = hw(prm.bolt.d);
-      const rr = hwb.s / Math.sqrt(3) + 2; // רדיוס אום/ראש (פינות) + מרווח
       const cosA = Math.abs(dot(exr, v3(1, 0, 0))) || 1;
       if (split) {
         // פלטת הקורה בתחום הקורה
         if (-prm.l / 2 < rStart - 1) issue({ code: 'BOLT_OUTSIDE', severity: 'error', elementId: id, message: `${label}: פלטת הקורה חורגת מקצה קורת הגג — הגדל קונזולה או קצר את הפלטה` });
-        for (const gy of grid(prm.cols, prm.gauge)) for (const px of grid(prm.rows, prm.pitch)) {
-          // אום מעל פלטת הקורה: חייב להיות מחוץ לרוחב אגף הקורה
-          if (Math.abs(gy) - rr < rp.props.b / 2) { issue({ code: 'BOLT_ACCESS', severity: 'error', elementId: id, message: `${label}: אום מעל פלטת הקורה מתנגש באגף הקורה — מרווח רוחבי ${prm.gauge} קטן מ-${Math.ceil(rp.props.b + 2 * rr)}; הגדל מרווח ורוחב פלטה` }); break; }
-          // ראש מתחת לפלטת העמוד: מחוץ להיטל העמוד
-          if (Math.abs(px) * cosA - rr < cp.props.h / 2 && Math.abs(gy) - rr < cp.props.b / 2) { issue({ code: 'BOLT_ACCESS', severity: 'error', elementId: id, message: `${label}: ראש בורג מתחת לפלטת העמוד בתוך היטל העמוד — הגדל מרווח לאורך הקורה` }); break; }
-        }
+        const ck = checkEavePlate(prm, raf!.profile, col!.profile, cosA);
+        if (ck.bolts.some((x) => x.nutHit)) issue({ code: 'EAVE_FIT', severity: 'error', elementId: id, message: `${label}: אום מעל פלטת הקורה מתנגש באגף הקורה — פתח "בדיקת פלטה" להצעת מידות` });
+        if (ck.bolts.some((x) => x.headHit)) issue({ code: 'EAVE_FIT', severity: 'error', elementId: id, message: `${label}: ראש בורג מתחת לפלטת העמוד בתוך היטל העמוד — פתח "בדיקת פלטה" להצעת מידות` });
+        if (!ck.coverOk) issue({ code: 'EAVE_FIT', severity: 'warning', elementId: id, message: `${label}: הפלטה אינה מכסה את חתך העמוד עם מקום לריתוך` });
       } else {
         for (const bo of bolts) {
           const tb = dot(sub(bo.p, P0), exr);

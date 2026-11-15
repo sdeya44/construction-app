@@ -54,6 +54,9 @@ test.describe('M3 – תומכים וחיבורים', () => {
     await expect(page.getByTestId('conn-id')).toHaveText('C.EAVE.F2.L');
     await page.getByTestId('cp-t').fill('25'); await page.getByTestId('cp-t').press('Enter');
     await page.getByTestId('cp-cols').fill('3'); await page.getByTestId('cp-cols').press('Enter');
+    // בורג אמצעי באגף הקורה — חלון בדיקת הפלטה מתריע
+    await expect(page.getByTestId('eave-check')).toBeVisible();
+    await page.getByTestId('eave-keep').click();
     await page.getByTestId('cp-w').fill('260'); await page.getByTestId('cp-w').press('Enter');
     await page.getByTestId('conn-status').selectOption('for-review');
     let c = await conn(page, 'C.EAVE.F2.L');

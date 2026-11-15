@@ -30,9 +30,8 @@ describe('ROOF – פריסת פטות', () => {
     expect(s.slice(0, 4)).toEqual([300, 1800, 3300, 4800]);
     // מרחק אמיתי במרחב בין שתי פטות עוקבות = 1500
     const L = purl(geo(), 'L');
-    // פטה אחרונה בקצה הקורה המוארכת (x=-170)
-    expect(L[L.length - 1].start.x).toBeCloseTo(-170, 6);
-    expect(L[L.length - 1].purlin!.sSlope).toBeCloseTo(Math.hypot(9170, 917), 6);
+    // פטה אחרונה יושבת כולה על הקורה המוארכת: פני האגף (78.5 מ"מ מציר הווב, פתיחה לכיוון המרזב) בקצה הקורה
+    expect(L[L.length - 1].purlin!.sSlope).toBeCloseTo(Math.hypot(9170, 917) - 78.5, 6);
     expect(Math.hypot(L[1].start.x - L[0].start.x, L[1].start.z - L[0].start.z)).toBeCloseTo(1500, 6);
   });
   it('ROOF-03: שינוי מרווח שמאל אינו משנה את ימין', () => {
@@ -47,11 +46,10 @@ describe('ROOF – פריסת פטות', () => {
     p.building.rafterOverhangLeft = 800;
     const L = purl(p, 'L');
     const Ls = Math.hypot(9800, 980);
-    expect(L[L.length - 1].purlin!.sSlope).toBeCloseTo(Ls, 6);
-    expect(L[L.length - 1].start.x).toBeCloseTo(-800, 6); // בקצה החיצוני של הקונזולה
+    expect(L[L.length - 1].purlin!.sSlope).toBeCloseTo(Ls - 78.5, 6); // פני הפטה בקצה החיצוני של הקונזולה
     const spans = L.slice(1).map((m) => m.purlin!.spanBefore);
     for (const s of spans.slice(0, -1)) expect(s).toBeCloseTo(1500, 9);
-    expect(spans[spans.length - 1]).toBeCloseTo(Ls - 300 - 1500 * (spans.length - 1), 6);
+    expect(spans[spans.length - 1]).toBeCloseTo(Ls - 78.5 - 300 - 1500 * (spans.length - 1), 6);
     expect(spans[spans.length - 1]).toBeLessThanOrEqual(1500);
   });
   it('ROOF-04: שארית זעירה מדווחת כאזהרה', () => {
@@ -77,10 +75,11 @@ describe('ROOF – פריסת פטות', () => {
         const M = purl(p, 'M');
         // הקורה מוארכת 170 מ"מ מעבר לכל ציר (חצי פלטת כיפה)
         const L = Math.hypot(6340, 6340 / 6);
-        expect(M[0].purlin!.sSlope).toBe(0);
-        expect(M[M.length - 1].purlin!.sSlope).toBeCloseTo(L, 6);
-        const startHigh = (start === 'high') === (eR > eL);
-        expect(M[0].start.x).toBeCloseTo(startHigh ? 6170 : -170, 6);
+        // הפטה הראשונה והאחרונה יושבות כולן על הקורה (חתך + תומך בתוך הקורה)
+        expect(M[0].purlin!.sSlope).toBeGreaterThan(0);
+        expect(M[0].purlin!.sSlope).toBeLessThanOrEqual(90);
+        expect(M[M.length - 1].purlin!.sSlope).toBeGreaterThanOrEqual(L - 90);
+        expect(generate(p).issues.filter((i) => i.code === 'PURLIN_OVERHANG')).toEqual([]);
         for (const m of M.slice(1, -1)) expect(m.purlin!.spanBefore).toBeCloseTo(1500, 9);
         expect(generate(p).issues.filter((i) => i.severity === 'error')).toEqual([]);
       }

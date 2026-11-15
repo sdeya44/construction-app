@@ -36,6 +36,9 @@ test('UX-02: בחירה מרובה — "משתנה" אינו משנה דבר; ע
   await expect(page.getByTestId('multi-material')).toHaveClass(/varies/);
   // חתך משותף — שינוי חל על שלושתם; ביטול אחד מחזיר
   await page.getByTestId('multi-profile').fill('IPE360'); await page.getByTestId('multi-profile').press('Enter');
+  // קורה רחבה יותר ⇒ אום מתנגש באגף — חלון בדיקת הפלטה קופץ
+  await expect(page.getByTestId('eave-check')).toBeVisible();
+  await page.getByTestId('eave-keep').click();
   const prof = () => page.evaluate(() => ['F1.RAF.L', 'F2.RAF.L', 'F3.RAF.L'].map((id) => (window as any).__ksp.store.state.derived.byId.get(id).profile));
   expect(await prof()).toEqual(['IPE360', 'IPE360', 'IPE360']);
   const mats = await page.evaluate(() => ['F1.RAF.L', 'F2.RAF.L'].map((id) => (window as any).__ksp.store.state.derived.byId.get(id).material));
@@ -105,4 +108,18 @@ test('UX-05: עץ תפריטים — בחירת צומת מציגה טבלה; ש
   await expect(page.getByTestId('frames-table')).toBeVisible();
   await expect(page.getByTestId('width')).toHaveCount(0); // צומת משני מציג רק את החלק שלו
   await shot(page, 'UX-05_tree');
+});
+
+test('UX-06: שינוי פרופיל עמוד/קורה — חלון בדיקת פלטת ראש עמוד עם התנגשות והצעה; החלה מתקנת', async ({ page }) => {
+  await boot(page);
+  await page.getByTestId('tab-structure').click();
+  await page.getByTestId('columnProfile').fill('HEA300'); await page.getByTestId('columnProfile').press('Enter');
+  await expect(page.getByTestId('eave-check')).toBeVisible();
+  await expect(page.getByTestId('eave-cur')).toContainText('התנגשות');
+  await expect(page.getByTestId('eave-sug')).toContainText('תקין');
+  await shot(page, 'UX-06_eave_check');
+  await page.getByTestId('eave-apply-default').click();
+  await expect(page.getByTestId('eave-check')).toHaveCount(0);
+  const n = await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'EAVE_FIT').length);
+  expect(n).toBe(0);
 });

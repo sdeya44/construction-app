@@ -280,7 +280,7 @@ export function setPurlinSide(side: 'left' | 'right', patch: Partial<PurlinSideP
   };
 }
 
-export function setPurlinSystem(patch: Partial<Pick<PurlinSystem, 'material' | 'monoStart' | 'splice'>>): Command {
+export function setPurlinSystem(patch: Partial<Pick<PurlinSystem, 'material' | 'monoStart' | 'splice' | 'pieceBays'>>): Command {
   return {
     label: 'עדכון מערכת פטות',
     run: (p) => {
@@ -322,8 +322,10 @@ export function proposeSplicesFor(ids: string[]): Command {
         const L = Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y, m.end.z - m.start.z);
         let ts: number[];
         if (m.purlin) {
-          const sup = d.supports.filter((s) => s.purlinId === id).map((s) => s.p.y - m.start.y);
-          ts = proposeSplices(L, stock, sup);
+          const sup = d.supports.filter((s) => s.purlinId === id).map((s) => s.p.y - m.start.y).sort((a, b) => a - b);
+          const nb = p.building.purlins.pieceBays ?? 0;
+          // אורך קטע לפי מספר מפתחים (החלטת משתמש): תפר מעל כל N מסגרות
+          ts = nb > 0 ? sup.filter((_, i) => i > 0 && i < sup.length - 1 && i % nb === 0) : proposeSplices(L, stock, sup);
         } else {
           const k = Math.ceil(L / stock);
           ts = k > 1 ? Array.from({ length: k - 1 }, (_, i) => (L * (i + 1)) / k) : [];

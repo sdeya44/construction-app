@@ -13,6 +13,7 @@ import { ProductionView } from './ProductionView';
 import { CommandPalette, ConnCard, ContextBar, MarkingMenu, connectionsOf, type Cmd } from './Overlays';
 import { KIND_LABEL } from './TreePanel';
 import { SideNav, type NavKey } from './SideNav';
+import { EaveCheckDialog } from './EaveCheckDialog';
 
 type DialogKind = null | 'new' | 'open' | 'move' | 'copy' | 'rotate' | 'mirror' | 'catalog';
 type SideTab = 'structure' | 'roof' | 'tree' | 'conns' | 'issues';
@@ -54,6 +55,14 @@ export function App() {
     window.__ksp = { store, viewport };
     return () => viewport.dispose();
   }, []);
+
+  // מנגנון בדיקה: שינוי פרופיל שגורם להתנגשות בפלטת ראש העמוד — חלון קופץ עם הצעה
+  const eaveErr = s.derived.issues.filter((i) => i.code === 'EAVE_FIT' && i.severity === 'error');
+  const prevEave = useRef(eaveErr.length);
+  useEffect(() => {
+    if (eaveErr.length > prevEave.current && eaveErr[0]?.elementId) store.set({ eaveCheck: eaveErr[0].elementId });
+    prevEave.current = eaveErr.length;
+  }, [eaveErr.length]);
 
   // קיצורי מקשים
   useEffect(() => {
@@ -312,6 +321,7 @@ export function App() {
       <div className="toasts" data-testid="toasts">{s.toasts.map((t) => <div key={t.id} className={`toast ${t.kind}`}>{t.text}</div>)}</div>
 
       {menu && ms.length > 0 && <MarkingMenu x={menu.x} y={menu.y} title={ms.length === 1 ? (ms[0]!.id.length > 12 ? KIND_LABEL[ms[0]!.kind] : ms[0]!.id) : String(ms.length)} items={menuItems()} onClose={() => setMenu(null)} />}
+      <EaveCheckDialog />
       {palette && <CommandPalette cmds={cmds} onClose={() => setPalette(false)} onPickElement={pickElement} />}
       {dialog === 'new' && <NewProjectDialog onClose={() => setDialog(null)} />}
       {dialog === 'open' && <OpenDialog onClose={() => setDialog(null)} />}

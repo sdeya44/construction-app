@@ -380,3 +380,13 @@ select.inp { padding: 0 6px; }
 .nav-tbl tr.sel td { background: var(--brand-soft); }
 .nav-tbl th.sortable { cursor: pointer; user-select: none; }
 .nav-tbl thead th { position: sticky; top: -10px; background: var(--panel); z-index: 1; }
+.plate-plan { width: 100%; height: 220px; background: var(--bg); border-radius: 10px; border: 1px solid var(--line); }
+.plate-plan .pp-raf { fill: rgba(31,90,63,.12); stroke: #1f5a3f; stroke-dasharray: 4 3; }
+.plate-plan .pp-plate { fill: #fffdf8; stroke: #1c2420; stroke-width: 1.4; }
+.plate-plan .pp-col { fill: rgba(94,101,95,.18); stroke: #4e5a55; }
+.plate-plan .pp-nut { fill: rgba(138,90,43,.15); stroke: #8a5a2b; }
+.plate-plan .pp-nut.bad { fill: rgba(163,50,42,.25); stroke: var(--err); stroke-width: 1.6; }
+.plate-plan .pp-hole { fill: #fff; stroke: #1c2420; }
+.pp-legend { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.pp-legend .sw { display: inline-block; width: 12px; height: 10px; border-radius: 2px; margin-inline-end: 3px; vertical-align: middle; }
+.pp-legend .sw.raf { background: rgba(31,90,63,.3); } .pp-legend .sw.col { background: rgba(94,101,95,.35); } .pp-legend .sw.bad { background: rgba(163,50,42,.5); }

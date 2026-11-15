@@ -18,24 +18,30 @@ export interface Layout {
  * מתחילה בנקודת ההתחלה, פטה ראשונה במרחק first, מרווחים רגילים, פטה אחרונה בקצה (פחות edgeOffset).
  * השארית נשארת במפתח האחרון בלבד — אינה מפוזרת על שאר המפתחים.
  */
-export function layoutPositions(Ls: number, cosA: number, p: PurlinSideParams, label: string): Layout {
+export function layoutPositions(Ls: number, cosA: number, p: PurlinSideParams, label: string, towardEnd = 0, towardStart = 0): Layout {
   const issues: ValidationIssue[] = [];
   const W = (code: string, message: string, severity: 'error' | 'warning' | 'info' = 'warning') => issues.push({ code, severity, message });
   // עבודה ביחידת המדידה שנבחרה (שיפוע או אופקי), המרה בסוף לשיפוע
   const k = p.measure === 'horizontal' ? cosA : 1;
   const L = Ls * k;
-  const end = L - p.edgeOffset;
+  // הפטה האחרונה יושבת כולה על קורת הגג: edgeOffset נמדד מקצה הקורה עד הפנים החיצוניות של הפטה/התומך,
+  // ולכן ציר הווב מוזז פנימה ברוחב החלק שפונה לקצה (החלטת משתמש 15.11.2026)
+  const end = L - p.edgeOffset - towardEnd * k;
   let s: number[];
   if (p.manualPositions) {
     s = [...p.manualPositions].sort((a, b) => a - b).map((x) => x * k);
     if (s.some((x) => x < -TOL || x > L + TOL)) W('PURLIN_RANGE', `${label}: מיקום ידני מחוץ לקורת הגג`, 'error');
+    else if (s.length && s[s.length - 1] + towardEnd * k > L + TOL) W('PURLIN_OVERHANG', `${label}: הפטה האחרונה בולטת מעבר לקצה קורת הגג — אינה יושבת כולה על הפרופיל`);
     for (let i = 1; i < s.length; i++) if (s[i] - s[i - 1] < TOL) W('PURLIN_DUP', `${label}: שתי פטות באותו מיקום`, 'error');
   } else {
     if (!(p.spacing > 0)) { W('PURLIN_SPACING', `${label}: מרווח פטות חייב להיות חיובי`, 'error'); return { s: [], h: [], lastSpan: 0, issues }; }
     if (p.first < 0) { W('PURLIN_FIRST', `${label}: מרחק ראשון שלילי`, 'error'); return { s: [], h: [], lastSpan: 0, issues }; }
     if (p.edgeOffset < 0 || end <= 0) { W('PURLIN_EDGE', `${label}: מיקום פטה אחרונה לא תקין`, 'error'); return { s: [], h: [], lastSpan: 0, issues }; }
     if (p.first > end + TOL) { W('PURLIN_FIRST', `${label}: המרחק הראשון גדול מאורך השיפוע`, 'error'); return { s: [], h: [], lastSpan: 0, issues }; }
-    s = [p.first];
+    // בקצה חופשי (גג חד־שיפועי) גם הפטה הראשונה יושבת כולה על הקורה
+    const first = p.first + towardStart * k;
+    if (first > end + TOL) { W('PURLIN_FIRST', `${label}: המרחק הראשון גדול מאורך השיפוע`, 'error'); return { s: [], h: [], lastSpan: 0, issues }; }
+    s = [first];
     while (s[s.length - 1] + p.spacing < end - TOL) s.push(s[s.length - 1] + p.spacing);
     if (end - s[s.length - 1] > TOL) s.push(end);
     else s[s.length - 1] = Math.max(s[s.length - 1], end); // מקרה גבולי: הפטה האחרונה נופלת בדיוק על הקצה
@@ -114,11 +120,29 @@ export function buildPurlins(b: BuildingParams, roof: RoofInfo, deleted: Set<str
     const Ls = Math.hypot(dx, dz);
     const dir = { x: dx / Ls, z: dz / Ls };
     const cosA = Math.abs(dir.x);
-    const lay = layoutPositions(Ls, cosA, prm, ln.label);
-    out.issues.push(...lay.issues);
-    if (lay.issues.some((i) => i.severity === 'error')) continue;
     // נורמל מישור הגג כלפי מעלה (ניצב לקו השיפוע, במישור XZ)
     const n = norm(v3(-ln.up.z * Math.sign(ln.up.x || 1), 0, Math.abs(ln.up.x)));
+    // היקף החתך (ותומך) לכיוון קצה הקו — כדי שהפטה האחרונה תשב על הקורה
+    const n0 = n;
+    const u0 = cross(n0, ex);
+    const mirror0 = (dot(u0, ln.up) > 0) !== (prm.opening === 'up');
+    const wc0 = webCenterU(prm.profile);
+    const us0 = prof.outline.outer.map((q) => (mirror0 ? -(q.u - wc0) : q.u - wc0));
+    // ln.up מצביע מהקצה לכיוון ההתחלה (רכס/צד גבוה); הקצה בכיוון -up
+    let towardEnd = dot(u0, ln.up) > 0 ? -Math.min(...us0) : Math.max(...us0);
+    const cleatToStart0 = prm.cleat.enabled && (prof.family === 'Z' ? prm.opening === 'up' : prm.opening === 'down');
+    if (prm.cleat.enabled && !cleatToStart0) {
+      const wb0 = prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2;
+      towardEnd = Math.max(towardEnd, wb0 + prm.cleat.base);
+    }
+    let towardStart0 = 0;
+    if (ln.side === 'M') {
+      towardStart0 = dot(u0, ln.up) > 0 ? Math.max(...us0) : -Math.min(...us0);
+      if (cleatToStart0) towardStart0 = Math.max(towardStart0, (prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2) + prm.cleat.base);
+    }
+    const lay = layoutPositions(Ls, cosA, prm, ln.label, Math.max(0, towardEnd), Math.max(0, towardStart0));
+    out.issues.push(...lay.issues);
+    if (lay.issues.some((i) => i.severity === 'error')) continue;
     // u = v × ex (כמו ב-localFrame) — כיוון פתיחת חתך C כאשר mirror=false
     const u = cross(n, ex);
     const wantUp = prm.opening === 'up';

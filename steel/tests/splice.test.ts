@@ -43,3 +43,18 @@ describe('חיבור המשך פטה — פלטה ו-4 ברגים (2 בכל פט
     expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
   });
 });
+
+describe('אורך קטע פטה לפי מפתחים', () => {
+  it('2 מפתחים: תפר מעל מסגרות 3 ו-5', () => {
+    const p0 = geo();
+    p0.building.purlins.pieceBays = 2;
+    const p = proposeSplicesFor(['PL.R.05']).run(p0);
+    const d = generate(p);
+    expect(d.parts.filter((x) => x.memberId === 'PL.R.05').map((x) => Math.round(x.length))).toEqual([12050, 12000, 6050]);
+    // תפר בדיוק מעל תומך: ברגים משני צדי הזוויתן, ברגי הזוויתן עוברים בפלטה
+    const c = d.connById.get('C.PS.PL.R.05.1')!;
+    const s0 = d.byId.get('PL.R.05')!.start.y;
+    expect(c.bolts.map((b) => Math.round(b.p.y - s0 - 12050)).sort((a, b) => a - b)).toEqual([-85, -85, 85, 85]);
+    expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
+  });
+});

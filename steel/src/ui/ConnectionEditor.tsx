@@ -104,6 +104,7 @@ export function ConnectionEditor() {
           </select>
         </div>
       )}
+      {eff && c.type === 'eave' && eff.split !== false && <button className="btn small" data-testid="eave-check-open" onClick={() => store.set({ eaveCheck: id })}>בדיקת פלטה והצעת מידות</button>}
       {eff && c.type === 'eave' && (
         <div className="field"><label>סוג פרט</label>
           <select className="inp" data-testid="cp-split" value={eff.split === false ? '0' : '1'} onChange={(e) => setP({ split: e.target.value === '1' })}>
