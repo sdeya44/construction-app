@@ -153,9 +153,16 @@ function KneeEditor() {
         {(kb.mode ?? 'angle') === 'angle'
           ? <div className="field"><label>זווית מהאופק</label><NumField testId="kb-angle" value={kb.angle ?? 45} suffix="°" onCommit={(v) => set({ angle: Math.max(15, Math.min(75, v)) })} /></div>
           : <div className="field"><label>מרחק על הקורה (אופקי)</label><NumField testId="kb-reach" value={kb.reach} suffix='מ"מ' onCommit={(v) => set({ reach: v })} /></div>}
-        <div className="field"><label>פלטת קצה (עובי×רוחב×אורך)</label><span className="readonly">{kb.plateT}×{kb.plateW}×{kb.plateL}</span></div>
-        <div className="field"><label>ברגים</label><span className="readonly">4×M{kb.bolt.d} · {kb.gauge}/{kb.pitch}</span></div>
-        <div className="hint">בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. פלטת קצה מרותכת לאלכסון ומוברגת לאגף העמוד/הקורה (האום בתוך הפרופיל). לפי פרט התוכנית: RHS80/80/4, פלטה 180×280×14, 4×M16. אין בדיקת חוזק.</div>
+        <div className="field"><label>פרט חיבור</label>
+          <select className="inp" data-testid="kb-detail" value={kb.detail ?? 'stub'} onChange={(e) => set({ detail: e.target.value as 'stub' | 'flange' })}>
+            <option value="stub">זיז + 2 פלטות ניצבות לציר (פרט הלקוח)</option><option value="flange">פלטת קצה מוברגת לאגף המארח</option>
+          </select></div>
+        {(kb.detail ?? 'stub') === 'stub'
+          ? <div className="field"><label>ברגים בכל קצה</label>
+              <select className="inp" data-testid="kb-bolts" value={kb.boltsPerEnd ?? 2} onChange={(e) => set({ boltsPerEnd: Number(e.target.value) as 2 | 4 })}><option value={2}>2×M{kb.bolt.d} (אחד מכל צד)</option><option value={4}>4×M{kb.bolt.d}</option></select></div>
+          : <div className="field"><label>פלטת קצה / ברגים</label><span className="readonly">{kb.plateT}×{kb.plateW}×{kb.plateL} · 4×M{kb.bolt.d}</span></div>}
+        <div className="field"><label>עובי פלטות</label><NumField testId="kb-t" value={kb.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: Math.max(6, v) })} /></div>
+        <div className="hint">בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. פרט הלקוח: זיז קצר מאותו פרופיל מרותך לעמוד/לקורה במסגריה, פלטה ניצבת לציר על הזיז ועל האלכסון, מוברגות בשטח; הברגים מחוץ לפרופיל, והזיז ארוך מספיק לאום. אין בדיקת חוזק.</div>
       </>}
     </>
   );

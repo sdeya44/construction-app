@@ -2,34 +2,51 @@ import { describe, expect, it } from 'vitest';
 import { defaultBuilding, newProject } from '../src/model/defaults';
 import { generate } from '../src/geometry/generate';
 import { defaultPortal } from '../src/geometry/portal';
+import { SECTION_TEMPLATES } from '../src/model/section';
 
 describe('אגד B — קשיחות לאורך בקיר', () => {
-  const mk = () => {
+  const mk = (patch: object = {}) => {
     const b = defaultBuilding();
-    b.bracing.walls = { ...b.bracing.walls, enabled: true, type: 'portal', portal: defaultPortal() };
+    b.bracing.walls = { ...b.bracing.walls, enabled: true, type: 'portal', portal: defaultPortal(), ...patch };
     return generate(newProject('t', b));
   };
-  it('קורה + 2 אלכסונים בכל מפתח קיר, במקום X', () => {
+  const beams = (d: any) => d.members.filter((m: any) => /^BB\.[^K]*$/.test(m.id));
+  const diags = (d: any) => d.members.filter((m: any) => /^BB\..*\.K[12]$/.test(m.id));
+  it('אגד במפתחים שנבחרו, וקורת אגד רציפה בשאר המפתחים של אותו ציר', () => {
     const d = mk();
-    const beams = d.members.filter((m) => m.id.startsWith('BB.') && !m.id.includes('.K'));
-    const kb = d.members.filter((m) => /^BB\..*\.K[12]$/.test(m.id));
-    expect(beams.length).toBe(4); // 2 מפתחים × 2 קירות
-    expect(kb.length).toBe(8);
+    expect(beams(d).length).toBe(2 * 5); // 2 צירים × 5 מפתחים
+    expect(diags(d).length).toBe(2 * 2 * 2); // 2 מפתחים × 2 צירים × 2 אלכסונים
     expect(d.members.some((m) => m.id.startsWith('BR.W'))).toBe(false);
-    const bm = beams[0];
-    expect(bm.start.z).toBeCloseTo(bm.end.z, 6); // אופקית
-    expect(bm.start.x).toBeCloseTo(bm.end.x, 6); // במישור ציר העמודים
+    const bm = beams(d)[0];
+    expect(bm.start.z).toBeCloseTo(bm.end.z, 6);
+    expect(bm.start.x).toBeCloseTo(bm.end.x, 6);
+    // ללא רציפות — רק במפתחי האגד
+    const d2 = mk({ portal: { ...defaultPortal(), continuous: false } });
+    expect(beams(d2).length).toBe(4);
   });
-  it('אלכסון ב-45°, 4 ברגי שטח בכל חיבור, ללא התנגשויות', () => {
+  it('פרט הלקוח: זיזים + 2 פלטות, ברגים לא דרך העמוד; קורה 4 ברגים, אלכסון 2; 45°; ללא התנגשויות', () => {
     const d = mk();
-    const k = d.members.find((m) => /^BB\..*\.K1$/.test(m.id))!;
-    const dy = Math.abs(k.end.y - k.start.y), dz = Math.abs(k.end.z - k.start.z);
-    expect(Math.atan2(dz, dy) * 180 / Math.PI).toBeGreaterThan(38);
-    expect(Math.atan2(dz, dy) * 180 / Math.PI).toBeLessThan(52);
+    const k = diags(d)[0];
+    const a = Math.atan2(Math.abs(k.end.z - k.start.z), Math.abs(k.end.y - k.start.y)) * 180 / Math.PI;
+    expect(a).toBeGreaterThan(40); expect(a).toBeLessThan(50);
     const cs = d.connections.filter((c) => c.id.startsWith('C.BB.'));
-    expect(cs.length).toBe(4 * 6); // 2 קצוות קורה + 2×(עמוד, קורה) לאלכסונים
-    expect(cs.every((c) => c.bolts.length === 4 && c.bolts.every((b) => b.location === 'site'))).toBe(true);
-    expect(cs.every((c) => c.welds.every((w) => w.location === 'shop'))).toBe(true);
-    expect(d.issues.filter((i) => i.code === 'CLASH' && /BB\./.test(i.message + (i.elementId ?? '')))).toEqual([]);
+    expect(cs.length).toBe(10 * 2 + 4 * 4);
+    for (const c of cs) {
+      expect(c.bolts.length).toBe(/\.E[01]$/.test(c.id) ? 4 : 2);
+      expect(c.bolts.every((b) => b.location === 'site' && !b.holesIn.some((h) => h.includes('.COL.')))).toBe(true);
+      expect(c.welds.every((w) => w.location === 'shop')).toBe(true);
+      expect(c.parts.some((p) => p.endsWith('.S'))).toBe(true);
+    }
+    expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
+  });
+  it('אגד בכל ציר: ציר פנימי בחתך מודולרי', () => {
+    const p = newProject('t', defaultBuilding());
+    p.building.section = SECTION_TEMPLATES.find((t) => t.id === 'gable-inner')!.make();
+    const mid = [...p.building.section.lines].sort((a, b) => a.x - b.x)[1].id;
+    p.building.bracing.walls = { ...p.building.bracing.walls, enabled: true, type: 'portal', portal: defaultPortal(), byLine: { [mid]: [2] } };
+    const d = generate(p);
+    expect(diags(d).length).toBe(2);
+    expect(beams(d).every((m: any) => m.id.endsWith(`.${mid}`))).toBe(true);
+    expect(d.issues.filter((i) => i.severity === 'error')).toEqual([]);
   });
 });

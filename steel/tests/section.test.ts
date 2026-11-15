@@ -56,17 +56,27 @@ describe('חתך מודולרי — מערכת לבניית סוגי סככות'
     expect(['C.SIDE.F1.B.P1', 'C.SIDE.F1.B.P2'].every((id) => d.connById.get(id)?.type === 'rafter-side')).toBe(true);
     expect(d.byId.get('F1.COL.B')!.end.z).toBeCloseTo(6900, 3);
   });
-  it('אלכסון עמוד-קורה: RHS80/80/4, פלטת קצה בכל קצה מוברגת 4×M16 לאגף המארח (אום בתוך הפרופיל)', () => {
+  it('אלכסון עמוד-קורה לפי פרט הלקוח: זיז מרותך למארח + 2 פלטות ניצבות לציר, 2×M16 בכל קצה מחוץ לפרופיל', () => {
     const d = generate(withTpl('mono-multi', true));
     const c = d.connById.get('C.KB.F2.B.P1.L')!;
-    expect(c.bolts.length).toBe(8);
-    expect(c.bolts.every((b) => b.d === 16 && b.location === 'site')).toBe(true);
-    expect(c.bolts.filter((b) => b.holesIn.includes('F2.COL.B')).length).toBe(4);
-    expect(c.bolts.filter((b) => b.holesIn.includes('F2.RAF.P1')).length).toBe(4);
+    expect(c.bolts.length).toBe(4);
+    expect(c.bolts.every((b) => b.d === 16 && b.location === 'site' && b.grip === 24)).toBe(true);
+    // אין ברגים במארח — רק דרך שתי הפלטות
+    expect(c.bolts.some((b) => b.holesIn.includes('F2.COL.B') || b.holesIn.includes('F2.RAF.P1'))).toBe(false);
     const br = d.byId.get('KB.F2.B.P1.L')!;
     expect(br.profile).toBe('RHS80x80x4');
+    const stubC = d.byId.get('C.KB.F2.B.P1.L.C.S')!, stubR = d.byId.get('C.KB.F2.B.P1.L.R.S')!;
+    expect(stubC.profile).toBe('RHS80x80x4');
+    expect(stubR.profile).toBe('RHS80x80x4');
+    // ציר האלכסון ממשיך את ציר הזיז
+    const dir = (m: any) => { const v = { x: m.end.x - m.start.x, z: m.end.z - m.start.z }; const l = Math.hypot(v.x, v.z); return { x: v.x / l, z: v.z / l }; };
+    expect(dir(stubC).x).toBeCloseTo(dir(br).x, 6);
+    // ברגים משני צדי הפרופיל (ניצב למישור המסגרת), מחוץ ל-RHS80
+    const ys = c.bolts.filter((b) => b.id.includes('.C.B')).map((b) => b.p.y - br.start.y).sort((a, b) => a - b);
+    expect(ys[0]).toBeLessThan(-40 - 10);
+    expect(ys[1]).toBeGreaterThan(40 + 10);
     expect(c.welds.every((w) => w.location === 'shop')).toBe(true);
-    // קצה שמאלי של עמוד קיצוני — אין אלכסון כלפי חוץ (הקורה לא ממשיכה מספיק)
+    expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
     expect(d.connById.has('C.KB.F2.A.P1.L')).toBe(false);
   });
   it('מישור שעובר דרך עמוד גבוה ממנו — שגיאה ברורה', () => {

@@ -26,7 +26,10 @@ test('USE-02: אגד B בקירות דרך הממשק — קורה + 2 אלכס�
   await page.getByTestId('nav-s:bracing').click();
   await page.getByTestId('br-walls-type').selectOption('portal');
   const q = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { beams: d.members.filter((m: any) => /^BB\.[^K]*$/.test(m.id)).length, k: d.members.filter((m: any) => /^BB\..*\.K\d$/.test(m.id)).length, x: d.members.filter((m: any) => m.id.startsWith('BR.W')).length, clash: d.issues.filter((i: any) => i.code === 'CLASH').length }; });
+  expect(await q()).toEqual({ beams: 10, k: 8, x: 0, clash: 0 }); // קורת אגד רציפה בכל המפתחים, אלכסונים רק במפתחי האגד
+  await page.getByTestId('pb-cont').uncheck();
   expect(await q()).toEqual({ beams: 4, k: 8, x: 0, clash: 0 });
+  await page.getByTestId('pb-cont').check();
   await page.getByTestId('pb-drop').fill('800'); await page.getByTestId('pb-drop').press('Enter');
   expect((await st(page)).project.building.bracing.walls.portal.drop).toBe(800);
   await setView(page, 'left');

@@ -3,12 +3,14 @@ import type { BoltInfo, Connection, KneeBraceParams, Member, Project, Validation
 import { zAt, type SectionTopology } from '../model/section';
 import { getProfile, tryProfile } from '../profiles/library';
 import { hw, makeBolt } from './connections';
+import { stubJoint } from './stubJoint';
 
 /** ברירת מחדל לפי תוכניות הלקוח: RHS80/80/4, פלטת קצה 180×280×14 בכל קצה, 4×M16 (שתי עמודות × שתי שורות) */
 export function defaultKneeBraces(): KneeBraceParams {
   return {
-    enabled: false, profile: 'RHS80x80x4', drop: 800, reach: 900, mode: 'angle', angle: 45, plateT: 14, plateW: 180, plateL: 280,
+    enabled: false, profile: 'RHS80x80x4', drop: 800, reach: 900, mode: 'angle', angle: 45, plateT: 12, plateW: 180, plateL: 280,
     bolt: { d: 16, grade: '8.8', standard: 'ISO 4017', clearance: 2 }, gauge: 80, pitch: 200, weldSize: 5, exclude: [],
+    detail: 'stub', boltsPerEnd: 2,
   };
 }
 
@@ -75,12 +77,26 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
         const rafUnder: Plane = { point: v3(xR, f.y, tosAt(xR) - hv), normal: nDown };
         const C0 = v3(xFace, f.y, zC), R0 = v3(xR, f.y, tosAt(xR) - hv);
         const dir = norm(sub(R0, C0));
+        const id = `C.KB.${f.id}.${key}`;
+        const bid = `KB.${f.id}.${key}`;
+        if ((kb.detail ?? 'stub') === 'stub') {
+          // פרט הלקוח: זיז מרותך למארח + שתי פלטות ניצבות לציר, ברגים מחוץ לפרופיל (פריסה ניצבת למישור המסגרת)
+          const common = { cid: id, desc: 'אלכסון', memberId: bid, prof, profile: kb.profile, refUp: Y, plateT: kb.plateT, bolt: kb.bolt, bolts: (kb.boltsPerEnd ?? 2) as 2 | 4, weldSize: kb.weldSize, mat, u: Y };
+          const jc = stubJoint({ ...common, tag: 'C', hostId: col.id, P: lineHitPlane(C0, dir, colFace), n: colFace.normal, d: dir });
+          const jr = stubJoint({ ...common, tag: 'R', hostId: raf.id, P: lineHitPlane(C0, dir, rafUnder), n: rafUnder.normal, d: scale(dir, -1) });
+          if (dot(sub(jr.start, jc.start), dir) < 300) { out.issues.push({ code: 'KNEE_SHORT', severity: 'warning', message: `אלכסון ${key} מסגרת ${fi}: קצר מדי לפרט הזיז` }); continue; }
+          out.members.push({
+            id: bid, kind: 'brace', label: `אלכסון עמוד-קורה ציר ${jn.line.label} מסגרת ${fi}`, start: jc.start, end: jr.start, profile: kb.profile, material: mat,
+            rollDeg: 0, mirror: false, anchor: 'center', refUp: Y, source: 'generated', manualPlacement: false, connId: id, partDesc: `אלכסון ${kb.profile}`,
+          }, ...jc.members, ...jr.members);
+          out.issues.push(...jc.issues, ...jr.issues);
+          out.connections.push({ id, type: 'knee', label: `אלכסון עמוד-קורה ציר ${jn.line.label} (${s < 0 ? 'שמאל' : 'ימין'}) מסגרת ${fi}`, members: [col.id, raf.id], parts: [bid, ...jc.parts, ...jr.parts], bolts: [...jc.bolts, ...jr.bolts], welds: [...jc.welds, ...jr.welds], status: 'not-verified', fixity: 'pinned', overridden: false });
+          continue;
+        }
         const T2 = kb.plateT;
         const offPlane = (pl0: Plane, k: number): Plane => ({ point: add(pl0.point, scale(pl0.normal, k)), normal: pl0.normal });
         const cutC = offPlane(colFace, T2), cutR = offPlane(rafUnder, T2);
         const A = lineHitPlane(C0, dir, cutC), B = lineHitPlane(C0, dir, cutR);
-        const id = `C.KB.${f.id}.${key}`;
-        const bid = `KB.${f.id}.${key}`;
         out.members.push({
           id: bid, kind: 'brace', label: `אלכסון עמוד-קורה ציר ${jn.line.label} מסגרת ${fi}`, start: A, end: B, profile: kb.profile, material: mat,
           rollDeg: 0, mirror: false, anchor: 'center', refUp: Y, source: 'generated', manualPlacement: false, connId: id,

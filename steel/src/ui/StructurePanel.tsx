@@ -4,7 +4,7 @@ import type { BuildingParams, PortalBraceParams, RhsTrussParams, RidgeReinfParam
 import { defaultPortal } from '../geometry/portal';
 import { defaultRhsTruss } from '../geometry/hbrace';
 import { defaultRidgeReinf } from '../model/defaults';
-import { resolveBays } from '../geometry/bracing';
+import { resolveBays, wallBays } from '../geometry/bracing';
 import { catalogNames } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
@@ -163,6 +163,27 @@ function RhsFields() {
   );
 }
 
+/** מפתחי קיר לכל ציר עמודים (כולל צירים פנימיים) */
+function WallLines({ nb }: { nb: number }) {
+  const br = useStore((s) => s.project.building.bracing);
+  const lines = useStore((s) => s.derived.section?.lines) ?? [];
+  const ls = [...lines].sort((a, b) => a.x - b.x);
+  const cur = new Map(wallBays(br, ls.map((l) => l.id)));
+  const setLine = (id: string, bays: number[]) => {
+    const byLine: Record<string, number[]> = {};
+    for (const l of ls) byLine[l.id] = l.id === id ? bays : cur.get(l.id) ?? [];
+    store.exec(setBuilding({ bracing: { ...br, walls: { ...br.walls, byLine, left: byLine[ls[0]?.id] ?? [], right: byLine[ls[ls.length - 1]?.id] ?? [] } } }));
+  };
+  return (
+    <>
+      {ls.map((l, i) => (
+        <div className="field" key={l.id}><label>ציר {l.label}{i === 0 ? ' (שמאל)' : i === ls.length - 1 ? ' (ימין)' : ' (פנימי)'}</label>
+          <BayPicker testId={i === 0 ? 'br-wl' : i === ls.length - 1 ? 'br-wr' : `br-w-${l.id}`} bays={cur.get(l.id) ?? []} count={nb} onChange={(x) => setLine(l.id, x)} /></div>
+      ))}
+    </>
+  );
+}
+
 function PortalFields() {
   const br = useStore((s) => s.project.building.bracing);
   const p = br.walls.portal ?? defaultPortal();
@@ -175,8 +196,11 @@ function PortalFields() {
       <div className="field"><label>ירידה על העמוד</label><NumField testId="pb-drop" value={p.drop} suffix='מ"מ' onCommit={(v) => set({ drop: Math.max(200, v) })} /></div>
       <div className="field"><label>זווית אלכסון</label><NumField testId="pb-angle" value={p.angle} suffix="°" onCommit={(v) => set({ angle: Math.max(20, Math.min(70, v)) })} /></div>
       <div className="field"><label>עובי פלטות</label><NumField value={p.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: v })} /></div>
+      <div className="field"><label>ברגים בקצה אלכסון</label>
+        <select className="inp" data-testid="pb-bolts" value={p.boltsPerEnd ?? 2} onChange={(e) => set({ boltsPerEnd: Number(e.target.value) as 2 | 4 })}><option value={2}>2 (אחד מכל צד)</option><option value={4}>4</option></select></div>
+      <div className="field"><label>קורת אגד בשאר המפתחים</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="pb-cont" checked={p.continuous ?? true} onChange={(e) => set({ continuous: e.target.checked })} />{(p.continuous ?? true) ? 'כן — ללא אלכסונים' : 'לא'}</label></div>
       <div className="field"><label>קוטר בורג</label><NumField value={p.bolt.d} suffix="M" onCommit={(v) => set({ bolt: { ...p.bolt, d: Math.round(v) } })} /></div>
-      <div className="hint">קורה בין העמודים בפלטות קצה (4 ברגים לווב העמוד), ושני אלכסונים קטנים מהעמודים לתחתית הקורה; בקורה — פח רפידה רחב מה-RHS כדי שהברגים יהיו מחוץ לו. ריתוך במסגריה, ברגים בשטח.</div>
+      <div className="hint">פרט חיבור (לכל הקצוות): זיז קצר מאותו פרופיל מרותך למארח במסגריה, עם פלטה ניצבת לציר; פלטת קצה על האלמנט; שתי הפלטות מוברגות בשטח, הברגים מחוץ לפרופיל. קורה-עמוד: 4 ברגים (2 מעל, 2 מתחת). בשאר המפתחים של הציר — קורת אגד בלבד, להעברת הכוחות האופקיים לאגד.</div>
     </>
   );
 }
@@ -241,8 +265,7 @@ function BracingEditor() {
         {(br.walls.type ?? 'x') === 'x'
           ? <div className="field prof"><label>חתך</label><ProfilePicker value={br.walls.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ walls: { ...br.walls, profile: v } })} /></div>
           : <PortalFields />}
-        <div className="field"><label>ציר א (שמאל)</label><BayPicker testId="br-wl" bays={br.walls.left} count={nb} onChange={(x) => set({ walls: { ...br.walls, left: x } })} /></div>
-        <div className="field"><label>ציר ב (ימין)</label><BayPicker testId="br-wr" bays={br.walls.right} count={nb} onChange={(x) => set({ walls: { ...br.walls, right: x } })} /></div>
+        <WallLines nb={nb} />
       </>}
       <div className="panel-title">שורת קשירה לפטות
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-ties" checked={br.purlinTies.enabled} onChange={(e) => set({ purlinTies: { ...br.purlinTies, enabled: e.target.checked } })} />פעיל</label>

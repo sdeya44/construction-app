@@ -94,6 +94,8 @@ export interface BracingParams {
     enabled: boolean; profile: string; left: number[]; right: number[];
     /** x = קושרות X (ברירת מחדל); portal = אגד B: קורת RHS בין העמודים + שני אלכסונים קטנים */
     type?: 'x' | 'portal';
+    /** מפתחים לכל ציר עמודים (מזהה ציר → מפתחים). חסר = left לציר הראשון ו-right לאחרון */
+    byLine?: Record<string, number[]>;
     portal?: PortalBraceParams;
   };
   /** שורת קשירה לאגף התחתון של הפטות, באמצע כל מפתח */
@@ -112,6 +114,10 @@ export interface PortalBraceParams {
   /** זווית האלכסון מהאופק */
   angle: number;
   plateT: Mm; bolt: BoltSpec; pitch: Mm; weldSize: Mm;
+  /** ברגים בכל קצה אלכסון (2/4); קורת האגד תמיד 4 */
+  boltsPerEnd?: 2 | 4;
+  /** בשאר המפתחים של ציר עם אגד: קורה רציפה באותו חתך, ללא אלכסונים (העברת כוחות אופקיים) */
+  continuous?: boolean;
 }
 
 /** סבכה אופקית בגג מ-RHS (במקום X) */
@@ -210,7 +216,11 @@ export interface KneeBraceParams {
   /** angle (ברירת מחדל, 45° מהאופק): נקודת החיבור לקורה נגזרת מהזווית; reach: מרחק אופקי קבוע */
   mode?: 'angle' | 'reach';
   angle?: number;
-  /** פלטות קצה: אחת מרותכת לאלכסון ואחת למארח, מוברגות */
+  /** stub (ברירת מחדל, פרט הלקוח): זיז מרותך למארח + שתי פלטות ניצבות לציר, מוברגות; flange: פלטת קצה מוברגת לאגף המארח */
+  detail?: 'stub' | 'flange';
+  /** ברגים בכל קצה בפרט הזיז: 2 (אחד מכל צד) או 4 */
+  boltsPerEnd?: 2 | 4;
+  /** פלטות קצה: עובי; רוחב/אורך — לפרט flange בלבד (בפרט stub נגזרים מהפרופיל והברגים) */
   plateT: Mm; plateW: Mm; plateL: Mm;
   bolt: BoltSpec; gauge: Mm; pitch: Mm;
   weldSize: Mm;

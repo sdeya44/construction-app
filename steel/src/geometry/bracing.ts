@@ -1,14 +1,22 @@
 import { add, dot, norm, scale, sub, v3, type Vec3 } from '../core/vec';
 import { getProfile, tryProfile } from '../profiles/library';
-import type { BoltInfo, BraceConnParams, BuildingParams, Connection, Member, ValidationIssue, WeldInfo } from '../model/types';
+import type { BoltInfo, BraceConnParams, BracingParams, BuildingParams, Connection, Member, ValidationIssue, WeldInfo } from '../model/types';
 import { zAt, type SectionTopology } from '../model/section';
 import { hw, makeBolt } from './connections';
 import { defaultRhsTruss, rhsTruss } from './hbrace';
-import { buildPortal, defaultPortal } from './portal';
+import { buildPortalLine, defaultPortal } from './portal';
 import { localFrame } from './frame';
 import { bolt } from '../model/defaults';
 
 export interface BracingResult { members: Member[]; connections: Connection[]; issues: ValidationIssue[] }
+
+/** מפתחי קיר לכל ציר עמודים: byLine אם הוגדר, אחרת left לציר הראשון ו-right לאחרון (סדר לפי X) */
+export function wallBays(br: BracingParams, lineIds: string[]): [string, number[]][] {
+  const w = br.walls;
+  if (w.byLine) return lineIds.filter((id) => w.byLine![id]?.length).map((id) => [id, w.byLine![id]]);
+  if (!lineIds.length) return [];
+  return lineIds.length > 1 ? [[lineIds[0], w.left], [lineIds[lineIds.length - 1], w.right]] : [[lineIds[0], w.left]];
+}
 
 /** מפתחים: אינדקסים שליליים נספרים מהסוף (‎-1 = המפתח האחרון). */
 export function resolveBays(bays: number[], count: number): number[] {
@@ -96,24 +104,26 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
   if (br.walls.enabled) {
     const ctw = col.dims.tw ?? col.dims.t ?? 6;
     const ls = [...topo.sec.lines].sort((p, q) => p.x - q.x);
-    const outer = ls.length > 1 ? [{ l: ls[0], bays: br.walls.left, key: 'L' }, { l: ls[ls.length - 1], bays: br.walls.right, key: 'R' }] : [{ l: ls[0], bays: br.walls.left, key: 'L' }];
-    for (const { l, bays, key } of outer) {
+    for (const [lid, bays] of wallBays(b.bracing, ls.map((l) => l.id))) {
+      const l = ls.find((q) => q.id === lid)!;
       const ct = topo.colTop.get(l.id);
       if (!ct) continue;
       const cap = ct.cap ?? topo.junctions.find((j) => j.line === l)?.plane;
       const sl = cap ? Math.abs((cap.b.z - cap.a.z) / (cap.b.x - cap.a.x)) : 0;
       const rafV = raf.props.h * Math.sqrt(1 + sl * sl);
-      const side = topo.sec.custom ? l.id : key;
+      const side = l.id;
       const x = l.x, eave = ct.z;
+      if ((br.walls.type ?? 'x') === 'portal') {
+        buildPortalLine(res, br.walls.portal ?? defaultPortal(), {
+          side, label: l.label, x, frames: frames.map((f) => ({ id: f.id, y: f.y })), portalBays: resolveBays(bays, nb),
+          colProfile: b.columnProfile, zBase: b.baseElevation, zTop: eave - rafV - 60, mat,
+        });
+        continue;
+      }
       for (const bay of resolveBays(bays, nb)) {
         const f0 = frames[bay], f1 = frames[bay + 1];
         const z0 = b.baseElevation + 300, z1 = eave - rafV - 60 - 150;
         if (z1 - z0 < 1000) { res.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `קושרת קיר ציר ${l.label} מפתח ${bay + 1}: גובה קטן מדי` }); continue; }
-        if ((br.walls.type ?? 'x') === 'portal') {
-          buildPortal(res, br.walls.portal ?? defaultPortal(), `${bay + 1}.${side}`, `אגד B ציר ${l.label} מפתח ${bay + 1}`, x, f0.y, f1.y,
-            [`${f0.id}.COL.${l.id}`, `${f1.id}.COL.${l.id}`], b.columnProfile, b.baseElevation, eave - rafV - 60, mat);
-          continue;
-        }
         xbrace(`W${bay + 1}.${side}`, `קושרת קיר ציר ${l.label} מפתח ${bay + 1}`, br.walls.profile, v3(x, 0, z0), v3(1, 0, 0), v3(0, 0, 1),
           { y: f0.y, w: 0 }, { y: f1.y, w: z1 - z0 }, f0.y + ctw / 2, f1.y - ctw / 2, `${f0.id}.COL.${l.id}`, `${f1.id}.COL.${l.id}`);
       }
