@@ -2,7 +2,7 @@ import type { Mm } from '../core/units';
 import type { Plane, Vec3 } from '../core/vec';
 
 /** גרסת סכמת קובץ הפרויקט. כל שינוי שובר מחייב מיגרציה ב-model/migrate.ts */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export type RoofType = 'gable' | 'mono';
 /** לאן מתייחסים גובהי העמודים/הרכס: פני עליון של קורת הגג (TOS) או ציר הקורה. */
@@ -187,6 +187,8 @@ export interface PlateConnParams {
   gauge: Mm;   // מרחק בין עמודות
   pitch: Mm;   // מרחק בין שורות
   weldSize: Mm;
+  /** ראש עמוד בלבד: true = פלטה על העמוד + פלטה על הקורה, מוברגות ביניהן (ברירת מחדל); false = פלטה אחת, ברגים דרך אגף הקורה */
+  split?: boolean;
   /** פלטת בסיס בלבד: אורך ברגי/מוטות עיגון מתחת לפלטה */
   anchorLength?: Mm;
   /**

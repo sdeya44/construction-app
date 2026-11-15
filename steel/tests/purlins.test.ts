@@ -174,8 +174,8 @@ describe('SPL / BEAM – חלקים וחיבורי המשך', () => {
     expect(m.start).toEqual(before.start); expect(m.end).toEqual(before.end);
     expect(m.start.y).toBe(-50); expect(m.end.y).toBe(30050);
     const parts = d.parts.filter((x) => x.memberId === 'PL.L.03');
-    // קו 30.1 מ' (הארכה 50 מ"מ מעבר למסגרות הקיצוניות); חיבורים מעל מסגרות בלבד
-    expect(parts.map((x) => Math.round(x.length))).toEqual([6050, 12000, 6000, 6050]);
+    // קו 30.1 מ'; תומך ב-12.05 — התפר בסוף מוט 12 מ', 50 מ"מ לפני התומך (ניצול מלא)
+    expect(parts.map((x) => Math.round(x.length))).toEqual([12000, 12000, 6100]);
     expect(parts.every((x) => x.length <= 12000)).toBe(true);
     // פטה C: חיבור המשך מוברג (פלטה + 4 ברגים) — החלטת משתמש 15.11.2026
     expect(d.splices.filter((s) => s.memberId === 'PL.L.03').every((s) => s.status === 'bolted')).toBe(true);
@@ -219,7 +219,7 @@ describe('מיגרציה v1 → v2', () => {
     const p: any = geo();
     delete p.building.purlins; delete p.splices; p.schemaVersion = 1;
     const m = migrate(JSON.parse(JSON.stringify(p)));
-    expect(m.schemaVersion).toBe(6);
+    expect(m.schemaVersion).toBe(7);
     expect(m.marks.parts).toEqual({});
     expect(m.settings.kerf).toBe(3);
     expect(m.building.bracing.roof.enabled).toBe(true);

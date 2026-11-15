@@ -6,17 +6,17 @@ import { VIEW_LABEL, Viewport } from '../view/viewport';
 import { duplicateProject, exportProject, NewProjectDialog, OpenDialog, TransformDialog } from './Dialogs';
 import { Icon } from './icons';
 import { PropertiesPanel } from './PropertiesPanel';
-import { RoofPanel } from './RoofPanel';
-import { ProfileDatalist, StructurePanel } from './StructurePanel';
-import { IssuesPanel, TreePanel } from './TreePanel';
+import { ProfileDatalist } from './StructurePanel';
 import { DrawingsView } from './DrawingsView';
 import { CatalogDialog } from './CatalogDialog';
 import { ProductionView } from './ProductionView';
-import { CommandPalette, ConnCard, ConnectionsPanel, ContextBar, MarkingMenu, connectionsOf, type Cmd } from './Overlays';
+import { CommandPalette, ConnCard, ContextBar, MarkingMenu, connectionsOf, type Cmd } from './Overlays';
 import { KIND_LABEL } from './TreePanel';
+import { SideNav, type NavKey } from './SideNav';
 
 type DialogKind = null | 'new' | 'open' | 'move' | 'copy' | 'rotate' | 'mirror' | 'catalog';
 type SideTab = 'structure' | 'roof' | 'tree' | 'conns' | 'issues';
+const navGroup = (k: NavKey): SideTab => (k.startsWith('s') ? 'structure' : k.startsWith('r') ? 'roof' : k.startsWith('k') || k === 'tree' ? 'tree' : k.startsWith('c') ? 'conns' : 'issues');
 type MobileTab = null | 'side' | 'props';
 
 function TB({ icon, label, on, onClick, disabled, testId, title, desk }: { icon: string; label?: string; on?: boolean; onClick: () => void; disabled?: boolean; testId?: string; title?: string; desk?: boolean }) {
@@ -31,7 +31,9 @@ export function App() {
   const host = useRef<HTMLDivElement>(null);
   const vp = useRef<Viewport | null>(null);
   const [dialog, setDialog] = useState<DialogKind>(null);
-  const [tab, setTab] = useState<SideTab>('structure');
+  const [nav, setNav] = useState<NavKey>('structure');
+  const tab = navGroup(nav);
+  const setTab = (t: SideTab) => setNav(t);
   const [mtab, setMtab] = useState<MobileTab>(null);
   const [mode, setMode] = useState<'model' | 'drawings' | 'production'>('model');
   const [palette, setPalette] = useState(false);
@@ -204,16 +206,7 @@ export function App() {
       {mode === 'production' && <main className="mode-area"><ProductionView /></main>}
       <main className="workspace" style={mode !== 'model' ? { display: 'none' } : undefined}>
         <aside className={`side side-start${sideOpen ? ' open' : ''}`}>
-          <div className="tabs">
-            <button className={`tab${tab === 'structure' ? ' on' : ''}`} onClick={() => setTab('structure')} data-testid="tab-structure">מבנה</button>
-            <button className={`tab${tab === 'roof' ? ' on' : ''}`} onClick={() => setTab('roof')} data-testid="tab-roof">גג ופטות</button>
-            <button className={`tab${tab === 'tree' ? ' on' : ''}`} onClick={() => setTab('tree')} data-testid="tab-tree">אלמנטים</button>
-            <button className={`tab${tab === 'conns' ? ' on' : ''}`} onClick={() => setTab('conns')} data-testid="tab-conns">חיבורים</button>
-            <button className={`tab${tab === 'issues' ? ' on' : ''}`} onClick={() => setTab('issues')} data-testid="tab-issues">
-              בעיות {(errs + warns) > 0 && <span className={`count ${errs ? 'err' : 'warn'}`}>{errs + warns}</span>}
-            </button>
-          </div>
-          {tab === 'structure' ? <StructurePanel /> : tab === 'roof' ? <RoofPanel /> : tab === 'tree' ? <TreePanel /> : tab === 'conns' ? <ConnectionsPanel onOpen={openConn} /> : <IssuesPanel />}
+          <SideNav nav={nav} setNav={setNav} onOpenConn={openConn} />
         </aside>
         <div className="center">
           <section className="viewport-host" dir="ltr" ref={host} data-testid="viewport">

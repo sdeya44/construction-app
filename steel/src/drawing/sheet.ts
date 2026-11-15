@@ -8,7 +8,7 @@ export type Layer = 'FRAME' | 'TITLE' | 'OUTLINE' | 'THIN' | 'HIDDEN' | 'AXIS' |
 
 export type Ent =
   | { k: 'line'; a: P; b: P; layer: Layer }
-  | { k: 'poly'; pts: P[]; closed: boolean; layer: Layer; fill?: boolean }
+  | { k: 'poly'; pts: P[]; closed: boolean; layer: Layer; fill?: boolean; shade?: number }
   | { k: 'circle'; c: P; r: number; layer: Layer }
   | { k: 'text'; p: P; s: string; h: number; align: 'left' | 'center' | 'right'; layer: Layer; rot?: number; bold?: boolean };
 

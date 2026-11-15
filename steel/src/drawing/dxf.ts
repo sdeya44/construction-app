@@ -43,6 +43,7 @@ export function sheetToDxf(sh: Sheet): string {
   for (const e of sh.ents) {
     if (e.k === 'line') { g(0, 'LINE'); g(8, e.layer); g(10, X(e.a.x)); g(20, Y(e.a.y)); g(30, 0); g(11, X(e.b.x)); g(21, Y(e.b.y)); g(31, 0); }
     else if (e.k === 'circle') { g(0, 'CIRCLE'); g(8, e.layer); g(10, X(e.c.x)); g(20, Y(e.c.y)); g(30, 0); g(40, e.r * k); }
+    else if (e.k === 'poly' && e.shade !== undefined) continue; // מילוי מוצלל — רק ב-PDF/SVG
     else if (e.k === 'poly') {
       g(0, 'POLYLINE'); g(8, e.layer); g(66, 1); g(10, 0); g(20, 0); g(30, 0); g(70, e.closed ? 1 : 0);
       for (const q of e.pts) { g(0, 'VERTEX'); g(8, e.layer); g(10, X(q.x)); g(20, Y(q.y)); g(30, 0); }

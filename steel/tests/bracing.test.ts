@@ -45,12 +45,12 @@ describe('קושרות ושורות קשירה', () => {
     expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
   });
 
-  it('פח חיבור: מרותך במסגריה לווב הקורה, 2×M16 בשטח דרך הזוויתן והפח; הצטלבות עם פח מילוי ובורג אחד', () => {
+  it('פח חיבור: מרותך במסגריה לווב הקורה, M16 בשטח דרך הזוויתן והפח; הצטלבות עם פח מילוי ובורג אחד', () => {
     const d = generate(geo());
     const c = d.connById.get('C.BR.R1.L.1S')!;
     expect(c.members).toEqual(['F1.RAF.L', 'BR.R1.L.1']);
     expect(c.welds.every((w) => w.location === 'shop' && w.between[0] === 'F1.RAF.L')).toBe(true);
-    expect(c.bolts.length).toBe(2);
+    expect(c.bolts.length).toBe(1); // בורג M16 אחד בכל קצה (החלטת משתמש)
     expect(c.bolts.every((b) => b.d === 16 && b.location === 'site' && b.grip === 5 + 8 && b.holesIn.includes('C.BR.R1.L.1S.PL'))).toBe(true);
     const x = d.connById.get('C.BR.R1.L.X')!;
     expect(x.bolts.length).toBe(1);

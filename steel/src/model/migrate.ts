@@ -43,6 +43,12 @@ const MIGRATIONS: Record<number, (d: any) => any> = {
       purlins: { ...d.building.purlins, splice: defaultPurlinSplice() },
     },
   }),
+  // v6 → v7: ראש עמוד בשתי פלטות מוברגות; בורג קושרת אחד בכל קצה (החלטות משתמש 15.11.2026)
+  6: (d) => ({
+    ...d, schemaVersion: 7,
+    connectionDefaults: { ...d.connectionDefaults, eave: { ...d.connectionDefaults.eave, split: true, w: Math.max(d.connectionDefaults.eave.w, 270), gauge: Math.max(d.connectionDefaults.eave.gauge, 200) } },
+    building: { ...d.building, bracing: { ...d.building.bracing, conn: { ...d.building.bracing.conn, boltsPerEnd: 1 } } },
+  }),
 };
 
 export class ProjectFileError extends Error {}

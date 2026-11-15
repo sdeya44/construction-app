@@ -105,7 +105,9 @@ function SideEditor({ side, title, items }: { side: 'left' | 'right'; title: str
   );
 }
 
-export function RoofPanel() {
+export type RoofSection = 'system' | 'left' | 'right' | 'splices';
+export function RoofPanel({ section }: { section?: RoofSection } = {}) {
+  const show = (k: RoofSection) => !section || section === k;
   const d = useStore((s) => s.derived);
   const p = useStore((s) => s.project);
   const pu = p.building.purlins;
@@ -115,6 +117,7 @@ export function RoofPanel() {
   const exec = (c: Command) => store.exec(c);
   return (
     <div className="panel-body" data-testid="roof-panel">
+      {show('system') && <>
       <div className="panel-title">מערכת פטות</div>
       <div className="field"><label>חומר</label>
         <select className="inp" value={pu.material} onChange={(e) => exec(setPurlinSystem({ material: e.target.value }))}>
@@ -129,9 +132,11 @@ export function RoofPanel() {
         </div>
       )}
       <div className="hint">הפריסה מתחילה {p.building.roofType === 'gable' ? 'ברכס, לכל צד בנפרד,' : 'בקצה שנבחר'} ומתקדמת עד הקצה החיצוני של קורת הגג כולל הקונזולה. הפטה האחרונה בקצה, והשארית נשארת במפתח האחרון בלבד.</div>
+      </>}
       {p.building.roofType === 'gable'
-        ? <><SideEditor side="left" title="שיפוע שמאל" items={L} /><SideEditor side="right" title="שיפוע ימין" items={R} /></>
-        : <SideEditor side="left" title="שיפוע הגג" items={M} />}
+        ? <>{show('left') && <SideEditor side="left" title="שיפוע שמאל" items={L} />}{show('right') && <SideEditor side="right" title="שיפוע ימין" items={R} />}</>
+        : (show('left') || show('right')) && <SideEditor side="left" title="שיפוע הגג" items={M} />}
+      {show('splices') && <>
       <div className="panel-title">חלוקה לחלקי ייצור</div>
       <div className="hint">אורך חומר גלם: {(p.settings.stockLength / 1000).toFixed(2)} מ'. ההצעה ממקמת חיבורי המשך מעל מסגרות, רק במקום הנדרש — לא בכל מסגרת. חיבור המשך בפטת C/Z: פלטה בצד הפנימי של הווב ו-4 ברגים, 2 בכל פטה.</div>
       <div className="field"><label>עובי פלטת המשך</label><NumField testId="ps-t" value={pu.splice.plateT} suffix='מ"מ' onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, plateT: v } }))} /></div>
@@ -145,6 +150,7 @@ export function RoofPanel() {
         })}>ניקוי</button>
       </div>
       <div className="hint">חיבורי המשך בפטות: <b data-testid="purlin-splice-count">{nSpl}</b></div>
+      </>}
     </div>
   );
 }

@@ -16,7 +16,9 @@ export function ProfileDatalist() {
   );
 }
 
-export function StructurePanel() {
+export type StructSection = 'project' | 'geometry' | 'profiles' | 'bracing' | 'frames';
+export function StructurePanel({ section }: { section?: StructSection } = {}) {
+  const show = (k: StructSection) => !section || section === k;
   const p = useStore((s) => s.project);
   const roof = useStore((s) => s.derived.roof);
   const b = p.building;
@@ -28,6 +30,7 @@ export function StructurePanel() {
 
   return (
     <div className="panel-body" data-testid="structure-panel">
+      {show('project') && <>
       <div className="panel-title">פרויקט</div>
       <div className="field wide"><label>שם</label><TextField value={p.meta.name} onCommit={(v) => store.exec(setMeta({ name: v }))} /></div>
       <div className="field wide"><label>מספר</label><TextField value={p.meta.number} onCommit={(v) => store.exec(setMeta({ number: v }))} /></div>
@@ -39,7 +42,9 @@ export function StructurePanel() {
         </select>
       </div>
       <div className="field"><label>אורך חומר גלם</label><LenField mm={p.settings.stockLength} unit={u} min={1} onCommit={(v) => store.exec(setSettings({ stockLength: v }))} /></div>
+      </>}
 
+      {show('geometry') && <>
       <div className="panel-title">גיאומטריית מבנה</div>
       <div className="field"><label>סוג גג</label>
         <select className="inp" value={b.roofType} data-testid="roofType" onChange={(e) => {
@@ -72,6 +77,8 @@ export function StructurePanel() {
       <div className="field"><label>קונזולת פטות – סוף (Y)</label><LenField mm={b.purlinOverhangEnd} unit={u} onCommit={(v) => set({ purlinOverhangEnd: v })} /></div>
       <div className="field"><label>מפלס בסיס</label><LenField mm={b.baseElevation} unit={u} onCommit={(v) => set({ baseElevation: v })} /></div>
 
+      </>}
+      {show('profiles') && <>
       <div className="panel-title">חתכים וחומר</div>
       <div className="field"><label>עמודים</label><TextField ltr list="profiles" testId="columnProfile" value={b.columnProfile} onCommit={(v) => set({ columnProfile: v.toUpperCase().replace(/\s/g, '') })} /></div>
       <div className="field"><label>קורות גג</label><TextField ltr list="profiles" testId="rafterProfile" value={b.rafterProfile} onCommit={(v) => set({ rafterProfile: v.toUpperCase().replace(/\s/g, '') })} /></div>
@@ -81,7 +88,9 @@ export function StructurePanel() {
         </select>
       </div>
 
-      <BracingEditor />
+      </>}
+      {show('bracing') && <BracingEditor />}
+      {show('frames') && <>
       <div className="panel-title">מסגרות ({frames.length})
         <button className="btn small" data-testid="add-frame" onClick={() => {
           const last = frames[frames.length - 1];
@@ -111,6 +120,7 @@ export function StructurePanel() {
       <div className="field"><label>מספר מסגרות</label><NumField value={nf} onCommit={(v) => setNf(Math.round(v))} /></div>
       <div className="field"><label>מרווח</label><LenField mm={sp} unit={u} onCommit={setSp} /></div>
       <button className="btn" data-testid="respace" onClick={() => store.exec(respaceFrames(nf, sp))}>החל חלוקה</button>
+      </>}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { PDFDocument, rgb, degrees, LineCapStyle, type PDFFont, type PDFPage } f
 import fontkit from '@pdf-lib/fontkit';
 import { KSP_BOLD, KSP_REGULAR } from './font/fontData';
 import { visualRuns, type Layer, type Sheet } from './sheet';
+import { shadeTuple } from './svg';
 
 const MM = 72 / 25.4;
 const COLOR: Record<Layer, [number, number, number, number, number[]?]> = {
@@ -36,7 +37,11 @@ function drawSheet(page: PDFPage, sh: Sheet, reg: PDFFont, bold: PDFFont) {
     if (e.k === 'line') page.drawLine({ start: P(e.a.x, e.a.y), end: P(e.b.x, e.b.y), ...opts });
     else if (e.k === 'poly') {
       const pts = e.closed ? [...e.pts, e.pts[0]] : e.pts;
-      if (e.fill && e.pts.length > 2) {
+      if (e.shade !== undefined && e.pts.length > 2) {
+        const d = e.pts.map((q, i) => `${i ? 'L' : 'M'} ${(q.x * MM).toFixed(2)} ${(-q.y * MM).toFixed(2)}`).join(' ') + ' Z';
+        const [sr, sg, sb] = shadeTuple(e.shade);
+        page.drawSvgPath(d, { x: 0, y: 0, color: rgb(sr, sg, sb), borderColor: rgb(sr, sg, sb), borderWidth: 0.06 * MM });
+      } else if (e.fill && e.pts.length > 2) {
         const d = e.pts.map((q, i) => `${i ? 'L' : 'M'} ${(q.x * MM).toFixed(2)} ${(-q.y * MM).toFixed(2)}`).join(' ') + ' Z';
         page.drawSvgPath(d, { x: 0, y: 0, color: rgb(0.81, 0.84, 0.87), borderColor: color, borderWidth: w * MM });
       } else for (let i = 1; i < pts.length; i++) page.drawLine({ start: P(pts[i - 1].x, pts[i - 1].y), end: P(pts[i].x, pts[i].y), ...opts });

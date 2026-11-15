@@ -35,7 +35,8 @@ export function defaultPurlinSide(): PurlinSideParams {
 /** ברירות מחדל לחיבורים — הצעה גיאומטרית בלבד, לא מאומתת. */
 export function defaultConnections(): ConnectionDefaults {
   return {
-    eave: { enabled: true, t: 15, w: 200, l: 340, bolt: bolt(16), cols: 2, rows: 2, gauge: 100, pitch: 260, weldSize: 6 },
+    // החלטת משתמש 15.11.2026: פלטה על העמוד ופלטה על הקורה, 4×M16 בפינות — מחוץ לאגף הקורה ומחוץ להיטל העמוד (גישה למפתח)
+    eave: { enabled: true, split: true, t: 15, w: 270, l: 340, bolt: bolt(16), cols: 2, rows: 2, gauge: 200, pitch: 260, weldSize: 6 },
     ridge: { enabled: true, t: 15, w: 160, l: 0, bolt: bolt(16), cols: 2, rows: 2, gauge: 90, pitch: 0, weldSize: 6 },
     // לפי פרט K-02: PL 230×230×20 מבוטנת, 8 מוטות Φ20 מרותכים מתחת (עיגון 800), העמוד מרותך מסביב בשטח
     base: { enabled: true, mode: 'embedded', t: 20, w: 230, l: 230, bolt: { ...bolt(20), standard: 'מוט מצולע', grade: 'B500' }, cols: 3, rows: 3, gauge: 80, pitch: 80, weldSize: 4, anchorLength: 800 },
@@ -46,9 +47,9 @@ export function defaultPurlins(): PurlinSystem {
   return { material: 'S235', left: defaultPurlinSide(), right: defaultPurlinSide(), monoStart: 'high', splice: defaultPurlinSplice() };
 }
 
-/** חיבור קושרת (החלטת משתמש 15.11.2026): פח t=8 מרותך במסגריה, 2×M16 בכל קצה, בורג M16 בהצטלבות. */
+/** חיבור קושרת (החלטת משתמש 15.11.2026): פח t=8 מרותך במסגריה, M16 אחד בכל קצה (15.11.2026), בורג M16 בהצטלבות. */
 export function defaultBraceConn(): BraceConnParams {
-  return { bolt: bolt(16), boltsPerEnd: 2, pitch: 50, endDist: 30, gauge: null, gussetT: 8, gussetEdge: 30, clearance: 15, weldSize: 5, crossBolt: true };
+  return { bolt: bolt(16), boltsPerEnd: 1, pitch: 50, endDist: 30, gauge: null, gussetT: 8, gussetEdge: 30, clearance: 15, weldSize: 5, crossBolt: true };
 }
 
 /** חיבור המשך פטה (החלטת משתמש 15.11.2026): פלטת חיבור ו-4 ברגים, 2 בכל פטה. */

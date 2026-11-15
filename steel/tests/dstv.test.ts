@@ -29,13 +29,14 @@ describe('DSTV (NC1)', () => {
     expect(Number(first[2])).toBeCloseTo(100, 1);
     expect(L[L.length - 2]).toBe('EN');
   });
-  it('קורה: חורי פלטת כיפה באגף התחתון, חיתוכי קצה בזווית', () => {
+  it('קורה: ללא חורים (ראש עמוד בשתי פלטות — הקורה מרותכת לפלטה), חיתוכי קצה בזווית; חורי פלטת הקורה בקובץ הפלטה', () => {
     const part = fab.parts.find((x) => x.memberId === 'F2.RAF.L')!;
     const L = partToNc1(part, p, d, 1).split('\r\n');
     expect(L[9].trim()).toBe('I');
-    const bo = L.slice(L.indexOf('BO') + 1, L.indexOf('EN')).map((x) => x.trim().split(/\s+/));
-    expect(bo.length).toBe(4);
-    expect(bo.every((x) => x[0] === 'u' && Number(x[3]) === 18)).toBe(true);
+    expect(L.map((x) => x.trim())).not.toContain('BO');
+    const pl = fab.parts.find((x) => x.memberId === 'C.EAVE.F2.L.PL2')!;
+    expect(pl.holes.length).toBe(4);
+    expect(pl.holes.every((h) => h.d === 18)).toBe(true);
     expect(Number(L[19])).toBeCloseTo(5.7, 1); // חיתוך קצה בשיפוע 10%
   });
   it('ZIP: קובץ לכל סימון (ללא מוטות עיגון), נפתח ומכיל ST/EN', () => {

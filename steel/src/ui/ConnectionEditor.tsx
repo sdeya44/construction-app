@@ -95,6 +95,7 @@ export function ConnectionEditor() {
         </div>
       )}
 
+      {c.type === 'eave' && eff?.split !== false && <div className="hint">שתי הפלטות מרותכות במסגריה (לעמוד ולתחתית הקורה) ומוברגות זו לזו בשטח. הברגים בפינות: מחוץ לרוחב אגף הקורה ומחוץ להיטל העמוד, לגישת מפתח.</div>}
       {c.type === 'brace' && <div className="issue warning"><span className="ic">!</span>{c.label}. החלקים: {c.parts.join(', ')}.</div>}
       {eff && c.type === 'base' && (
         <div className="field"><label>סוג פרט</label>
@@ -103,8 +104,15 @@ export function ConnectionEditor() {
           </select>
         </div>
       )}
+      {eff && c.type === 'eave' && (
+        <div className="field"><label>סוג פרט</label>
+          <select className="inp" data-testid="cp-split" value={eff.split === false ? '0' : '1'} onChange={(e) => setP({ split: e.target.value === '1' })}>
+            <option value="1">פלטה על העמוד + פלטה על הקורה</option><option value="0">פלטה אחת, ברגים דרך אגף הקורה</option>
+          </select>
+        </div>
+      )}
       {eff && <>
-        <div className="panel-title">פלטה</div>
+        <div className="panel-title">{c.type === 'eave' && eff.split !== false ? 'פלטות (עמוד וקורה — אותן מידות)' : 'פלטה'}</div>
         <div className="field"><label>עובי</label><LenField testId="cp-t" mm={eff.t} unit="mm" onCommit={(v) => setP({ t: v })} /></div>
         <div className="field"><label>רוחב</label><LenField testId="cp-w" mm={eff.w} unit="mm" onCommit={(v) => setP({ w: v })} /></div>
         <div className="field"><label>{c.type === 'ridge' ? 'הארכה מתחת לקורה' : 'אורך'}</label><LenField testId="cp-l" mm={eff.l} unit="mm" onCommit={(v) => setP({ l: v })} /></div>

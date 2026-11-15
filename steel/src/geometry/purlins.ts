@@ -163,18 +163,24 @@ export function buildPurlins(b: BuildingParams, roof: RoofInfo, deleted: Set<str
 }
 
 /**
- * הצעת חיבורי המשך לקו באורך L (לאורך Y מתחילת הקו), מעל נקודות תמיכה, כך שאף חלק אינו ארוך מחומר הגלם.
- * הצעה בלבד — המשתמש מאשר/משנה. אינה כופה חיבור בכל מסגרת.
+ * הצעת חיבורי המשך לקו באורך L (לאורך Y מתחילת הקו), כך שאף חלק אינו ארוך מחומר הגלם.
+ * עדיפות: תפר מעל תומך. אם תומך נמצא ממש אחרי סוף המוט (עד 300 מ"מ) — התפר בסוף המוט, סמוך לתומך
+ * (ניצול מלא של המוט; החלטת משתמש 15.11.2026). הצעה בלבד — המשתמש מאשר/משנה.
  */
 export function proposeSplices(L: number, stock: number, supportsT: number[]): number[] {
   if (L <= stock + TOL) return [];
+  const NEAR = 300;
   const out: number[] = [];
   // לא מציעים חיבור קרוב לקצה הקו (חלק קצר מ-500 מ"מ אינו מעשי)
   const ts = [...supportsT].filter((t) => t > 500 && t < L - 500).sort((a, b) => a - b);
   let s = 0;
   while (L - s > stock + TOL) {
+    const end = s + stock;
     const cand = ts.filter((t) => t > s + TOL && t - s <= stock + TOL);
-    const next = cand.length ? cand[cand.length - 1] : s + stock;
+    const near = ts.some((t) => t > end + TOL && t <= end + NEAR);
+    const best = cand.length ? cand[cand.length - 1] : null;
+    // תומך במרחק NEAR אחרי סוף המוט — עדיף מוט מלא עם תפר ליד התומך על פני חלק קצר בהרבה
+    const next = near || best === null || end - best > NEAR ? end : best;
     out.push(next);
     s = next;
   }

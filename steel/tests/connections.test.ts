@@ -124,7 +124,7 @@ describe('CONN – חיבורים', () => {
     expect(c.bolts.length).toBe(6);
     expect(c.overridden).toBe(true);
     const after = d.byId.get('F2.COL.L')!.endCut!;
-    expect(dot(sub(before.point, after.point), after.normal)).toBeCloseTo(10, 6); // העמוד התקצר ב-10
+    expect(dot(sub(before.point, after.point), after.normal)).toBeCloseTo(20, 6); // העמוד התקצר ב-2×10 (פלטת עמוד ופלטת קורה)
     expect(generate(p).connById.get('C.EAVE.F3.L')!.bolts.length).toBe(4); // חיבור אחר לא השתנה
     expect(JSON.parse(JSON.stringify(p)).connectionOverrides[id].t).toBe(25);
   });

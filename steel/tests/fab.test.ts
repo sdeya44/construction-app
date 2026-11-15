@@ -65,15 +65,15 @@ describe('מספור, מכלולים, כמויות', () => {
     expect(sumParts).toBeCloseTo(sumProf, 6);
     expect(bom.totalWeight).toBeCloseTo(sumProf, 6);
     const c200 = bom.profiles.find((r) => r.profile === 'C200x80x20x3')!;
-    expect(c200.count).toBe(12 + 2 * 4); // 12 קווים בחלק אחד + 2 קווים בארבעה חלקים
+    expect(c200.count).toBe(12 + 2 * 3); // 12 קווים בחלק אחד + 2 קווים בשלושה חלקים (12/12/6.1)
     expect(c200.length).toBeCloseTo(14 * 30100, 6);
     const cleatBolts = bom.bolts.find((b) => b.d === 12 && b.length === 35)!;
-    // 2 קווים × 3 תפרים מעל תומכים: 2 ברגי תומך בכל תפר עוברים גם בפלטת ההמשך (ארוכים יותר)
-    expect(cleatBolts.qty).toBe(84 * 2 - 2 * 3 * 2);
-    expect(bom.bolts.filter((b) => b.d === 12).reduce((s, b) => s + b.qty, 0)).toBe(84 * 2 + 5 * 14 + 2 * 3 * 4);
+    // 2 קווים × 2 תפרים סמוך לתומך: 2 ברגי תומך בכל תפר עוברים גם בפלטת ההמשך (ארוכים יותר)
+    expect(cleatBolts.qty).toBe(84 * 2 - 2 * 2 * 2);
+    expect(bom.bolts.filter((b) => b.d === 12).reduce((s, b) => s + b.qty, 0)).toBe(84 * 2 + 5 * 14 + 2 * 2 * 4);
     expect(cleatBolts.location).toBe('site');
     const tieBolts = bom.bolts.find((b) => b.d === 12 && b.length === 30)!;
-    expect(tieBolts.qty).toBe(5 * 14 + 2 * 3 * 4); // שורת קשירה: בורג בכל הצטלבות + ברגי פלטות המשך (אותו אורך)
+    expect(tieBolts.qty).toBe(5 * 14 + 2 * 2 * 4); // שורת קשירה: בורג בכל הצטלבות + ברגי פלטות המשך (אותו אורך)
     // שינוי חתך הפטה — משקל, כמות וחיתוך מתעדכנים
     const p2 = setPurlinSide('left', { profile: 'C250x80x20x3' }).run(p);
     const r2 = fabOf(p2), bom2 = computeBom(r2.d, r2.f);
@@ -90,8 +90,8 @@ describe('מספור, מכלולים, כמויות', () => {
     const { f } = fabOf(p);
     const pl = cutPlans(f, p).find((x) => x.profile === 'C200x80x20x3')!;
     expect(pl.tooLong.length).toBe(13); // שאר הפטות 30 מ' ללא חיבורי המשך
-    // חלקים 6050/12000/6000/6050: מוט 12 מ' לחלק 12, ושני 6050+6000 לא נכנסים יחד במוט אחד עם קרף
-    expect(pl.bars.reduce((s, b) => s + b.cuts.length, 0)).toBe(4);
+    // חלקים 12000/12000/6100: מוט מלא לכל חלק ארוך (החלטת משתמש: ניצול מוט 12 מ')
+    expect(pl.bars.reduce((s, b) => s + b.cuts.length, 0)).toBe(3);
     expect(pl.partsTotal).toBeCloseTo(30100, 6);
     expect(pl.bars.every((b) => b.cuts.reduce((s, c) => s + c.length, 0) + (b.cuts.length - 1) * 3 <= b.stock)).toBe(true);
     p = setBuilding({ purlinOverhangEnd: 0 }).run(p);

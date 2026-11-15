@@ -99,7 +99,7 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
 
   for (const f of b.frames) {
     const fi = b.frames.indexOf(f) + 1;
-    // ---- ראש עמוד: פלטת כיפה מרותכת לעמוד (מסגריה), ברגים דרך האגף התחתון של הקורה (שטח)
+    // ---- ראש עמוד: פלטה מרותכת לעמוד ופלטה מרותכת לקורה (מסגריה), מוברגות זו לזו (שטח)
     for (const side of ['L', 'R'] as const) {
       const id = `C.EAVE.${f.id}.${side}`;
       const col = byId.get(`${f.id}.COL.${side}`);
@@ -111,38 +111,55 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       const exr = norm(sub(raf!.end, raf!.start));
       const tAx = linePlaneT(col!.end, Z, U) ?? 0;
       const P0 = add(col!.end, scale(Z, tAx)); // מרכז פני עליון של הפלטה (במישור תחתון הקורה)
-      col!.endCut = { point: sub(U.point, scale(n, prm.t)), normal: n };
-      const pid = `${id}.PL`;
-      const plate = partMember(pid, 'plate', `PL${prm.w}x${prm.t}`, sub(P0, scale(exr, prm.l / 2)), add(P0, scale(exr, prm.l / 2)), n, 'top', id, `פלטת כיפה PL${prm.t}×${prm.w}×${prm.l}`, mat);
-      res.members.push(plate);
+      // split (החלטת משתמש 15.11.2026): פלטה על ראש העמוד + פלטה מרותכת לתחתית הקורה, מוברגות זו לזו בשטח
+      const split = prm.split !== false;
+      const T = split ? 2 * prm.t : prm.t;
+      col!.endCut = { point: sub(U.point, scale(n, T)), normal: n };
+      const pid = `${id}.PL`, pid2 = `${id}.PL2`;
+      const Pc = split ? sub(P0, scale(n, prm.t)) : P0; // פני עליון של פלטת העמוד
+      res.members.push(partMember(pid, 'plate', `PL${prm.w}x${prm.t}`, sub(Pc, scale(exr, prm.l / 2)), add(Pc, scale(exr, prm.l / 2)), n, 'top', id, `פלטת ראש עמוד PL${prm.t}×${prm.w}×${prm.l}`, mat));
+      if (split) res.members.push(partMember(pid2, 'plate', `PL${prm.w}x${prm.t}`, sub(P0, scale(exr, prm.l / 2)), add(P0, scale(exr, prm.l / 2)), n, 'top', id, `פלטת קורה PL${prm.t}×${prm.w}×${prm.l}`, mat));
       const rp = getProfile(raf!.profile), cp = getProfile(col!.profile);
       const tf = rp.dims.tf ?? rp.dims.t ?? 10;
       const yDir = norm(cross(n, exr));
       const bolts: BoltInfo[] = [];
       grid(prm.cols, prm.gauge).forEach((gy, ci) => grid(prm.rows, prm.pitch).forEach((px, ri) => {
-        const head = add(add(sub(P0, scale(n, prm.t)), scale(yDir, gy)), scale(exr, px));
-        bolts.push(makeBolt(`${id}.B${ci + 1}${ri + 1}`, id, head, n, prm.bolt, prm.t + tf, 'site', [pid, raf!.id], exr, res.members));
+        const head = add(add(sub(P0, scale(n, T)), scale(yDir, gy)), scale(exr, px));
+        bolts.push(makeBolt(`${id}.B${ci + 1}${ri + 1}`, id, head, n, prm.bolt, split ? 2 * prm.t : prm.t + tf, 'site', split ? [pid, pid2] : [pid, raf!.id], exr, res.members));
       }));
       const d0 = prm.bolt.d + prm.bolt.clearance;
       const label = `חיבור ראש עמוד ${side === 'L' ? 'שמאל' : 'ימין'} מסגרת ${fi}`;
-      // כל בורג חייב לעבור דרך אגף הקורה: מיקום לאורך הקורה בתוך התחום, עם מרחק קצה
-      // קצה הקורה בגובה האגף התחתון: חיתוך קו תחתון הקורה עם מישור חיתוך הקצה
       const rStart = (raf!.startCut ? linePlaneT(P0, exr, raf!.startCut) : null) ?? dot(sub(raf!.start, P0), exr);
-      for (const bo of bolts) {
-        const tb = dot(sub(bo.p, P0), exr);
-        if (tb - d0 / 2 < rStart + 1.2 * d0 - 0.01) issue({ code: 'BOLT_OUTSIDE', severity: 'error', elementId: id, message: `${label}: בורג ${bo.id} מחוץ לקורת הגג או קרוב מדי לקצה שלה — הגדל קונזולה או קצר את הפלטה` });
-      }
       edgeChecks(label, id, d0, prm.l / 2 - ((prm.rows - 1) / 2) * prm.pitch, prm.w / 2 - ((prm.cols - 1) / 2) * prm.gauge,
         prm.rows > 1 ? prm.pitch : null, prm.cols > 1 ? prm.gauge : null, res.issues);
-      const flangeEdge = rp.props.b / 2 - ((prm.cols - 1) / 2) * prm.gauge;
-      if (flangeEdge < 1.2 * d0) issue({ code: 'BOLT_EDGE', severity: 'warning', elementId: id, message: `${label}: ברגים קרובים לשפת אגף הקורה (${flangeEdge.toFixed(1)} מ"מ)` });
-      if (prm.w > rp.props.b + 0.5) issue({ code: 'PLATE_WIDE', severity: 'info', elementId: id, message: `${label}: הפלטה רחבה מאגף הקורה` });
-      const colHalf = cp.props.h / 2 / Math.abs(dot(exr, v3(1, 0, 0)) || 1);
-      if (prm.rows > 1 && (prm.pitch / 2 - (prm.bolt.d + 2 * hw(prm.bolt.d).s) / 2) < colHalf) {
-        issue({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `${label}: ברגים בתוך היטל העמוד — אין גישה לכלי עבודה מתחת לפלטה` });
+      const hwb = hw(prm.bolt.d);
+      const rr = hwb.s / Math.sqrt(3) + 2; // רדיוס אום/ראש (פינות) + מרווח
+      const cosA = Math.abs(dot(exr, v3(1, 0, 0))) || 1;
+      if (split) {
+        // פלטת הקורה בתחום הקורה
+        if (-prm.l / 2 < rStart - 1) issue({ code: 'BOLT_OUTSIDE', severity: 'error', elementId: id, message: `${label}: פלטת הקורה חורגת מקצה קורת הגג — הגדל קונזולה או קצר את הפלטה` });
+        for (const gy of grid(prm.cols, prm.gauge)) for (const px of grid(prm.rows, prm.pitch)) {
+          // אום מעל פלטת הקורה: חייב להיות מחוץ לרוחב אגף הקורה
+          if (Math.abs(gy) - rr < rp.props.b / 2) { issue({ code: 'BOLT_ACCESS', severity: 'error', elementId: id, message: `${label}: אום מעל פלטת הקורה מתנגש באגף הקורה — מרווח רוחבי ${prm.gauge} קטן מ-${Math.ceil(rp.props.b + 2 * rr)}; הגדל מרווח ורוחב פלטה` }); break; }
+          // ראש מתחת לפלטת העמוד: מחוץ להיטל העמוד
+          if (Math.abs(px) * cosA - rr < cp.props.h / 2 && Math.abs(gy) - rr < cp.props.b / 2) { issue({ code: 'BOLT_ACCESS', severity: 'error', elementId: id, message: `${label}: ראש בורג מתחת לפלטת העמוד בתוך היטל העמוד — הגדל מרווח לאורך הקורה` }); break; }
+        }
+      } else {
+        for (const bo of bolts) {
+          const tb = dot(sub(bo.p, P0), exr);
+          if (tb - d0 / 2 < rStart + 1.2 * d0 - 0.01) issue({ code: 'BOLT_OUTSIDE', severity: 'error', elementId: id, message: `${label}: בורג ${bo.id} מחוץ לקורת הגג או קרוב מדי לקצה שלה — הגדל קונזולה או קצר את הפלטה` });
+        }
+        const flangeEdge = rp.props.b / 2 - ((prm.cols - 1) / 2) * prm.gauge;
+        if (flangeEdge < 1.2 * d0) issue({ code: 'BOLT_EDGE', severity: 'warning', elementId: id, message: `${label}: ברגים קרובים לשפת אגף הקורה (${flangeEdge.toFixed(1)} מ"מ)` });
+        if (prm.w > rp.props.b + 0.5) issue({ code: 'PLATE_WIDE', severity: 'info', elementId: id, message: `${label}: הפלטה רחבה מאגף הקורה` });
+        const colHalf = cp.props.h / 2 / cosA;
+        if (prm.rows > 1 && (prm.pitch / 2 - (prm.bolt.d + 2 * hwb.s) / 2) < colHalf) {
+          issue({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `${label}: ברגים בתוך היטל העמוד — אין גישה לכלי עבודה מתחת לפלטה` });
+        }
       }
-      const welds: WeldInfo[] = [{ id: `${id}.W1`, connId: id, type: 'fillet', a: prm.weldSize, length: outlinePerimeter(col!.profile), location: 'shop', between: [col!.id, pid], from: sub(P0, scale(n, prm.t)), to: sub(P0, scale(n, prm.t)) }];
-      res.connections.push({ id, type: 'eave', label, members: [col!.id, raf!.id], parts: [pid, ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'rigid', overridden: !!project.connectionOverrides[id] });
+      const welds: WeldInfo[] = [{ id: `${id}.W1`, connId: id, type: 'fillet', a: prm.weldSize, length: outlinePerimeter(col!.profile), location: 'shop', between: [col!.id, pid], from: sub(P0, scale(n, T)), to: sub(P0, scale(n, T)) }];
+      if (split) welds.push({ id: `${id}.W2`, connId: id, type: 'fillet', a: prm.weldSize, length: 2 * Math.min(prm.l, prm.l) + 2 * rp.props.b, location: 'shop', between: [raf!.id, pid2], from: P0, to: P0 });
+      res.connections.push({ id, type: 'eave', label, members: [col!.id, raf!.id], parts: [pid, ...(split ? [pid2] : []), ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'rigid', overridden: !!project.connectionOverrides[id] });
     }
 
     // ---- רכס: פלטות קצה מרותכות לקורות (מסגריה), מוברגות זו לזו (שטח)
@@ -258,27 +275,40 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       if (!(t > 100 && t < lf.length - 100)) return; // נבדק ב-buildParts (SPLICE_RANGE)
       const id = `C.PS.${pur.id}.${k + 1}`;
       const pid = `${id}.PL`;
-      const nearSup = cl.enabled && supT.some((st) => Math.abs(st - t) < cl.width / 2 + sp0.jointOffset);
-      const o = nearSup ? Math.max(sp0.jointOffset, cl.width / 2 + sp0.edge + 5) : sp0.jointOffset;
-      const L = 2 * (o + sp0.edge);
+      // מרחק עמודת הברגים מהתפר בכל צד: לפחות jointOffset, ומחוץ לרוחב הזוויתן (+ מרווח) אם יש תומך סמוך
+      const clr = sp0.edge + 5;
+      const offFor = (sg: number) => {
+        let o = sp0.jointOffset;
+        if (!cl.enabled) return o;
+        for (let g = 0; g < 20; g++) {
+          const tb = t + sg * o;
+          const hit = supT.find((st) => Math.abs(tb - st) < cl.width / 2 + clr);
+          if (hit === undefined) break;
+          o = Math.abs(hit + sg * (cl.width / 2 + clr) - t);
+        }
+        return o;
+      };
+      const oL = offFor(-1), oR = offFor(1);
+      const L = oL + oR + 2 * sp0.edge;
       const J = add(pur.start, scale(lf.ex, t));
       const C = add(add(J, scale(n, h / 2)), scale(back, tw / 2 + sp0.plateT / 2));
-      res.members.push(partMember(pid, 'plate', `PL${H}x${sp0.plateT}`, sub(C, scale(lf.ex, L / 2)), add(C, scale(lf.ex, L / 2)), back, 'center', id,
+      const y0p = -(oL + sp0.edge), y1p = oR + sp0.edge;
+      res.members.push(partMember(pid, 'plate', `PL${H}x${sp0.plateT}`, add(C, scale(lf.ex, y0p)), add(C, scale(lf.ex, y1p)), back, 'center', id,
         `פלטת המשך פטה PL${sp0.plateT}×${H}×${L}`, b.purlins.material));
       const bolts: BoltInfo[] = [];
       [-1, 1].forEach((sg, si) => [-gV / 2, gV / 2].forEach((zz, zi) => {
-        const head = add(add(add(J, scale(lf.ex, sg * o)), scale(n, h / 2 + zz)), scale(d, tw / 2));
+        const head = add(add(add(J, scale(lf.ex, sg < 0 ? -oL : oR)), scale(n, h / 2 + zz)), scale(d, tw / 2));
         bolts.push(makeBolt(`${id}.B${si + 1}${zi + 1}`, id, head, back, sp0.bolt, tw + sp0.plateT, 'site', [pur.id, pid], n, res.members));
       }));
       const d0 = sp0.bolt.d + sp0.bolt.clearance;
       const label = `חיבור המשך ${pur.label} (${(t / 1000).toFixed(3)} מ')`;
       edgeChecks(label, id, d0, sp0.edge, sp0.edge, gV, null, res.issues);
-      if (o < 1.2 * d0) issue({ code: 'BOLT_EDGE', severity: 'warning', elementId: id, message: `${label}: מרחק הבורג מקצה הפטה ${o} מ"מ < 1.2·d0` });
+      if (Math.min(oL, oR) < 1.2 * d0) issue({ code: 'BOLT_EDGE', severity: 'warning', elementId: id, message: `${label}: מרחק הבורג מקצה הפטה ${Math.min(oL, oR)} מ"מ < 1.2·d0` });
       const flat0 = 2 * tw, flat1 = h - 2 * tw;
       if (h / 2 - gV / 2 - d0 / 2 < flat0 || h / 2 + gV / 2 + d0 / 2 > flat1) issue({ code: 'HOLE_FLAT', severity: 'warning', elementId: id, message: `${label}: חור מחוץ לאזור השטוח של ווב הפטה` });
       if (pp.family === 'C' && H > h - 2 * tw - 2 * (pp.dims.r ?? tw)) issue({ code: 'PLATE_WIDE', severity: 'warning', elementId: id, message: `${label}: גובה הפלטה ${H} גדול מהאזור השטוח בין האגפים` });
       const arr = splicePlates.get(pur.id) ?? [];
-      arr.push({ id: pid, y0: t - L / 2, y1: t + L / 2, T: sp0.plateT });
+      arr.push({ id: pid, y0: t + y0p, y1: t + y1p, T: sp0.plateT });
       splicePlates.set(pur.id, arr);
       res.connections.push({ id, type: 'purlin-splice', label, members: [pur.id], parts: [pid, ...bolts.map((x) => x.id)], bolts, welds: [], status: statusOf(project, id), fixity: 'pinned', overridden: false });
     });

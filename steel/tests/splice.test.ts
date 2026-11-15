@@ -7,29 +7,26 @@ import { computeFabrication } from '../src/fab/marks';
 const geo = () => newProject('t', defaultBuilding());
 
 describe('חיבור המשך פטה — פלטה ו-4 ברגים (2 בכל פטה)', () => {
-  it('תפר מעל תומך: פלטה בצד הפנימי של הווב, 4 ברגים מחוץ לרוחב הזוויתן, ברגי התומך עוברים גם בפלטה', () => {
+  it('תפר סמוך לתומך (סוף מוט 12 מטר): פלטה בצד הפנימי של הווב, 4 ברגים מחוץ לרוחב הזוויתן, ברגי התומך עוברים גם בפלטה', () => {
     const p = proposeSplicesFor(['PL.L.03']).run(geo());
     const d = generate(p);
     const ts = p.splices['PL.L.03'];
-    expect(ts.length).toBeGreaterThanOrEqual(2);
-    const sp = d.splices.filter((s) => s.memberId === 'PL.L.03');
-    expect(sp.every((s) => s.status === 'bolted')).toBe(true);
+    expect(ts).toEqual([12000, 24000]);
+    const s0 = d.byId.get('PL.L.03')!.start.y;
+    expect(d.splices.filter((s) => s.memberId === 'PL.L.03').every((s) => s.status === 'bolted')).toBe(true);
     const c = d.connById.get('C.PS.PL.L.03.1')!;
     expect(c.type).toBe('purlin-splice');
     expect(c.bolts.length).toBe(4);
-    const tj = ts[0];
-    const left = c.bolts.filter((b) => b.p.y - d.byId.get('PL.L.03')!.start.y < tj).length;
-    expect(left).toBe(2);
+    const rel = c.bolts.map((b) => Math.round(b.p.y - s0 - 12000)).sort((a, b) => a - b);
+    // צד ללא תומך: 60 מהתפר; צד התומך (מרכז ב-+50, רוחב 100): מעבר לזוויתן + 35
+    expect(rel).toEqual([-60, -60, 135, 135]);
     expect(c.bolts.every((b) => b.d === 12 && b.location === 'site' && b.grip === 3 + 6)).toBe(true);
-    // מעל תומך: עמודת הברגים במרחק ≥ חצי רוחב הזוויתן + שפה
-    const off = Math.min(...c.bolts.map((b) => Math.abs(b.p.y - d.byId.get('PL.L.03')!.start.y - tj)));
-    expect(off).toBeGreaterThanOrEqual(50 + 30);
-    const plate = d.byId.get('C.PS.PL.L.03.1.PL')!;
-    expect(plate.profile).toBe('PL160x6');
-    // בורג התומך בתפר עובר בפלטה: אחיזה מוגדלת ושלושה חלקים
-    const sup = d.supports.find((s) => s.purlinId === 'PL.L.03' && Math.abs(s.p.y - d.byId.get('PL.L.03')!.start.y - tj) < 1)!;
+    expect(d.byId.get('C.PS.PL.L.03.1.PL')!.profile).toBe('PL160x6');
+    // ברגי התומך הסמוך עוברים בפלטה
+    const sup = d.supports.find((s) => s.purlinId === 'PL.L.03' && Math.abs(s.p.y - s0 - 12050) < 1)!;
     const cc = d.connById.get(`C.PC.PL.L.03.${sup.frameId}`)!;
     expect(cc.bolts.every((b) => b.holesIn.includes('C.PS.PL.L.03.1.PL') && b.grip === 8 + 3 + 6)).toBe(true);
+    expect(d.parts.filter((x) => x.memberId === 'PL.L.03').map((x) => Math.round(x.length))).toEqual([12000, 12000, 6100]);
     expect(d.issues.filter((i) => i.code === 'CLASH' || (i.severity !== 'info' && i.elementId?.startsWith('C.PS')))).toEqual([]);
   });
   it('תפר באמצע מפתח: עמודת ברגים במרחק ברירת המחדל; חורים בשני חלקי הפטה', () => {

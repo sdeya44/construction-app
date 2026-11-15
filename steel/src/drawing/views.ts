@@ -1,6 +1,7 @@
 import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import { cachedSolidPure } from './solidCache';
+import { assemblySheet } from './assembly';
 import { getProfile } from '../profiles/library';
 import type { Bom } from '../fab/bom';
 import type { Fabrication, MarkedPart } from '../fab/marks';
@@ -291,9 +292,12 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
       T('גיאומטריה בלבד — אין בדיקת חוזק לברגים, ריתוכים ופלטות.');
       break;
     }
-    case 'part':
     case 'assembly': {
-      const isAsm = def.type === 'assembly';
+      scaleLabel = assemblySheet(sh, fab, d, def.ref!);
+      break;
+    }
+    case 'part': {
+      const isAsm = false as boolean;
       const part: MarkedPart | undefined = isAsm
         ? (() => { const a = fab.assemblies.find((x) => x.mark === def.ref)!; return fab.byPart.get(a.main); })()
         : fab.parts.find((x) => x.mark === def.ref);
