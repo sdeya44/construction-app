@@ -27,7 +27,12 @@ export function SectionEditor() {
       <div className="tpl-grid">
         {SECTION_TEMPLATES.map((t) => (
           <button key={t.id} className={`tpl${sec?.template === t.id ? ' on' : ''}`} data-testid={`tpl-${t.id}`} title={t.desc}
-            onClick={() => (!sec || confirm(`להחליף את החתך בתבנית "${t.name}"?`)) && apply(t.make(), `תבנית חתך: ${t.name}`)}>
+            onClick={() => {
+              if (sec && !confirm(`להחליף את החתך בתבנית "${t.name}"?`)) return;
+              // תבנית = סככה כמו בתוכניות: כולל אלכסוני עמוד-קורה (ניתן לבטל)
+              const s2 = setSection(t.make(), `תבנית חתך: ${t.name}`), k2 = setKneeBraces({ enabled: true });
+              store.exec({ label: `תבנית חתך: ${t.name}`, run: (pp) => k2.run(s2.run(pp)) });
+            }}>
             <SectionPreview section={t.make()} small /><span>{t.name}</span>
           </button>
         ))}

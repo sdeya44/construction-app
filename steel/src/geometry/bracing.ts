@@ -51,16 +51,28 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
     const slopes: { side: string; a: { x: number; z: number }; c: { x: number; z: number }; rid: (f: string) => string }[] = [];
     const ridgeGap = 150 + bc.gussetEdge;
     // לכל מישור: מהעמוד הקיצוני בכל צד (או מהקצה פחות מרווח, אם אין עמוד באותו חצי — רכס/חיבור צד/קונזולה)
+    // קושרות לכל אורך המישור, מחולקות לקטעים בכל עמוד פנימי (החלטת משתמש 15.11.2026: "אלכסונים בגג" עד הרכס)
     for (const pl of topo.sec.planes) {
-      const lo = Math.min(pl.a.x, pl.b.x), hi = Math.max(pl.a.x, pl.b.x), mid = (lo + hi) / 2;
-      const inside = topo.sec.lines.filter((l) => l.x > lo + 1 && l.x < hi - 1);
-      const endX = (e: { x: number }) => {
-        const half = inside.filter((l) => (e.x < mid ? l.x <= mid : l.x >= mid));
-        if (half.length) return e.x < mid ? Math.min(...half.map((l) => l.x)) : Math.max(...half.map((l) => l.x));
-        return e.x < mid ? e.x + ridgeGap : e.x - ridgeGap;
+      const lo = Math.min(pl.a.x, pl.b.x), hi = Math.max(pl.a.x, pl.b.x);
+      const inside = topo.sec.lines.filter((l) => l.x > lo + 1 && l.x < hi - 1).map((l) => l.x).sort((p, q) => p - q);
+      const isJoined = (e: 'a' | 'b') => topo.ridges.some((r) => (r.pa === pl && r.ea === e) || (r.pb === pl && r.eb === e))
+        || topo.junctions.some((j) => j.plane === pl && j.kind === 'side' && j.end === e);
+      // קצה חופשי (מרזב/קונזולה): מהעמוד הקרוב; קצה מחובר (רכס/צד עמוד): מהקצה פחות מרווח
+      const endX = (e: 'a' | 'b') => {
+        const E = pl[e], toward = E.x < (lo + hi) / 2 ? 1 : -1;
+        if (!isJoined(e) && inside.length) return toward > 0 ? inside[0] : inside[inside.length - 1];
+        return E.x + toward * ridgeGap;
       };
-      const xa = endX(pl.a), xc = endX(pl.b);
-      slopes.push({ side: pl.id, a: { x: xa, z: zAt(pl, xa) }, c: { x: xc, z: zAt(pl, xc) }, rid: pl.rafterId });
+      const xa = endX('a'), xc = endX('b');
+      const x0 = Math.min(xa, xc), x1 = Math.max(xa, xc);
+      const st = [x0, ...inside.filter((x) => x > x0 + 500 && x < x1 - 500), x1];
+      // סדר מנקודה a לנקודה c (תאימות למזהים בגג הקלאסי)
+      const ordered = xa <= xc ? st : [...st].reverse();
+      const nseg = ordered.length - 1;
+      for (let k = 0; k < nseg; k++) {
+        const s0 = ordered[k], s1 = ordered[k + 1];
+        slopes.push({ side: nseg > 1 ? `${pl.id}${k + 1}` : pl.id, a: { x: s0, z: zAt(pl, s0) }, c: { x: s1, z: zAt(pl, s1) }, rid: pl.rafterId });
+      }
     }
     for (const bay of resolveBays(br.roof.bays, nb)) {
       const f0 = frames[bay], f1 = frames[bay + 1];

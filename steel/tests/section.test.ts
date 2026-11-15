@@ -76,4 +76,12 @@ describe('חתך מודולרי — מערכת לבניית סוגי סככות'
     const d = generate(p);
     expect(d.issues.some((i) => i.code === 'PLANE_THROUGH')).toBe(true);
   });
+
+  it('אלכסוני גג לכל אורך המישור, מחולקים בעמוד הפנימי ועד הרכס', () => {
+    const d = generate(withTpl('gable-inner'));
+    const span = (pre: string) => { const ms = d.members.filter((m) => m.id.startsWith(pre)); return [Math.min(...ms.map((m) => Math.min(m.start.x, m.end.x))), Math.max(...ms.map((m) => Math.max(m.start.x, m.end.x)))]; };
+    const [a0, a1] = span('BR.R1.P11.'), [b0, b1] = span('BR.R1.P12.');
+    expect(a0).toBeLessThan(200); expect(a1).toBeGreaterThan(6900); // מהעמוד החיצוני לפנימי
+    expect(b0).toBeLessThan(7100); expect(b1).toBeGreaterThan(10700); // מהעמוד הפנימי עד הרכס (11.0)
+  });
 });
