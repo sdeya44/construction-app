@@ -312,7 +312,11 @@ export interface Project {
   meta: ProjectMeta;
   displayUnit: 'm' | 'mm';
   /** autoSplice: חלוקה אוטומטית של אלמנט ארוך מחומר הגלם (ברירת מחדל: כן) */
-  settings: { stockLength: Mm; stockLengths: Mm[]; kerf: Mm; checkedBy: string; approvedBy: string; autoSplice?: boolean };
+  settings: { stockLength: Mm; stockLengths: Mm[]; kerf: Mm; checkedBy: string; approvedBy: string; autoSplice?: boolean;
+    /** stock = מוט מלא והשלמה (ברירת מחדל); equal = חלקים שווים */
+    spliceMode?: 'stock' | 'equal';
+    /** פלטות חיזוק משולשות בחיבור המשך של קורת I */
+    spliceStiffeners?: boolean };
   building: BuildingParams;
   memberOverrides: Record<string, MemberOverride>;
   manualMembers: ManualMember[];

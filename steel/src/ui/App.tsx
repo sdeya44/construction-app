@@ -13,13 +13,14 @@ import { ProductionView } from './ProductionView';
 import { CommandPalette, ConnCard, ContextBar, MarkingMenu, connectionsOf, type Cmd } from './Overlays';
 import { KIND_LABEL } from './TreePanel';
 import { moveLines } from '../model/section';
+import { NAV_INDEX } from './navIndex';
 import { SideNav, type NavKey } from './SideNav';
 import { EaveCheckDialog } from './EaveCheckDialog';
 import { LayersMenu } from './LayersMenu';
 
 type DialogKind = null | 'new' | 'open' | 'move' | 'copy' | 'rotate' | 'mirror' | 'catalog';
-type SideTab = 'structure' | 'roof' | 'tree' | 'conns' | 'issues';
-const navGroup = (k: NavKey): SideTab => (k.startsWith('s') ? 'structure' : k.startsWith('r') ? 'roof' : k.startsWith('k') || k === 'tree' ? 'tree' : k.startsWith('c') ? 'conns' : 'issues');
+type SideTab = 'structure' | 'roof' | 'brace' | 'tree' | 'conns' | 'issues';
+const navGroup = (k: NavKey): SideTab => (k.startsWith('s') ? 'structure' : k.startsWith('r') ? 'roof' : k.startsWith('b') ? 'brace' : k.startsWith('k') || k === 'tree' ? 'tree' : k.startsWith('c') ? 'conns' : 'issues');
 type MobileTab = null | 'side' | 'props';
 
 function TB({ icon, label, on, onClick, disabled, testId, title, desk }: { icon: string; label?: string; on?: boolean; onClick: () => void; disabled?: boolean; testId?: string; title?: string; desk?: boolean }) {
@@ -77,7 +78,9 @@ export function App() {
     viewport.onContext = (x, y) => setMenu({ x, y });
     viewport.onDimEdit = (key, value, x, y) => setDimEdit({ key, value, x, y });
     window.__ksp = { store, viewport };
-    return () => viewport.dispose();
+    const onNav = (e: Event) => { setMode('model'); setNav((e as CustomEvent).detail as NavKey); };
+    window.addEventListener('ksp-nav', onNav);
+    return () => { viewport.dispose(); window.removeEventListener('ksp-nav', onNav); };
   }, []);
 
   // מנגנון בדיקה: שינוי פרופיל שגורם להתנגשות בפלטת ראש העמוד — חלון קופץ עם הצעה
@@ -147,6 +150,7 @@ export function App() {
     { id: 'structure', group: 'מבנה', label: 'מבנה — מידות, מסגרות, קושרות', run: () => goTab('structure') },
     { id: 'roof', group: 'מבנה', label: 'גג ופטות — פריסה, תומכים, חיבורי המשך', keys: 'P', run: () => goTab('roof') },
     { id: 'tree', group: 'מבנה', label: 'עץ אלמנטים', run: () => goTab('tree') },
+    ...NAV_INDEX.map((n) => ({ id: `nav-${n.key}`, group: 'מעבר להגדרות', label: n.label, search: n.words, run: () => { setMode('model'); setNav(n.key); } })),
     { id: 'select', group: 'כלים', label: 'בחירה', keys: 'Esc', run: () => store.set({ tool: 'select', measure: {} }) },
     { id: 'measure', group: 'כלים', label: 'מדידה', keys: 'M', run: () => store.set({ tool: 'measure', measure: {} }) },
     { id: 'move', group: 'עריכה', label: 'הזזה', disabled: !sel.length, run: () => setDialog('move') },
@@ -216,7 +220,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.8</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.9</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}

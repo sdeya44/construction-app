@@ -10,7 +10,7 @@ import { MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
 import { LenField, NumField, ProfilePicker, TextField } from './fields';
 import { Icon } from './icons';
-import { SectionEditor } from './SectionEditor';
+import { KneeEditor, SectionEditor } from './SectionEditor';
 
 export function ProfileDatalist() {
   return (
@@ -47,6 +47,13 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
       </div>
       <div className="field"><label>אורך חומר גלם</label><LenField mm={p.settings.stockLength} unit={u} min={1} onCommit={(v) => store.exec(setSettings({ stockLength: v }))} /></div>
       <div className="field"><label>חלוקה אוטומטית לחומר גלם</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="auto-splice" checked={p.settings.autoSplice !== false} onChange={(e) => store.exec(setSettings({ autoSplice: e.target.checked }))} />{p.settings.autoSplice !== false ? 'כן — אלמנט ארוך מחולק עם חיבור המשך' : 'לא'}</label></div>
+      {p.settings.autoSplice !== false && <>
+        <div className="field"><label>אופן החלוקה</label>
+          <select className="inp" data-testid="splice-mode" value={p.settings.spliceMode ?? 'stock'} onChange={(e) => store.exec(setSettings({ spliceMode: e.target.value as 'stock' | 'equal' }))}>
+            <option value="stock">מוט מלא ({(p.settings.stockLength / 1000).toFixed(1)} מ') + השלמה</option><option value="equal">חלקים שווים</option>
+          </select></div>
+        <div className="field"><label>פלטות חיזוק בחיבור המשך קורה</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="splice-stiff" checked={!!p.settings.spliceStiffeners} onChange={(e) => store.exec(setSettings({ spliceStiffeners: e.target.checked }))} />{p.settings.spliceStiffeners ? 'כן — משולשים מעל ומתחת' : 'לא'}</label></div>
+      </>}
       </>}
 
       {show('geometry') && <>
@@ -235,13 +242,26 @@ function RidgeReinfEditor() {
   );
 }
 
-function BracingEditor() {
+export type BraceSection = 'knee' | 'ridge' | 'roof' | 'walls' | 'ties';
+/** חיזוקים וקשיחות: אלכסוני עמוד-קורה, חיזוק רכס, קושרות גג, קשיחות קירות (X / אגד B), שורות קשירה */
+export function BracePanel({ part }: { part?: BraceSection }) {
+  return (
+    <div className="panel-body" data-testid="brace-panel">
+      {(!part || part === 'knee') && <KneeEditor />}
+      {(!part || part !== 'knee') && <BracingEditor part={part} />}
+    </div>
+  );
+}
+
+function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) {
+  const on = (k: Exclude<BraceSection, 'knee'>) => !part || part === k;
   const b = useStore((s) => s.project.building);
   const br = b.bracing;
   const nb = b.frames.length - 1;
   const set = (patch: Partial<BuildingParams['bracing']>) => store.exec(setBuilding({ bracing: { ...br, ...patch } }));
   return (
     <>
+      {on('roof') && <>
       <div className="panel-title">קושרות X – גג
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-roof" checked={br.roof.enabled} onChange={(e) => set({ roof: { ...br.roof, enabled: e.target.checked } })} />פעיל</label>
       </div>
@@ -255,7 +275,10 @@ function BracingEditor() {
           ? <div className="field prof"><label>חתך</label><ProfilePicker value={br.roof.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ roof: { ...br.roof, profile: v } })} /></div>
           : <RhsFields />}
         <div className="field"><label>מפתחים</label><BayPicker testId="br-roof-bays" bays={br.roof.bays} count={nb} onChange={(x) => set({ roof: { ...br.roof, bays: x } })} /></div>
+        <div className="hint">שיפוע ארוך מחולק אוטומטית לכמה פנלי X לאורך השיפוע, כך שאלכסון לא יעלה על אורך חומר הגלם.</div>
       </>}
+      </>}
+      {on('walls') && <>
       <div className="panel-title">קשיחות לאורך – קירות
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-walls" checked={br.walls.enabled} onChange={(e) => set({ walls: { ...br.walls, enabled: e.target.checked } })} />פעיל</label>
       </div>
@@ -270,12 +293,15 @@ function BracingEditor() {
           : <PortalFields />}
         <WallLines nb={nb} />
       </>}
+      </>}
+      {on('ties') && <>
       <div className="panel-title">שורת קשירה לפטות
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-ties" checked={br.purlinTies.enabled} onChange={(e) => set({ purlinTies: { ...br.purlinTies, enabled: e.target.checked } })} />פעיל</label>
       </div>
       {br.purlinTies.enabled && <div className="field prof"><label>חתך</label><ProfilePicker value={br.purlinTies.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ purlinTies: { ...br.purlinTies, profile: v } })} /></div>}
-      <RidgeReinfEditor />
-      {(br.roof.enabled || br.walls.enabled) && <>
+      </>}
+      {on('ridge') && <RidgeReinfEditor />}
+      {(on('roof') || on('walls')) && (br.roof.enabled && (br.roof.type ?? 'x') === 'x' || br.walls.enabled && (br.walls.type ?? 'x') === 'x') && <>
         <div className="panel-title">חיבור קושרות X</div>
         <div className="field"><label>קוטר בורג</label><NumField testId="brc-d" value={br.conn.bolt.d} suffix="M" onCommit={(v) => set({ conn: { ...br.conn, bolt: { ...br.conn.bolt, d: Math.round(v) } } })} /></div>
         <div className="field"><label>ברגים בכל קצה</label><NumField testId="brc-n" value={br.conn.boltsPerEnd} onCommit={(v) => set({ conn: { ...br.conn, boltsPerEnd: Math.max(1, Math.round(v)) } })} /></div>
@@ -284,7 +310,7 @@ function BracingEditor() {
         <div className="field"><label>עובי פח חיבור</label><NumField value={br.conn.gussetT} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, gussetT: v } })} /></div>
         <div className="field"><label>בורג בהצטלבות</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="brc-cross" checked={br.conn.crossBolt} onChange={(e) => set({ conn: { ...br.conn, crossBolt: e.target.checked } })} />{br.conn.crossBolt ? 'כן' : 'לא'}</label></div>
       </>}
-      <div className="hint">קושרות X עובדות במתיחה בלבד. פח החיבור מרותך לווב הקורה/העמוד במסגריה, הזוויתן מוברג בשטח; בהצטלבות פח מילוי ובורג. שורת קשירה באמצע כל מפתח, צמודה לאגף התחתון של הפטות. בדיקת חוזק — אינה מבוצעת.</div>
+      {(on('roof') || on('walls') || on('ties')) && <div className="hint">קושרות X עובדות במתיחה בלבד. פח החיבור מרותך לווב הקורה/העמוד במסגריה, הזוויתן מוברג בשטח; בהצטלבות פח מילוי ובורג. שורת קשירה באמצע כל מפתח, צמודה לאגף התחתון של הפטות. בדיקת חוזק — אינה מבוצעת.</div>}
     </>
   );
 }

@@ -37,7 +37,7 @@ const mk = (id: string, label: string, profile: string, start: Vec3, end: Vec3, 
  * קושרות X בגג ובקירות ושורות קשירה לפטות. קושרות X עובדות במתיחה בלבד (לפי תוכנית K-02).
  * חיבור: פח מרותך במסגריה, זוויתן מוברג בשטח (M16), בורג בהצטלבות — החלטת משתמש 15.11.2026.
  */
-export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: Member[], eff: BuildingParams): BracingResult {
+export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: Member[], eff: BuildingParams, stockLen = 12000): BracingResult {
   const res: BracingResult = { members: [], connections: [], issues: [] };
   const br = b.bracing;
   const frames = b.frames;
@@ -94,8 +94,18 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         const rid = sl.rid;
         if (br.roof.type === 'rhs') rhsTruss({ res, mat: b.material }, br.roof.rhs ?? defaultRhsTruss(), `R${bay + 1}.${sl.side}`, `סבכה אופקית מפתח ${bay + 1}`, o, n, dir, L,
           f0.y, f1.y, f0.y + tw / 2, f1.y - tw / 2, rid(f0.id), rid(f1.id));
-        else xbrace(`R${bay + 1}.${sl.side}`, `קושרת גג מפתח ${bay + 1}`, br.roof.profile, o, n, dir,
-          { y: f0.y, w: 0 }, { y: f1.y, w: L }, f0.y + tw / 2, f1.y - tw / 2, rid(f0.id), rid(f1.id));
+        else {
+          // שיפוע ארוך: חלוקה לכמה פנלי X לאורך השיפוע, כך שאלכסון לא יעלה על חומר הגלם (החלטת משתמש 15.11.2026)
+          const bayW = Math.abs(f1.y - f0.y), stock = stockLen;
+          let k = 1;
+          while (k < 8 && Math.hypot(L / k, bayW) > stock - 100) k++;
+          const gap = k > 1 ? bc.gussetEdge + 120 : 0; // פחי החיבור של שני פנלים סמוכים זה ליד זה על הקורה
+          for (let j = 0; j < k; j++) {
+            const w0 = (L * j) / k + (j > 0 ? gap : 0), w1 = (L * (j + 1)) / k - (j < k - 1 ? gap : 0);
+            xbrace(`R${bay + 1}.${sl.side}${k > 1 ? `.${j + 1}` : ''}`, `קושרת גג מפתח ${bay + 1}${k > 1 ? ` פנל ${j + 1}` : ''}`, br.roof.profile, o, n, dir,
+              { y: f0.y, w: w0 }, { y: f1.y, w: w1 }, f0.y + tw / 2, f1.y - tw / 2, rid(f0.id), rid(f1.id));
+          }
+        }
       }
     }
   }

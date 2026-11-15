@@ -9,7 +9,7 @@ import { Icon } from './icons';
 import { KIND_LABEL } from './TreePanel';
 
 /** פקודה בלוח הפקודות / בתפריט. keys = קיצור מקלדת להצגה. */
-export interface Cmd { id: string; label: string; group: string; keys?: string; run: () => void; disabled?: boolean; danger?: boolean; icon?: string }
+export interface Cmd { id: string; label: string; group: string; keys?: string; search?: string; run: () => void; disabled?: boolean; danger?: boolean; icon?: string }
 
 const STATUS: Record<string, string> = { approved: 'מאושר', 'for-review': 'לבדיקה', 'not-verified': 'לא מאומת' };
 const statusCls = (s: string) => (s === 'approved' ? 'ok' : s === 'for-review' ? 'warn' : 'muted');
@@ -164,7 +164,7 @@ export function CommandPalette({ cmds, onClose, onPickElement }: { cmds: Cmd[]; 
   const listRef = useRef<HTMLDivElement>(null);
   const norm = (s: string) => s.toLowerCase().replace(/[\s'"׳״.\-_]/g, '');
   const nq = norm(q);
-  const cmdHits = cmds.filter((c) => !c.disabled && (!nq || norm(c.label).includes(nq) || norm(c.group).includes(nq)));
+  const cmdHits = cmds.filter((c) => !c.disabled && (!nq || norm(c.label).includes(nq) || norm(c.group).includes(nq) || (c.search ? nq.length >= 2 && norm(c.search).includes(nq) : false)));
   const elHits = nq.length >= 2
     ? d.members.filter((m) => m.kind !== 'bolt' && (norm(m.id).includes(nq) || norm(m.label).includes(nq) || norm(m.profile).includes(nq))).slice(0, 8)
     : [];

@@ -1,4 +1,4 @@
-import { add, dot, scale, sub, v3 } from '../core/vec';
+import { add, dot, norm, scale, sub, v3 } from '../core/vec';
 import type { BoltInfo, Connection, Member, Project, SupportPoint, ValidationIssue, WeldInfo } from '../model/types';
 import { tryProfile } from '../profiles/library';
 import { axialExtent, BEAM_SPLICE_T } from './parts';
@@ -7,6 +7,8 @@ import { localFrame } from './frame';
 import { hw, makeBolt } from './connections';
 
 const AUTO_KINDS = new Set(['rafter', 'column', 'beam', 'purlin']);
+/** שורות קשירה לפטות (זוויתן ארוך) — חלוקה גם להן */
+const isTie = (m: Member) => m.kind === 'brace' && m.id.startsWith('BR.T');
 
 /**
  * חיבורי המשך אפקטיביים: המיקומים שהמשתמש קבע, ולכל אלמנט ארוך מחומר הגלם שלא נקבע לו דבר — חלוקה אוטומטית
@@ -20,7 +22,7 @@ export function effectiveSplices(project: Project, members: Member[], supports: 
   const stock = project.settings.stockLength;
   const allow = Math.max(10, project.settings.kerf * 3); // מרווח חיתוך מהמוט
   for (const m of members) {
-    if (!AUTO_KINDS.has(m.kind) || m.source !== 'generated' || m.id in project.splices) continue;
+    if (!(AUTO_KINDS.has(m.kind) || isTie(m)) || m.source !== 'generated' || m.id in project.splices) continue;
     const L = Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y, m.end.z - m.start.z);
     if (L <= stock - allow) continue;
     const { tMin, tMax } = axialExtent(m);
@@ -37,14 +39,17 @@ export function effectiveSplices(project: Project, members: Member[], supports: 
       const HALF = 160;
       ts = [];
       let s = tMin;
+      // מצב חלוקה: stock = מוט מלא + השלמה (ברירת מחדל); equal = חלקים שווים
+      const nEq = Math.ceil((tMax - tMin) / (stock - allow));
+      const step = project.settings.spliceMode === 'equal' ? (tMax - tMin) / nEq : stock - allow;
       while (tMax - s > stock + 0.5) {
-        let t = s + stock - allow;
+        let t = s + step;
         for (let it = 0; it < 20; it++) {
           const hit = zones.find((z) => Math.abs(z - t) < HALF);
           if (hit === undefined) break;
           t = hit - HALF;
         }
-        if (t - s < 1000) { t = s + stock - allow; } // לא נמצא מקום — נשאר במוט מלא (אזהרה בבדיקת ההתנגשות)
+        if (t - s < 1000) { t = s + step; } // לא נמצא מקום — נשאר במוט מלא (אזהרה בבדיקת ההתנגשות)
         ts.push(Math.round(t));
         s = t;
       }
@@ -91,9 +96,25 @@ export function buildBeamSplices(project: Project, members: Member[], splices: R
         });
         plates.push(pid);
       }
+      // אופציה: פלטות חיזוק משולשות במישור הווב, מעל ומתחת לכל פלטה (מסגריה)
+      if (project.settings.spliceStiffeners) {
+        const Ls = 2 * ext, ts = 8;
+        for (const [sg, pid] of [[-1, plates[0]], [1, plates[1]]] as const) for (const up of [1, -1]) {
+          const sid = `${pid}.ST${up > 0 ? 'T' : 'B'}`;
+          const q0 = up * (h / 2 + ext / 2);
+          const P0 = at(sg * T, q0), P1 = at(sg * (T + Ls), q0);
+          const B = at(sg * (T + Ls), up * h / 2); // קצה המשולש על האגף
+          const nrm = norm(add(scale(f.ex, sg * ext), scale(f.v, up * Ls)));
+          out.members.push({
+            id: sid, kind: 'plate', label: `פלטת חיזוק PL${ts}`, start: P0, end: P1, profile: `PL${ext}x${ts}`, material: m.material, rollDeg: 0, mirror: false, anchor: 'center',
+            refUp: f.u, source: 'generated', manualPlacement: false, connId: id, endCut: { point: B, normal: nrm }, partDesc: `פלטת חיזוק משולשת PL${ts}×${ext}×${Ls}`,
+          });
+          plates.push(sid);
+        }
+      }
       const bolts: BoltInfo[] = [];
       for (const dv of [vOut, vIn, -vIn, -vOut]) for (const du of [-g / 2, g / 2]) {
-        bolts.push(makeBolt(`${id}.B${bolts.length + 1}`, id, at(-T, dv, du), f.ex, bolt, 2 * T, 'site', plates, f.v, out.members));
+        bolts.push(makeBolt(`${id}.B${bolts.length + 1}`, id, at(-T, dv, du), f.ex, bolt, 2 * T, 'site', plates.slice(0, 2), f.v, out.members));
       }
       if (g / 2 - tw / 2 < nutR) out.issues.push({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `${m.label}: חיבור המשך — אום קרוב לווב (אגף צר)` });
       if (vOut - vIn < 2.2 * d0) out.issues.push({ code: 'BOLT_EDGE', severity: 'warning', elementId: id, message: `${m.label}: חיבור המשך — מרווח שורות קטן` });

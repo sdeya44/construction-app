@@ -58,7 +58,9 @@ export function finJoint(j: FinJointIn): FinJointOut {
   const clr = j.clearance ?? 10;
   // רוחב הלשונית והפח = מידת ה-RHS במישור הפח
   // רוחב הפח והלשונית: רוחב ה-RHS + 10 מכל צד (RHS80 ⇒ 100), כדי ששני ברגים ייכנסו לרוחב
-  const wt = j.prof.props.b + 2 * (j.extra ?? 10);
+  // לפחות כך ששני ברגים ייכנסו לרוחב (2 × שפה + מרווח 2.4·d0) — RHS60 ⇒ 95
+  const eW0 = Math.max(25, Math.ceil((1.2 * (j.bolt.d + j.bolt.clearance)) / 5) * 5);
+  const wt = Math.max(j.prof.props.b + 2 * (j.extra ?? 10), 2 * eW0 + Math.ceil((2.4 * (j.bolt.d + j.bolt.clearance)) / 5) * 5);
   const dn = dot(d, j.n), un = Math.abs(dot(u, j.n));
   if (dn < 0.25) issues.push({ code: 'BRACE_ANGLE', severity: 'warning', elementId: j.cid, message: `${j.desc}: זווית חדה מדי למארח` });
   const k = Math.max(dn, 0.25);

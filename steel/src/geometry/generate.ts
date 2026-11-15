@@ -179,8 +179,11 @@ export function generate(project: Project): DerivedModel {
     connections.push(...bs.connections);
     issues.push(...bs.issues);
     if (eff.auto.size) issues.push({ code: 'AUTO_SPLICE', severity: 'info', message: `חיבורי המשך אוטומטיים ב-${eff.auto.size} אלמנטים ארוכים מחומר הגלם (${(project.settings.stockLength / 1000).toFixed(1)} מ') — לשינוי: בחר אלמנט ← "חיבורי המשך"` });
-    const bb = buildBracing(b, topo, out.filter((m) => m.purlin), bEff);
+    const bb = buildBracing(b, topo, out.filter((m) => m.purlin), bEff, project.settings.stockLength);
     out.push(...bb.members.filter((m) => !hidden.has(m.id)));
+    // חלוקה אוטומטית גם לשורות הקשירה הארוכות
+    const effT = effectiveSplices(projEff, bb.members, []);
+    if (effT.auto.size) projEff = { ...projEff, splices: effT.splices };
     connections.push(...bb.connections);
     issues.push(...bb.issues);
     byId = new Map(out.map((m) => [m.id, m]));

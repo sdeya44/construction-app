@@ -452,3 +452,28 @@ select.inp { padding: 0 6px; }
 .cleat-face .cf-dim text { fill: #2c4a68; font-size: 10px; text-anchor: middle; font-family: var(--mono, monospace); }
 .cleat-face .cf-bad line { stroke: #c0392b; stroke-width: 1.2; }
 .cleat-face .cf-bad text { fill: #c0392b; font-size: 10.5px; font-weight: 700; text-anchor: middle; font-family: var(--mono, monospace); }
+
+/* תמונות תפריט (בקשת משתמש): מסגרת מוקטנת שבה מודגש החלק הרלוונטי */
+.mpic { flex: none; overflow: visible; }
+.mpic path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.mpic .pb { stroke: #9aa3ab; stroke-width: 1.4; }
+.mpic .pa { stroke: var(--brand); stroke-width: 2.4; }
+.mpic .pa2 { stroke: #b07a1f; stroke-width: 2; }
+.mpic .pd { stroke: var(--brand); stroke-width: 3.6; }
+.mpic .pe { stroke: var(--err); stroke-width: 2.6; }
+.mpic .pw { stroke: var(--warn); stroke-width: 2.2; }
+.nav-item.on .mpic .pb { stroke: rgba(255,255,255,.55); }
+.nav-item.on .mpic .pa, .nav-item.on .mpic .pd { stroke: #fff; }
+.nav-item { justify-content: flex-start; gap: 8px; padding-inline-start: 22px; }
+.nav-item .nav-t { flex: 1; }
+.nav-lbl { display: flex; align-items: center; gap: 8px; }
+.nav-tree { max-height: 52%; }
+.nav-crumb { display: flex; align-items: center; gap: 6px; padding: 7px 12px; font-size: 12.5px; color: var(--muted); border-bottom: 1px solid var(--line); background: var(--panel-2); flex: none; }
+.nav-crumb b { color: var(--text); }
+.nav-crumb .sep { opacity: .6; }
+.btn.link-nav { margin: 4px 0 8px; width: 100%; justify-content: flex-start; border-style: dashed; }
+
+/* עץ קומפקטי — יותר מקום לתוכן */
+.nav-tree { max-height: 46%; padding: 6px 6px 4px; }
+.nav-item { padding-top: 2px; padding-bottom: 2px; min-height: 26px; }
+.nav-lbl { height: 26px; }

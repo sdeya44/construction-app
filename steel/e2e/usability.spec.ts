@@ -23,7 +23,7 @@ test('USE-01: פרויקט חדש מתבנית מודולרית עם אלכסו�
 
 test('USE-02: אגד B בקירות דרך הממשק — קורה + 2 אלכסונים, ללא התנגשויות', async ({ page }) => {
   await boot(page);
-  await page.getByTestId('nav-s:bracing').click();
+  await page.getByTestId('nav-b:walls').click();
   await page.getByTestId('br-walls-type').selectOption('portal');
   const q = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { beams: d.members.filter((m: any) => /^BB\.[^K]*$/.test(m.id)).length, k: d.members.filter((m: any) => /^BB\..*\.K\d$/.test(m.id)).length, x: d.members.filter((m: any) => m.id.startsWith('BR.W')).length, clash: d.issues.filter((i: any) => i.code === 'CLASH').length }; });
   expect(await q()).toEqual({ beams: 10, k: 8, x: 0, clash: 0 }); // קורת אגד רציפה בכל המפתחים, אלכסונים רק במפתחי האגד

@@ -47,3 +47,23 @@ describe('חיבורי המשך אוטומטיים (ברירת מחדל)', () =>
     expect(d.parts.filter((x) => x.memberId === 'PL.L.03').length).toBe(1); // רשימה ריקה מפורשת = ללא חיבור
   });
 });
+
+describe('אופציות חלוקה וקושרות ארוכות', () => {
+  it('חלקים שווים; פלטות חיזוק בחיבור ההמשך; קושרות גג ארוכות מחולקות לפנלים; שורת קשירה מחולקת', () => {
+    const p = mono();
+    let d = generate(p);
+    // קושרות X: אלכסון ≤ 12 מ' — שני פנלים לאורך השיפוע
+    expect(d.members.filter((m) => /^BR\.R1\.M\.[12]\.[12]$/.test(m.id)).length).toBe(4);
+    expect(d.issues.filter((i) => i.code === 'PART_STOCK')).toEqual([]);
+    expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
+    p.settings.spliceMode = 'equal';
+    p.settings.spliceStiffeners = true;
+    d = generate(p);
+    const parts = d.parts.filter((x) => x.memberId === 'F1.RAF');
+    expect(Math.abs(parts[0].length - parts[1].length)).toBeLessThan(400); // חלקים שווים (פחות הסטה מתומך)
+    const c = d.connById.get('C.RS.F1.RAF.1')!;
+    expect(c.parts.filter((x) => /\.ST[TB]$/.test(x)).length).toBe(4);
+    expect(c.bolts.every((b) => b.holesIn.length === 2)).toBe(true);
+    expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
+  });
+});

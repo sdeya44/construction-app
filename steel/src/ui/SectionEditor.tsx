@@ -39,7 +39,7 @@ export function SectionEditor() {
         ))}
       </div>
       {sec && <ModularTables sec={sec} unit={u} apply={apply} />}
-      <KneeEditor />
+      <button className="btn small link-nav" data-testid="goto-knee" onClick={() => window.dispatchEvent(new CustomEvent('ksp-nav', { detail: 'b:knee' }))}>אלכסוני עמוד-קורה, חיזוק רכס וקושרות ← חיזוקים וקשיחות</button>
     </>
   );
 }
@@ -132,7 +132,7 @@ function Overhangs({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' | 'm
   );
 }
 
-function KneeEditor() {
+export function KneeEditor() {
   const kb = useStore((s) => s.project.building.kneeBraces) ?? defaultKneeBraces();
   const n = useStore((s) => s.derived.connections.filter((c) => c.type === 'knee').length);
   const set = (patch: Parameters<typeof setKneeBraces>[0]) => store.exec(setKneeBraces(patch));

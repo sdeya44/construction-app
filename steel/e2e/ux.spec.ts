@@ -133,10 +133,13 @@ test('SEC-01: חתך מודולרי — תבנית גג מדורג, הוספת �
   await page.getByTestId('tpl-stepped').click();
   const n = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { cols: d.members.filter((m: any) => m.kind === 'column').length, side: d.connections.filter((c: any) => c.type === 'rafter-side').length, err: d.issues.filter((i: any) => i.severity === 'error').length, knee: d.connections.filter((c: any) => c.type === 'knee').length }; });
   expect(await n()).toEqual({ cols: 18, side: 6, err: 0, knee: 24 }); // תבנית מדליקה אלכסוני עמוד-קורה
+  await page.getByTestId('goto-knee').click(); // מעבר לחיזוקים וקשיחות ← אלכסוני עמוד-קורה
+  await expect(page.getByTestId('nav-crumb')).toContainText('אלכסוני עמוד-קורה');
   await page.getByTestId('kb-on').uncheck();
   expect((await n()).knee).toBe(0);
   await page.getByTestId('kb-on').check();
   expect((await n()).knee).toBe(24);
+  await page.getByTestId('nav-s:geometry').click();
   // ציר חדש ב-26 מ' — מחוץ לכל מישור גג: שגיאת טופולוגיה מדווחת (ואין גיאומטריה עד לתיקון)
   await page.getByTestId('sec-add-line').click();
   expect((await n()).err).toBeGreaterThan(0);
@@ -149,7 +152,7 @@ test('SEC-01: חתך מודולרי — תבנית גג מדורג, הוספת �
 
 test('BR-02: סבכה אופקית RHS וחיזוק רכס בשתי השיטות דרך הממשק', async ({ page }) => {
   await boot(page);
-  await page.getByTestId('nav-s:bracing').click();
+  await page.getByTestId('tab-brace').click();
   await page.getByTestId('br-roof-type').selectOption('rhs');
   const q = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { hb: d.members.filter((m: any) => m.id.startsWith('HB.') && m.kind === 'brace').length, x: d.members.filter((m: any) => m.id.startsWith('BR.R')).length, tie: d.connections.filter((c: any) => c.type === 'ridge-tie').length, st: d.members.filter((m: any) => /C\.RIDGE\..*\.ST/.test(m.id)).length, clash: d.issues.filter((i: any) => i.code === 'CLASH').length }; });
   expect(await q()).toMatchObject({ hb: 12, x: 0, clash: 0 });

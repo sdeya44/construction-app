@@ -38,8 +38,10 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
   if (!bp || !kp) { out.issues.push({ code: 'PROFILE', severity: 'error', message: `אגד B: חתך לא מוכר ${!bp ? pp.beam : pp.brace}` }); return; }
   if (!L.portalBays.length) return;
   const cp = getProfile(L.colProfile);
-  const tw = cp.dims.tw ?? cp.dims.t ?? 8;
-  const inner = cp.props.h - 2 * (cp.dims.tf ?? 10) - 2 * (cp.dims.r ?? 0);
+  // עמוד I: הפח על הווב, בין האגפים. עמוד חלול (RHS/SHS/CHS): הפח על הדופן החיצונית (פני העמוד ב-±b/2)
+  const hollow = ['RHS', 'SHS', 'CHS'].includes(cp.family);
+  const tw = hollow ? cp.props.b : cp.dims.tw ?? cp.dims.t ?? 8;
+  const inner = hollow ? cp.props.h : cp.props.h - 2 * (cp.dims.tf ?? 10) - 2 * (cp.dims.r ?? 0);
   const X = v3(1, 0, 0), Z = v3(0, 0, 1);
   void Z;
   const hb = bp.props.h;
@@ -66,7 +68,7 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
     const ends = ([['E0', ya, 1, colA], ['E1', yb, -1, colB]] as const).map(([k, yF, sg, col]) => {
       const cid = `C.BB.${key}.${k}`;
       const j = finJoint({ ...base, cid, desc: 'קורת אגד', hostId: col, memberId: bid, P: v3(x, yF, zc), n: v3(0, sg, 0), d: v3(0, sg, 0), pn: X, side: 1, prof: bp, profile: pp.beam, bolts: pp.beamBolts ?? 2 });
-      if (bp.props.b / 2 + T > inner / 2 + 0.5) out.issues.push({ code: 'PLATE_WIDE', severity: 'warning', elementId: cid, message: `${lab}: קורת האגד המוסטת אינה נכנסת בין אגפי העמוד (${Math.round(inner)})` });
+      if (!hollow && bp.props.b / 2 + T > inner / 2 + 0.5) out.issues.push({ code: 'PLATE_WIDE', severity: 'warning', elementId: cid, message: `${lab}: קורת האגד המוסטת ${hollow ? 'רחבה מפני העמוד' : 'אינה נכנסת בין אגפי העמוד'} (${Math.round(inner)})` });
       return { cid, col, j, label: `${lab} — קורה לעמוד` };
     });
     out.members.push({ id: bid, kind: 'beam', label: lab, start: ends[0].j.start, end: ends[1].j.start, profile: pp.beam, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: Z, source: 'generated', manualPlacement: false, partDesc: `קורת אגד ${pp.beam}` });

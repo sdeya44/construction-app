@@ -96,6 +96,10 @@ function PropertiesInner() {
         <div className="k">{KIND_LABEL[m.kind]}{frameNo > 0 ? ` · מסגרת ${frameNo}` : ''}{m.side ? ` · ${m.side === 'L' ? 'שמאל' : 'ימין'}` : ''} <span className={`badge ${m.source === 'manual' ? 'warn' : 'blue'}`}>{m.source === 'manual' ? 'ידני' : 'פרמטרי'}</span></div>
         <div className="t"><b>{mark ?? m.label}</b><span className="mono" data-testid="prop-id">{m.id}</span></div>
       </div>
+      {settingsOf(m.id, m.kind, m.purlin?.paramKey ?? (m.purlin?.side === 'R' ? 'right' : m.purlin ? 'left' : undefined)) && (() => {
+        const [key, label] = settingsOf(m.id, m.kind, m.purlin?.side === 'R' ? 'right' : 'left')!;
+        return <button className="btn small link-nav" data-testid="goto-settings" onClick={() => window.dispatchEvent(new CustomEvent('ksp-nav', { detail: key }))}>⚙ {label}</button>;
+      })()}
       <div className="ptabs" role="tablist">
         <button role="tab" className={ptab === 'basic' ? 'on' : ''} onClick={() => setPtab('basic')} data-testid="ptab-basic">בסיסי</button>
         <button role="tab" className={ptab === 'conns' ? 'on' : ''} onClick={() => setPtab('conns')} data-testid="ptab-conns">חיבורים{conns ? ` ${conns}` : ''}</button>
@@ -249,4 +253,16 @@ function PurlinInfoBlock({ id }: { id: string }) {
       <div className="hint">מגע עם האגף העליון של קורת הגג: 0 מ"מ. גובה החתך ניצב למישור הגג. מגע גיאומטרי אינו אישור ביצוע.</div>
     </>
   );
+}
+
+/** מאלמנט שנבחר — אל ההגדרות הכלליות שקובעות אותו (שינוי לכולם במקום אחד) */
+function settingsOf(id: string, kind: string, side?: string): [string, string] | null {
+  if (id.startsWith('KB.') || id.startsWith('C.KB.')) return ['b:knee', 'הגדרות כל אלכסוני עמוד-קורה'];
+  if (id.startsWith('BB.') || id.startsWith('C.BB.') || id.startsWith('BR.W')) return ['b:walls', 'הגדרות קשיחות קירות / אגד B'];
+  if (id.startsWith('BR.R') || id.startsWith('HB.') || id.startsWith('C.HB.')) return ['b:roof', 'הגדרות קושרות גג'];
+  if (id.startsWith('BR.T')) return ['b:ties', 'הגדרות שורות קשירה'];
+  if (id.startsWith('C.RIDGE') || id.startsWith('RT.')) return ['b:ridge', 'הגדרות חיזוק רכס'];
+  if (kind === 'purlin' || kind === 'cleat') return [side === 'right' ? 'r:right' : 'r:left', kind === 'cleat' ? 'הגדרות כל התומכים בשיפוע' : 'הגדרות הפטות בשיפוע'];
+  if (kind === 'column' || kind === 'rafter') return ['s:profiles', 'חתכי כל העמודים והקורות'];
+  return null;
 }

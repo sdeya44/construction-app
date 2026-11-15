@@ -8,7 +8,8 @@ import { store, useStore } from '../store';
 import { CONN_TYPE } from './ConnectionEditor';
 import { ConnectionsPanel } from './Overlays';
 import { RoofPanel, type RoofSection } from './RoofPanel';
-import { StructurePanel, type StructSection } from './StructurePanel';
+import { BracePanel, StructurePanel, type BraceSection, type StructSection } from './StructurePanel';
+import { MenuPic } from './pics';
 import { IssuesPanel, KIND_LABEL, TreePanel } from './TreePanel';
 
 /**
@@ -20,62 +21,87 @@ export type NavKey =
   | 'roof' | `r:${RoofSection}`
   | 'tree' | `k:${MemberKind}`
   | 'conns' | `c:${Connection['type']}`
-  | 'issues' | `i:${Severity}`;
+  | 'issues' | `i:${Severity}`
+  | 'brace' | `b:${BraceSection}`;
 
-const ORDER_C: Connection['type'][] = ['eave', 'ridge', 'base', 'purlin-cleat', 'purlin-splice', 'brace-end', 'brace-cross', 'brace'];
+const ORDER_C: Connection['type'][] = ['eave', 'ridge', 'base', 'rafter-side', 'knee', 'ridge-tie', 'purlin-cleat', 'purlin-splice', 'beam-splice', 'brace-end', 'brace-cross', 'brace'];
 const KINDS: MemberKind[] = ['column', 'rafter', 'purlin', 'brace', 'cleat', 'plate', 'anchor', 'beam'];
 const SEV_LABEL: Record<Severity, string> = { error: 'שגיאות', warning: 'אזהרות', info: 'מידע' };
 
 export function SideNav({ nav, setNav, onOpenConn }: { nav: NavKey; setNav: (k: NavKey) => void; onOpenConn: (id: string) => void }) {
   const d = useStore((s) => s.derived);
-  const roofType = useStore((s) => s.project.building.roofType);
-  const [open, setOpen] = useState<Record<string, boolean>>({ structure: true, roof: true });
+  const roofType = useStore((s) => (s.project.building.section ? 'modular' : s.project.building.roofType));
+  const [open, setOpen] = useState<Record<string, boolean>>({ structure: true, roof: true, brace: true });
   const kindCount = useMemo(() => { const m = new Map<string, number>(); for (const x of d.members) m.set(x.kind, (m.get(x.kind) ?? 0) + 1); return m; }, [d]);
   const connCount = useMemo(() => { const m = new Map<string, number>(); for (const c of d.connections) m.set(c.type, (m.get(c.type) ?? 0) + 1); return m; }, [d]);
   const sevCount = useMemo(() => { const m = new Map<string, number>(); for (const i of d.issues) m.set(i.severity, (m.get(i.severity) ?? 0) + 1); return m; }, [d]);
   const errs = sevCount.get('error') ?? 0, warns = sevCount.get('warning') ?? 0;
 
-  const group = (key: NavKey, label: string, testId: string, children: { key: NavKey; label: string; n?: number; cls?: string }[], badge?: ReactNode) => {
+  type Item = { key: NavKey; label: string; n?: number; cls?: string; pic: string };
+  const labels = new Map<string, string>();
+  const group = (key: NavKey, label: string, testId: string, pic: string, children: Item[], badge?: ReactNode) => {
+    for (const c of children) labels.set(c.key, c.label);
     const isOpen = open[key] ?? false;
     const on = nav === key;
     return (
-      <div className="nav-group" key={key}>
+      <div className={`nav-group${isOpen ? ' open' : ''}`} key={key}>
         <div className={`nav-head${on ? ' on' : ''}`}>
           <button className="nav-chev" aria-label={isOpen ? 'כיווץ' : 'הרחבה'} onClick={() => setOpen({ ...open, [key]: !isOpen })}>{isOpen ? '▾' : '▸'}</button>
-          <button className="nav-lbl" data-testid={testId} onClick={() => { setNav(key); setOpen({ ...open, [key]: true }); }}>{label}</button>
+          <button className="nav-lbl" data-testid={testId} onClick={() => { setNav(key); setOpen({ ...open, [key]: true }); }}><MenuPic name={pic} size={26} /><span>{label}</span></button>
           {badge}
         </div>
         {isOpen && children.map((c) => (
-          <button key={c.key} className={`nav-item${nav === c.key ? ' on' : ''}`} onClick={() => setNav(c.key)} data-testid={`nav-${c.key}`}>
-            <span>{c.label}</span>{c.n !== undefined && <span className={`nav-n${c.cls ? ` ${c.cls}` : ''}`}>{c.n}</span>}
+          <button key={c.key} className={`nav-item${nav === c.key ? ' on' : ''}`} onClick={() => setNav(c.key)} data-testid={`nav-${c.key}`} title={c.label}>
+            <MenuPic name={c.pic} /><span className="nav-t">{c.label}</span>{c.n !== undefined && <span className={`nav-n${c.cls ? ` ${c.cls}` : ''}`}>{c.n}</span>}
           </button>
         ))}
       </div>
     );
   };
+  // כשנבחר פריט מקבוצה סגורה (חיפוש / קישור) — פותחים את הקבוצה שלו
+  const grp = nav.includes(':') ? ({ s: 'structure', r: 'roof', b: 'brace', k: 'tree', c: 'conns', i: 'issues' } as Record<string, string>)[nav[0]] : nav;
+  if (grp && !open[grp]) setTimeout(() => setOpen((o) => ({ ...o, [grp]: true })), 0);
 
   return (
     <div className="sidenav">
       <nav className="nav-tree" aria-label="עץ תפריטים">
-        {group('structure', 'מבנה', 'tab-structure', [
-          { key: 's:project', label: 'פרטי פרויקט והגדרות' }, { key: 's:geometry', label: 'גיאומטריה' }, { key: 's:profiles', label: 'חתכים וחומר' },
-          { key: 's:frames', label: 'מסגרות', n: d.grid.filter((g) => g.dir === 'Y').length }, { key: 's:bracing', label: 'קושרות ושורות קשירה' },
+        {group('structure', 'מבנה', 'tab-structure', 'geometry', [
+          { key: 's:project', label: 'פרויקט והגדרות', pic: 'project' }, { key: 's:geometry', label: 'גיאומטריה וצירים', pic: 'geometry' },
+          { key: 's:profiles', label: 'חתכים וחומר', pic: 'profiles' }, { key: 's:frames', label: 'מסגרות', n: d.grid.filter((g) => g.dir === 'Y').length, pic: 'frames' },
         ])}
-        {group('roof', 'גג ופטות', 'tab-roof', [
-          { key: 'r:system', label: 'מערכת פטות' },
-          ...(roofType === 'gable' ? [{ key: 'r:left' as NavKey, label: 'שיפוע שמאל' }, { key: 'r:right' as NavKey, label: 'שיפוע ימין' }] : [{ key: 'r:left' as NavKey, label: 'שיפוע הגג' }]),
-          { key: 'r:splices', label: 'חיבורי המשך', n: d.splices.filter((x) => x.memberId.startsWith('PL.')).length },
+        {group('roof', 'גג ופטות', 'tab-roof', 'slope', [
+          { key: 'r:system', label: 'מערכת פטות', pic: 'purlins' },
+          ...(roofType === 'gable' ? [{ key: 'r:left' as NavKey, label: 'שיפוע שמאל ותומכים', pic: 'slopeL' }, { key: 'r:right' as NavKey, label: 'שיפוע ימין ותומכים', pic: 'slopeR' }] : [{ key: 'r:left' as NavKey, label: roofType === 'modular' ? 'שיפועי הגג ותומכים' : 'שיפוע הגג ותומכים', pic: 'slope' }]),
+          { key: 'r:splices', label: 'חיבורי המשך פטות', n: d.splices.filter((x) => x.memberId.startsWith('PL.')).length, pic: 'splice' },
         ])}
-        {group('tree', 'אלמנטים', 'tab-tree', KINDS.filter((k) => kindCount.get(k)).map((k) => ({ key: `k:${k}` as NavKey, label: KIND_LABEL[k], n: kindCount.get(k) })))}
-        {group('conns', 'חיבורים', 'tab-conns', ORDER_C.filter((t) => connCount.get(t)).map((t) => ({ key: `c:${t}` as NavKey, label: CONN_TYPE[t], n: connCount.get(t) })))}
-        {group('issues', 'בדיקות', 'tab-issues', (['error', 'warning', 'info'] as Severity[]).filter((s) => sevCount.get(s)).map((s) => ({ key: `i:${s}` as NavKey, label: SEV_LABEL[s], n: sevCount.get(s), cls: s === 'error' ? 'err' : s === 'warning' ? 'warn' : '' })),
+        {group('brace', 'חיזוקים וקשיחות', 'tab-brace', 'brace0', [
+          { key: 'b:knee', label: 'אלכסוני עמוד-קורה', n: connCount.get('knee') ? d.connections.filter((c) => c.id.startsWith('C.KB.')).length : undefined, pic: 'knee' },
+          { key: 'b:ridge', label: 'חיזוק רכס', pic: 'ridge' },
+          { key: 'b:roof', label: 'קושרות גג', pic: 'roofX' },
+          { key: 'b:walls', label: 'קשיחות קירות / אגד B', pic: 'walls' },
+          { key: 'b:ties', label: 'שורות קשירה לפטות', pic: 'ties' },
+        ])}
+        {group('tree', 'אלמנטים', 'tab-tree', 'elements', KINDS.filter((k) => kindCount.get(k)).map((k) => ({ key: `k:${k}` as NavKey, label: KIND_LABEL[k], n: kindCount.get(k), pic: k })))}
+        {group('conns', 'חיבורים', 'tab-conns', 'conns', ORDER_C.filter((t) => connCount.get(t)).map((t) => ({ key: `c:${t}` as NavKey, label: CONN_TYPE[t], n: connCount.get(t), pic: t === 'ridge' ? 'ridge' : t === 'knee' ? 'knee' : t === 'brace' ? 'brace' : t })))}
+        {group('issues', 'בדיקות', 'tab-issues', 'issues', (['error', 'warning', 'info'] as Severity[]).filter((s) => sevCount.get(s)).map((s) => ({ key: `i:${s}` as NavKey, label: SEV_LABEL[s], n: sevCount.get(s), cls: s === 'error' ? 'err' : s === 'warning' ? 'warn' : '', pic: s })),
           (errs + warns) > 0 ? <span className={`count ${errs ? 'err' : 'warn'}`}>{errs + warns}</span> : null)}
       </nav>
       <div className="nav-content">
+        <NavCrumb nav={nav} item={labels.get(nav)} />
         <NavContent nav={nav} onOpenConn={onOpenConn} />
       </div>
     </div>
   );
+}
+
+const GROUP_LABEL: Record<string, [string, string]> = {
+  structure: ['מבנה', 'geometry'], roof: ['גג ופטות', 'slope'], brace: ['חיזוקים וקשיחות', 'brace0'], tree: ['אלמנטים', 'elements'], conns: ['חיבורים', 'conns'], issues: ['בדיקות', 'issues'],
+};
+/** פירורי לחם מעל התוכן: איפה אני (קבוצה › פריט) עם התמונה */
+function NavCrumb({ nav, item }: { nav: NavKey; item?: string }) {
+  const g = nav.includes(':') ? ({ s: 'structure', r: 'roof', b: 'brace', k: 'tree', c: 'conns', i: 'issues' } as Record<string, string>)[nav[0]] : nav;
+  const [gl, gp] = GROUP_LABEL[g] ?? ['', 'elements'];
+  return <div className="nav-crumb" data-testid="nav-crumb"><MenuPic name={gp} size={22} /><span>{gl}</span>{item && <><span className="sep">›</span><b>{item}</b></>}</div>;
 }
 
 function NavContent({ nav, onOpenConn }: { nav: NavKey; onOpenConn: (id: string) => void }) {
@@ -84,9 +110,11 @@ function NavContent({ nav, onOpenConn }: { nav: NavKey; onOpenConn: (id: string)
   if (nav === 'tree') return <TreePanel />;
   if (nav === 'conns') return <ConnectionsPanel onOpen={onOpenConn} />;
   if (nav === 'issues') return <IssuesPanel />;
+  if (nav === 'brace') return <BracePanel />;
   const [g, k] = nav.split(':') as [string, string];
   if (g === 's') return <StructurePanel section={k as StructSection} />;
   if (g === 'r') return <RoofPanel section={k as RoofSection} />;
+  if (g === 'b') return <BracePanel part={k as BraceSection} />;
   if (g === 'k') return <ElementsTable kind={k as MemberKind} />;
   if (g === 'c') return <ConnTable type={k as Connection['type']} onOpen={onOpenConn} />;
   return <IssuesTable sev={k as Severity} />;
