@@ -214,7 +214,9 @@ function build(key: string): Profile {
 /** שמות לדפדוף בספרייה (סדרות טבלאיות) ודוגמאות לסדרות פרמטריות. */
 export function catalogNames(): { family: Family; names: string[] }[] {
   const by = new Map<Family, string[]>();
-  for (const r of BUILTIN) { if (!by.has(r.f)) by.set(r.f, []); by.get(r.f)!.push(r.n); }
+  // C/Z מכופפים: רק בשם המקובל בן 4 חלקים (גובה×רוחב×שפה×עובי, למשל C120x40x13x2) — קודי יצרן לא מוצגים
+  const czOk = (r: { f: string; n: string }) => !(r.f === 'C' || r.f === 'Z') || /^[CZ]\d+(\.\d+)?x\d+(\.\d+)?x\d+(\.\d+)?x\d+(\.\d+)?$/.test(r.n);
+  for (const r of BUILTIN) { if (!czOk(r)) continue; if (!by.has(r.f)) by.set(r.f, []); by.get(r.f)!.push(r.n); }
   // RHS ריבועי זמין גם בשמות התוכנה (RHS80x80x4)
   const sq = BUILTIN.filter((r) => r.f === 'SHS' && r.h && r.t).map((r) => `RHS${r.h}x${r.h}x${r.t}`);
   by.set('RHS', [...(by.get('RHS') ?? []), ...sq]);

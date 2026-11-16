@@ -33,7 +33,10 @@ describe('קטלוג פרופילים מובנה (מקובץ הנתונים של
   it('רשימות הבחירה כוללות את כל הגדלים מהקטלוג', () => {
     const g = new Map(catalogNames().map((x) => [x.family, x.names.length]));
     expect(g.get('RHS')!).toBeGreaterThan(300);
-    expect(g.get('C')!).toBeGreaterThan(300);
+    // C/Z: רק שמות מקובלים בני 4 חלקים (גובה×רוחב×שפה×עובי) — קודי יצרן הוסרו מהבחירה
+    expect(g.get('C')!).toBeGreaterThan(150);
+    const cz = catalogNames().filter((x) => x.family === 'C' || x.family === 'Z').flatMap((x) => x.names);
+    expect(cz.every((n) => /^[CZ]\d+(\.\d+)?(x\d+(\.\d+)?){3}$/.test(n))).toBe(true);
     expect(g.get('L')!).toBeGreaterThan(100);
     expect(g.get('HEB')).toBe(24);
   });

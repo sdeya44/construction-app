@@ -553,3 +553,6 @@ select.inp { padding: 0 6px; }
 .mini-table th { font-weight: 600; color: var(--muted, #667); }
 .mini-table td .inp, .mini-table td input:not([type=checkbox]) { width: 74px; min-width: 0; }
 .mini-table td.num { font-variant-numeric: tabular-nums; }
+.ctx-pop { position: absolute; top: calc(100% + 4px); right: 0; z-index: 8; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column; gap: 5px; white-space: normal; min-width: 300px; }
+.ctx-pop-row { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+.ctx-pop .prof-pick { min-width: 280px; }

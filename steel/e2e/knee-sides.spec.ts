@@ -18,3 +18,15 @@ test('KB-02: אלכסוני עמוד-קורה — הגדרה לכל צד: ביט
   await page.getByTestId('kb-side-reset-L.L.R').click();
   expect(await n()).toBe(n0);
 });
+
+test('CTX-PROF: שינוי חתך מהסרגל — סוג ← מידה, ו"החל על כל העמודים"', async ({ page }) => {
+  await boot(page);
+  await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
+  await page.getByTestId('ctx-profile').click();
+  await page.getByTestId('ctx-prof-family').selectOption('HEB');
+  await page.getByTestId('ctx-prof-size').selectOption('HEB200');
+  await shot(page, 'CTX_profile_pop');
+  await page.getByTestId('ctx-prof-all').click();
+  const p = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind === 'column').map((m: any) => m.profile))]);
+  expect(p).toEqual(['HEB200']);
+});

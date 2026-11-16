@@ -12,7 +12,8 @@ test('UX-01: סרגל הקשרי וכרטיס חיבור לאלמנט בודד; 
   await shot(page, 'UX-01_single');
   // שינוי חתך מהסרגל ההקשרי
   await page.getByTestId('ctx-profile').click();
-  await page.getByTestId('ctx-profile-inp').fill('IPE330'); await page.getByTestId('ctx-profile-inp').press('Enter');
+  await page.getByTestId('ctx-prof-size').selectOption('IPE330');
+  await page.getByTestId('ctx-prof-sel').click();
   expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('F3.RAF.L').profile)).toBe('IPE330');
   // IPE330 (אגף 160) עם M18 ומרווח 200 — חלון בדיקת פלטת ראש העמוד נפתח
   await page.getByTestId('eave-keep').click();

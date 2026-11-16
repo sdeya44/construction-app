@@ -101,7 +101,7 @@ export function partSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: st
     const slots: Slot[] = [];
     {
       const fam = getProfile(m.profile).family;
-      const conns = ['RHS', 'SHS', 'CHS'].includes(fam) ? d.connections.filter((c) => c.parts.includes(m.id) || c.members.includes(m.id)) : [];
+      const conns = m.kind === 'brace' && ['RHS', 'SHS', 'CHS'].includes(fam) ? d.connections.filter((c) => c.parts.includes(m.id) || c.members.includes(m.id)) : [];
       const pids = new Set(conns.flatMap((c) => c.parts));
       for (const pm of d.members.filter((x) => x.kind === 'plate' && pids.has(x.id))) {
         const q = [...cachedSolidPure(pm).startRing, ...cachedSolidPure(pm).endRing].map(loc);
