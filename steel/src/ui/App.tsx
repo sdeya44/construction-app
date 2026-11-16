@@ -5,6 +5,7 @@ import { store, useStore, type ViewName } from '../store';
 import { VIEW_LABEL, Viewport } from '../view/viewport';
 import { duplicateProject, exportProject, NewProjectDialog, OpenDialog, TransformDialog } from './Dialogs';
 import { Icon } from './icons';
+import { SizingPanel } from './SizingPanel';
 import { PropertiesPanel } from './PropertiesPanel';
 import { ProfileDatalist } from './StructurePanel';
 import { DrawingsView } from './DrawingsView';
@@ -234,7 +235,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.14</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.15</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -311,6 +312,7 @@ export function App() {
           <div className="dock" role="toolbar" aria-label="כלי עבודה">
             <TB icon="select" label="בחירה" on={s.tool === 'select'} onClick={() => store.set({ tool: 'select', measure: {} })} testId="tool-select" />
             <TB icon="measure" label="מדידה" on={s.tool === 'measure'} onClick={() => store.set({ tool: s.tool === 'measure' ? 'select' : 'measure', measure: {} })} testId="tool-measure" />
+            <TB icon="sizing" label="גדלים" on={s.colorMode === 'sizing'} title="בדיקת גדלים — צביעה לפי כללי אצבע (כתום/ירוק/סגול)" onClick={() => store.set({ colorMode: s.colorMode === 'sizing' ? 'kind' : 'sizing' })} testId="tool-sizing" />
             <TB icon="clip" label="חתך" on={v.clip.enabled} onClick={() => store.setView({ clip: { ...v.clip, enabled: !v.clip.enabled } })} testId="toggle-clip" />
             <span className="dock-sep desk-only" />
             <TB icon="move" label="הזזה" disabled={!sel.length} onClick={() => setDialog('move')} testId="tool-move" desk />
@@ -321,6 +323,7 @@ export function App() {
             {s.project.deleted.length > 0 && <TB icon="history" label={`שחזור (${s.project.deleted.length})`} onClick={() => store.exec(restoreDeleted())} desk />}
           </div>
 
+          {s.colorMode === 'sizing' && s.tool !== 'measure' && <SizingPanel />}
           {s.tool === 'measure' && (
             <div className="measure-box" data-testid="measure-box">
               <b>מדידה</b>

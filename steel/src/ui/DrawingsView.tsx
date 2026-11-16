@@ -15,6 +15,7 @@ const GROUPS: [DrawingDef['type'][], string][] = [
   [['connection'], 'פרטי חיבור'],
   [['assembly'], 'שרטוטי מכלול'],
   [['part'], 'שרטוטי חלק'],
+  [['plates'], 'גיליונות פלטות'],
 ];
 const ST: Record<DrawingRecord['status'], string> = { draft: 'טיוטה', 'for-review': 'לבדיקה', approved: 'מאושר' };
 
@@ -48,7 +49,9 @@ export function DrawingsView() {
     setBusy(true);
     try {
       const sheets = defs.map((x) => buildSheet(x, p, d, fab, bom, p.drawings.find((r) => r.id === x.id)));
-      const bytes = await sheetsToPdf(sheets, { title: `${p.meta.name} – ${name}`, author: p.meta.designer });
+      // סימניות לפי קבוצות השרטוטים
+      const outline = GROUPS.map(([types, title]) => ({ title, items: defs.map((x, i) => ({ x, i })).filter(({ x }) => types.includes(x.type)).map(({ x, i }) => ({ title: `${x.number} — ${x.title}`, page: i })) }));
+      const bytes = await sheetsToPdf(sheets, { title: `${p.meta.name} – ${name}`, author: p.meta.designer, outline });
       downloadBytes(`${safeFileName(p.meta.name)}_${safeFileName(name)}.pdf`, bytes, 'application/pdf');
       store.toast('ok', `הופק PDF: ${sheets.length} גיליונות`);
     } catch (e) { store.toast('error', `הפקת PDF נכשלה: ${(e as Error).message}`); }
@@ -93,7 +96,11 @@ export function DrawingsView() {
           <span className={`badge ${rec?.status === 'approved' ? 'ok' : ''}`} data-testid="dwg-status">{ST[rec?.status ?? 'draft']} · מהדורה {rec?.rev ?? p.revision.current}</span>
           {changed && <span className="badge err" data-testid="dwg-changed">השתנה מאז האישור</span>}
           <span style={{ flex: 1 }} />
-          <select className="inp" style={{ width: 70 }} value={rec?.sheet ?? 'A3'} onChange={(e) => store.exec(setDrawing(def.id, { id: def.id, number: def.number, type: def.type, title: def.title, ref: def.ref }, { sheet: e.target.value as DrawingRecord['sheet'] }))}>
+          <select className="inp" style={{ width: 110 }} data-testid="dwg-paper" title="נייר מועדף לכל הסט: A4 (מדפסת ביתית — גיליון שלא נכנס בקנ&quot;מ סביר עולה ל-A3) או A3" value={p.settings.paper ?? 'A4'} onChange={(e) => store.exec(setSettings({ paper: e.target.value as 'A4' | 'A3' }))}>
+            <option value="A4">סט: A4 מועדף</option><option value="A3">סט: A3</option>
+          </select>
+          <select className="inp" style={{ width: 96 }} data-testid="dwg-sheet" title="גודל גיליון זה" value={rec?.sheet ?? ''} onChange={(e) => store.exec(setDrawing(def.id, { id: def.id, number: def.number, type: def.type, title: def.title, ref: def.ref }, { sheet: (e.target.value || undefined) as DrawingRecord['sheet'] }))}>
+            <option value="">{`אוטו' (${sheet.size})`}</option>
             {['A4', 'A3', 'A2', 'A1', 'A0'].map((x) => <option key={x}>{x}</option>)}
           </select>
           <select className="inp" style={{ width: 110 }} data-testid="dwg-set-status" value={rec?.status ?? 'draft'} onChange={(e) => setStatus(e.target.value as DrawingRecord['status'])}>
@@ -110,6 +117,7 @@ export function DrawingsView() {
           <button className="btn small" onClick={() => setZoom(1)}>התאם</button>
           <button className="btn small primary" disabled={busy} data-testid="dwg-pdf" onClick={() => exportPdf([def], def.number)}><Icon name="download" />PDF</button>
           <button className="btn small" data-testid="dwg-dxf" onClick={() => { downloadText(`${safeFileName(p.meta.name)}_${def.number}.dxf`, sheetToDxf(sheet), 'application/dxf'); store.toast('ok', 'הופק DXF'); }}><Icon name="download" />DXF</button>
+          <button className="btn small" disabled={busy} data-testid="dwg-pdf-all" title="כל הגיליונות בקובץ אחד, עם סימניות לפי סוג" onClick={() => exportPdf(cat, 'סט שרטוטים מלא')}><Icon name="download" />סט מלא</button>
           <button className="btn small" disabled={busy || !checked.size} data-testid="dwg-pdf-batch" onClick={() => exportPdf(cat.filter((c) => checked.has(c.id)), 'סט שרטוטים')}>PDF למסומנים ({checked.size})</button>
         </div>
         <div className="dwg-canvas" ref={box} onWheel={(e) => { if (e.ctrlKey) { e.preventDefault(); setZoom((z) => Math.max(0.5, Math.min(8, z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)))); } }}>

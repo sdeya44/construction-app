@@ -1,4 +1,6 @@
-import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { assessCandidate, SIZE_LABEL, type SizeStatus } from '../model/sizing';
+import { useStore } from '../store';
 import { fromMm, toMm } from '../core/units';
 import { catalogNames, tryProfile } from '../profiles/library';
 import { getUserCatalog } from '../profiles/userCatalog';
@@ -76,9 +78,15 @@ const FAMILY_LABEL: Record<string, string> = {
  * בחירת חתך בשני שלבים (החלטת משתמש 15.11.2026): סוג פרופיל ← גודל. משלב חתכים מקטלוג המשתמש.
  * families מגביל את הסוגים (למשל פטות: C/Z). שדה הקלדה חופשית נשאר לבעלי ניסיון (testId).
  */
-export function ProfilePicker({ value, onCommit, families, testId, placeholder, varies }: {
+const SZ_CSS: Record<SizeStatus, string> = { small: '#c4600a', ok: '#21844a', big: '#7a3fc4', na: '' };
+const SZ_MARK: Record<SizeStatus, string> = { small: '  ▼ קטן', ok: '  ● מתאים', big: '  ▲ גדול', na: '' };
+
+export function ProfilePicker({ value, onCommit, families, testId, placeholder, varies, role }: {
   value: string; onCommit: (v: string) => void; families?: string[]; testId?: string; placeholder?: string; varies?: boolean;
+  /** תפקיד האלמנט — צביעת הגדלים לפי הערכת כללי האצבע (כתום/ירוק/סגול) */
+  role?: 'column' | 'rafter' | 'purlin';
 }) {
+  const project = useStore((s) => s.project), derived = useStore((s) => s.derived);
   const groups = catalogNames().filter((g) => !families || families.includes(g.family));
   const user = getUserCatalog()?.rows.map((r) => r.name) ?? [];
   const fam = (n: string) => tryProfile(n)?.family ?? groups.find((g) => n.startsWith(g.family))?.family ?? '';
@@ -89,6 +97,13 @@ export function ProfilePicker({ value, onCommit, families, testId, placeholder, 
   const sizes = [...new Set([...(g?.names ?? []), ...user.filter((n) => fam(n) === f), ...(value && fam(value) === f ? [value] : [])])];
   const num = (n: string) => n.replace(/^[A-Z]+/, '').split(/x/i).map(Number);
   sizes.sort((a, b) => { const A = num(a), B = num(b); for (let i = 0; i < Math.max(A.length, B.length); i++) { const d = (A[i] ?? 0) - (B[i] ?? 0); if (d) return d; } return 0; });
+  const sz = useMemo(() => {
+    const m = new Map<string, SizeStatus>();
+    if (role) for (const n of sizes) { try { m.set(n, assessCandidate(project, derived, role, n).status); } catch { /* פרופיל לא מוכר */ } }
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, f, project, derived, sizes.join(',')]);
+  const curSz = role && value ? (sz.get(value) ?? (() => { try { return assessCandidate(project, derived, role, value).status; } catch { return 'na' as SizeStatus; } })()) : 'na';
   return (
     <div className="prof-pick">
       <select className="inp" value={f} aria-label="סוג פרופיל" data-testid={testId ? `${testId}-family` : undefined} onChange={(e) => setF(e.target.value)}>
@@ -97,8 +112,9 @@ export function ProfilePicker({ value, onCommit, families, testId, placeholder, 
       <select className={`inp num${varies ? ' varies' : ''}`} value={value && fam(value) === f ? value : ''} aria-label="גודל" data-testid={testId ? `${testId}-size` : undefined}
         onChange={(e) => e.target.value && e.target.value !== value && onCommit(e.target.value)}>
         <option value="">{varies ? 'משתנה' : 'בחר גודל…'}</option>
-        {sizes.map((n) => <option key={n} value={n}>{n.replace(/^[A-Z]+/, '').replace(/x/g, '×')}{user.includes(n) ? ' ✓' : ''}</option>)}
+        {sizes.map((n) => { const st = sz.get(n) ?? 'na'; return <option key={n} value={n} style={st !== 'na' ? { color: SZ_CSS[st], fontWeight: st === 'ok' ? 700 : 400 } : undefined}>{n.replace(/^[A-Z]+/, '').replace(/x/g, '×')}{user.includes(n) ? ' ✓' : ''}{SZ_MARK[st]}</option>; })}
       </select>
+      {role && curSz !== 'na' && <span className={`sz-badge sz-${curSz}`} data-testid={testId ? `${testId}-sz` : undefined} title="הערכת כללי אצבע — לא תכן סטטי">{SIZE_LABEL[curSz]}</span>}
       <TextField ltr list="profiles" testId={testId} value={value} placeholder={placeholder ?? 'הקלדה'} varies={varies} onCommit={(v) => { const n = v.toUpperCase().replace(/\s/g, ''); if (n && n !== value) onCommit(n); }} />
     </div>
   );

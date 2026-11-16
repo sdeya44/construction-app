@@ -1,3 +1,5 @@
+import type { Member } from '../model/types';
+import { sizingAll, SIZE_COLOR } from '../model/sizing';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { fromMm } from '../core/units';
@@ -299,7 +301,7 @@ export class Viewport {
     if ((this.panes.length > 1) !== s.view.split) this.layoutPanes(s.view.split);
     const main = this.panes[0];
     if (main.projection !== s.view.projection) { main.setProjection(s.view.projection); }
-    const visKey = `${s.hidden.join(',')}|${s.isolated?.join(',') ?? ''}|${Object.entries(s.filter).filter(([, v]) => !v).map(([k]) => k).join(',')}`;
+    const visKey = `${s.hidden.join(',')}|${s.isolated?.join(',') ?? ''}|${Object.entries(s.filter).filter(([, v]) => !v).map(([k]) => k).join(',')}|${s.colorMode}|${s.colorMode === 'sizing' ? JSON.stringify(s.project.settings.sizing ?? {}) : ''}`;
     if (s.derived !== this.lastDerived || visKey !== this.lastVisKey) {
       this.lastDerived = s.derived; this.lastVisKey = visKey;
       this.rebuildModel(s);
@@ -327,7 +329,12 @@ export class Viewport {
       this.model.mesh.geometry.dispose(); this.model.edges.geometry.dispose();
     }
     const vis = visibleMembers(s.derived, s.hidden, s.isolated).filter((m) => s.filter[m.kind] !== false);
-    this.model = buildModel(vis, this.modelMat, this.edgeMat);
+    let colorOf: ((m: Member) => number | undefined) | undefined;
+    if (s.colorMode === 'sizing') {
+      const sz = sizingAll(s.project, s.derived);
+      colorOf = (m) => SIZE_COLOR[sz.get(m.id)?.status ?? 'na'];
+    }
+    this.model = buildModel(vis, this.modelMat, this.edgeMat, colorOf);
     this.scene.add(this.model.mesh, this.model.edges);
   }
 

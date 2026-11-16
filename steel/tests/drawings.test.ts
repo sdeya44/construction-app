@@ -37,10 +37,17 @@ const texts = (sh: ReturnType<typeof buildSheet>) => sh.ents.filter((e) => e.k =
 
 describe('שרטוטים', () => {
   const { p, d, fab, bom, cat } = setup();
-  it('קטלוג: GA, תוכנית גג, 6 חתכי מסגרת, 2 חזיתות, 7 פרטי חיבור (כולל המשך פטה ופחי קושרות), מכלולים וחלקים', () => {
+  it('קטלוג: GA, תוכנית גג, חתכי מסגרת מקובצים (מסגרות זהות), גיליון חזיתות אחד, 7 פרטי חיבור (כולל המשך פטה ופחי קושרות), מכלולים וחלקים', () => {
     const t = (x: string) => cat.filter((c) => c.type === x).length;
-    expect([t('ga'), t('roof-plan'), t('frame'), t('side'), t('connection')]).toEqual([1, 1, 6, 2, 7]);
-    expect(t('part')).toBe(new Set(fab.parts.map((x) => x.mark)).size);
+    expect([t('ga'), t('roof-plan'), t('side'), t('connection')]).toEqual([1, 1, 1, 7]);
+    // מסגרות: כל ציר מופיע בדיוק בגיליון אחד
+    const fr = cat.filter((c) => c.type === 'frame').flatMap((c) => c.refs ?? []);
+    expect(fr.sort()).toEqual(p.building.frames.map((f) => f.id).sort());
+    expect(t('frame')).toBeLessThan(p.building.frames.length);
+    // חלקים: פרופילים — גיליון לכל סימון; פלטות — בגיליונות פלטות משולבים, כל סימון פעם אחת
+    const plateMarks = new Set(fab.parts.filter((x) => d.byId.get(x.memberId)?.kind === 'plate').map((x) => x.mark));
+    expect(t('part')).toBe(new Set(fab.parts.map((x) => x.mark)).size - plateMarks.size);
+    expect(cat.filter((c) => c.type === 'plates').flatMap((c) => c.refs ?? []).sort()).toEqual([...plateMarks].sort());
     expect(t('assembly')).toBe(new Set(fab.assemblies.map((x) => x.mark)).size);
     expect(new Set(cat.map((c) => c.id)).size).toBe(cat.length);
   });
@@ -53,7 +60,7 @@ describe('שרטוטים', () => {
     expect(ts.filter((x) => x === '300').length).toBe(2); // שתי פטות נפרדות ליד הרכס
     expect(ts.filter((x) => x === '1500').length).toBeGreaterThanOrEqual(10);
     expect(ts.some((x) => /^\d+\*$/.test(x))).toBe(true); // שארית
-    expect(sh.size).toBe('A3');
+    expect(sh.size).toBe('A4'); // ברירת מחדל: A4 כשהקנ"מ סביר
     expect(sh.title.scale).toMatch(/^1:\d+$/);
   });
   it('חתך מסגרת: גבהים 6000 ו-6900 מהמודל, רוחב 18000, חתכי פטות ממולאים', () => {

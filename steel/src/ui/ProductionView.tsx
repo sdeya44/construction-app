@@ -7,11 +7,34 @@ import { downloadText, safeFileName } from '../persist/files';
 import { store, useStore } from '../store';
 import { LenField, NumField, TextField } from './fields';
 import { Icon } from './icons';
+import { computeQuote, DEFAULT_PRICING, type Pricing } from '../fab/quote';
 
 export function ProductionView() {
   const p = useStore((s) => s.project);
   const { fab, bom, plans } = useFab();
-  const tables = bomTables(bom, plans);
+  const pricing: Pricing = { ...DEFAULT_PRICING, ...(p.settings.pricing ?? {}) };
+  const q = computeQuote(pricing, store.state.derived, fab, bom, plans);
+  const money = (n: number) => Math.round(n).toLocaleString('en-US');
+  const quoteTable = {
+    name: 'הצעת מחיר', headers: ['סעיף', 'כמות', 'יחידה', 'מחיר ליח\' (₪)', 'סה"כ (₪)'],
+    rows: [
+      ...q.lines.map((l) => [l.label, l.qty, l.unit, l.price, Math.round(l.total)] as (string | number)[]),
+      ['סה"כ עלויות ישירות', '', '', '', Math.round(q.subtotal)],
+      [`תקורה ${pricing.overheadPct}%`, '', '', '', Math.round(q.overhead)],
+      [`רווח ${pricing.marginPct}%`, '', '', '', Math.round(q.margin)],
+      ['סה"כ לפני מע"מ', '', '', '', Math.round(q.beforeVat)],
+      [`מע"מ ${pricing.vatPct}%`, '', '', '', Math.round(q.vat)],
+      ['סה"כ כולל מע"מ', '', '', '', Math.round(q.total)],
+    ],
+  };
+  const tables = [...bomTables(bom, plans), quoteTable];
+  const isQuote = (i: number) => i === tables.length - 1;
+  const setPrice = (k: keyof Pricing, v: number) => store.exec(setSettings({ pricing: { ...(p.settings.pricing ?? {}), [k]: v } }));
+  const PRICE_FIELDS: [keyof Pricing, string][] = [
+    ['steelPerKg', 'פלדה פרופילים ₪/ק"ג'], ['platePerKg', 'פלטות ₪/ק"ג (0 = כמו פרופילים)'], ['plateWastePct', 'פחת פלטות %'], ['galvPerKg', 'גלוון ₪/ק"ג'],
+    ['boltPerUnit', 'בורג ₪/יח\''], ['anchorPerUnit', 'מוט עיגון ₪/יח\''], ['fabHoursPerTon', 'ש"ע ייצור לטון'], ['hourRate', 'מחיר ש"ע ₪'],
+    ['erectionPerTon', 'הרכבה ₪/טון'], ['transport', 'הובלה ₪'], ['overheadPct', 'תקורה %'], ['marginPct', 'רווח %'], ['vatPct', 'מע"מ %'],
+  ];
   const [tab, setTab] = useState(0);
   const t = tables[tab];
   const prov = fab.parts.filter((x) => x.provisional).length;
@@ -75,6 +98,14 @@ export function ProductionView() {
             const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${safeFileName(p.meta.name)}_כמויות.xlsx`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
           }}><Icon name="download" />Excel</button>
         </div>
+        {isQuote(tab) && <div className="quote-prices" data-testid="quote-prices">
+          {PRICE_FIELDS.map(([k, lab]) => <div className="field" key={k}><label>{lab}</label><NumField testId={`qp-${k}`} value={pricing[k]} step={0.5} onCommit={(v) => setPrice(k, v)} /></div>)}
+          <div className="quote-sum" data-testid="quote-total">
+            <b>סה"כ כולל מע"מ: ₪{money(q.total)}</b>
+            <span>משקל נטו {money(q.netKg)} ק"ג · רכש {money(q.buyKg)} ק"ג · {q.perKg ? `₪${q.perKg.toFixed(2)} לק"ג (לפני מע"מ)` : 'הזן מחירים'}</span>
+          </div>
+          <div className="hint">המחירים נשמרים בקובץ הפרויקט בלבד. אומדן — לא כולל עבודות בטון, צבע, מנופים ושינויים בשטח.</div>
+        </div>}
         <div className="prod-table">
           <table className="tbl big" data-testid="prod-table">
             <thead><tr>{t.headers.map((h) => <th key={h}>{h}</th>)}</tr></thead>
@@ -86,4 +117,3 @@ export function ProductionView() {
     </div>
   );
 }
-void NumField;

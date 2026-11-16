@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, degrees, LineCapStyle, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, PDFHexString, PDFName, PDFNull, PDFNumber, rgb, degrees, LineCapStyle, type PDFDict, type PDFFont, type PDFPage, type PDFRef } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { KSP_BOLD, KSP_REGULAR } from './font/fontData';
 import { fillOf, penOf, visualRuns, type Sheet } from './sheet';
@@ -11,7 +11,37 @@ function b64(s: string): Uint8Array {
 }
 
 /** הפקת PDF וקטורי (עמוד לכל גיליון) עם גופן עברי מוטמע. מחזיר בתים. */
-export async function sheetsToPdf(sheets: Sheet[], meta: { title: string; author?: string }, fonts?: { regular: Uint8Array; bold: Uint8Array }): Promise<Uint8Array> {
+/** סימניות (Outline) לסט שרטוטים: קבוצות → גיליונות. page = אינדקס הגיליון במערך */
+export interface OutlineGroup { title: string; items: { title: string; page: number }[] }
+
+function addOutline(doc: PDFDocument, groups: OutlineGroup[]) {
+  const ctx = doc.context, pages = doc.getPages();
+  const rootRef = ctx.nextRef();
+  const dest = (i: number) => ctx.obj([pages[Math.min(i, pages.length - 1)].ref, PDFName.of('Fit')]);
+  const gRefs = groups.map(() => ctx.nextRef());
+  let total = 0;
+  groups.forEach((g, gi) => {
+    const iRefs = g.items.map(() => ctx.nextRef());
+    g.items.forEach((it, ii) => {
+      const d: Record<string, unknown> = { Title: PDFHexString.fromText(it.title), Parent: gRefs[gi], Dest: dest(it.page) };
+      if (ii > 0) d.Prev = iRefs[ii - 1];
+      if (ii < iRefs.length - 1) d.Next = iRefs[ii + 1];
+      ctx.assign(iRefs[ii], ctx.obj(d as never) as unknown as PDFDict);
+    });
+    const gd: Record<string, unknown> = { Title: PDFHexString.fromText(g.title), Parent: rootRef, Dest: dest(g.items[0]?.page ?? 0) };
+    if (iRefs.length) { gd.First = iRefs[0]; gd.Last = iRefs[iRefs.length - 1]; gd.Count = PDFNumber.of(-iRefs.length); }
+    if (gi > 0) gd.Prev = gRefs[gi - 1];
+    if (gi < gRefs.length - 1) gd.Next = gRefs[gi + 1];
+    ctx.assign(gRefs[gi], ctx.obj(gd as never) as unknown as PDFDict);
+    total += 1;
+  });
+  const root = ctx.obj({ Type: 'Outlines', First: gRefs[0] ?? PDFNull, Last: gRefs[gRefs.length - 1] ?? PDFNull, Count: PDFNumber.of(total) } as never) as unknown as PDFDict;
+  ctx.assign(rootRef, root);
+  doc.catalog.set(PDFName.of('Outlines'), rootRef as PDFRef);
+  doc.catalog.set(PDFName.of('PageMode'), PDFName.of('UseOutlines'));
+}
+
+export async function sheetsToPdf(sheets: Sheet[], meta: { title: string; author?: string; outline?: OutlineGroup[] }, fonts?: { regular: Uint8Array; bold: Uint8Array }): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   doc.setTitle(meta.title); doc.setCreator('KAYAN STEEL PRO'); doc.setProducer('KAYAN STEEL PRO');
@@ -19,6 +49,7 @@ export async function sheetsToPdf(sheets: Sheet[], meta: { title: string; author
   const reg = await doc.embedFont(fonts?.regular ?? b64(KSP_REGULAR), { subset: true });
   const bold = await doc.embedFont(fonts?.bold ?? b64(KSP_BOLD), { subset: true });
   for (const sh of sheets) drawSheet(doc.addPage([sh.w * MM, sh.h * MM]), sh, reg, bold);
+  if (meta.outline?.length) addOutline(doc, meta.outline.filter((g) => g.items.length));
   return doc.save();
 }
 

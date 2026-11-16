@@ -504,3 +504,26 @@ select.inp { padding: 0 6px; }
 .quick-b > .panel-body { padding: 8px 10px; }
 .ctx-btn.pri { background: var(--brand); color: #fff; border-color: var(--brand); }
 .vp-label.slope { background: #fff7e6; border-color: #d9a441; color: #8a5a00; font-weight: 700; }
+
+/* בדיקת גדלים */
+.sizing-box { position: absolute; right: 14px; top: 158px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px 12px; width: 300px; max-height: calc(100% - 140px); overflow: auto; direction: rtl; z-index: 3; font-size: 12.5px; }
+.sizing-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.sizing-leg { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 6px; }
+.sizing-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-left: 4px; vertical-align: -1px; }
+.sizing-t { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+.sizing-t th, .sizing-t td { padding: 2px 4px; text-align: center; border-bottom: 1px solid var(--line); }
+.sizing-t td:first-child, .sizing-t th:first-child { text-align: right; }
+.linkish { background: none; border: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; padding: 0; }
+.sz-note { padding: 6px 8px; border-radius: 6px; margin: 6px 0; border-right: 4px solid #b9c0c7; background: var(--bg, #f6f7f8); }
+.sz-note.sz-small { border-color: #e8730c; } .sz-note.sz-ok { border-color: #2f9e5b; } .sz-note.sz-big { border-color: #8a4fd0; }
+.sz-cfg { margin-top: 6px; display: grid; gap: 4px; }
+.sz-cfg .field { display: grid; grid-template-columns: 1fr 90px; align-items: center; gap: 6px; }
+.sz-badge { grid-column: 1 / -1; font-size: 11.5px; padding: 1px 6px; border-radius: 10px; justify-self: start; }
+.sz-badge.sz-small { background: #fde8d7; color: #9a4a07; } .sz-badge.sz-ok { background: #dcf3e5; color: #1b6e3d; } .sz-badge.sz-big { background: #ece2fa; color: #5f2fa0; }
+@media (max-width: 760px) { .sizing-box { right: 8px; left: 8px; width: auto; } }
+
+/* הצעת מחיר */
+.quote-prices { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); direction: rtl; }
+.quote-prices .field { display: grid; grid-template-columns: 1fr 90px; gap: 6px; align-items: center; }
+.quote-sum { grid-column: 1 / -1; display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; font-size: 15px; }
+.quote-sum span { color: var(--muted, #667); font-size: 12.5px; }

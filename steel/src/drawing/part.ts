@@ -208,8 +208,10 @@ export function plateGeom(part: MarkedPart, d: DerivedModel) {
   }
   const bolts = new Map(d.connections.flatMap((c) => c.bolts).map((b) => [b.id, b]));
   const holes = part.holes.map((h) => { const b = bolts.get(h.boltId); if (!b) return null; const q = P2(b.p); return { x: q.x, y: q.y, d: h.d }; }).filter((h): h is { x: number; y: number; d: number } => !!h);
+  // מוטות עיגון מרותכים לפלטה (פלטה מבוטנת) — מיקומי ריתוך, לא חורים
+  const studs = d.members.filter((a) => a.kind === 'anchor' && a.connId && a.connId === m.connId).map((a) => { const q = P2(a.start); return { x: q.x, y: q.y, d: Number(a.profile.replace(/\D/g, '')) || 16 }; });
   const xs = face.flatMap(([a, b]) => [a.x, b.x]), ys = face.flatMap(([a, b]) => [a.y, b.y]);
-  return { face, edge, holes, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys), T: ext[order[2]] };
+  return { face, edge, holes, studs, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys), T: ext[order[2]] };
 }
 
 /** מבט פני פלטה מוקטן לתוך מלבן נתון (לגיליון פרט חיבור): מתאר, חורים, מידות כוללות, שרשרת מרכזי חורים וקוטר. */
@@ -249,4 +251,68 @@ export function plateFaceInBox(sh: Sheet, part: MarkedPart, d: DerivedModel, box
   if (ys.length > 2) dimV(g.y0, g.y1, P(g.x1, 0).x + 7.5, String(Math.round(W)));
   const gd = new Map<number, number>(); for (const h of g.holes) gd.set(h.d, (gd.get(h.d) ?? 0) + 1);
   E.push({ k: 'text', p: { x: (box.x0 + box.x1) / 2, y: box.y1 - 2 }, s: `${part.mark} · PL${Math.round(g.T)}×${Math.round(W)}×${Math.round(Lp)}${gd.size ? ` · ${[...gd].map(([dd, q]) => `${q}×Ø${dd}`).join(', ')}` : ''} · 1:${sc}`, h: 1.9, align: 'center', layer: 'TEXT', bold: true });
+}
+
+/**
+ * תא פלטה בגיליון פלטות משולב: מבט פנים בקנ"מ תקני הגדול ביותר שנכנס, שרשראות מידה לחורים,
+ * כותרת עם סימון, כמות, עובי, חומר, משקל וקנ"מ. טקסט 2.5 מ"מ.
+ */
+export function plateCell(sh: Sheet, part: MarkedPart, qty: number, d: DerivedModel, box: { x0: number; x1: number; y0: number; y1: number }) {
+  if (!d.byId.get(part.memberId)) return;
+  const g = plateGeom(part, d);
+  const Lp = g.x1 - g.x0, W = g.y1 - g.y0;
+  const E = sh.ents;
+  const head = 15, foot = 6;
+  const sc = fitScale(Lp, W, box.x1 - box.x0 - 26, box.y1 - box.y0 - head - foot - 18);
+  const cx = (box.x0 + box.x1) / 2 - 5, cy = box.y0 + foot + 9 + (box.y1 - head - (box.y0 + foot + 9)) / 2 - 4;
+  const P = (x: number, y: number): P => ({ x: cx + (x - (g.x0 + g.x1) / 2) / sc, y: cy + (y - (g.y0 + g.y1) / 2) / sc });
+  for (const [a, b] of g.face) E.push({ k: 'line', a: P(a.x, a.y), b: P(b.x, b.y), layer: 'OUTLINE' });
+  for (const h of g.holes) {
+    const c = P(h.x, h.y), r = Math.max(h.d / 2 / sc, 0.6);
+    E.push({ k: 'circle', c, r, layer: 'HOLE' });
+    E.push({ k: 'line', a: { x: c.x - r - 1, y: c.y }, b: { x: c.x + r + 1, y: c.y }, layer: 'AXIS' }, { k: 'line', a: { x: c.x, y: c.y - r - 1 }, b: { x: c.x, y: c.y + r + 1 }, layer: 'AXIS' });
+  }
+  const dimH = (xa: number, xb: number, y: number, lab: string) => {
+    const a = P(xa, 0).x, b = P(xb, 0).x;
+    if (Math.abs(b - a) < 0.01) return;
+    E.push({ k: 'line', a: { x: a, y }, b: { x: b, y }, layer: 'DIM' });
+    for (const x of [a, b]) E.push({ k: 'line', a: { x: x - 0.7, y: y - 1 }, b: { x: x + 0.7, y: y + 1 }, layer: 'DIM' });
+    E.push({ k: 'text', p: { x: (a + b) / 2, y: y + (Math.abs(b - a) < 7 ? 2.6 : 0.9) }, s: lab, h: 2.5, align: 'center', layer: 'DIM' });
+  };
+  const dimV = (ya: number, yb: number, x: number, lab: string) => {
+    const a = P(0, ya).y, b = P(0, yb).y;
+    if (Math.abs(b - a) < 0.01) return;
+    E.push({ k: 'line', a: { x, y: a }, b: { x, y: b }, layer: 'DIM' });
+    for (const y of [a, b]) E.push({ k: 'line', a: { x: x - 1, y: y - 0.7 }, b: { x: x + 1, y: y + 0.7 }, layer: 'DIM' });
+    E.push({ k: 'text', p: { x: x - 1, y: (a + b) / 2 }, s: lab, h: 2.5, align: 'center', layer: 'DIM', rot: 90 });
+  };
+  // מוטות עיגון מרותכים (מתחת לפלטה): עיגול מקווקו + צלב
+  for (const st of g.studs) {
+    const c = P(st.x, st.y), r = Math.max(st.d / 2 / sc, 0.6);
+    E.push({ k: 'circle', c, r, layer: 'HIDDEN' });
+    E.push({ k: 'line', a: { x: c.x - r, y: c.y - r }, b: { x: c.x + r, y: c.y + r }, layer: 'THIN' }, { k: 'line', a: { x: c.x - r, y: c.y + r }, b: { x: c.x + r, y: c.y - r }, layer: 'THIN' });
+  }
+  const pts = [...g.holes, ...g.studs];
+  const ch = (v: number[]) => [...new Set(v.map((x) => Math.round(x * 10) / 10))].sort((a, b) => a - b);
+  const xs = ch([g.x0, ...pts.map((h) => h.x), g.x1]);
+  const yTop = P(0, g.y1).y;
+  for (let i = 1; i < xs.length; i++) dimH(xs[i - 1], xs[i], yTop + 4, String(Math.round(xs[i] - xs[i - 1])));
+  if (xs.length > 2) dimH(g.x0, g.x1, yTop + 9, String(Math.round(Lp)));
+  else dimH(g.x0, g.x1, yTop + 4, String(Math.round(Lp)));
+  { const xb = g.face.flatMap(([a, b]) => [a, b]).filter((q) => Math.abs(q.y - g.y0) < 0.5).map((q) => q.x);
+    if (xb.length && Math.max(...xb) - Math.min(...xb) > 5 && (Math.min(...xb) > g.x0 + 0.5 || Math.max(...xb) < g.x1 - 0.5)) dimH(Math.min(...xb), Math.max(...xb), P(0, g.y0).y - 4, String(Math.round(Math.max(...xb) - Math.min(...xb)))); }
+  const ys = ch([g.y0, ...pts.map((h) => h.y), g.y1]);
+  const xR = P(g.x1, 0).x;
+  for (let i = 1; i < ys.length; i++) dimV(ys[i - 1], ys[i], xR + 4, String(Math.round(ys[i] - ys[i - 1])));
+  if (ys.length > 2) dimV(g.y0, g.y1, xR + 9, String(Math.round(W)));
+  else dimV(g.y0, g.y1, xR + 4, String(Math.round(W)));
+  // כותרת התא: בועת סימון + נתונים
+  const bx = box.x1 - 7, by = box.y1 - 6;
+  E.push({ k: 'circle', c: { x: bx, y: by }, r: 4.2, layer: 'MARK' });
+  E.push({ k: 'text', p: { x: bx, y: by - 1.1 }, s: part.mark, h: part.mark.length > 3 ? 2.5 : 3, align: 'center', layer: 'MARK', bold: true });
+  E.push({ k: 'text', p: { x: bx - 6, y: by + 0.4 }, s: `PL${Math.round(g.T)}×${Math.round(W)}×${Math.round(Lp)}   כמות ${qty}`, h: 2.8, align: 'right', layer: 'TEXT', bold: true });
+  const gd = new Map<number, number>(); for (const h of g.holes) gd.set(h.d, (gd.get(h.d) ?? 0) + 1);
+  E.push({ k: 'text', p: { x: bx - 6, y: by - 4.4 }, s: `${part.material} · ${part.weight.toFixed(2)} ק"ג/יח'${gd.size ? ` · חורים ${[...gd].map(([dd, q]) => `${q}×Ø${dd}`).join(', ')}` : ''}`, h: 2.5, align: 'right', layer: 'TEXT' });
+  if (g.studs.length) E.push({ k: 'text', p: { x: (box.x0 + box.x1) / 2, y: box.y0 + 6.5 }, s: `${g.studs.length} מוטות עיגון Φ${g.studs[0].d} מרותכים מתחת לפלטה (⊠)`, h: 2.5, align: 'center', layer: 'TEXT' });
+  E.push({ k: 'text', p: { x: (box.x0 + box.x1) / 2, y: box.y0 + 2 }, s: `${part.desc}  ·  1:${sc}`, h: 2.5, align: 'center', layer: 'TEXT' });
 }

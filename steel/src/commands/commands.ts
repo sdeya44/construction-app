@@ -553,7 +553,7 @@ export function setDrawing(id: string, base: Omit<DrawingRecord, 'status' | 'rev
     allowWhenLocked: true,
     run: (p) => {
       const n = clone(p);
-      const cur = n.drawings.find((x) => x.id === id) ?? { ...base, sheet: 'A3' as const, status: 'draft' as const, rev: p.revision.current, history: [] };
+      const cur: DrawingRecord = n.drawings.find((x) => x.id === id) ?? { ...base, status: 'draft' as const, rev: p.revision.current, history: [] };
       const next = { ...cur, ...patch };
       if (patch.status && patch.status !== cur.status) next.history = [...cur.history, { rev: next.rev, date: new Date().toISOString(), status: patch.status, note }];
       n.drawings = [...n.drawings.filter((x) => x.id !== id), next];

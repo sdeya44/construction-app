@@ -101,8 +101,8 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
       </>}
       {show('profiles') && <>
       <div className="panel-title">חתכים וחומר</div>
-      <div className="field prof"><label>עמודים</label><ProfilePicker testId="columnProfile" value={b.columnProfile} families={['HEA', 'HEB', 'HEM', 'IPE', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ columnProfile: v })} /></div>
-      <div className="field prof"><label>קורות גג</label><ProfilePicker testId="rafterProfile" value={b.rafterProfile} families={['IPE', 'HEA', 'HEB', 'RHS', 'UPN']} onCommit={(v) => set({ rafterProfile: v })} /></div>
+      <div className="field prof"><label>עמודים</label><ProfilePicker testId="columnProfile" role="column" value={b.columnProfile} families={['HEA', 'HEB', 'HEM', 'IPE', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ columnProfile: v })} /></div>
+      <div className="field prof"><label>קורות גג</label><ProfilePicker testId="rafterProfile" role="rafter" value={b.rafterProfile} families={['IPE', 'HEA', 'HEB', 'RHS', 'UPN']} onCommit={(v) => set({ rafterProfile: v })} /></div>
       <div className="field"><label>חומר</label>
         <select className="inp" value={b.material} onChange={(e) => set({ material: e.target.value })}>
           {MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}

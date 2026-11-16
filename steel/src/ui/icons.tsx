@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 const P = (d: string) => <path d={d} />;
 const ICONS: Record<string, ReactElement> = {
   select: P('M5 3l14 8-6 1.5L10 19z'),
+  sizing: <><circle cx="7" cy="17" r="3" /><circle cx="12" cy="8" r="3" /><circle cx="17" cy="17" r="3" /></>,
   move: <>{P('M12 2v20M2 12h20')}{P('M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3')}</>,
   copy: <><rect x="8" y="8" width="12" height="12" rx="2" />{P('M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3')}</>,
   rotate: <>{P('M20 12a8 8 0 1 1-2.3-5.7')}{P('M20 4v5h-5')}</>,

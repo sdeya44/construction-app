@@ -33,7 +33,7 @@ export interface ModelBuffers {
 }
 
 /** בונה גיאומטריה ממוזגת אחת לכל האלמנטים הגלויים (קריאת ציור אחת, מתאים לאלפי אלמנטים). */
-export function buildModel(members: Member[], material: THREE.Material, edgeMat: THREE.LineBasicMaterial): ModelBuffers {
+export function buildModel(members: Member[], material: THREE.Material, edgeMat: THREE.LineBasicMaterial, colorOf?: (m: Member) => number | undefined): ModelBuffers {
   let triCount = 0, edgeCount = 0;
   const solids = members.map((m) => {
     const s = cachedSolid(m);
@@ -49,8 +49,12 @@ export function buildModel(members: Member[], material: THREE.Material, edgeMat:
   const c = new THREE.Color();
   members.forEach((m, mi) => {
     const s = solids[mi];
-    c.setHex(m.source === 'manual' ? MANUAL_COLOR : KIND_COLOR[m.kind]);
-    if (m.manualPlacement && m.source === 'generated') c.offsetHSL(0.08, 0.15, 0);
+    const cc = colorOf?.(m);
+    if (cc !== undefined) c.setHex(cc);
+    else {
+      c.setHex(m.source === 'manual' ? MANUAL_COLOR : KIND_COLOR[m.kind]);
+      if (m.manualPlacement && m.source === 'generated') c.offsetHSL(0.08, 0.15, 0);
+    }
     pos.set(s.tris, tp);
     for (let i = 0; i < s.tris.length; i += 3) { col[tp + i] = c.r; col[tp + i + 1] = c.g; col[tp + i + 2] = c.b; }
     const n = s.tris.length / 9;

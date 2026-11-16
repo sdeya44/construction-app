@@ -27,7 +27,7 @@ test.describe('M4/M5 – שרטוטים, ייצור, מהדורות', () => {
     const pdf = await save(page, 'dwg-pdf', 'R-01.pdf');
     const info = execSync(`pdfinfo "${pdf}"`).toString();
     expect(info).toMatch(/Pages:\s+1/);
-    expect(info).toMatch(/1190\.55 x 841\.89/);
+    expect(info).toMatch(/841\.89 x 595\.276/); // A4 לרוחב — ברירת מחדל (מדפסת ביתית)
     expect(execSync(`pdftotext "${pdf}" -`).toString()).toContain('30000');
     // שרטוט חלק של פטה
     await page.locator('[data-testid^="dwg-D-PART-p"]').first().click();
@@ -69,7 +69,7 @@ test.describe('M4/M5 – שרטוטים, ייצור, מהדורות', () => {
     const x = await save(page, 'export-xlsx', 'bom.xlsx');
     if (fs.existsSync(PY)) {
       const s = execSync(`${PY} -c "import openpyxl,sys; wb=openpyxl.load_workbook(sys.argv[1]); print('|'.join(wb.sheetnames))" "${x}"`).toString().trim();
-      expect(s).toBe('חתכים|חלקים|מכלולים|ברגים|ריתוכים|חיתוך');
+      expect(s).toBe('חתכים|חלקים|מכלולים|ברגים|ריתוכים|חיתוך|הצעת מחיר');
     }
     // שינוי חתך מעדכן משקל
     await page.getByTestId('mode-model').click();

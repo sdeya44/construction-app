@@ -119,8 +119,11 @@ export function newSheet(size: SheetSize, title: TitleInfo, scale: number): Shee
 
 /** אזור השרטוט הזמין (מעל/מימין לבלוק הכותרת), מ"מ נייר. */
 export function drawArea(s: Sheet) {
-  return { x0: 20, y0: 10 + TB_H + 4, x1: s.w - 10, y1: s.h - 10 };
+  return { x0: 20, y0: 10 + (isCompact(s) ? TB_COMPACT_H + 3 : TB_H + 4), x1: s.w - 10, y1: s.h - 10 };
 }
+/** גיליון A4: פס כותרת מצומצם לכל הרוחב (בלי חתימות וטבלת מהדורות) */
+export const isCompact = (s: Sheet) => s.size === 'A4';
+export const TB_COMPACT_H = 16;
 export const TB_W = 185, TB_H = 67;
 /** גובה טבלת המהדורות (פינה ימנית תחתונה) — גיליונות עם טבלאות בפינה זו מתחילים מעליה */
 export const revBandH = (t: TitleInfo) => 4.6 * (Math.min(5, Math.max(1, t.revisions?.length ?? 0)) + 1) + 2;
@@ -133,6 +136,7 @@ export function frameAndTitle(s: Sheet) {
     s.ents.push({ k: 'text', p: { x, y }, s: str, h, align, layer: 'TITLE', bold });
   const x0 = 20, y0 = 10, x1 = s.w - 10, y1 = s.h - 10;
   s.ents.push({ k: 'poly', pts: [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }], closed: true, layer: 'FRAME' });
+  if (isCompact(s)) { compactTitle(s, x0, y0, x1); return; }
   const bx = x0, by = y0, bw = TB_W, bh = TB_H;
   s.ents.push({ k: 'poly', pts: [{ x: bx, y: by }, { x: bx + bw, y: by }, { x: bx + bw, y: by + bh }, { x: bx, y: by + bh }], closed: true, layer: 'FRAME' });
   const t = s.title;
@@ -236,3 +240,34 @@ export function visualOrder(s: string): string {
 }
 
 export const today = () => new Date().toISOString().slice(0, 10).split('-').reverse().join('.');
+
+/** פס כותרת מצומצם (A4): שתי שורות לכל רוחב הגיליון — רק השדות החיוניים לייצור. */
+function compactTitle(s: Sheet, x0: number, y0: number, x1: number) {
+  const t = s.title, H = TB_COMPACT_H, R = H / 2;
+  const L = (a: P, b: P, layer: Layer = 'TITLE') => s.ents.push({ k: 'line', a, b, layer });
+  const T = (x: number, y: number, str: string, h: number, align: 'left' | 'center' | 'right' = 'center', bold = false) =>
+    s.ents.push({ k: 'text', p: { x, y }, s: str, h, align, layer: 'TITLE', bold });
+  s.ents.push({ k: 'poly', pts: [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y0 + H }, { x: x0, y: y0 + H }], closed: true, layer: 'FRAME' });
+  L({ x: x0, y: y0 + R }, { x: x1, y: y0 + R });
+  const W = x1 - x0;
+  const row = (yb: number, cells: [string, string, number, number?][]) => {
+    const sum = cells.reduce((a, c) => a + c[2], 0);
+    let x = x1;
+    cells.forEach(([lab, v, w, big], i) => {
+      const cw = (W * w) / sum;
+      if (i) L({ x, y: yb }, { x, y: yb + R });
+      if (lab) T(x - 0.8, yb + R - 1.9, lab, 1.5, 'right');
+      if (lab || v) T(x - cw / 2, yb + 1.3, v || '—', big ?? 2.4, 'center', true);
+      x -= cw;
+    });
+  };
+  row(y0 + R, [['כותרת', t.title, 38, 2.8], ['פרויקט', t.project, 22], ['', t.company, 14, 2.6], ['מס\' שרטוט', t.number, 14, 3]]);
+  row(y0, [['חומר', t.material ?? 'S235JR', 12], ['משקל', t.weight ?? '', 11], ['קנ"מ', t.scale, 9], ['מהדורה', t.rev, 7], ['תאריך', t.date, 11], ['גיליון', t.sheetNo ?? '', 8],
+    ['סטטוס', t.status, 10], ['ביצוע', t.exec ?? 'EXC2', 7], ['', 'מ"מ', 6], ['', '', 10]]);
+  // סמל זווית ראשונה בתא האחרון (שמאל)
+  const px = x0 + 7, py = y0 + R / 2;
+  s.ents.push({ k: 'poly', pts: [{ x: px - 4.5, y: py - 1 }, { x: px - 0.8, y: py - 2 }, { x: px - 0.8, y: py + 2 }, { x: px - 4.5, y: py + 1 }], closed: true, layer: 'TITLE' });
+  s.ents.push({ k: 'circle', c: { x: px + 3, y: py }, r: 2, layer: 'TITLE' }, { k: 'circle', c: { x: px + 3, y: py }, r: 1, layer: 'TITLE' });
+  T(x0 + 1, y0 + H + 1.2, 'KAYAN STEEL PRO', 1.6, 'left');
+  if (t.note) T(x1, y0 + H + 1.2, t.note, 1.8, 'right');
+}

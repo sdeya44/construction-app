@@ -320,7 +320,13 @@ export interface Project {
     /** שרטוטים בצבע (מסך); ברירת מחדל: שחור-לבן להדפסה */
     drawingColor?: boolean;
     /** דרגת ביצוע לפי EN 1090-2 */
-    execClass?: 'EXC1' | 'EXC2' | 'EXC3' };
+    execClass?: 'EXC1' | 'EXC2' | 'EXC3';
+    /** גודל נייר מועדף: A4 (ברירת מחדל — מדפסת ביתית; גיליון שלא נכנס בקנ"מ סביר עולה ל-A3) או A3 */
+    paper?: 'A4' | 'A3';
+    /** הערכת גדלים (כללי אצבע) — ספים ועומסים; חסר = ברירת מחדל */
+    sizing?: Partial<import('./sizing').SizingCfg>;
+    /** מחירון להצעת מחיר — נשמר בקובץ הפרויקט בלבד */
+    pricing?: Partial<import('../fab/quote').Pricing> };
   building: BuildingParams;
   memberOverrides: Record<string, MemberOverride>;
   manualMembers: ManualMember[];
@@ -363,7 +369,7 @@ export interface MarkRegistry {
 export interface RevisionEntry { rev: string; date: string; note: string; status: 'approved' | 'draft'; snapshot?: string }
 export interface RevisionState { current: string; locked: boolean; log: RevisionEntry[] }
 
-export type DrawingType = 'cover' | 'roof-plan' | 'anchor-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga';
+export type DrawingType = 'cover' | 'plates' | 'roof-plan' | 'anchor-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga';
 export interface DrawingRecord {
   id: string;
   number: string;
@@ -371,7 +377,8 @@ export interface DrawingRecord {
   title: string;
   /** פרמטר: מזהה מסגרת / סימון חלק / מזהה חיבור / צד */
   ref?: string;
-  sheet: 'A4' | 'A3' | 'A2' | 'A1' | 'A0';
+  /** גודל גיליון קבוע; ריק = אוטומטי לפי העדפת הנייר בהגדרות */
+  sheet?: 'A4' | 'A3' | 'A2' | 'A1' | 'A0';
   status: 'draft' | 'for-review' | 'approved';
   rev: string;
   /** חתימת התוכן בעת האישור — שינוי מסמן "השתנה מאז האישור" */

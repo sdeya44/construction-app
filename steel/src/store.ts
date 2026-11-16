@@ -39,6 +39,8 @@ export interface AppState {
   /** חלון בדיקת פלטת ראש עמוד (מזהה חיבור) */
   eaveCheck: string | null;
   measure: { a?: { x: number; y: number; z: number }; b?: { x: number; y: number; z: number } };
+  /** צביעת המודל: לפי סוג (רגיל) או לפי הערכת גדלים */
+  colorMode: 'kind' | 'sizing';
   revision: number;
 }
 
@@ -61,7 +63,7 @@ class Store {
         projection: 'persp', render: 'solid', grid: true, dims: true, labels: true, split: false,
         clip: { enabled: false, axis: 'Y', pos: 0, flip: false },
       },
-      toasts: [], saveState: 'saved', canUndo: false, canRedo: false, measure: {}, revision: 0, activeConn: null, eaveCheck: null,
+      toasts: [], saveState: 'saved', canUndo: false, canRedo: false, measure: {}, revision: 0, activeConn: null, eaveCheck: null, colorMode: 'kind',
     };
   }
 

@@ -7,6 +7,7 @@ import { store, useStore } from '../store';
 import type { Viewport } from '../view/viewport';
 import { CONN_TYPE, SectionSvg } from './ConnectionEditor';
 import { Icon } from './icons';
+import { fabFor } from '../fab/useFab';
 import { KIND_LABEL } from './TreePanel';
 
 /** פקודה בלוח הפקודות / בתפריט. keys = קיצור מקלדת להצגה. */
@@ -89,6 +90,16 @@ export function ContextBar({ vp, onMore, onOpenConn }: { vp: Viewport | null; on
         return <button className="ctx-btn pri" data-testid="ctx-settings" title={label} onClick={() => window.dispatchEvent(new CustomEvent('ksp-quick', { detail: { key, label } }))}>⚙ מידות והגדרות</button>;
       })()}
       <button className="ctx-btn" onClick={() => store.set({ isolated: [...sel] })}>בודד</button>
+      {single && <button className="ctx-btn" data-testid="ctx-isolate-asm" title="הצג רק את המכלול (החלק הראשי והחלקים המרותכים אליו) והברגים שלו" onClick={() => {
+        const st = store.state, { fab } = fabFor(st.project, st.derived);
+        const pt = fab.parts.find((x) => x.memberId === single.id);
+        const asm = pt && fab.assemblies.find((a) => a.id === pt.assembly);
+        if (!asm) return;
+        const ids = new Set(asm.parts.map((pid) => fab.byPart.get(pid)?.memberId).filter((x): x is string => !!x));
+        for (const c of st.derived.connections) for (const b of c.bolts) if (b.holesIn.some((h) => ids.has(h))) for (const sfx of ['', '.H', '.S', '.N']) ids.add(`${b.id}${sfx}`);
+        store.set({ isolated: [...ids], selection: [single.id] });
+        store.toast('info', `מכלול ${asm.mark}: ${asm.parts.length} חלקים`);
+      }}>בודד מכלול</button>}
       {single && <button className="ctx-btn" data-testid="ctx-hide-kind" title="הסתרת כל האלמנטים מסוג זה (שכבות — הצג הכל)" onClick={() => store.set({ hidden: [...new Set([...store.state.hidden, ...d.members.filter((m) => m.kind === single.kind && (single.kind !== 'brace' || m.id.slice(0, 4) === single.id.slice(0, 4))).map((m) => m.id)])], selection: [] })}>הסתר סוג</button>}
       <button className="ctx-btn" onClick={() => store.set({ hidden: [...new Set([...store.state.hidden, ...sel])], selection: [] })}>הסתר</button>
       <button className="ctx-btn icon" aria-label="עוד פעולות" title="עוד פעולות (לחיצה ימנית)" data-testid="ctx-more"
