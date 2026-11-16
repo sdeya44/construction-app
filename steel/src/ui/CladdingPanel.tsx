@@ -1,3 +1,4 @@
+import { WallCladSchematic } from './schematics';
 import { useMemo } from 'react';
 import { setBuilding } from '../commands/commands';
 import { claddingTakeoff, defaultCladding, WALL_HE } from '../geometry/cladding';
@@ -14,6 +15,8 @@ const m = (mm: number) => (mm / 1000).toFixed(2);
 export function CladdingPanel({ section }: { section?: CladSection } = {}) {
   const show = (k: CladSection) => !section || section === k;
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
+  // גובה ראש הקיר (לשרטוט): עמודי הקיר בפועל
+  const eaveOf = (w: string) => { const cols = d.members.filter((m) => m.kind === 'column'); const xs = cols.map((c) => c.start.x); const pick = w === 'L' ? cols.filter((c) => c.start.x === Math.min(...xs)) : w === 'R' ? cols.filter((c) => c.start.x === Math.max(...xs)) : cols; return pick.length ? Math.max(...pick.map((c) => Math.max(c.start.z, c.end.z))) - p.building.baseElevation : 6000; };
   const unit = p.displayUnit;
   const cl = p.building.cladding;
   const set = (patch: Partial<CladdingParams>) => store.exec(setBuilding({ cladding: { ...(cl ?? defaultCladding()), ...patch } }));
@@ -56,6 +59,8 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
           return (
             <div key={w} className="op-card" data-testid={`clad-wall-${w}`}>
               <b>{WALL_HE[w]}</b>
+              <WallCladSchematic n={n} bays={bays} bottom={pw.bottom ?? cl.walls.bottom} top={pw.top ?? null} eave={eaveOf(w)} testId={`sch-clad-${w}`} labelOf={lab}
+                onBays={(b) => setW({ bays: b })} onBottom={(v) => setW({ bottom: v })} onTop={(v) => setW({ top: v })} />
               <div className="row" style={{ flexWrap: 'wrap', gap: 8, margin: '4px 0' }}>
                 <span className="hint">מפתחים מחופים:</span>
                 {bays.map((on, i) => <label key={i} className="row" title={`מפתח ${lab(i)}`}><input type="checkbox" checked={on} data-testid={`clad-bay-${w}-${i}`} onChange={(e) => setW({ bays: bays.map((x, k) => (k === i ? e.target.checked : x)) })} />{lab(i)}</label>)}

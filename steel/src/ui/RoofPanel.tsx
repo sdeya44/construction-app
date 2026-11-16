@@ -6,6 +6,7 @@ import { MATERIALS } from '../profiles/materials';
 import { purlinParams } from '../geometry/purlins';
 import { store, useStore } from '../store';
 import { LenField, ProfilePicker } from './fields';
+import { CleatSchematic, PurlinSlopeSchematic } from './schematics';
 
 const OPENING: Record<'up' | 'down', string> = { up: 'לכיוון הרכס / הצד הגבוה', down: 'לכיוון המרזב / הצד הנמוך' };
 
@@ -26,6 +27,7 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
       </div>
       {prm.enabled && <>
         <div className="field prof"><label>חתך הפטה</label><ProfilePicker testId={tid('profile')} role="purlin" value={prm.profile} families={['C', 'Z', 'RHS', 'IPE', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>
+        <PurlinSlopeSchematic side={side} items={items} mono={mono} />
         <div className="field"><label>{mono ? 'מרחק ראשון מקצה ההתחלה' : 'מרחק ראשון מהרכס'}</label><LenField testId={tid('first')} mm={prm.first} unit={u} onCommit={(v) => set({ first: v })} /></div>
         <div className="field"><label>חלוקה</label>
           <select className="inp" data-testid={tid('mode')} value={prm.layout ?? 'fixed'} onChange={(e) => set({ layout: e.target.value as 'fixed' | 'even' })}>
@@ -70,6 +72,7 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
           <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" checked={prm.cleat.enabled} data-testid={tid('cleat-enabled')} onChange={(e) => store.exec(setCleat(side, { enabled: e.target.checked }))} />פעיל</label>
         </div>
         {prm.cleat.enabled && <>
+          <CleatSchematic side={side} />
           <div className="field"><label>גובה</label>
             <div className="row" style={{ flexWrap: 'nowrap' }}>
               {prm.cleat.height === null

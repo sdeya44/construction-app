@@ -110,6 +110,7 @@ export function RoofTrussPanel() {
   const span = cols.length >= 2 ? cols[cols.length - 1].start.x - cols[0].start.x : p.building.width;
   const set = (patch: Partial<RoofTrussParams>) => store.exec(setBuilding({ roofTruss: { ...(rt ?? { enabled: false, frames: 'all', shape: 'flat', spec: defaultTrussSpec(evenPanels(span), depthFor(span), { top: p.building.rafterProfile }) }), ...patch } }));
   const fr = [...p.building.frames].sort((a, b) => a.y - b.y);
+  const hasRidge = d.members.filter((m) => m.kind === 'rafter' && m.frameId === fr[0]?.id).length >= 2;
   const sel = rt?.frames === 'all' || !rt ? fr.map((f) => f.id) : rt.frames;
   const toggleFrame = (id: string) => { const s2 = new Set(sel); if (s2.has(id)) s2.delete(id); else s2.add(id); set({ frames: s2.size === fr.length ? 'all' : fr.filter((f) => s2.has(f.id)).map((f) => f.id) }); };
   return (
@@ -122,11 +123,12 @@ export function RoofTrussPanel() {
         <div className="field"><label>מסגרות</label>
           <div className="bay-pick">{fr.map((f, i) => <button key={f.id} className={`tbtn${sel.includes(f.id) ? ' on' : ''}`} data-testid={`rt-f-${i + 1}`} onClick={() => toggleFrame(f.id)}>{i + 1}</button>)}</div></div>
         <div className="field"><label>צורה</label>
-          <select className="inp" data-testid="rt-shape" value={rt.shape} onChange={(e) => set({ shape: e.target.value as 'flat' | 'parallel' })}>
-            <option value="flat">חגורה תחתונה אופקית</option><option value="parallel">חגורה תחתונה מקבילה לגג</option>
+          <select className="inp" data-testid="rt-shape" value={rt.shape} onChange={(e) => set({ shape: e.target.value as 'flat' | 'parallel' | 'scissor', rise: rt.rise ?? 1000 })}>
+            <option value="flat">חגורה תחתונה אופקית</option><option value="parallel">חגורה תחתונה מקבילה לגג</option><option value="scissor">"מספריים" — מוגבהת ברכס</option>
           </select></div>
         <div className="field prof"><label>חגורה עליונה (= קורת הגג)</label><span className="readonly mono">{p.building.rafterProfile}</span></div>
         <TrussWizard spec={{ ...rt.spec, profiles: { ...rt.spec.profiles, top: p.building.rafterProfile } }} span={span} chordFamilies={['HEA', 'HEB', 'IPE', 'RHS', 'SHS']} loads={{ q: roofTrussLoad(p) }} testId="tw-roof"
+          roof={{ ridge: hasRidge, shape: rt.shape, rise: rt.rise ?? 1000, onRise: (v) => set({ rise: v }) }}
           onChange={(sp) => { if (sp.profiles.top !== rt.spec.profiles.top) store.exec(setBuilding({ rafterProfile: sp.profiles.top, roofTruss: { ...rt, spec: sp } })); else set({ spec: sp }); }}
           note="בגג דו-שיפועי: השדות ליד הרכס — אלכסונים לרכס, והחגורה התחתונה נחתכת ברכס (חיבור מוברג)." />
       </>}

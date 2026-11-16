@@ -259,7 +259,14 @@ export function roofTrussRafterSplices(p: Project, members: Member[]): Record<st
       const len = Math.hypot(r.end.x - r.start.x, r.end.z - r.start.z);
       if (len <= stock || r.id in p.splices) continue;
       const lo = Math.min(r.start.x, r.end.x), hi = Math.max(r.start.x, r.end.x);
-      const mids = L.nodes.slice(0, -1).map((x, i) => (x + L.nodes[i + 1]) / 2).filter((x) => x > lo + 300 && x < hi - 300);
+      // תפר באמצע שדה (חופשי מצמתים), מוזז בתוך השדה הרחק מתומכי הפטות על הקורה
+      const pxs = members.filter((m) => m.purlin).map((m) => m.start.x);
+      const best = (a: number, b: number) => {
+        let bx = (a + b) / 2, bd = -1;
+        for (let k = 0; k <= 20; k++) { const x = a + 0.2 * (b - a) + (0.6 * (b - a) * k) / 20; const dd = Math.min(...pxs.map((q) => Math.abs(q - x)), 1e9); if (dd > bd + 1) { bd = dd; bx = x; } }
+        return bd >= 220 ? bx : null;
+      };
+      const mids = L.nodes.slice(0, -1).map((x, i) => best(x, L.nodes[i + 1])).filter((x): x is number => x !== null && x > lo + 300 && x < hi - 300);
       const cos = Math.abs(r.end.x - r.start.x) / len;
       const tOf = (x: number) => Math.abs(x - r.start.x) / cos;
       const ts: number[] = []; let prev = 0;
@@ -289,7 +296,11 @@ export function buildRoofTrusses(p: Project, members: Member[], splices: Record<
     const y = L.colL.start.y;
     const top = (x: number) => rafterAt(L.rafters, x).axis;
     const zEnd = Math.min(top(L.x0), top(L.x1)) - spec.depth;
-    const bz = rt.shape === 'parallel' ? (x: number) => top(x) - spec.depth : () => zEnd;
+    const rise = rt.shape === 'scissor' && L.xR !== null ? Math.max(0, rt.rise ?? 1000) : 0;
+    const bz = rt.shape === 'parallel' ? (x: number) => top(x) - spec.depth
+      : rise > 0 ? (x: number) => zEnd + rise * (1 - Math.abs(x - L.xR!) / (x < L.xR! ? L.xR! - L.x0 : L.x1 - L.xR!)) : () => zEnd;
+    if (rt.shape === 'scissor' && L.xR === null) res.issues.push({ code: 'TRUSS_FRAME', severity: 'info', message: `מסבך "מספריים" מסגרת ${fi}: גג חד-שיפועי — חגורה תחתונה אופקית` });
+    if (rise > 0 && top(L.xR!) - (zEnd + rise) < spec.depth * 0.6) res.issues.push({ code: 'TRUSS_ANGLE', severity: 'warning', message: `מסבך "מספריים" מסגרת ${fi}: הגבהה גדולה — גובה המסבך ברכס קטן מ-60% מהגובה בקצה` });
     // מקטעי החגורה התחתונה: נחתכים ברכס (parallel / גג דו-שיפועי) ובמקומות חיבורי ההמשך של קורות הגג
     const cutsX = new Set<number>();
     if (L.xR !== null) cutsX.add(L.xR);

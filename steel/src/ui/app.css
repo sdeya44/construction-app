@@ -612,3 +612,8 @@ select.inp { padding: 0 6px; }
 .tw-prof td.sz-small { color: #c4600a; font-weight: 700; }
 .tw-prof td.sz-ok { color: #21844a; font-weight: 700; }
 .tw-prof td.sz-big { color: #7a3fc4; }
+.schem .bay-cell { cursor: pointer; }
+.schem .bay { fill: #f4f2ec; stroke: #c9c3b6; stroke-width: 0.4; }
+.schem .bay.on { fill: #efe8fb; }
+.schem .bay.on.clad { fill: #dfe9f2; stroke: #8fb0cc; }
+.schem .bay-cell:hover .bay { stroke: #7a3fc4; stroke-width: 0.8; }

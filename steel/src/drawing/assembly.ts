@@ -5,7 +5,7 @@ import type { Fabrication, MarkedPart } from '../fab/marks';
 import { ventHoles } from '../fab/marks';
 import type { DerivedModel, Member } from '../model/types';
 import { cachedSolidPure, silhouetteEdges } from './solidCache';
-import { fitScale, revBandH, type P, type Sheet } from './sheet';
+import { drawArea, fitScale, revBandH, type P, type Sheet } from './sheet';
 
 /**
  * שרטוט מכלול (החלטת משתמש 15.11.2026: "לא ברור — לצרף תלת־ממד"):
@@ -15,7 +15,7 @@ import { fitScale, revBandH, type P, type Sheet } from './sheet';
  *  · טבלת חלקים והערות ייצור
  * כל המידות נגזרות מהמודל.
  */
-export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: string): string {
+export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: string, mode: 'full' | 'main' = 'full'): string {
   const asm = fab.assemblies.find((x) => x.mark === mark);
   if (!asm) return '—';
   const mainPart = fab.byPart.get(asm.main)!;
@@ -388,7 +388,12 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     renderIso(sh, ms, parts.map((x) => x.mark), { x0, x1: x0 + w, y0: isoY0, y1: 150 }, [t0, t1], loc, `תלת־ממד — פרט ${name}`, holesW.map((h) => ({ p: h.p, axis: h.axis, r: h.d / 2, len: h.grip })));
   });
 
-  // ---- טבלת חלקים
+  // ---- טבלת חלקים (מכלול גדול — בגיליון נפרד)
+  if (mode === 'main') {
+    const tx1m = sh.w - 12;
+    text({ x: tx1m, y: 12 + 30 }, `מכלול ${asm.mark} · ${asm.weight.toFixed(1)} ק"ג · כמות בפרויקט ${fab.assemblies.filter((x) => x.mark === asm.mark).length} · ${parts.length} חלקים — רשימת החלקים בגיליון A-${asm.mark}.2`, 2.8, 'right', 'TEXT', true);
+    return `1:${sc}`;
+  }
   const tx1 = sh.w - 12, tx0 = 210, rowH = 4.6;
   const cols: [string, number][] = [['סימון', 16], ['כמות', 11], ['תיאור', 70], ['חתך', 34], ['אורך', 17], ['ק"ג/יח\'', 15], ['ק"ג', 17]];
   const scaleW = (tx1 - tx0) / cols.reduce((a, c) => a + c[1], 0);
@@ -583,4 +588,41 @@ export function renderIso(sh: Sheet, ms: Member[], marks: string[], box: { x0: n
     E.push({ k: 'circle', c: b, r: 3, layer: 'MARK' });
     E.push({ k: 'text', p: { x: b.x, y: b.y - 0.9 }, s: mk, h: mk.length > 3 ? 1.9 : 2.3, align: 'center', layer: 'MARK', bold: true });
   }
+}
+
+/** גיליון 2 של מכלול גדול: רשימת חלקים מלאה + תלת־ממד גדול + הערות ייצור */
+export function assemblyListSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: string): string {
+  const asm = fab.assemblies.find((x) => x.mark === mark);
+  if (!asm) return '—';
+  const E: Sheet['ents'] = sh.ents;
+  const text = (p: P, s: string, h = 2.5, align: 'left' | 'center' | 'right' = 'right', bold = false) => E.push({ k: 'text', p, s, h, align, layer: 'TEXT', bold });
+  const parts = asm.parts.map((pid) => fab.byPart.get(pid)!).filter(Boolean);
+  const mainPart = fab.byPart.get(asm.main)!;
+  const cnt = new Map<string, { q: number; p: MarkedPart }>();
+  for (const pt of parts) { const e = cnt.get(pt.mark) ?? { q: 0, p: pt }; e.q++; cnt.set(pt.mark, e); }
+  const rows = [...cnt.values()].sort((a, b) => (a.p === mainPart ? -1 : b.p === mainPart ? 1 : a.p.mark.localeCompare(b.p.mark, 'en', { numeric: true })));
+  const area = drawArea(sh);
+  const tx1 = area.x1 - 4, tx0 = area.x1 - 230, rowH = 5;
+  const cols: [string, number][] = [['סימון', 16], ['כמות', 11], ['תיאור', 82], ['חתך', 36], ['אורך', 18], ['ק"ג/יח\'', 16], ['ק"ג', 18]];
+  const kx = (tx1 - tx0) / cols.reduce((a, c) => a + c[1], 0);
+  let y = area.y1 - 8;
+  text({ x: tx1, y }, `מכלול ${asm.mark} — רשימת חלקים (${parts.length} חלקים, ${rows.length} סימונים) · ${asm.weight.toFixed(1)} ק"ג · כמות בפרויקט ${fab.assemblies.filter((x) => x.mark === asm.mark).length}`, 3, 'right', true);
+  y -= 6;
+  const top = y;
+  const hl = (yy: number) => E.push({ k: 'line', a: { x: tx0, y: yy }, b: { x: tx1, y: yy }, layer: 'THIN' });
+  hl(y);
+  const row = (vals: string[], bold = false) => { let x = tx1; vals.forEach((v, i) => { text({ x: x - 1, y: y - rowH + 1.6 }, v, 2.6, 'right', bold); x -= cols[i][1] * kx; }); y -= rowH; hl(y); };
+  row(cols.map((c) => c[0]), true);
+  for (const r of rows) row([r.p.mark, String(r.q), r.p.desc, r.p.profile, String(Math.round(r.p.length)), r.p.weight.toFixed(1), (r.p.weight * r.q).toFixed(1)]);
+  { let x = tx1; for (let i = 0; i <= cols.length; i++) { E.push({ k: 'line', a: { x, y: top }, b: { x, y }, layer: 'THIN' }); if (i < cols.length) x -= cols[i][1] * kx; } }
+  // תלת־ממד גדול בצד השמאלי
+  const ms = parts.map((pt) => d.byId.get(pt.memberId)!).filter(Boolean);
+  const m0 = d.byId.get(mainPart.memberId)!;
+  renderIso(sh, ms, parts.map((x) => x.mark), { x0: area.x0 + 4, x1: tx0 - 10, y0: area.y0 + 10, y1: area.y1 - 10 }, null, (q) => ({ t: dot(sub(q, m0.start), localFrame(m0).ex), u: 0, v: 0 }), 'מבט תלת־ממדי — המכלול (ללא קנ"מ)');
+  const weld = d.connections.flatMap((c) => c.welds).filter((w) => w.location === 'shop' && ms.some((m) => m.id === w.between[0]) && ms.some((m) => m.id === w.between[1]));
+  const aS = [...new Set(weld.map((w) => w.a))].sort((a, b) => a - b);
+  const notes = [aS.length ? `ריתוך פינתי במסגריה a=${aS.join('/')} מ"מ, היקפי, לפני גלוון` : 'ללא ריתוך במכלול', 'גלוון חם לאחר ייצור; הרכבה בשטח בברגים בלבד', `מבטים ומידות — בגיליון A-${asm.mark}`];
+  y -= 8;
+  notes.forEach((n2, i) => text({ x: tx1, y: y - i * 4 }, `${i + 1}. ${n2}`, 2.6));
+  return '—';
 }

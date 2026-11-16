@@ -3,7 +3,7 @@ import { localFrame } from '../geometry/frame';
 import { cachedSolidPure, silhouetteEdges } from './solidCache';
 import { partSheet, plateCell, plateFaceInBox } from './part';
 import { claddingTakeoff, WALL_HE } from '../geometry/cladding';
-import { assemblySheet, renderIso } from './assembly';
+import { assemblyListSheet, assemblySheet, renderIso } from './assembly';
 import { purlinParams } from '../geometry/purlins';
 import { getProfile, tryProfile } from '../profiles/library';
 import type { Bom } from '../fab/bom';
@@ -16,6 +16,12 @@ export interface DrawingDef { id: string; type: DrawingType; number: string; tit
 const num = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true });
 
 /** קטלוג השרטוטים הנגזר מהמודל. המזהים יציבים; מספרי השרטוטים נגזרים מהמזהה. */
+/** מכלול עם הרבה סימוני חלקים שונים (למשל חצי מסבך) */
+export function bigAssembly(fab: Fabrication, mark: string): boolean {
+  const a = fab.assemblies.find((x) => x.mark === mark);
+  return !!a && new Set(a.parts.map((pid) => fab.byPart.get(pid)?.mark)).size > 10;
+}
+
 export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): DrawingDef[] {
   const out: DrawingDef[] = [];
   out.push({ id: 'D-COVER', type: 'cover', number: 'G-00', title: 'גיליון שער — רשימת שרטוטים והערות כלליות' });
@@ -36,7 +42,11 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
     if (c) out.push({ id: `D-CONN-${t}`, type: 'connection', number: `D-${String(i + 1).padStart(2, '0')}`, title, ref: c.id });
   });
   const asm = [...new Set(fab.assemblies.map((a) => a.mark))].sort(num);
-  for (const m of asm) out.push({ id: `D-ASM-${m}`, type: 'assembly', number: `A-${m}`, title: `שרטוט מכלול ${m}`, ref: m });
+  for (const m of asm) {
+    out.push({ id: `D-ASM-${m}`, type: 'assembly', number: `A-${m}`, title: `שרטוט מכלול ${m}`, ref: m });
+    // מכלול גדול (מסבך): רשימת החלקים בגיליון שני — הגיליון הראשון נשאר קריא
+    if (bigAssembly(fab, m)) out.push({ id: `D-ASM-${m}-L`, type: 'assembly', number: `A-${m}.2`, title: `שרטוט מכלול ${m} — רשימת חלקים`, ref: `${m}|list` });
+  }
   // חלקי פרופיל — גיליון לכל חלק; פלטות — כמה פלטות בגיליון (A4: 6, A3: 8), ממוינות לפי גודל
   const isPlate = (mk: string) => d.byId.get(fab.parts.find((x) => x.mark === mk)?.memberId ?? '')?.kind === 'plate';
   const parts = [...new Set(fab.parts.map((x) => x.mark))].sort(num);
@@ -794,7 +804,8 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       break;
     }
     case 'assembly': {
-      scaleLabel = assemblySheet(sh, fab, d, def.ref!);
+      const [mk, sub2] = def.ref!.split('|');
+      scaleLabel = sub2 === 'list' ? assemblyListSheet(sh, fab, d, mk) : assemblySheet(sh, fab, d, mk, bigAssembly(fab, mk) ? 'main' : 'full');
       break;
     }
     case 'part': {

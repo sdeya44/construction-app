@@ -13,13 +13,20 @@ const COLORS = { top: '#1f5fa8', bottom: '#1b6e3d', endDiag: '#b00020', diag: '#
  * אשף מסבך: עורך שדות בלחיצה (שדה: ╱ ╲ X ריק · צומת: אנך · חגורה באמצע שדה: ✂ חיבור המשך), תבניות, סימטריה,
  * מספר שדות וגובה (מידה בלחיצה), פרופיל לכל קבוצה (סוג ← מידה) עם הערכת ניצול, משקל משוער.
  */
-export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId = 'tw', note }: {
+export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId = 'tw', note, roof }: {
   spec: TrussSpec; span: number; onChange: (s: TrussSpec) => void; chordFamilies: string[];
   loads: { q?: number; points?: [number, number][] }; testId?: string; note?: string;
+  /** מסבך גג: צורת החגורות בשרטוט (רכס/חד-שיפועי, אופקית/מקבילה/מספריים) */
+  roof?: { ridge: boolean; shape: 'flat' | 'parallel' | 'scissor'; rise: number; onRise: (v: number) => void };
 }) {
   const n = spec.panels;
-  const W = 300, H = 118, x0 = 18, x1 = 282, yT = 30, yB = 78;
+  const W = 300, H = 124, x0 = 18, x1 = 282, yT = 36, yB = 84;
   const px = (i: number) => x0 + ((x1 - x0) * i) / n;
+  // גובה החגורות בצמת i (שרטוט סכמטי)
+  const tri = (i: number) => (roof?.ridge ? 1 - Math.abs(i - n / 2) / (n / 2) : i / n);
+  const yTop = (i: number) => (roof ? yT - 14 * tri(i) : yT);
+  const riseV = roof?.shape === 'scissor' && roof.ridge ? Math.min(0.75 * (yB - yT), ((yB - yT) * roof.rise) / Math.max(spec.depth, 1)) : 0;
+  const yBot = (i: number) => (!roof ? yB : roof.shape === 'parallel' ? yTop(i) + (yB - yT) : yB - riseV * (roof.ridge ? 1 - Math.abs(i - n / 2) / (n / 2) : 0));
   const sym = spec.symmetric ?? true;
   const set = (patch: Partial<TrussSpec>) => onChange({ ...spec, ...patch });
   const setCell = (i: number) => {
@@ -49,48 +56,49 @@ export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId
   }, [spec, span, n]);
   const members = spec.cells.reduce((a, c) => a + (c === 'X' ? 3 : c ? 1 : 0), 0) + spec.verts.filter(Boolean).length;
   const dims: SDim[] = [
-    { a: [x1 + 3, yT], b: [x1 + 3, yB], off: -6, value: spec.depth, testId: `${testId}-depth`, min: 300, onCommit: (v) => set({ depth: Math.round(v) }) },
-    { a: [px(0), yB + 18], b: [px(1), yB + 18], off: 0, value: span / n, derived: true, text: `${Math.round(span / n)} (שדה)` },
-    { a: [px(0), yB + 30], b: [px(n), yB + 30], off: 0, value: span, derived: true, text: `${Math.round(span)} (מפתח)` },
+    { a: [x1 + 3, yTop(n)], b: [x1 + 3, yBot(n)], off: -6, value: spec.depth, testId: `${testId}-depth`, min: 300, onCommit: (v) => set({ depth: Math.round(v) }) },
+    ...(roof?.shape === 'scissor' && roof.ridge ? [{ a: [px(n / 2) + 4, yB], b: [px(n / 2) + 4, yBot(n / 2)], off: -6, value: roof.rise, text: `${Math.round(roof.rise)} (הגבהה)`, testId: `${testId}-rise`, min: 0, onCommit: (v: number) => roof.onRise(Math.round(v)) } as SDim] : []),
+    { a: [px(0), yB + 14], b: [px(1), yB + 14], off: 0, value: span / n, derived: true, text: `${Math.round(span / n)} (שדה)` },
+    { a: [px(0), yB + 26], b: [px(n), yB + 26], off: 0, value: span, derived: true, text: `${Math.round(span)} (מפתח)` },
   ];
   return (
     <div className="truss-wiz" data-testid={testId}>
       <Schematic w={W} h={H} dims={dims} testId={`${testId}-sch`} caption="לחיצה על שדה: ╱ ╲ X ריק · על צומת תחתון: אנך · על ✂ בחגורה: חיבור המשך · על הגובה ✎">
         {/* שדות לחיצה */}
         {Array.from({ length: n }, (_, i) => (
-          <rect key={`c${i}`} x={px(i) + 1} y={yT + 1} width={px(i + 1) - px(i) - 2} height={yB - yT - 2} className="tw-cell" data-testid={`${testId}-cell-${i}`} onClick={() => setCell(i)} />
+          <polygon key={`c${i}`} points={`${px(i) + 1},${yTop(i) + 1} ${px(i + 1) - 1},${yTop(i + 1) + 1} ${px(i + 1) - 1},${yBot(i + 1) - 1} ${px(i) + 1},${yBot(i) - 1}`} className="tw-cell" data-testid={`${testId}-cell-${i}`} onClick={() => setCell(i)} />
         ))}
-        <line x1={x0} y1={yT} x2={x1} y2={yT} stroke={COLORS.top} strokeWidth={3} />
-        <line x1={x0} y1={yB} x2={x1} y2={yB} stroke={COLORS.bottom} strokeWidth={3} />
+        <polyline points={Array.from({ length: n + 1 }, (_, i) => `${px(i)},${yTop(i)}`).join(' ')} fill="none" stroke={COLORS.top} strokeWidth={3} />
+        <polyline points={Array.from({ length: n + 1 }, (_, i) => `${px(i)},${yBot(i)}`).join(' ')} fill="none" stroke={COLORS.bottom} strokeWidth={3} />
         {spec.cells.map((c, i) => {
           const col = i === 0 || i === n - 1 ? COLORS.endDiag : COLORS.diag;
           return (
             <g key={`d${i}`} pointerEvents="none">
-              {(c === '/' || c === 'X') && <line x1={px(i)} y1={yB} x2={px(i + 1)} y2={yT} stroke={col} strokeWidth={1.8} />}
-              {(c === '\\' || c === 'X') && <line x1={px(i)} y1={yT} x2={px(i + 1)} y2={yB} stroke={col} strokeWidth={1.8} />}
-              {c === '' && <text x={(px(i) + px(i + 1)) / 2} y={(yT + yB) / 2} className="sm-lbl-s" textAnchor="middle">ריק</text>}
+              {(c === '/' || c === 'X') && <line x1={px(i)} y1={yBot(i)} x2={px(i + 1)} y2={yTop(i + 1)} stroke={col} strokeWidth={1.8} />}
+              {(c === '\\' || c === 'X') && <line x1={px(i)} y1={yTop(i)} x2={px(i + 1)} y2={yBot(i + 1)} stroke={col} strokeWidth={1.8} />}
+              {c === '' && <text x={(px(i) + px(i + 1)) / 2} y={(yTop(i) + yBot(i + 1)) / 2} className="sm-lbl-s" textAnchor="middle">ריק</text>}
             </g>
           );
         })}
-        {spec.verts.map((v, i) => v && <line key={`v${i}`} x1={px(i)} y1={yT} x2={px(i)} y2={yB} stroke={COLORS.vert} strokeWidth={1.6} pointerEvents="none" />)}
+        {spec.verts.map((v, i) => v && <line key={`v${i}`} x1={px(i)} y1={yTop(i)} x2={px(i)} y2={yBot(i)} stroke={COLORS.vert} strokeWidth={1.6} pointerEvents="none" />)}
         {Array.from({ length: n + 1 }, (_, i) => (
           <g key={`n${i}`}>
-            <circle cx={px(i)} cy={yT} r={1.6} className="tw-node" />
-            <circle cx={px(i)} cy={yB} r={2.6} className={`tw-node click${spec.verts[i] ? ' on' : ''}`} data-testid={`${testId}-node-${i}`} onClick={() => setVert(i)} />
+            <circle cx={px(i)} cy={yTop(i)} r={1.6} className="tw-node" />
+            <circle cx={px(i)} cy={yBot(i)} r={2.6} className={`tw-node click${spec.verts[i] ? ' on' : ''}`} data-testid={`${testId}-node-${i}`} onClick={() => setVert(i)} />
           </g>
         ))}
         {Array.from({ length: n }, (_, i) => {
-          const on = splices.includes(i), xm = (px(i) + px(i + 1)) / 2;
+          const on = splices.includes(i), xm = (px(i) + px(i + 1)) / 2, ym = (yTop(i) + yTop(i + 1)) / 2;
           return (
             <g key={`s${i}`} className={`tw-spl${on ? ' on' : ''}`} data-testid={`${testId}-spl-${i}`} onClick={() => toggleSplice(i)}>
-              <rect x={xm - 3.5} y={yT - 12} width={7} height={8} rx={1.5} />
-              <text x={xm} y={yT - 6.6} textAnchor="middle">✂</text>
-              {on && <line x1={xm} y1={yT - 3} x2={xm} y2={yB + 3} className="tw-spl-line" />}
+              <rect x={xm - 3.5} y={ym - 12} width={7} height={8} rx={1.5} />
+              <text x={xm} y={ym - 6.6} textAnchor="middle">✂</text>
+              {on && <line x1={xm} y1={ym - 3} x2={xm} y2={(yBot(i) + yBot(i + 1)) / 2 + 3} className="tw-spl-line" />}
             </g>
           );
         })}
-        <polygon points={`${x0},${yB} ${x0 - 4},${yB + 6} ${x0 + 4},${yB + 6}`} className="sm-host" />
-        <polygon points={`${x1},${yB} ${x1 - 4},${yB + 6} ${x1 + 4},${yB + 6}`} className="sm-host" />
+        <polygon points={`${x0},${yBot(0)} ${x0 - 4},${yBot(0) + 6} ${x0 + 4},${yBot(0) + 6}`} className="sm-host" />
+        <polygon points={`${x1},${yBot(n)} ${x1 - 4},${yBot(n) + 6} ${x1 + 4},${yBot(n) + 6}`} className="sm-host" />
       </Schematic>
       <div className="tw-row">
         <span className="tw-lbl">תבנית:</span>

@@ -220,8 +220,10 @@ export interface RoofTrussParams {
   enabled: boolean;
   /** מסגרות עם מסבך: all או רשימת מזהי מסגרות */
   frames: 'all' | string[];
-  /** flat: חגורה תחתונה אופקית; parallel: מקבילה לגג */
-  shape: 'flat' | 'parallel';
+  /** flat: חגורה תחתונה אופקית; parallel: מקבילה לגג; scissor: "מספריים" — מוגבהת באמצע (ברכס) */
+  shape: 'flat' | 'parallel' | 'scissor';
+  /** scissor: הגבהת החגורה התחתונה ברכס (מ"מ) */
+  rise?: Mm;
   spec: TrussSpec;
 }
 
