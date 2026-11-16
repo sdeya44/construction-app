@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
-import { setSettings } from '../commands/commands';
+import { applySizingSuggestion, setSettings } from '../commands/commands';
 import { DEFAULT_SIZING, SIZE_COLOR, SIZE_LABEL, sizingAll, sizingCfg, type SizeStatus, type SizingCfg } from '../model/sizing';
 import { store, useStore } from '../store';
 import { NumField } from './fields';
 import { Icon } from './icons';
 
-const KIND_HE: Record<string, string> = { column: 'עמודים', rafter: 'קורות גג', purlin: 'פטות', brace: 'אלכסונים/קושרות', beam: 'קורות' };
+const KIND_HE: Record<string, string> = { column: 'עמודים', rafter: 'קורות גג', purlin: 'פטות', brace: 'אלכסונים/קושרות', beam: 'קורות', girt: 'מסגור קירות' };
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 const FIELDS: [keyof SizingCfg, string, string][] = [
-  ['dead', 'עומס קבוע', 'kN/m²'], ['live', 'עומס שימושי', 'kN/m²'], ['gamma', 'מקדם עומס', ''],
+  ['dead', 'עומס קבוע', 'kN/m²'], ['live', 'עומס שימושי', 'kN/m²'], ['snow', 'שלג (ת"י 412)', 'kN/m²'], ['wind', 'לחץ רוח qp (ת"י 414)', 'kN/m²'],
+  ['cpRoof', 'מקדם יניקה בגג', ''], ['cpWall', 'מקדם לחץ בקיר', ''], ['gamma', 'מקדם עומס (כבידה)', ''],
   ['kRafter', 'קורת גג: M = qL²/k, k=', ''], ['kPurlin', 'פטה: M = qL²/k, k=', ''],
   ['rafterMinDepth', 'קורה: עומק מינ\' L/', ''], ['rafterMaxDepth', 'קורה: עומק מרבי L/', ''],
   ['columnMinDepth', 'עמוד: עומק מינ\' H/', ''], ['columnK', 'עמוד: מקדם אורך קריסה', ''],
@@ -52,7 +53,8 @@ export function SizingPanel() {
           </tr>))}</tbody>
       </table>
       {selR && selM && <div className={`sz-note sz-${selR.status}`} data-testid="sz-note"><b>{selM.label} · {selM.profile}</b><br />{SIZE_LABEL[selR.status]} — {selR.text}</div>}
-      <div className="hint">הערכה לפי כללי אצבע ועומס גג אחיד ({cfg.dead}+{cfg.live} kN/m² ×{cfg.gamma}); ללא רוח, שלג ועגורן. אינה תכן סטטי.</div>
+      <div className="hint">הערכה בכללי אצבע: גג {cfg.dead}+max({cfg.live}, שלג {cfg.snow}) kN/m² ×{cfg.gamma}; רוח qp={cfg.wind} kN/m² (יניקה בפטות, לחץ על העמודים). ללא עגורן, ללא בדיקת יציבות כוללת. אינה תכן סטטי — לעדכן רוח ושלג לפי האתר.</div>
+      <button className="btn small primary" data-testid="sz-apply" title="עמודים, קורות, פטות וקושרות — הגודל הקטן ביותר שמסומן 'סביר' באותה משפחה; פלטות ראש עמוד ובסיס מותאמות" onClick={() => { if (store.exec(applySizingSuggestion())) store.toast('ok', 'החתכים הותאמו לפי כללי האצבע — יש לבדוק את רשימת הבדיקות'); }}>התאם חתכים</button>{' '}
       <button className="btn small" data-testid="sz-settings" onClick={() => setOpen(!open)}>{open ? 'הסתר ספים' : 'ספים ועומסים…'}</button>
       {open && <div className="sz-cfg">
         {FIELDS.map(([k, lab, suf]) => <div className="field" key={k}><label>{lab}</label><NumField testId={`szc-${k}`} value={cfg[k]} suffix={suf} step={0.05} onCommit={(v) => setCfg(k, v)} /></div>)}

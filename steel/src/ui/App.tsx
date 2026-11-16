@@ -6,6 +6,7 @@ import { VIEW_LABEL, Viewport } from '../view/viewport';
 import { duplicateProject, exportProject, NewProjectDialog, OpenDialog, TransformDialog } from './Dialogs';
 import { Icon } from './icons';
 import { SizingPanel } from './SizingPanel';
+import { backupDownload, fsSupported, linkedName, linkToFile, needsBackup } from '../persist/fileLink';
 import { PropertiesPanel } from './PropertiesPanel';
 import { ProfileDatalist } from './StructurePanel';
 import { DrawingsView } from './DrawingsView';
@@ -137,13 +138,19 @@ export function App() {
   const setView = (name: ViewName) => vp.current?.fitAll(name);
   const hide = () => { if (store.state.selection.length) store.set({ hidden: [...new Set([...store.state.hidden, ...store.state.selection])], selection: [] }); };
   const isolate = () => { if (store.state.selection.length) store.set({ isolated: [...store.state.selection] }); };
-  const showAll = () => store.set({ hidden: [], isolated: null, filter: { column: true, rafter: true, beam: true, brace: true, purlin: true, cleat: true, plate: true, bolt: true, anchor: true } });
+  const showAll = () => store.set({ hidden: [], isolated: null, filter: { column: true, rafter: true, beam: true, brace: true, purlin: true, girt: true, cleat: true, plate: true, bolt: true, anchor: true } });
   const u = s.project.displayUnit;
   const m = s.measure;
   const mdist = m.a && m.b ? { d: Math.hypot(m.b.x - m.a.x, m.b.y - m.a.y, m.b.z - m.a.z), dx: m.b.x - m.a.x, dy: m.b.y - m.a.y, dz: m.b.z - m.a.z } : null;
   const fmt = (mm: number) => (u === 'm' ? `${fromMm(mm, 'm').toFixed(3)} מ'` : `${mm.toFixed(1)} מ"מ`);
   const saveText = { saved: 'נשמר במחשב', dirty: 'שינויים לא שמורים', saving: 'שומר…', error: 'שגיאת שמירה' }[s.saveState];
   const sideOpen = mtab === 'side', propsOpen = mtab === 'props';
+  const [linked, setLinked] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => { setLinked(linkedName(s.project.id)); }, [s.project.id]);
+  // ברירת מחדל: פאנל המאפיינים קבוע (המבט לא קופץ בבחירה); המשתמש יכול לכווץ אותו ידנית — ואז הוא נפתח כשכבה בבחירה
+  const [propsPinned, setPropsPinnedS] = useState(() => { try { return localStorage.getItem('ksp-props-pinned') !== '0'; } catch { return true; } });
+  const setPropsPinned = (v: boolean) => { setPropsPinnedS(v); try { localStorage.setItem('ksp-props-pinned', v ? '1' : '0'); } catch { /* */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 30); };
 
   // פתיחת חיבור: עורך בלוח המאפיינים + סימון חלקיו
   const openConn = (id: string) => {
@@ -230,12 +237,11 @@ export function App() {
         {railBtn('prod', 'factory', 'ייצור', mode === 'production', () => setMode('production'), 'mode-production')}
         {railBtn('chk', 'alert', 'בדיקות', mode === 'model' && tab === 'issues', () => goTab('issues'), 'rail-issues', errs + warns)}
         <div className="rail-sp" />
-        {railBtn('cat', 'tree', 'חתכים', false, () => setDialog('catalog'), 'btn-catalog')}
-        <span className="rail-btn disabled" title="מודול חישוב — שלב M8, טרם מומש"><Icon name="calc" /><span>חישובים<br />בפיתוח</span></span>
+        {railBtn('cat', 'tree', 'קטלוג', false, () => setDialog('catalog'), 'btn-catalog')}
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.15</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.16</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -248,6 +254,10 @@ export function App() {
         <button className="tb-btn" onClick={() => setDialog('open')} data-testid="btn-open" title="פתיחה"><Icon name="folder" /></button>
         <button className="tb-btn desk-only" onClick={saveNow} data-testid="btn-save" title="שמירה (Ctrl S)"><Icon name="save" /></button>
         <button className="tb-btn desk-only" onClick={exportProject} data-testid="btn-export" title="ייצוא קובץ פרויקט"><Icon name="download" /></button>
+        <button className={`tb-btn desk-only${linked ? ' on' : ''}`} data-testid="btn-link-file" title={linked ? `נשמר אוטומטית גם לקובץ: ${linked}` : fsSupported() ? 'שמירה אוטומטית לקובץ בתיקייה שתבחר (גיבוי מחוץ לדפדפן)' : 'גיבוי לקובץ (הורדה)'} onClick={async () => {
+          try { const n = await linkToFile(s.project); if (n) { setLinked(n); store.toast('ok', `כל שמירה תיכתב גם לקובץ ${n}`); } else store.toast('ok', 'הופק קובץ גיבוי'); } catch { /* בוטל */ }
+        }}><Icon name="save" />{linked ? <span className="tb-mini">קובץ</span> : null}</button>
+        {!linked && needsBackup(s.project) && <button className="chip-st warn" data-testid="backup-reminder" title="הפרויקט שמור רק בדפדפן. ניקוי נתוני הדפדפן ימחק אותו." onClick={() => { backupDownload(s.project); store.toast('ok', 'הופק קובץ גיבוי'); setTick(tick + 1); }}>⚠ לא גובה לקובץ — גבה עכשיו</button>}
         <span className="tb-div desk-only" />
         <button className="tb-btn" onClick={() => store.undo()} disabled={!s.canUndo} title={s.undoLabel ? `ביטול: ${s.undoLabel}` : 'ביטול'} data-testid="btn-undo"><Icon name="undo" /></button>
         <button className="tb-btn" onClick={() => store.redo()} disabled={!s.canRedo} title={s.redoLabel ? `חזרה: ${s.redoLabel}` : 'חזרה'} data-testid="btn-redo"><Icon name="redo" /></button>
@@ -256,7 +266,7 @@ export function App() {
 
       {mode === 'drawings' && <main className="mode-area"><DrawingsView /></main>}
       {mode === 'production' && <main className="mode-area"><ProductionView /></main>}
-      <main className="workspace" style={mode !== 'model' ? { display: 'none' } : undefined}>
+      <main className={`workspace${!propsPinned ? ' props-collapsed' : ''}${!propsPinned && (sel.length || s.activeConn) ? ' props-float' : ''}`} style={mode !== 'model' ? { display: 'none' } : undefined}>
         <aside className={`side side-start${sideOpen ? ' open' : ''}`}>
           <SideNav nav={nav} setNav={setNav} onOpenConn={openConn} />
         </aside>
@@ -351,6 +361,7 @@ export function App() {
           )}
         </div>
         <aside className={`side side-end${propsOpen ? ' open' : ''}`} data-testid="props">
+          <button className="props-pin desk-only" data-testid="props-pin" title={propsPinned ? 'כיווץ הפאנל — יותר מקום לתלת־ממד; בבחירה הפאנל נפתח כשכבה' : 'קיבוע פאנל המאפיינים'} onClick={() => setPropsPinned(!propsPinned)}>{propsPinned ? '▸ כיווץ פאנל' : '◂ מאפיינים וסיכום'}</button>
           <PropertiesPanel />
         </aside>
       </main>

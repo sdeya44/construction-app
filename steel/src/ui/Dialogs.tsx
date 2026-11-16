@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { copyMembers, mirrorMembers, moveMembers, rotateMembers } from '../commands/commands';
 import { uniformFrames, defaultBuilding, newProject } from '../model/defaults';
-import { fromFileJson, toFileJson } from '../model/migrate';
+import { fromFileJson } from '../model/migrate';
 import type { BuildingParams } from '../model/types';
 import { validateBuilding } from '../model/validate';
-import { downloadText, pickFile, safeFileName } from '../persist/files';
+import { pickFile } from '../persist/files';
 import { deleteProject, listProjects, listSnapshots, loadProject, loadSnapshot, type ProjectSummary, type SnapshotInfo } from '../persist/idb';
 import { store, useStore } from '../store';
 import { cachedSolid } from '../view/scene';
@@ -12,6 +12,9 @@ import { LenField, NumField, ProfilePicker } from './fields';
 import { SECTION_TEMPLATES } from '../model/section';
 import { SectionPreview } from './SectionEditor';
 import { defaultKneeBraces } from '../geometry/knee';
+import { applySizingSuggestion } from '../commands/commands';
+import { backupDownload } from '../persist/fileLink';
+import { defaultCladding } from '../geometry/cladding';
 import { Icon } from './icons';
 
 export function Dialog({ title, onClose, children, footer, wide, testId }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean; testId?: string }) {
@@ -45,6 +48,8 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   /** סוג המבנה: gable / mono (קלאסי) או מזהה תבנית מודולרית */
   const [kind, setKind] = useState<string>('gable');
   const [knee, setKnee] = useState(false);
+  const [autoSize, setAutoSize] = useState(true);
+  const [clad, setClad] = useState(true);
   const u: 'm' = 'm';
   const set = (p: Partial<BuildingParams>) => setB({ ...b, ...p });
   const build = (): BuildingParams | null => {
@@ -58,8 +63,10 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const create = () => {
     if (!cand || errors.length) return;
     const bb: BuildingParams = tpl ? { ...cand, section: tpl.make(), kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined } : { ...cand, kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined };
-    const p = newProject(name, bb);
+    if (clad) bb.cladding = defaultCladding();
+    let p = newProject(name, bb);
     p.meta.number = number; p.meta.client = client;
+    if (autoSize) { try { p = applySizingSuggestion().run(p); } catch { /* נשאר עם החתכים שנבחרו */ } }
     store.loadProject(p, true);
     void store.saveNow('יצירת פרויקט');
     onClose();
@@ -83,6 +90,8 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
             ))}
           </div>
           <label className="row" style={{ marginTop: 6 }}><input type="checkbox" checked={knee} data-testid="np-knee" onChange={(e) => setKnee(e.target.checked)} />אלכסוני עמוד-קורה (RHS, 45°)</label>
+          <label className="row" style={{ marginTop: 4 }}><input type="checkbox" checked={clad} data-testid="np-clad" onChange={(e) => setClad(e.target.checked)} />חיפוי גג וקירות, פטות קיר, עמודי רוח ומזחלות</label>
+          <label className="row" style={{ marginTop: 4 }} title="הקטן ביותר שמסומן 'סביר' בבדיקת הגדלים, באותה משפחת פרופיל; כולל התאמת פלטות ראש עמוד ובסיס. הערכה בלבד — לא תכן."><input type="checkbox" checked={autoSize} data-testid="np-autosize" onChange={(e) => setAutoSize(e.target.checked)} />התאמת חתכים לפי כללי אצבע (עמודים, קורות, פטות, קושרות)</label>
         </div>
         <div>
           <div className="panel-title">ממדים</div>
@@ -166,8 +175,7 @@ export function OpenDialog({ onClose }: { onClose: () => void }) {
 }
 
 export function exportProject() {
-  const p = store.state.project;
-  downloadText(`${safeFileName(p.meta.name)}.ksp.json`, toFileJson(p));
+  backupDownload(store.state.project);
 }
 
 export function duplicateProject() {

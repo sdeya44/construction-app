@@ -5,6 +5,7 @@ import { generate } from './geometry/generate';
 import { newProject } from './model/defaults';
 import type { DerivedModel, MemberKind, Project } from './model/types';
 import { saveProject } from './persist/idb';
+import { writeLinked } from './persist/fileLink';
 
 export type ViewName = 'iso' | 'front' | 'back' | 'left' | 'right' | 'top';
 export type Tool = 'select' | 'measure';
@@ -16,6 +17,8 @@ export interface ViewState {
   dims: boolean;
   labels: boolean;
   split: boolean;
+  /** הצגת משטחי החיפוי (שקופים) */
+  cladding: boolean;
   clip: { enabled: boolean; axis: 'X' | 'Y' | 'Z'; pos: number; flip: boolean };
 }
 
@@ -57,10 +60,10 @@ class Store {
     this.history = new History(p);
     this.state = {
       project: p, derived: generate(p), selection: [], hidden: [], isolated: null,
-      filter: { column: true, rafter: true, beam: true, brace: true, purlin: true, cleat: true, plate: true, bolt: true, anchor: true },
+      filter: { column: true, rafter: true, beam: true, brace: true, purlin: true, girt: true, cleat: true, plate: true, bolt: true, anchor: true },
       tool: 'select',
       view: {
-        projection: 'persp', render: 'solid', grid: true, dims: true, labels: true, split: false,
+        projection: 'persp', render: 'solid', grid: true, dims: true, labels: true, split: false, cladding: true,
         clip: { enabled: false, axis: 'Y', pos: 0, flip: false },
       },
       toasts: [], saveState: 'saved', canUndo: false, canRedo: false, measure: {}, revision: 0, activeConn: null, eaveCheck: null, colorMode: 'kind',
@@ -141,6 +144,7 @@ class Store {
     this.set({ saveState: 'saving' });
     try {
       await saveProject(this.state.project, reason);
+      void writeLinked(this.state.project);
       this.set({ saveState: 'saved' });
       return true;
     } catch (e) {

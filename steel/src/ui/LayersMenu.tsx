@@ -4,7 +4,7 @@ import { store, useStore } from '../store';
 import { Icon } from './icons';
 
 const LAYERS: { kind: MemberKind; label: string }[] = [
-  { kind: 'column', label: 'עמודים' }, { kind: 'rafter', label: 'קורות גג' }, { kind: 'purlin', label: 'פטות' },
+  { kind: 'column', label: 'עמודים' }, { kind: 'rafter', label: 'קורות גג' }, { kind: 'purlin', label: 'פטות' }, { kind: 'girt', label: 'פטות קיר ועמודי רוח' },
   { kind: 'cleat', label: 'תומכי פטות' }, { kind: 'brace', label: 'קושרות ואלכסונים' }, { kind: 'beam', label: 'פרופילי חיזוק' },
   { kind: 'plate', label: 'פלטות ופחים' }, { kind: 'bolt', label: 'ברגים' }, { kind: 'anchor', label: 'מוטות עיגון' },
 ];
@@ -15,6 +15,8 @@ const LAYERS: { kind: MemberKind; label: string }[] = [
 export function LayersMenu() {
   const [open, setOpen] = useState(false);
   const filter = useStore((s) => s.filter);
+  const view = useStore((s) => s.view);
+  const hasClad = useStore((s) => !!s.project.building.cladding);
   const members = useStore((s) => s.derived.members);
   const hidden = useStore((s) => s.hidden);
   const isolated = useStore((s) => s.isolated);
@@ -37,6 +39,7 @@ export function LayersMenu() {
               <span>{l.label}</span><span className="mono muted">{counts.get(l.kind)}</span>
             </label>
           ))}
+          {hasClad && <label className="layer-row"><input type="checkbox" checked={view.cladding} data-testid="layer-cladding" onChange={(e) => store.setView({ cladding: e.target.checked })} /><span>משטחי חיפוי (שקוף)</span><span /></label>}
           {(hidden.length > 0 || isolated) && <div className="hint" style={{ margin: '6px 2px 0' }}>{isolated ? `מצב בידוד: ${isolated.length} אלמנטים מוצגים` : ''}{hidden.length ? ` · ${hidden.length} מוסתרים ידנית (H)` : ''}</div>}
           <button className="btn small" style={{ marginTop: 6, width: '100%' }} data-testid="layers-all" onClick={resetAll}>הצג הכל</button>
         </div>

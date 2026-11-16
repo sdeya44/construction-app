@@ -18,7 +18,7 @@ test.describe('M4/M5 – שרטוטים, ייצור, מהדורות', () => {
     const errors = await boot(page);
     page.on('dialog', (d) => d.accept());
     await page.getByTestId('mode-drawings').click();
-    await page.getByTestId('dwg-number').click();
+    if (await page.getByTestId('dwg-number').count()) await page.getByTestId('dwg-number').click(); // המספור רץ אוטומטית בכניסה
     await page.getByTestId('dwg-D-ROOF').click();
     await expect(page.getByTestId('dwg-title')).toContainText('R-01');
     await expect(page.getByTestId('dwg-scale')).toContainText('1:');
@@ -30,6 +30,7 @@ test.describe('M4/M5 – שרטוטים, ייצור, מהדורות', () => {
     expect(info).toMatch(/841\.89 x 595\.276/); // A4 לרוחב — ברירת מחדל (מדפסת ביתית)
     expect(execSync(`pdftotext "${pdf}" -`).toString()).toContain('30000');
     // שרטוט חלק של פטה
+    await page.getByTestId('dwg-search').fill('P-p');
     await page.locator('[data-testid^="dwg-D-PART-p"]').first().click();
     await expect(page.getByTestId('dwg-title')).toContainText('P-p');
     await shot(page, 'DRAW_part_preview');
@@ -39,6 +40,7 @@ test.describe('M4/M5 – שרטוטים, ייצור, מהדורות', () => {
       expect(Number(n)).toBeGreaterThan(50);
     }
     // אישור, ואז שינוי במודל ⇒ "השתנה מאז האישור"
+    await page.getByTestId('dwg-search').fill('');
     await page.getByTestId('dwg-D-ROOF').click();
     await page.getByTestId('dwg-set-status').selectOption('approved');
     await expect(page.getByTestId('dwg-status')).toContainText('מאושר');

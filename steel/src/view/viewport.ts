@@ -1,3 +1,4 @@
+import { claddingTakeoff } from '../geometry/cladding';
 import type { Member } from '../model/types';
 import { sizingAll, SIZE_COLOR } from '../model/sizing';
 import * as THREE from 'three';
@@ -79,6 +80,7 @@ class Pane {
     c.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
     c.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
     c.addEventListener('change', () => this.vp.requestRender());
+    c.addEventListener('start', () => { this.vp.userMoved = true; });
     this.controls = c;
   }
 
@@ -181,11 +183,21 @@ class Pane {
     let i = 0;
     const viewDir = new THREE.Vector3();
     this.camera.getWorldDirection(viewDir);
-    for (const l of labels) {
+    // מניעת חפיפה: עדיפות (מדידה > בועות > מידות ניתנות לעריכה > מידות > מידות פטות > חיבורי המשך), כל תווית שחופפת לתווית שכבר הוצבה — מוסתרת
+    const prio = (c: string) => (c.includes('measure') || c.includes('tag') ? 0 : c.includes('bubble') ? 1 : c.includes('slope') ? 2 : c.includes('small') || c.includes('rem') ? 4 : c.includes('dim') ? 3 : c.includes('splice') ? 6 : 5);
+    const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const order = labels.map((l, k) => ({ l, k, pr: prio(l.cls) })).sort((a, b) => a.pr - b.pr || a.k - b.k);
+    for (const { l, pr } of order) {
       // מידה שנצפית בקצה (כיוונה מקביל לכיוון המבט) אינה מוצגת — היא מתנוונת לנקודה
       if (l.dir && Math.abs(l.dir.dot(viewDir)) > 0.97) continue;
       const s = this.toScreen(l.p);
       if (!s.visible || s.x < -50 || s.y < -50 || s.x > this.rect.w + 50 || s.y > this.rect.h + 50) continue;
+      if (pr > 0) {
+        const hw = l.cls.includes('bubble') ? 13 : l.cls.includes('splice') ? 5 : l.text.length * 3.6 + 5, hh = l.cls.includes('bubble') ? 13 : l.cls.includes('splice') ? 5 : 8;
+        const r = { x0: s.x - hw, x1: s.x + hw, y0: s.y - hh, y1: s.y + hh };
+        if (placed.some((q) => r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0)) continue;
+        placed.push(r);
+      }
       let el = this.labelPool[i];
       if (!el) { el = document.createElement('div'); this.labelLayer.appendChild(el); this.labelPool[i] = el; }
       el.className = `vp-label ${l.cls}${l.edit ? ' editable' : ''}`;
@@ -293,8 +305,13 @@ export class Viewport {
       Object.assign(p.el.style, { left: `${p.rect.x}px`, top: `${p.rect.y}px`, width: `${p.rect.w}px`, height: `${p.rect.h}px` });
       p.updateCams();
     });
+    // לפני שהמשתמש הזיז את המצלמה — התאמה מחדש לגודל החלון (טלפון: הסרגלים נטענים אחרי הבנייה הראשונה)
+    if (!this.userMoved && this.model && !this.model.box.isEmpty() && performance.now() - this.bootAt < 2500) for (const p of this.panes) p.fit(this.model.box);
     this.requestRender();
   }
+  /** המשתמש סובב/הזיז/הגדיל — לא להתאים את המבט אוטומטית; התאמה אוטומטית רק בשניות הראשונות (התייצבות הפריסה) */
+  userMoved = false;
+  private bootAt = performance.now();
 
   /** סנכרון מצב האפליקציה לסצנה. בונה מחדש רק מה שהשתנה. */
   sync(s: AppState) {
@@ -365,6 +382,21 @@ export class Viewport {
     const b = s.project.building;
     const unit = s.project.displayUnit;
     const fmt = (mm: number) => (unit === 'm' ? fromMm(mm, 'm').toFixed(2) : mm.toFixed(0));
+    // משטחי חיפוי שקופים (גג וקירות)
+    if (s.view.cladding && b.cladding) {
+      const t = claddingTakeoff(s.project, d);
+      if (t) for (const sf of t.surfaces) {
+        const pos: number[] = [];
+        for (let i = 1; i < sf.pts.length - 1; i++) for (const q of [sf.pts[0], sf.pts[i], sf.pts[i + 1]]) pos.push(q.x, q.y, q.z);
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: sf.kind === 'roof' ? 0x6f8fa8 : 0x9aa8a0, transparent: true, opacity: sf.kind === 'roof' ? 0.16 : 0.12, side: THREE.DoubleSide, depthWrite: false }));
+        mesh.renderOrder = 2;
+        this.helpers.add(mesh);
+        const lp: number[] = []; for (let i = 0; i < sf.pts.length; i++) { const a = sf.pts[i], c = sf.pts[(i + 1) % sf.pts.length]; lp.push(a.x, a.y, a.z, c.x, c.y, c.z); }
+        const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+        this.helpers.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x5a7486, transparent: true, opacity: 0.5 })));
+      }
+    }
     if (!d.members.length) return;
     const ys = d.grid.filter((g) => g.dir === 'Y').map((g) => g.pos);
     const xs = d.grid.filter((g) => g.dir === 'X').map((g) => g.pos);
@@ -462,8 +494,8 @@ export class Viewport {
       this.helpers.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xe8730c })));
     }
     // חיבורי המשך: סמן בכל מיקום, מסומן "דורש תכנון"
-    for (const sp of d.splices) {
-      this.labels.push({ p: new THREE.Vector3(sp.p.x, sp.p.y, sp.p.z), text: '◆', cls: 'splice' });
+    if (s.view.dims) for (const sp of d.splices) {
+      this.labels.push({ p: new THREE.Vector3(sp.p.x, sp.p.y, sp.p.z), text: '◇', cls: 'splice' });
     }
     if (s.view.labels) {
       for (const id of s.selection.slice(0, 50)) {
@@ -510,6 +542,15 @@ export class Viewport {
       renderer.render(this.scene, p.camera);
       p.drawLabels(this.labels);
     }
+  }
+
+  /** תמונת PNG של המודל (לחלונית הראשית) — להצעת מחיר ללקוח */
+  snapshot(): string {
+    const helpersVis = this.helpers.visible;
+    this.render();
+    const url = this.renderer.domElement.toDataURL('image/png');
+    this.helpers.visible = helpersVis;
+    return url;
   }
 
   worldPerPixel(p: Pane): number {

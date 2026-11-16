@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { numberParts, setDrawing, setSettings } from '../commands/commands';
 import { buildSheet, drawingCatalog, sheetHash, type DrawingDef } from '../drawing/views';
 import { sheetToSvg } from '../drawing/svg';
@@ -11,7 +11,7 @@ import { store, useStore } from '../store';
 import { Icon } from './icons';
 
 const GROUPS: [DrawingDef['type'][], string][] = [
-  [['cover', 'ga', 'roof-plan', 'anchor-plan', 'frame', 'side'], 'תוכניות, חזיתות וחתכים'],
+  [['cover', 'ga', 'roof-plan', 'anchor-plan', 'frame', 'side', 'cladding'], 'תוכניות, חזיתות וחתכים'],
   [['connection'], 'פרטי חיבור'],
   [['assembly'], 'שרטוטי מכלול'],
   [['part'], 'שרטוטי חלק'],
@@ -44,6 +44,10 @@ export function DrawingsView() {
   const changed = rec?.status === 'approved' && rec.approvedHash && rec.approvedHash !== hash;
   const box = useRef<HTMLDivElement>(null);
   const provisional = fab.parts.some((x) => x.provisional);
+  // מספור אוטומטי בכניסה לשרטוטים (סימונים זמניים בפרויקט לא נעול)
+  useEffect(() => { if (provisional && !p.revision.locked && store.exec(numberParts())) store.toast('info', 'החלקים מוספרו אוטומטית'); }, [provisional, p.revision.locked]);
+  const [q, setQ] = useState('');
+  const [closed, setClosed] = useState<Set<string>>(new Set(['שרטוטי מכלול', 'שרטוטי חלק']));
 
   const exportPdf = async (defs: DrawingDef[], name: string) => {
     setBusy(true);
@@ -68,13 +72,16 @@ export function DrawingsView() {
       <aside className="dwg-list">
         <div className="panel-body">
           {provisional && <div className="issue warning" style={{ marginBottom: 8 }}><span className="ic">!</span><div>סימוני חלקים זמניים. <button className="btn small" data-testid="dwg-number" onClick={() => store.exec(numberParts())}>הרץ מספור</button></div></div>}
+          <input className="inp" style={{ width: '100%', marginBottom: 6 }} placeholder="חיפוש שרטוט (מספר, סימון, כותרת)…" data-testid="dwg-search" value={q} onChange={(e) => setQ(e.target.value)} />
           {GROUPS.map(([types, title]) => {
-            const items = cat.filter((c) => types.includes(c.type));
+            const ql = q.trim().toLowerCase();
+            const items = cat.filter((c) => types.includes(c.type) && (!ql || `${c.number} ${c.title} ${c.ref ?? ''}`.toLowerCase().includes(ql)));
             if (!items.length) return null;
+            const isClosed = !ql && closed.has(title) && !items.some((c) => c.id === def.id);
             return (
               <div key={title}>
-                <div className="panel-title">{title} <span className="badge">{items.length}</span></div>
-                {items.map((c) => {
+                <div className="panel-title" style={{ cursor: 'pointer' }} data-testid={`dwg-group-${types[0]}`} onClick={() => { const n = new Set(closed); if (isClosed) n.delete(title); else n.add(title); setClosed(n); }}>{isClosed ? '◂' : '▾'} {title} <span className="badge">{items.length}</span></div>
+                {!isClosed && items.map((c) => {
                   const r = p.drawings.find((x) => x.id === c.id);
                   return (
                     <div key={c.id} className={`tree-item${c.id === def.id ? ' sel' : ''}`} style={{ paddingInlineStart: 6 }} onClick={() => setCur(c.id)} data-testid={`dwg-${c.id}`}>

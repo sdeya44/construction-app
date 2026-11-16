@@ -45,3 +45,30 @@ test('QUOTE-01 / ISO-01: הצעת מחיר, בידוד מכלול, סט PDF מל
   await page.getByTestId('mode-drawings').click();
   await expect(page.getByTestId('dwg-pdf-all')).toBeEnabled();
 });
+
+test('CLAD-01: פרויקט חדש עם חיפוי והתאמת חתכים — פתח, כתב כמויות, IFC והצעת מחיר ללקוח', async ({ page }) => {
+  page.on('dialog', (d) => d.accept());
+  await boot(page);
+  await page.getByTestId('btn-new').click();
+  await expect(page.getByTestId('np-clad')).toBeChecked();
+  await expect(page.getByTestId('np-autosize')).toBeChecked();
+  await page.getByTestId('create').click();
+  const st = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { err: d.issues.filter((i: any) => i.severity === 'error').length, girts: d.members.filter((m: any) => m.kind === 'girt').length }; });
+  expect((await st()).err).toBe(0);
+  expect((await st()).girts).toBeGreaterThan(40);
+  await page.getByTestId('tab-clad').click();
+  await page.getByTestId('nav-w:openings').click();
+  await page.getByTestId('op-add-door').click();
+  await page.getByTestId('nav-w:takeoff').click();
+  await expect(page.getByTestId('clad-takeoff')).toContainText('מ"ר');
+  expect((await st()).err).toBe(0);
+  await shot(page, 'CLAD_01');
+  await page.getByTestId('mode-production').click();
+  const ifc = page.waitForEvent('download'); await page.getByTestId('export-ifc').click();
+  // שם קובץ עברי אינו נמסר ב-Chromium ללא ממשק — בודקים את התוכן
+  const fsm = await import('node:fs');
+  expect(fsm.readFileSync((await (await ifc).path())!, 'utf8').startsWith('ISO-10303-21;')).toBe(true);
+  await page.locator('[data-testid^="prod-tab-"]').last().click();
+  const pdf = page.waitForEvent('download'); await page.getByTestId('qc-pdf').click();
+  expect(fsm.readFileSync((await (await pdf).path())!).subarray(0, 5).toString()).toBe('%PDF-');
+});

@@ -8,12 +8,18 @@ import { store, useStore } from '../store';
 import { LenField, NumField, TextField } from './fields';
 import { Icon } from './icons';
 import { computeQuote, DEFAULT_PRICING, type Pricing } from '../fab/quote';
+import { claddingTakeoff } from '../geometry/cladding';
+import { projectToIfc } from '../fab/ifc';
+import { clientQuoteSheet, DEFAULT_TERMS } from '../fab/clientQuote';
+import { sheetsToPdf } from '../drawing/pdf';
+import { setMeta } from '../commands/commands';
 
 export function ProductionView() {
   const p = useStore((s) => s.project);
   const { fab, bom, plans } = useFab();
   const pricing: Pricing = { ...DEFAULT_PRICING, ...(p.settings.pricing ?? {}) };
-  const q = computeQuote(pricing, store.state.derived, fab, bom, plans);
+  const clad = claddingTakeoff(p, store.state.derived);
+  const q = computeQuote(pricing, store.state.derived, fab, bom, plans, clad);
   const money = (n: number) => Math.round(n).toLocaleString('en-US');
   const quoteTable = {
     name: 'הצעת מחיר', headers: ['סעיף', 'כמות', 'יחידה', 'מחיר ליח\' (₪)', 'סה"כ (₪)'],
@@ -27,13 +33,25 @@ export function ProductionView() {
       ['סה"כ כולל מע"מ', '', '', '', Math.round(q.total)],
     ],
   };
-  const tables = [...bomTables(bom, plans), quoteTable];
+  const cladTable = clad ? {
+    name: 'חיפוי', headers: ['פריט', 'מיקום', 'כמות', 'אורך/שטח', 'יחידה'],
+    rows: [
+      ...clad.roofSheets.map((r) => ['פנל גג', `${r.where} · ${r.panel}`, r.count, Math.round(r.length) / 1000, 'מ\' לפנל'] as (string | number)[]),
+      ...clad.wallSheets.map((r) => ['פנל קיר', `${r.where} · ${r.panel}`, r.count, Math.round(r.length) / 1000, 'מ\' לפנל'] as (string | number)[]),
+      ...clad.flashings.map((f) => ['פח', f.name, 1, Math.round(f.length) / 1000, 'מ\''] as (string | number)[]),
+      ...clad.gutters.map((g) => ['מזחלה', `${g.name} · ${g.downpipes} מרזבים`, 1, Math.round(g.length) / 1000, 'מ\''] as (string | number)[]),
+      ['ברגי חיפוי', '', clad.screws, '', 'יח\''],
+      ['סה"כ גג', '', '', Math.round(clad.roofArea * 10) / 10, 'מ"ר'], ['סה"כ קירות (נטו)', '', '', Math.round(clad.wallArea * 10) / 10, 'מ"ר'],
+    ],
+  } : null;
+  const tables = [...bomTables(bom, plans), ...(cladTable ? [cladTable] : []), quoteTable];
   const isQuote = (i: number) => i === tables.length - 1;
   const setPrice = (k: keyof Pricing, v: number) => store.exec(setSettings({ pricing: { ...(p.settings.pricing ?? {}), [k]: v } }));
   const PRICE_FIELDS: [keyof Pricing, string][] = [
     ['steelPerKg', 'פלדה פרופילים ₪/ק"ג'], ['platePerKg', 'פלטות ₪/ק"ג (0 = כמו פרופילים)'], ['plateWastePct', 'פחת פלטות %'], ['galvPerKg', 'גלוון ₪/ק"ג'],
     ['boltPerUnit', 'בורג ₪/יח\''], ['anchorPerUnit', 'מוט עיגון ₪/יח\''], ['fabHoursPerTon', 'ש"ע ייצור לטון'], ['hourRate', 'מחיר ש"ע ₪'],
     ['erectionPerTon', 'הרכבה ₪/טון'], ['transport', 'הובלה ₪'], ['overheadPct', 'תקורה %'], ['marginPct', 'רווח %'], ['vatPct', 'מע"מ %'],
+    ...(clad ? [['roofPanelPerM2', 'פנל גג ₪/מ"ר'], ['wallPanelPerM2', 'פנל קיר ₪/מ"ר'], ['flashingPerM', 'פחים ₪/מ\''], ['gutterPerM', 'מזחלה ₪/מ\''], ['downpipePerUnit', 'מרזב ₪/יח\''], ['claddingScrewPerUnit', 'בורג חיפוי ₪'], ['claddingInstallPerM2', 'התקנת חיפוי ₪/מ"ר']] as [keyof Pricing, string][] : []),
   ];
   const [tab, setTab] = useState(0);
   const t = tables[tab];
@@ -91,6 +109,11 @@ export function ProductionView() {
             const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${safeFileName(p.meta.name)}_DSTV.zip`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
             store.toast('ok', `הופקו ${count} קבצי NC1 (בטא — לאמת מול המכונה)`);
           }}><Icon name="download" />DSTV</button>
+          <button className="btn small" data-testid="export-ifc" title="מודל BIM ‏IFC4 — לפתיחה ב-Tekla / Revit / צופי IFC" onClick={() => {
+            const txt = projectToIfc(p, store.state.derived, fab);
+            downloadText(`${safeFileName(p.meta.name)}.ifc`, txt, 'application/octet-stream');
+            store.toast('ok', 'הופק קובץ IFC4');
+          }}><Icon name="download" />IFC</button>
           <button className="btn small" data-testid="export-csv" onClick={() => downloadText(`${safeFileName(p.meta.name)}_${t.name}.csv`, toCsv(t), 'text/csv')}><Icon name="download" />CSV</button>
           <button className="btn small primary" data-testid="export-xlsx" onClick={() => {
             const bytes = toXlsx(tables, p.meta.name);
@@ -105,6 +128,30 @@ export function ProductionView() {
             <span>משקל נטו {money(q.netKg)} ק"ג · רכש {money(q.buyKg)} ק"ג · {q.perKg ? `₪${q.perKg.toFixed(2)} לק"ג (לפני מע"מ)` : 'הזן מחירים'}</span>
           </div>
           <div className="hint">המחירים נשמרים בקובץ הפרויקט בלבד. אומדן — לא כולל עבודות בטון, צבע, מנופים ושינויים בשטח.</div>
+          <div className="quote-client">
+            <b>הצעת מחיר ללקוח (PDF)</b>
+            <div className="field"><label>שם החברה</label><TextField testId="qc-company" value={p.settings.company ?? 'כיאן הנדסה'} onCommit={(v) => store.exec(setSettings({ company: v }))} /></div>
+            <div className="field"><label>לקוח</label><TextField testId="qc-client" value={p.meta.client} onCommit={(v) => store.exec(setMeta({ client: v }))} /></div>
+            <label className="hint">תנאים והערות (שורה לכל סעיף)</label>
+            <textarea className="inp" rows={5} data-testid="qc-terms" defaultValue={p.settings.quoteTerms ?? DEFAULT_TERMS.join('\n')} onBlur={(e) => { if (e.target.value !== (p.settings.quoteTerms ?? DEFAULT_TERMS.join('\n'))) store.exec(setSettings({ quoteTerms: e.target.value })); }} />
+            <button className="btn primary small" data-testid="qc-pdf" onClick={async () => {
+              try {
+                // תמונת תלת־ממד: מציגים את חלון המודל לרגע, מתאימים מבט ומצלמים
+                const ws = document.querySelector('.workspace') as HTMLElement | null; const prev = ws?.style.display ?? '';
+                if (ws) ws.style.display = '';
+                const vp = (window as any).__ksp?.viewport;
+                let png: Uint8Array | null = null;
+                if (vp) { vp.resize(); vp.fitAll('iso'); await new Promise((r) => requestAnimationFrame(r)); const url: string = vp.snapshot(); png = Uint8Array.from(atob(url.split(',')[1]), (c) => c.charCodeAt(0)); }
+                if (ws) ws.style.display = prev;
+                const { sheet, imageBox } = clientQuoteSheet(p, store.state.derived, q, clad, pricing.vatPct, (p.settings.quoteTerms ?? DEFAULT_TERMS.join('\n')).split('\n'), p.settings.company ?? 'כיאן הנדסה');
+                const bytes = await sheetsToPdf([sheet], { title: `הצעת מחיר — ${p.meta.name}`, author: p.settings.company ?? '', images: png ? [{ page: 0, ...imageBox, png }] : [] });
+                const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${safeFileName(p.meta.name)}_הצעת_מחיר.pdf`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+                store.toast('ok', 'הופקה הצעת מחיר ללקוח');
+              } catch (e) { store.toast('error', `הפקת ההצעה נכשלה: ${(e as Error).message}`); }
+            }}><Icon name="download" />הצעת מחיר ללקוח</button>
+            <div className="hint">בהצעה ללקוח התקורה והרווח מגולמים במחירי הסעיפים ואינם מוצגים.</div>
+          </div>
         </div>}
         <div className="prod-table">
           <table className="tbl big" data-testid="prod-table">

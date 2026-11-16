@@ -11,6 +11,7 @@ import { buildBeamSplices, effectiveSplices } from './autoSplice';
 import { buildPurlins } from './purlins';
 import type { Connection, SupportPoint } from '../model/types';
 import { buildConnections, checkClashes } from './connections';
+import { buildWallFraming } from './cladding';
 import { buildBracing } from './bracing';
 
 const HEB_LETTERS = 'אבגדהוזחטיכלמנסעפצקרשת';
@@ -194,6 +195,13 @@ export function generate(project: Project): DerivedModel {
     if (effT.auto.size) projEff = { ...projEff, splices: effT.splices };
     connections.push(...bb.connections);
     issues.push(...bb.issues);
+    // מסגור קירות לחיפוי: פטות קיר, עמודי רוח ועמודי פתחים
+    if (sec && b.cladding) {
+      const wf = buildWallFraming(project, bEff, sec, out);
+      for (const m of wf.members) { const o = project.memberOverrides[m.id]; if (o?.profile) m.profile = o.profile; if (o?.material) m.material = o.material; if (o?.rollDeg !== undefined) m.rollDeg = o.rollDeg; if (o?.mirror !== undefined) m.mirror = o.mirror; }
+      out.push(...wf.members.filter((m) => !hidden.has(m.id)));
+      issues.push(...wf.issues);
+    }
     byId = new Map(out.map((m) => [m.id, m]));
     issues.push(...checkClashes(connections, byId));
   }

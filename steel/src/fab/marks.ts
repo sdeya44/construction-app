@@ -28,10 +28,10 @@ export interface Assembly { id: string; mark: string; provisional: boolean; main
 export interface Fabrication { parts: MarkedPart[]; assemblies: Assembly[]; byPart: Map<string, MarkedPart>; changed: { id: string; from: string; to: string }[] }
 
 const PREFIX: Record<MemberKind, string> = {
-  column: 'c', rafter: 'r', beam: 'b', brace: 'br', purlin: 'p', cleat: 'cl', plate: 'pl', bolt: 'x', anchor: 'a',
+  column: 'c', rafter: 'r', beam: 'b', brace: 'br', purlin: 'p', girt: 'g', cleat: 'cl', plate: 'pl', bolt: 'x', anchor: 'a',
 };
 const APREFIX: Record<MemberKind, string> = {
-  column: 'C', rafter: 'R', beam: 'B', brace: 'BR', purlin: 'P', cleat: 'CL', plate: 'BP', bolt: 'X', anchor: 'A',
+  column: 'C', rafter: 'R', beam: 'B', brace: 'BR', purlin: 'P', girt: 'G', cleat: 'CL', plate: 'BP', bolt: 'X', anchor: 'A',
 };
 
 const r1 = (n: number) => (Math.round(n * 2) / 2).toFixed(1);

@@ -2,6 +2,7 @@ import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import { cachedSolidPure, silhouetteEdges } from './solidCache';
 import { partSheet, plateCell, plateFaceInBox } from './part';
+import { claddingTakeoff, WALL_HE } from '../geometry/cladding';
 import { assemblySheet, renderIso } from './assembly';
 import { purlinParams } from '../geometry/purlins';
 import { getProfile, tryProfile } from '../profiles/library';
@@ -27,6 +28,8 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
     out.push({ id: `D-FRAME-${g[0]}`, type: 'frame', number: `F-${String(k + 1).padStart(2, '0')}`, title: g.length > 1 ? `חתך מסגרת טיפוסי – צירים ${ax.join(', ')}` : `חתך מסגרת – ציר ${ax[0]}`, ref: g[0], refs: g });
   }
   out.push({ id: 'D-SIDE', type: 'side', number: 'E-01', title: 'חזיתות צד – צירים א ו-ב', ref: 'LR' });
+  if (p.building.cladding?.walls.enabled && (p.building.cladding.walls.sides.F || p.building.cladding.walls.sides.B)) out.push({ id: 'D-ENDWALLS', type: 'side', number: 'E-02', title: 'קירות קצה – עמודי רוח, פטות קיר ופתחים', ref: 'FB' });
+  if (p.building.cladding) out.push({ id: 'D-CLAD', type: 'cladding', number: 'K-01', title: 'חיפוי, פחים ומזחלות — כתב כמויות' });
   const types: [string, string][] = [['eave', 'פרט חיבור קורה-עמוד'], ['ridge', 'פרט חיבור רכס'], ['base', 'פרט פלטת בסיס'], ['purlin-cleat', 'פרט תומך פטה'], ['purlin-splice', 'פרט חיבור המשך פטה'], ['brace-end', 'פרט פח חיבור קושרת'], ['brace-cross', 'פרט הצטלבות קושרות'], ['rafter-side', 'פרט חיבור קורה לצד עמוד'], ['knee', 'פרט אלכסון עמוד-קורה'], ['ridge-tie', 'פרט חיזוק רכס אופקי']];
   types.forEach(([t, title], i) => {
     const c = d.connections.find((x) => x.type === t);
@@ -208,6 +211,40 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
     return part ? fab.assemblies.find((a) => a.id === part.assembly)?.mark ?? '' : '';
   };
 
+  /** פתחים בחזית: מלבן מקווקו עם אלכסונים, מידות רוחב/גובה ומיקום */
+  const openingsOn = (v: View, w: 'L' | 'R' | 'F' | 'B', toH: (t: number) => number) => {
+    for (const o of b.cladding?.openings.filter((x) => x.wall === w) ?? []) {
+      const x0 = toH(o.pos), x1 = toH(o.pos + o.width), z0 = b.baseElevation + o.sill, z1 = z0 + o.height;
+      v.poly([{ x: x0, y: z0 }, { x: x1, y: z0 }, { x: x1, y: z1 }, { x: x0, y: z1 }], true, 'HIDDEN');
+      v.line({ x: x0, y: z0 }, { x: x1, y: z1 }, 'THIN'); v.line({ x: x0, y: z1 }, { x: x1, y: z0 }, 'THIN');
+      v.dim({ x: x0, y: z1 }, { x: x1, y: z1 }, { x: 1, y: 0 }, 4, `${Math.round(o.width)}`);
+      v.dim({ x: x1, y: z0 }, { x: x1, y: z1 }, { x: 0, y: 1 }, -4, `${Math.round(o.height)}`);
+      v.text({ x: (x0 + x1) / 2, y: (z0 + z1) / 2 + 200 }, o.label ?? o.id, 2.5, 'center', 'MARK', 0, true);
+    }
+  };
+  /** חזית קיר קצה: עמודי המסגרת, קורות הגג, עמודי רוח, פטות קיר ופתחים, מידות ומפלסים */
+  const drawEndWall = (w: 'F' | 'B', ar: { x0: number; x1: number; y0: number; y1: number }) => {
+    const fr = [...b.frames].sort((a1, a2) => a1.y - a2.y), f = w === 'F' ? fr[0] : fr[fr.length - 1];
+    const pr: Proj = (q) => ({ x: w === 'F' ? q.x : -q.x, y: q.z });
+    const ms = d.members.filter((m) => (m.frameId === f.id && (m.kind === 'column' || m.kind === 'rafter')) || m.wall?.id === w);
+    const bx = boxOf(solidPts(ms, pr)); bx.x0 -= 1800; bx.x1 += 1800; bx.y0 -= 1600; bx.y1 += 900;
+    const v = placeView(sh, bx, ar, undefined, 12); setScale(v);
+    for (const m of ms) edges(m, pr, v, m.wall?.role === 'girt' ? 'THIN' : 'OUTLINE');
+    const xs = [...new Set(d.members.filter((m) => m.frameId === f.id && (m.kind === 'column' || m.wall?.role === 'post')).map((m) => Math.round(m.start.x)))].sort((a1, a2) => a1 - a2);
+    const X = (x: number) => (w === 'F' ? x : -x);
+    for (let i = 1; i < xs.length; i++) v.dim({ x: X(xs[i - 1]), y: b.baseElevation }, { x: X(xs[i]), y: b.baseElevation }, { x: 1, y: 0 }, -10);
+    if (xs.length > 2) v.dim({ x: X(xs[0]), y: b.baseElevation }, { x: X(xs[xs.length - 1]), y: b.baseElevation }, { x: 1, y: 0 }, -17);
+    const xL = Math.min(...(d.section?.lines ?? []).map((l) => l.x));
+    openingsOn(v, w, (t) => X(xL + t));
+    // מפלסי פטות הקיר
+    const gz = [...new Set(ms.filter((m) => m.wall?.role === 'girt').map((m) => Math.round(m.start.z)))].sort((a1, a2) => a1 - a2);
+    const xD = Math.min(X(xs[0]), X(xs[xs.length - 1])) - 900;
+    let prev = b.baseElevation; for (const z of gz) { v.dim({ x: xD, y: prev }, { x: xD, y: z }, { x: 0, y: 1 }, 0); prev = z; }
+    v.level({ x: Math.max(X(xs[0]), X(xs[xs.length - 1])) + 600, y: b.baseElevation }, 0);
+    for (const m of ms.filter((x) => x.wall?.role === 'post')) { const mk = asmOf(m.id); if (mk) v.text({ x: X(m.start.x) + 300, y: (m.start.z + m.end.z) / 2 }, `${mk} ${m.profile}`, 2.5, 'center', 'MARK', 90); }
+    v.text({ x: (bx.x0 + bx.x1) / 2, y: bx.y1 - 300 }, `${w === 'F' ? 'קיר קצה קדמי (ציר 1)' : `קיר קצה אחורי (ציר ${fr.length})`}  1:${v.scale}`, 3, 'center', 'TEXT', 0, true);
+  };
+
   switch (def.type) {
     case 'roof-plan': {
       const ys0 = () => d.grid.filter((g) => g.dir === 'Y').map((g) => g.pos);
@@ -361,6 +398,12 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       break;
     }
     case 'side': {
+      if (def.ref === 'FB') {
+        const ends = (['F', 'B'] as const).filter((w) => b.cladding?.walls.sides[w]);
+        const ww = (area.x1 - area.x0) / Math.max(1, ends.length);
+        ends.forEach((w, i) => drawEndWall(w, { ...area, x1: area.x1 - i * ww, x0: area.x1 - (i + 1) * ww }));
+        break;
+      }
       const sideList = (def.ref === 'LR' ? ['L', 'R'] : [def.ref]) as ('L' | 'R')[];
       const hh = (area.y1 - area.y0) / sideList.length;
       const drawSide = (side: 'L' | 'R', area: { x0: number; x1: number; y0: number; y1: number }) => {
@@ -368,11 +411,12 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       const lineS = side === 'L' ? lnS[0] : lnS[lnS.length - 1];
       const x0 = lineS?.x ?? (side === 'L' ? 0 : b.width);
       const pr: Proj = (q) => ({ x: q.y, y: q.z });
-      const ms = d.members.filter((m) => (m.kind === 'column' && (m.lineId === lineS?.id || m.side === side)) || (m.id.startsWith('BR.W') && (m.id.includes(`.${side}.`) || (lineS && m.id.includes(`.${lineS.id}.`)))));
+      const ms = d.members.filter((m) => (m.kind === 'column' && (m.lineId === lineS?.id || m.side === side)) || (m.id.startsWith('BR.W') && (m.id.includes(`.${side}.`) || (lineS && m.id.includes(`.${lineS.id}.`)))) || m.wall?.id === side);
       const bx = boxOf(solidPts(ms, pr));
       bx.x0 -= 2500; bx.x1 += 2500; bx.y0 -= 1500; bx.y1 += 1500;
       const v = placeView(sh, bx, area); setScale(v);
-      for (const m of ms) edges(m, pr, v);
+      for (const m of ms) edges(m, pr, v, m.kind === 'girt' && m.wall?.role === 'girt' ? 'THIN' : 'OUTLINE');
+      openingsOn(v, side, (t) => b.frames.reduce((mn, f) => Math.min(mn, f.y), Infinity) + t);
       // פלטות בסיס וראש עמוד, וחתכי הקורות/קורות אגד שנשענות על קו העמודים
       const colIds = new Set(ms.filter((m) => m.kind === 'column').map((m) => m.id));
       for (const c of d.connections.filter((c) => (c.type === 'base' || c.type === 'eave') && c.members.some((id) => colIds.has(id)))) {
@@ -406,6 +450,24 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       v.text({ x: (ys[0] + ys[ys.length - 1]) / 2, y: eave + 900 }, `חזית ציר ${lineS?.label ?? (side === 'L' ? 'א' : 'ב')}  1:${v.scale}`, 3, 'center', 'TEXT', 0, true);
       };
       sideList.forEach((sd, i) => drawSide(sd, { ...area, y1: area.y1 - i * hh, y0: area.y1 - (i + 1) * hh }));
+      break;
+    }
+    case 'cladding': {
+      scaleLabel = 'ללא';
+      const t = claddingTakeoff(p, d);
+      if (!t) break;
+      const mm = (x: number) => (x / 1000).toFixed(2);
+      const half = (area.x1 - area.x0) / 2 - 6;
+      let yR = table(sh, area.x1 - 2, area.y1 - 2, [half * 0.55, half * 0.2, half * 0.25], 'פנלים — כמות ואורכים', ['מיקום ופנל', 'כמות', 'אורך פנל (מ\')'],
+        [...t.roofSheets, ...t.wallSheets].map((r) => [`${r.where} · ${r.panel}`, String(r.count), mm(r.length)]));
+      yR = table(sh, area.x1 - 2, yR - 6, [half * 0.55, half * 0.2, half * 0.25], 'סיכום שטחים', ['פריט', '', 'כמות'],
+        [['חיפוי גג', '', `${t.roofArea.toFixed(1)} מ"ר`], ['חיפוי קירות (נטו)', '', `${t.wallArea.toFixed(1)} מ"ר`], ['פתחים', '', `${t.openingArea.toFixed(1)} מ"ר`], ['ברגי חיפוי', '', String(t.screws)]]);
+      const xL2 = area.x1 - half - 8;
+      let yL = table(sh, xL2, area.y1 - 2, [half * 0.62, half * 0.18, half * 0.2], 'פחים', ['פריט', '', 'אורך (מ\')'], t.flashings.map((f) => [f.name, '', mm(f.length)]));
+      if (t.gutters.length) yL = table(sh, xL2, yL - 6, [half * 0.55, half * 0.2, half * 0.25], 'מזחלות ומרזבים', ['מזחלה', 'מרזבים', 'אורך (מ\')'], t.gutters.map((g) => [g.name, String(g.downpipes), mm(g.length)]));
+      const ops = b.cladding?.openings ?? [];
+      if (ops.length) table(sh, xL2, yL - 6, [half * 0.3, half * 0.3, half * 0.2, half * 0.2], 'פתחים', ['פתח', 'קיר', 'רוחב×גובה', 'אדן'], ops.map((o) => [o.label ?? o.id, WALL_HE[o.wall], `${mm(o.width)}×${mm(o.height)}`, mm(o.sill)]));
+      sh.ents.push({ k: 'text', p: { x: area.x1 - 2, y: Math.min(yR, yL) - 8 }, s: 'כמויות נטו לפי הגיאומטריה — יש להוסיף פחת חיתוך וחפיפות לפי יצרן הפנלים. אורכי פנלים בקירות הקצה: עד קו הגג (הגבוה ברוחב הפנל).', h: 2.5, align: 'right', layer: 'TEXT' });
       break;
     }
     case 'plates': {

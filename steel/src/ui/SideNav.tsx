@@ -10,6 +10,7 @@ import { ConnectionsPanel } from './Overlays';
 import { RoofPanel, type RoofSection } from './RoofPanel';
 import { BracePanel, StructurePanel, type BraceSection, type StructSection } from './StructurePanel';
 import { MenuPic } from './pics';
+import { CladdingPanel, type CladSection } from './CladdingPanel';
 import { IssuesPanel, KIND_LABEL, TreePanel } from './TreePanel';
 
 /**
@@ -22,10 +23,11 @@ export type NavKey =
   | 'tree' | `k:${MemberKind}`
   | 'conns' | `c:${Connection['type']}`
   | 'issues' | `i:${Severity}`
-  | 'brace' | `b:${BraceSection}`;
+  | 'brace' | `b:${BraceSection}`
+  | 'clad' | `w:${CladSection}`;
 
 const ORDER_C: Connection['type'][] = ['eave', 'ridge', 'base', 'rafter-side', 'knee', 'ridge-tie', 'purlin-cleat', 'purlin-splice', 'beam-splice', 'brace-end', 'brace-cross', 'brace'];
-const KINDS: MemberKind[] = ['column', 'rafter', 'purlin', 'brace', 'cleat', 'plate', 'anchor', 'beam'];
+const KINDS: MemberKind[] = ['column', 'rafter', 'purlin', 'girt', 'brace', 'cleat', 'plate', 'anchor', 'beam'];
 const SEV_LABEL: Record<Severity, string> = { error: 'שגיאות', warning: 'אזהרות', info: 'מידע' };
 
 export function SideNav({ nav, setNav, onOpenConn }: { nav: NavKey; setNav: (k: NavKey) => void; onOpenConn: (id: string) => void }) {
@@ -81,6 +83,12 @@ export function SideNav({ nav, setNav, onOpenConn }: { nav: NavKey; setNav: (k: 
           { key: 'b:walls', label: 'קשיחות קירות / אגד B', pic: 'walls' },
           { key: 'b:ties', label: 'שורות קשירה לפטות', pic: 'ties' },
         ])}
+        {group('clad', 'חיפוי ופתחים', 'tab-clad', 'walls', [
+          { key: 'w:roof', label: 'חיפוי גג ומזחלות', pic: 'slope' },
+          { key: 'w:walls', label: 'חיפוי קירות ופטות קיר', pic: 'walls' },
+          { key: 'w:openings', label: 'פתחים', n: d.members.length ? (store.state.project.building.cladding?.openings.length || undefined) : undefined, pic: 'frames' },
+          { key: 'w:takeoff', label: 'כתב כמויות חיפוי', pic: 'project' },
+        ])}
         {group('tree', 'אלמנטים', 'tab-tree', 'elements', KINDS.filter((k) => kindCount.get(k)).map((k) => ({ key: `k:${k}` as NavKey, label: KIND_LABEL[k], n: kindCount.get(k), pic: k })))}
         {group('conns', 'חיבורים', 'tab-conns', 'conns', ORDER_C.filter((t) => connCount.get(t)).map((t) => ({ key: `c:${t}` as NavKey, label: CONN_TYPE[t], n: connCount.get(t), pic: t === 'ridge' ? 'ridge' : t === 'knee' ? 'knee' : t === 'brace' ? 'brace' : t })))}
         {group('issues', 'בדיקות', 'tab-issues', 'issues', (['error', 'warning', 'info'] as Severity[]).filter((s) => sevCount.get(s)).map((s) => ({ key: `i:${s}` as NavKey, label: SEV_LABEL[s], n: sevCount.get(s), cls: s === 'error' ? 'err' : s === 'warning' ? 'warn' : '', pic: s })),
@@ -111,10 +119,12 @@ export function NavContent({ nav, onOpenConn }: { nav: NavKey; onOpenConn: (id: 
   if (nav === 'conns') return <ConnectionsPanel onOpen={onOpenConn} />;
   if (nav === 'issues') return <IssuesPanel />;
   if (nav === 'brace') return <BracePanel />;
+  if (nav === 'clad') return <CladdingPanel />;
   const [g, k] = nav.split(':') as [string, string];
   if (g === 's') return <StructurePanel section={k as StructSection} />;
   if (g === 'r') return <RoofPanel section={k as RoofSection} />;
   if (g === 'b') return <BracePanel part={k as BraceSection} />;
+  if (g === 'w') return <CladdingPanel section={k as CladSection} />;
   if (g === 'k') return <ElementsTable kind={k as MemberKind} />;
   if (g === 'c') return <ConnTable type={k as Connection['type']} onOpen={onOpenConn} />;
   return <IssuesTable sev={k as Severity} />;

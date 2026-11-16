@@ -41,14 +41,21 @@ function addOutline(doc: PDFDocument, groups: OutlineGroup[]) {
   doc.catalog.set(PDFName.of('PageMode'), PDFName.of('UseOutlines'));
 }
 
-export async function sheetsToPdf(sheets: Sheet[], meta: { title: string; author?: string; outline?: OutlineGroup[] }, fonts?: { regular: Uint8Array; bold: Uint8Array }): Promise<Uint8Array> {
+export async function sheetsToPdf(sheets: Sheet[], meta: { title: string; author?: string; outline?: OutlineGroup[]; images?: { page: number; x: number; y: number; w: number; h: number; png: Uint8Array }[] }, fonts?: { regular: Uint8Array; bold: Uint8Array }): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   doc.setTitle(meta.title); doc.setCreator('KAYAN STEEL PRO'); doc.setProducer('KAYAN STEEL PRO');
   if (meta.author) doc.setAuthor(meta.author);
   const reg = await doc.embedFont(fonts?.regular ?? b64(KSP_REGULAR), { subset: true });
   const bold = await doc.embedFont(fonts?.bold ?? b64(KSP_BOLD), { subset: true });
-  for (const sh of sheets) drawSheet(doc.addPage([sh.w * MM, sh.h * MM]), sh, reg, bold);
+  const pages = sheets.map((sh) => { const pg = doc.addPage([sh.w * MM, sh.h * MM]); drawSheet(pg, sh, reg, bold); return pg; });
+  for (const im of meta.images ?? []) {
+    const img = await doc.embedPng(im.png);
+    // התאמה לתיבה תוך שמירת יחס
+    const k = Math.min(im.w / img.width, im.h / img.height);
+    const w = img.width * k, h = img.height * k;
+    pages[im.page]?.drawImage(img, { x: (im.x + (im.w - w) / 2) * MM, y: (im.y + (im.h - h) / 2) * MM, width: w * MM, height: h * MM });
+  }
   if (meta.outline?.length) addOutline(doc, meta.outline.filter((g) => g.items.length));
   return doc.save();
 }

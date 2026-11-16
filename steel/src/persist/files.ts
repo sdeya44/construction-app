@@ -6,7 +6,8 @@ export function downloadText(name: string, text: string, mime = 'application/jso
   a.download = name;
   document.body.appendChild(a);
   a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  // קבצים גדולים (IFC) — לא לבטל את הכתובת לפני שההורדה התחילה
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 30000);
 }
 
 export function pickFile(accept: string): Promise<File | null> {

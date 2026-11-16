@@ -193,6 +193,21 @@ export interface BuildingParams {
   kneeBraces?: KneeBraceParams;
   /** חיזוק רכס לקבלת העומסים */
   ridgeReinf?: RidgeReinfParams;
+  /** חיפוי גג וקירות, פטות קיר, עמודי רוח, פתחים ומזחלות */
+  cladding?: CladdingParams;
+}
+
+export type WallId = 'L' | 'R' | 'F' | 'B';
+export interface OpeningDef { id: string; wall: WallId; /** מרחק מתחילת הקיר (L/R: מהמסגרת הראשונה; F/B: מציר שמאל) */ pos: Mm; width: Mm; height: Mm; sill: Mm; label?: string }
+export interface CladdingParams {
+  roof: { enabled: boolean; panel: string; cover: Mm; eaveExt: Mm };
+  walls: { enabled: boolean; sides: Record<WallId, boolean>; panel: string; cover: Mm; bottom: Mm };
+  girts: { enabled: boolean; profile: string; first: Mm; spacing: Mm };
+  posts: { enabled: boolean; profile: string; maxSpacing: Mm };
+  jambProfile: string;
+  openings: OpeningDef[];
+  gutter: { enabled: boolean; downpipeSpacing: Mm };
+  roofScrewsPerM2: number; wallScrewsPerM2: number;
 }
 
 /**
@@ -254,7 +269,7 @@ export interface MemberOverride {
   placement?: ManualPlacement;
 }
 
-export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'cleat' | 'plate' | 'bolt' | 'anchor';
+export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'girt' | 'cleat' | 'plate' | 'bolt' | 'anchor';
 
 export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee' | 'ridge-tie' | 'beam-splice';
 export type ApprovalStatus = 'not-verified' | 'for-review' | 'approved';
@@ -326,7 +341,9 @@ export interface Project {
     /** הערכת גדלים (כללי אצבע) — ספים ועומסים; חסר = ברירת מחדל */
     sizing?: Partial<import('./sizing').SizingCfg>;
     /** מחירון להצעת מחיר — נשמר בקובץ הפרויקט בלבד */
-    pricing?: Partial<import('../fab/quote').Pricing> };
+    pricing?: Partial<import('../fab/quote').Pricing>;
+    /** הצעת מחיר ללקוח: שם החברה ותנאים (שורה לכל תנאי) */
+    company?: string; quoteTerms?: string };
   building: BuildingParams;
   memberOverrides: Record<string, MemberOverride>;
   manualMembers: ManualMember[];
@@ -369,7 +386,7 @@ export interface MarkRegistry {
 export interface RevisionEntry { rev: string; date: string; note: string; status: 'approved' | 'draft'; snapshot?: string }
 export interface RevisionState { current: string; locked: boolean; log: RevisionEntry[] }
 
-export type DrawingType = 'cover' | 'plates' | 'roof-plan' | 'anchor-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga';
+export type DrawingType = 'cover' | 'plates' | 'cladding' | 'roof-plan' | 'anchor-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga';
 export interface DrawingRecord {
   id: string;
   number: string;
@@ -411,6 +428,8 @@ export interface Member {
   source: 'generated' | 'manual';
   manualPlacement: boolean;
   purlin?: PurlinInfo;
+  /** אלמנט קיר (פטת קיר, עמוד רוח, עמוד פתח) */
+  wall?: { id: WallId; role: 'girt' | 'post' | 'jamb'; level?: number };
   /** לחלקי חיבור (זוויתן, פלטה, בורג): מזהה החיבור */
   connId?: string;
   /** תיאור חלק לייצור (לפלטה/זוויתן/בורג) */

@@ -8,7 +8,9 @@ import { defaultKneeBraces } from '../geometry/knee';
 import type { CustomSection } from '../model/section';
 import { commitNumbering, computeFabrication } from '../fab/marks';
 import { hasErrors, validateBuilding } from '../model/validate';
-import { tryProfile } from '../profiles/library';
+import { catalogNames, tryProfile } from '../profiles/library';
+import { assessBraceCandidate, suggestSize } from '../model/sizing';
+import { suggestEavePlate } from '../geometry/eavePlate';
 import { MATERIALS } from '../profiles/materials';
 
 export class CommandError extends Error {}
@@ -603,4 +605,60 @@ export function applyIssueFixes(issues: ValidationIssue[]): Command {
 /** ביטול מיקומי חיבורי המשך ידניים לאלמנט — חזרה לחלוקה האוטומטית */
 export function setSplicesAuto(memberId: string): Command {
   return { label: 'חיבורי המשך — אוטומטי', run: (p) => { const n = clone(p); delete n.splices[memberId]; return n; } };
+}
+
+/**
+ * התאמת חתכים לפי הערכת הגדלים (כללי אצבע): לכל תפקיד — הגודל הקטן ביותר שמסומן "סביר" באותה משפחה,
+ * ואחריו התאמת פלטת ראש העמוד לחתכים החדשים. הערכה בלבד — לא תכן סטטי.
+ */
+export function applySizingSuggestion(): Command {
+  return {
+    label: 'התאמת חתכים לפי כללי אצבע',
+    run: (p0) => {
+      let n = clone(p0);
+      const fam = (name: string) => tryProfile(name)?.family ?? '';
+      const namesOf = (f: string) => catalogNames().find((g) => g.family === f)?.names ?? [];
+      const b = n.building;
+      for (const [role, key] of [['column', 'columnProfile'], ['rafter', 'rafterProfile']] as const) {
+        const d = generate(n);
+        const s = suggestSize(n, d, role, fam(b[key]), namesOf(fam(b[key])));
+        if (s) n.building[key] = s;
+      }
+      {
+        const d = generate(n);
+        const pu = n.building.purlins;
+        const cur = pu.left.profile;
+        const s = suggestSize(n, d, 'purlin', fam(cur), namesOf(fam(cur)).filter((x) => /^[A-Z]+\d+x\d+/.test(x)));
+        if (s) { pu.left.profile = s; pu.right.profile = s; if (pu.planes) for (const k of Object.keys(pu.planes)) pu.planes[k].profile = s; }
+      }
+      // קושרות גג וקירות: הזוויתן הקטן ביותר שעומד בתמירות
+      for (const [prefix, key] of [['BR.R', 'roof'], ['BR.W', 'walls']] as const) {
+        const br = n.building.bracing[key];
+        if (!br?.enabled) continue;
+        const d = generate(n);
+        const f0 = fam(br.profile);
+        const names = namesOf(f0).filter((x) => /^[A-Z]+\d+x\d+(x[\d.]+)?$/.test(x));
+        const num = (x: string) => x.replace(/^[A-Z]+/, '').split('x').map(Number);
+        names.sort((a, b2) => { const A = num(a), B = num(b2); return A[0] - B[0] || (A[2] ?? A[1]) - (B[2] ?? B[1]); });
+        // רגל מינימלית 50 — מקום לשורת ברגים בפח החיבור
+        const ok = names.filter((x) => num(x)[0] >= 50).find((x) => { try { return assessBraceCandidate(n, d, prefix, x).status !== 'small'; } catch { return false; } });
+        if (ok) br.profile = ok;
+      }
+      // פלטת ראש עמוד ופלטת בסיס מותאמות לחתכים
+      const slope = Math.abs(n.building.slopeLeftPct ?? 0) / 100;
+      const cos = 1 / Math.sqrt(1 + slope * slope);
+      const e = n.connectionDefaults.eave;
+      const sg = suggestEavePlate(e, n.building.rafterProfile, n.building.columnProfile, cos);
+      n.connectionDefaults.eave = { ...e, ...sg };
+      const cp = tryProfile(n.building.columnProfile);
+      if (cp) {
+        const bs = n.connectionDefaults.base, up5 = (x: number) => Math.ceil(x / 5) * 5;
+        const l = up5(Math.max(bs.l, cp.props.h + 2 * bs.weldSize + 20)), w = up5(Math.max(bs.w, cp.props.b + 2 * bs.weldSize + 20));
+        const eE = (bs.l - (bs.rows - 1) * bs.pitch) / 2, eW = (bs.w - (bs.cols - 1) * bs.gauge) / 2;
+        n.connectionDefaults.base = { ...bs, l, w, pitch: bs.rows > 1 ? Math.round((l - 2 * eE) / (bs.rows - 1)) : bs.pitch, gauge: bs.cols > 1 ? Math.round((w - 2 * eW) / (bs.cols - 1)) : bs.gauge };
+      }
+      n = clone(n);
+      return n;
+    },
+  };
 }

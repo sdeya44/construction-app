@@ -169,7 +169,7 @@ select.inp { padding: 0 6px; }
 .vp-label.dim { background: rgba(246,243,236,.92); color: var(--brand); font-family: var(--mono); padding: 0 3px; border-radius: 3px; font-weight: 600; }
 .vp-label.dim.small { font-size: 10.5px; }
 .vp-label.dim.rem { background: #fff1d6; color: #9a5200; border: 1px solid #f0c27a; }
-.vp-label.splice { color: #c4122f; font-size: 13px; text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
+.vp-label.splice { color: #a8324a; font-size: 10px; opacity: .75; text-shadow: 0 0 2px #fff; pointer-events: none; }
 .vp-label.tag { background: rgba(255,255,255,.95); border: 1px solid #f0b27a; color: #8a3f00; padding: 1px 6px; border-radius: 4px; font-family: var(--mono); font-size: 11px; }
 .vp-label.measure { background: #d0006f; color: #fff; padding: 2px 7px; border-radius: 4px; font-weight: 700; font-family: var(--mono); }
 .vp-axes { position: absolute; left: 10px; bottom: 10px; width: 76px; height: 76px; pointer-events: none; }
@@ -527,3 +527,24 @@ select.inp { padding: 0 6px; }
 .quote-prices .field { display: grid; grid-template-columns: 1fr 90px; gap: 6px; align-items: center; }
 .quote-sum { grid-column: 1 / -1; display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; font-size: 15px; }
 .quote-sum span { color: var(--muted, #667); font-size: 12.5px; }
+
+/* פאנל מאפיינים מתכווץ כשאין בחירה (מסך רחב) */
+.props-pin { display: none; }
+@media (min-width: 861px) {
+  .props-pin { display: block; background: var(--panel-2); border: 0; border-bottom: 1px solid var(--line); padding: 6px 8px; cursor: pointer; color: var(--muted); font-weight: 600; text-align: start; }
+  .workspace.props-collapsed { grid-template-columns: 330px 1fr 34px; }
+  .workspace { position: relative; }
+  .workspace.props-collapsed:not(.props-float) .side-end > :not(.props-pin) { display: none; }
+  /* בחירה כשהפאנל מכווץ: הפאנל נפתח כשכבה מעל התלת־ממד — בלי לשנות את גודל המבט (שום דבר לא "קופץ") */
+  .workspace.props-float .side-end { position: absolute; left: 0; top: 0; bottom: 0; width: 330px; z-index: 6; box-shadow: 4px 0 18px rgba(28,36,32,.14); }
+  .workspace.props-float .props-pin { writing-mode: horizontal-tb; height: auto; }
+  .workspace.props-collapsed .props-pin { writing-mode: vertical-rl; height: 100%; border: 0; text-align: center; padding: 10px 6px; }
+}
+@media (min-width: 861px) and (max-width: 1280px) { .workspace.props-collapsed { grid-template-columns: 250px 1fr 34px; } }
+
+.tb-mini { font-size: 10.5px; margin-inline-start: 3px; }
+
+.op-card { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; }
+
+.quote-client { grid-column: 1 / -1; display: grid; gap: 4px; border-top: 1px dashed var(--line); padding-top: 8px; max-width: 520px; }
+.quote-client textarea { width: 100%; font: inherit; direction: rtl; }
