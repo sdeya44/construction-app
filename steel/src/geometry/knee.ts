@@ -66,7 +66,9 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
         const tosAt = (x: number) => (raf.anchor === 'top' ? zAt(pl, x) : zAt(pl, x) + hv / 2);
         const xFace = jn.line.x + s * cp.props.h / 2;
         const underFace = tosAt(xFace) - hv;
-        const zC = underFace - kb.drop;
+        // עמוד מקוצר (קורה נושאת על ראש העמוד): נקודת החיבור יורדת מתחת לפלטת הראש
+        const colTop = Math.max(col.start.z, col.end.z);
+        const zC = colTop < underFace - 50 ? Math.min(underFace - kb.drop, colTop - 160) : underFace - kb.drop;
         if (zC < col.start.z + 500) { out.issues.push({ code: 'KNEE_LOW', severity: 'warning', message: `אלכסון ${key} מסגרת ${fi}: נקודת החיבור לעמוד נמוכה מדי` }); continue; }
         // מישורי המארחים: אגף העמוד (נורמל לכיוון הקורה) ותחתית הקורה (נורמל כלפי מטה)
         const exr = norm(v3(1, 0, sl));

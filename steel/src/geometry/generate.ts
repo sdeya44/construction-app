@@ -213,7 +213,7 @@ export function generate(project: Project): DerivedModel {
       issues.push(...tr.issues);
       if (tr.drop.size || tr.shortCols.size) {
         // חיבורים שתלויים בעמוד שהתקצר (ראש עמוד, קורה לצד עמוד, אלכסון) — הקורות יושבות עכשיו על הקורה הנושאת
-        const dropConn = connections.filter((c) => c.members.some((mid) => tr.drop.has(mid)) || ((c.type === 'eave' || c.type === 'rafter-side' || c.type === 'knee') && c.members.some((mid) => tr.shortCols.has(mid))));
+        const dropConn = connections.filter((c) => c.members.some((mid) => tr.drop.has(mid)) || ((c.type === 'eave' || c.type === 'rafter-side') && c.members.some((mid) => tr.shortCols.has(mid))));
         const dc = new Set(dropConn.map((c) => c.id));
         const keepIss = issues.filter((i) => !(i.elementId && dc.has(i.elementId))); issues.length = 0; issues.push(...keepIss);
         const dropIds = new Set([...tr.drop, ...dropConn.flatMap((c) => c.parts.flatMap((pid) => [pid, `${pid}.H`, `${pid}.S`, `${pid}.N`]))]);

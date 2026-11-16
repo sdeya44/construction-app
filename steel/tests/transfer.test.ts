@@ -3,6 +3,7 @@ import { defaultBuilding, newProject } from '../src/model/defaults';
 import { generate } from '../src/geometry/generate';
 import { SECTION_TEMPLATES } from '../src/model/section';
 import { planOmissions, setTransfers } from '../src/commands/commands';
+import { defaultKneeBraces } from '../src/geometry/knee';
 import type { TbSeat, TbSupport } from '../src/model/types';
 
 const SUPS: TbSupport[] = ['A1', 'A2', 'A3', 'A4', 'A5'];
@@ -53,5 +54,19 @@ describe('דילול עמודים — קורה נושאת', () => {
     expect(pl.defs[0].profile).toMatch(/^IPE\d+/);
     const p2 = setTransfers(pl.defs).run(p);
     expect(errs(generate(p2))).toEqual([]);
+  });
+  it('TB-U5: אלכסוני עמוד-קורה — נמחקים רק בעמודים שבוטלו; בציר הנגדי ובעמודים המקוצרים נשארים', () => {
+    for (const sup of SUPS) {
+      const b = defaultBuilding(); const f = [...b.frames].sort((x, y) => x.y - y.y);
+      b.kneeBraces = { ...defaultKneeBraces(), enabled: true };
+      b.transfers = [{ id: 'T1', lineId: 'L', from: f[1].id, to: f[4].id, removed: [f[2].id, f[3].id], profile: 'IPE600', support: sup, seat: 'B1' }];
+      const d = generate(newProject('x', b));
+      expect(errs(d).map((e) => `${sup} ${e.message}`)).toEqual([]);
+      const kb = d.members.filter((m) => m.id.startsWith('KB.')).map((m) => m.id);
+      expect(kb.length).toBe(2 * f.length - 2);
+      for (const fr of f) expect(kb.some((id) => id.startsWith(`KB.${fr.id}.R.`))).toBe(true);
+      expect(kb.some((id) => id.startsWith(`KB.${f[1].id}.L.`))).toBe(true);
+      expect(kb.some((id) => id.startsWith(`KB.${f[2].id}.L.`))).toBe(false);
+    }
   });
 });

@@ -289,12 +289,12 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
     const cutAtLine = pl.supported.some((f) => members.filter((m) => m.kind === 'rafter' && m.frameId === f.id && Math.min(Math.abs(m.start.x - x), Math.abs(m.end.x - x)) < cb).length >= 2);
     if (cutAtLine) res.issues.push({ code: 'TB_SPLIT', severity: 'warning', elementId: tbId, message: `קורה נושאת ציר ${line.label}: קורות הגג מתחברות כאן לצד העמוד — במסגרות ללא עמוד שתי הקורות נשענות על אותו כיסא ללא חיבור ביניהן; מומלץ פלטת המשך/רכס — לבדיקת המתכנן` });
     // ניקוי: אלכסוני עמוד-קורה ואלמנטים שנשענים על עמודים מוסרים / מקוצרים
-    const gone = new Set([...pl.def.removed.map((fid) => colId(fid, line.id)), ...(side ? [] : [pl.colFrom, pl.colTo])]);
     const removedPts = pl.def.removed.map((fid) => ({ x, y: frames.find((q) => q.id === fid)?.y ?? NaN }));
     for (const m of members) {
       if (m.kind === 'column' || m.kind === 'rafter' || m.purlin) continue;
       const nearRemoved = (p: Vec3) => removedPts.some((q) => Math.abs(p.x - q.x) < 400 && Math.abs(p.y - q.y) < 400 && p.z > project.building.baseElevation - 50);
-      if ((m.id.startsWith('KB.') && [...gone].some((cid) => m.id.startsWith(`KB.${cid.split('.COL.')[0]}.`) && (m.id.endsWith(`.${line.id}`) || m.id.includes(`.${line.id}.`)))) ||
+      // מזהה אלכסון: KB.{מסגרת}.{ציר}.{מישור}.{צד} — רק אלכסונים בעמודים שבוטלו (לא בציר אחר / בעמוד מקוצר)
+      if (pl.def.removed.some((fid) => m.id.startsWith(`KB.${fid}.${line.id}.`)) ||
           ((m.id.startsWith('BR.W') || m.id.startsWith('BB.')) && (nearRemoved(m.start) || nearRemoved(m.end)))) res.drop.add(m.id);
     }
   }
