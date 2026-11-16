@@ -9,7 +9,7 @@ const MANUAL_COLOR = 0xb08a4a;
 
 const solidCache = new Map<string, Solid>();
 function solidKey(m: Member) {
-  return JSON.stringify([m.start, m.end, m.profile, m.rollDeg, m.mirror, m.anchor, m.refUp, m.startCut, m.endCut]);
+  return JSON.stringify([m.start, m.end, m.profile, m.rollDeg, m.mirror, m.anchor, m.refUp, m.startCut, m.endCut, m.snip]);
 }
 export function clearSceneCache() { solidCache.clear(); }
 export function cachedSolid(m: Member): Solid {

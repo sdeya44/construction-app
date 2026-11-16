@@ -73,7 +73,7 @@ function drawSheet(page: PDFPage, sh: Sheet, reg: PDFFont, bold: PDFFont) {
       if (e.shade !== undefined && e.pts.length > 2) {
         const d = e.pts.map((q, i) => `${i ? 'L' : 'M'} ${(q.x * MM).toFixed(2)} ${(-q.y * MM).toFixed(2)}`).join(' ') + ' Z';
         const [sr, sg, sb] = shadeTuple(e.shade, mono);
-        page.drawSvgPath(d, { x: 0, y: 0, color: rgb(sr, sg, sb), borderColor: rgb(sr, sg, sb), borderWidth: 0.06 * MM });
+        page.drawSvgPath(d, { x: 0, y: 0, color: rgb(sr, sg, sb), borderColor: rgb(sr, sg, sb), borderWidth: 0.14 * MM });
       } else if (e.fill && e.pts.length > 2) {
         const d = e.pts.map((q, i) => `${i ? 'L' : 'M'} ${(q.x * MM).toFixed(2)} ${(-q.y * MM).toFixed(2)}`).join(' ') + ' Z';
         page.drawSvgPath(d, { x: 0, y: 0, color: rgb(...fillOf(mono)), borderColor: color, borderWidth: w * MM });

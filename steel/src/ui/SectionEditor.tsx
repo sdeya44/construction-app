@@ -5,6 +5,7 @@ import { lineLabel, moveLines, setAxisCount, setPlaneEndZ, setPlaneSlope, SECTIO
 import { store, useStore } from '../store';
 import { LenField, NumField, ProfilePicker } from './fields';
 import { Icon } from './icons';
+import type { KneeSideOverride } from '../model/types';
 
 /**
  * בונה החתך המודולרי (החלטת משתמש 15.11.2026): תבניות + טבלת צירי עמודים + טבלת מישורי גג, עם תצוגה מקדימה.
@@ -163,9 +164,53 @@ export function KneeEditor() {
               <select className="inp" data-testid="kb-bolts" value={kb.boltsPerEnd ?? 2} onChange={(e) => set({ boltsPerEnd: Number(e.target.value) })}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}×M{kb.bolt.d} — {n / 2} {n === 2 ? 'שורה' : 'שורות'} של 2 לרוחב</option>)}</select></div>
           : <div className="field"><label>פלטת קצה / ברגים</label><span className="readonly">{kb.plateT}×{kb.plateW}×{kb.plateL} · 4×M{kb.bolt.d}</span></div>}
         <div className="field"><label>עובי פלטות</label><NumField testId="kb-t" value={kb.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: Math.max(6, v) })} /></div>
+        <KneeSides />
         <div className="hint">בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. פרט הלקוח: פח מרותך לעמוד ולקורה (במישור המסגרת, מסגריה); בקצות ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. אין בדיקת חוזק.</div>
       </>}
     </>
+  );
+}
+
+/** הגדרה לכל צד בנפרד: כל מפגש עמוד-קורה וצד (מפתח) — פעיל, ירידה, זווית/מרחק; ריק = לפי ההגדרה הכללית */
+function KneeSides() {
+  const kb = useStore((s) => s.project.building.kneeBraces) ?? defaultKneeBraces();
+  const d = useStore((s) => s.derived);
+  const lines = [...(d.section?.lines ?? [])].sort((a, b) => a.x - b.x);
+  const keys = [...new Set([...d.connections.filter((c) => c.type === 'knee').map((c) => c.id.split('.').slice(3).join('.')), ...Object.keys(kb.sides ?? {})])]
+    .sort((a, b) => lines.findIndex((l) => l.id === a.split('.')[0]) - lines.findIndex((l) => l.id === b.split('.')[0]) || a.localeCompare(b));
+  if (!keys.length) return null;
+  const setSide = (key: string, patch: Partial<KneeSideOverride> | null) => {
+    const sides = { ...(kb.sides ?? {}) };
+    if (patch === null) delete sides[key]; else sides[key] = { ...(sides[key] ?? {}), ...patch };
+    store.exec(setKneeBraces({ sides }));
+  };
+  const lenOf = (key: string) => { const m = d.members.find((x) => x.id.startsWith('KB.') && x.id.endsWith(`.${key}`)); return m ? Math.round(Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y, m.end.z - m.start.z)) : null; };
+  const angleMode = (kb.mode ?? 'angle') === 'angle';
+  return (
+    <div className="op-card" data-testid="kb-sides">
+      <b>הגדרה לכל צד (מפתח)</b>
+      <div className="hint">ריק = לפי ההגדרה הכללית. מאפשר אורכי אלכסון שונים במפתחים שונים.</div>
+      <table className="mini-table"><thead><tr><th>מיקום</th><th>פעיל</th><th>ירידה</th><th>{angleMode ? 'זווית' : 'מרחק'}</th><th>אורך</th><th /></tr></thead>
+        <tbody>{keys.map((key) => {
+          const [lineId, , sd] = key.split('.');
+          const li = lines.findIndex((l) => l.id === lineId);
+          const span = sd === 'L' ? li : li + 1;
+          const ov = kb.sides?.[key] ?? {};
+          const L = lenOf(key);
+          return (
+            <tr key={key} data-testid={`kb-side-${key}`}>
+              <td>ציר {lines[li]?.label ?? lineId} · {sd === 'L' ? 'שמאל' : 'ימין'} (מפתח {span})</td>
+              <td><input type="checkbox" data-testid={`kb-side-on-${key}`} checked={ov.on !== false} onChange={(e) => setSide(key, { on: e.target.checked })} /></td>
+              <td><NumField testId={`kb-side-drop-${key}`} value={ov.drop ?? kb.drop} suffix="" onCommit={(v) => setSide(key, { drop: v })} /></td>
+              <td>{angleMode
+                ? <NumField testId={`kb-side-angle-${key}`} value={ov.angle ?? kb.angle ?? 45} suffix="°" onCommit={(v) => setSide(key, { angle: Math.max(15, Math.min(75, v)) })} />
+                : <NumField testId={`kb-side-reach-${key}`} value={ov.reach ?? kb.reach} suffix="" onCommit={(v) => setSide(key, { reach: v })} />}</td>
+              <td className="num">{ov.on === false ? '—' : L ?? '—'}</td>
+              <td>{kb.sides?.[key] && <button className="btn small" title="חזרה להגדרה הכללית" data-testid={`kb-side-reset-${key}`} onClick={() => setSide(key, null)}>↺</button>}</td>
+            </tr>
+          );
+        })}</tbody></table>
+    </div>
   );
 }
 

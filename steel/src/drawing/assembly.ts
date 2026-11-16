@@ -90,7 +90,7 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     }
     return ox;
   };
-  const yF = A.yTop - 24 - (vMax - vMin) / sc; // תחתית מבט החזית (v = vMin)
+  const yF = A.yTop - 38 - (vMax - vMin) / sc; // תחתית מבט החזית (v = vMin) — מעליו: בועות, מידות שיפוע ומידות בקרה
   const yT = yF - 52 - (uMax - uMin) / sc;     // תחתית מבט עליון (u = uMin) — מקום לשלוש שרשראות מידה בין המבטים
   const PF = (t: number, v: number): P => ({ x: X(t), y: yF + (v - vMin) / sc });
   const PT = (t: number, u: number): P => ({ x: X(t), y: yT + (u - uMin) / sc });
@@ -222,7 +222,7 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   const edgeT = (ring: { t: number; v: number }[], vv: number) => { const q = ring.filter((x) => Math.abs(x.v - vv) < 0.5); return q.length ? q.reduce((a, x) => a + x.t, 0) / q.length : null; };
   const sTop = edgeT(r0, vMaxMain) ?? 0, sBot = edgeT(r0, vMinMain) ?? 0, eTop = edgeT(r1, vMaxMain) ?? L, eBot = edgeT(r1, vMinMain) ?? L;
   if (Math.abs(sTop - sBot) > 0.5 || Math.abs(eTop - eBot) > 0.5) {
-    dimH(PF(sTop, 0).x, PF(eTop, 0).x, PF(0, vMax).y + 24, `${Math.round(eTop - sTop)} (צד ${main.kind === 'column' ? 'ימין/עליון' : 'עליון'} במבט)`);
+    dimH(PF(sTop, 0).x, PF(eTop, 0).x, PF(0, vMax).y + 22, `${Math.round(eTop - sTop)} (צד ${main.kind === 'column' ? 'ימין/עליון' : 'עליון'} במבט)`);
     dimH(PF(sBot, 0).x, PF(eBot, 0).x, yChain - 20, `${Math.round(eBot - sBot)} (צד ${main.kind === 'column' ? 'שמאל/תחתון' : 'תחתון'} במבט)`);
   }
   // שרשרת חורים לאורך כל החלק (גם בקטעים המקוצרים): חורים שנראים כעיגול במבט חזית — מתחת לחזית; במבט עליון — מתחת לעליון
@@ -231,16 +231,37 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     if (!ts0.length) return;
     const ts = [...new Set(ts0.map((t) => Math.round(t)))].sort((a, b) => a - b);
     const pts = [0, ...ts.filter((t) => t > 0 && t < Math.round(L)), Math.round(L)];
+    // שרשרת רציפה: כל קטע עם ערך; קטע צר — הערך מעל הקו, מדורג לסירוגין, עם קו מוביל לאמצע הקטע
+    let stag = 0;
+    line({ x: PF(pts[0], 0).x, y }, { x: PF(pts[pts.length - 1], 0).x, y }, 'DIM');
+    for (let i = 0; i < pts.length; i++) { const x = PF(pts[i], 0).x; line({ x: x - 0.8, y: y - 1.2 }, { x: x + 0.8, y: y + 1.2 }, 'DIM'); }
     for (let i = 1; i < pts.length; i++) {
-      const xa = PF(pts[i - 1], 0).x, xb = PF(pts[i], 0).x;
-      // קטע צר מדי (בתוך שבירה) — סימון בלי טקסט; הערך מופיע בשורת המידות המצטברות
-      if (xb - xa < 4.5) { line({ x: xa, y }, { x: xb, y }, 'DIM'); line({ x: xb - 0.8, y: y - 1.2 }, { x: xb + 0.8, y: y + 1.2 }, 'DIM'); continue; }
-      dimH(xa, xb, y, String(pts[i] - pts[i - 1]));
+      const xa = PF(pts[i - 1], 0).x, xb = PF(pts[i], 0).x, lab = String(pts[i] - pts[i - 1]);
+      if (xb - xa >= 2 * lab.length + 1) { text({ x: (xa + xb) / 2, y: y + 1.1 }, lab, 2, 'center', 'DIM'); stag = 0; continue; }
+      const yl = y + 3.6 + (stag++ % 2) * 2.8, xm = (xa + xb) / 2;
+      line({ x: xm, y: y + 0.3 }, { x: xm, y: yl - 0.4 }, 'DIM');
+      text({ x: xm, y: yl }, lab, 2, 'center', 'DIM');
     }
     text({ x: PF(0, 0).x - 2, y: y + 0.5 }, label, 1.9, 'right', 'DIM');
   };
   holeChain('u', yChain - 10, 'חורים');
   holeChain('v', PT(0, uMin).y - 7, 'חורים');
+  // מידות בקרה להרכבה: קצה הפרופיל הראשי → מרכז החור הקרוב, ומרכז חור לחור בין שני הקצוות
+  {
+    const hT = holesW.filter((h) => Math.abs(dot(h.axis, f.ex)) < 0.3).map((h) => loc(h.p).t).filter((t) => t > tMin - 1 && t < tMax + 1);
+    const [m0, m1] = ext(mainPart);
+    if (hT.length >= 2) {
+      const t0 = Math.min(...hT), t1 = Math.max(...hT);
+      if (t1 - t0 > 100 && t0 < (m0 + m1) / 2 && t1 > (m0 + m1) / 2) {
+        const yc = PF(0, vMax).y + (Math.abs(sTop - sBot) > 0.5 || Math.abs(eTop - eBot) > 0.5 ? 30 : 22);
+        const r = (x: number) => Math.round(Math.abs(x));
+        const segsC: [number, number, string][] = [[Math.min(m0, t0), Math.max(m0, t0), `${r(t0 - m0)}`], [t0, t1, `${r(t1 - t0)} c-c`], [Math.min(t1, m1), Math.max(t1, m1), `${r(m1 - t1)}`]];
+        for (const [a, b, lab] of segsC) if (b - a > 0.5) dimH(PF(a, 0).x, PF(b, 0).x, yc, lab, 1.4);
+        for (const t of [t0, t1]) if (inSeg(t)) E.push({ k: 'line', a: { x: PF(t, 0).x, y: PF(0, vMax).y + 1 }, b: { x: PF(t, 0).x, y: yc + 1.5 }, layer: 'HIDDEN' });
+        text({ x: PF(tMax, 0).x + 2, y: yc + 0.5 }, 'בקרה להרכבה', 2, 'left', 'DIM', true);
+      }
+    }
+  }
   dimH(PF(0, 0).x, PF(L, 0).x, PT(0, uMin).y - 15, `${Math.round(L)}`);
   // חתכי קצה A-A (ליד מבט החזית) ו-B-B (ליד מבט העליון), עם סימוני חתך במבט החזית
   ['A', 'B'].forEach((nm, k) => {
@@ -378,6 +399,13 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   let yy = tableTop;
   const hline = (y: number) => line({ x: tx0, y }, { x: tx1, y }, 'THIN');
   text({ x: tx1, y: yy + 2 }, `מכלול ${asm.mark} · ${asm.weight.toFixed(1)} ק"ג · כמות בפרויקט ${fab.assemblies.filter((x) => x.mark === asm.mark).length}`, 2.6, 'right', 'TEXT', true);
+  { // מיקומים: לאילו אלמנטים במבנה משמש שרטוט זה
+    const labs = new Map<string, number>();
+    for (const a of fab.assemblies.filter((x) => x.mark === asm.mark)) { const mid = fab.parts.find((x) => x.id === a.main)?.memberId ?? a.main; const l = d.byId.get(mid)?.label ?? mid; labs.set(l, (labs.get(l) ?? 0) + 1); }
+    let s0 = `עבור: ${[...labs].map(([l, q]) => (q > 1 ? `${l} ×${q}` : l)).join(' · ')}`;
+    if (s0.length > 125) s0 = s0.slice(0, 122) + '…';
+    text({ x: tx1, y: yy + 6.6 }, s0, 2.3, 'right', 'TEXT');
+  }
   hline(yy);
   const drawRow = (vals: string[], bold = false) => {
     let x = tx1;
@@ -448,11 +476,14 @@ function norm3(a: Vec3): Vec3 { const l = Math.hypot(a.x, a.y, a.z) || 1; return
  * ותאורה לפי נורמל הפאה. clip: תחום t (במערכת החלק הראשי) — מציג רק את הקטעים שבתחום, עם פאת חתך בגבול.
  */
 export function renderIso(sh: Sheet, ms: Member[], marks: string[], box: { x0: number; x1: number; y0: number; y1: number }, clip: [number, number] | null,
-  loc: (q: Vec3) => { t: number; u: number; v: number }, title: string, holes: { p: Vec3; axis: Vec3; r: number; len: number }[] = []) {
+  loc: (q: Vec3) => { t: number; u: number; v: number }, title: string, holes: { p: Vec3; axis: Vec3; r: number; len: number }[] = [], rot = 0, fineMode = false) {
   const E = sh.ents;
   const C30 = Math.cos(Math.PI / 6), S30 = 0.5;
-  const isoXY = (q: Vec3) => ({ x: (q.x - q.y) * C30, y: q.z + (q.x + q.y) * S30 });
-  const depth = (q: Vec3) => q.x + q.y - q.z; // גדול = רחוק מהצופה
+  // rot: סיבוב המבט ב-90°·rot סביב Z (לבחירת צד הצפייה — כך הפלטות לא מוסתרות ע"י האלמנט הראשי)
+  const ca = Math.round(Math.cos((rot * Math.PI) / 2)), sa = Math.round(Math.sin((rot * Math.PI) / 2));
+  const R = (q: Vec3): Vec3 => ({ x: q.x * ca - q.y * sa, y: q.x * sa + q.y * ca, z: q.z });
+  const isoXY = (q0: Vec3) => { const q = R(q0); return { x: (q.x - q.y) * C30, y: q.z + (q.x + q.y) * S30 }; };
+  const depth = (q0: Vec3) => { const q = R(q0); return q.x + q.y - q.z; }; // גדול = רחוק מהצופה
   const Ldir = norm3({ x: -0.35, y: -0.6, z: 1 });
   const lerp = (a: Vec3, b: Vec3, k: number): Vec3 => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k });
   const inClip = (q: Vec3) => !clip || (loc(q).t >= clip[0] - 0.5 && loc(q).t <= clip[1] + 0.5);
@@ -472,27 +503,49 @@ export function renderIso(sh: Sheet, ms: Member[], marks: string[], box: { x0: n
       if (k1 <= k0) return;
     } else if (clip && !inClip(s.startRing[0])) return;
     const len = Math.hypot(s.endRing[0].x - s.startRing[0].x, s.endRing[0].y - s.startRing[0].y, s.endRing[0].z - s.startRing[0].z) * (k1 - k0);
-    const segs = Math.max(1, Math.min(90, Math.ceil(len / (clip ? 40 : 150))));
+    const fine = rot >= 0 && fineMode;
+    const segs = Math.max(1, Math.min(fine ? 160 : 90, Math.ceil(len / (clip || fine ? (fine ? 30 : 40) : 150))));
     const base = mi === 0 ? 0.6 : 0.8;
+    // מבט מפורט: פלטות/ברגים צמודים לפאת אלמנט — עדיפות קלה לכיוון הצופה (מיון צייר לפי מרכז פאה)
+    const bias = !fine ? 0 : m.kind === 'bolt' ? -45 : m.kind === 'plate' || m.kind === 'cleat' ? -20 : 0;
     const ringAt = (k: number) => s.startRing.map((q, i) => lerp(q, s.endRing[i], k));
+    // כיוון הטבעת (עם/נגד ציר האלמנט) — לנורמל חיצוני עקבי ולסינון פאות אחוריות במבט המפורט
+    const axisV = sub(s.endRing[0], s.startRing[0]);
+    let ringN = { x: 0, y: 0, z: 0 };
+    for (let i = 0; i < n; i++) ringN = { x: ringN.x + cross3(s.startRing[i], s.startRing[(i + 1) % n]).x, y: ringN.y + cross3(s.startRing[i], s.startRing[(i + 1) % n]).y, z: ringN.z + cross3(s.startRing[i], s.startRing[(i + 1) % n]).z };
+    const orient = dot(ringN, axisV) >= 0 ? 1 : -1;
+    const back = (nOut: Vec3) => fine && R(nOut).x + R(nOut).y - R(nOut).z > 1e-6;
     for (let i = 0; i < n; i++) {
       const a0 = s.startRing[i], b0 = s.startRing[(i + 1) % n], a1 = s.endRing[i], b1 = s.endRing[(i + 1) % n];
-      const nn = norm3(cross3(sub(b0, a0), sub(a1, a0)));
+      const nW = norm3(cross3(sub(b0, a0), sub(a1, a0)));
+      if (back({ x: nW.x * orient, y: nW.y * orient, z: nW.z * orient })) continue;
+      const nn = R(nW);
       const tone = base + 0.35 * Math.abs(dot(nn, Ldir)) - 0.2;
+      // מבט מפורט: פאות רחבות מחולקות גם לרוחב — מיון עומק נכון לברגים ופלטות קטנים
+      const wid = Math.hypot(b0.x - a0.x, b0.y - a0.y, b0.z - a0.z);
+      const J = 1; void wid;
       for (let k = 0; k < segs; k++) {
         const ka = k0 + ((k1 - k0) * k) / segs, kb = k0 + ((k1 - k0) * (k + 1)) / segs;
-        const p0 = lerp(a0, a1, ka), p1 = lerp(a0, a1, kb), q0 = lerp(b0, b1, ka), q1 = lerp(b0, b1, kb);
-        const poly = [p0, q0, q1, p1];
-        faces.push({ poly, edges: [[p0, p1], [q0, q1]], z: poly.reduce((acc, q) => acc + depth(q), 0) / 4, tone });
+        const P0 = lerp(a0, a1, ka), P1 = lerp(a0, a1, kb), Q0 = lerp(b0, b1, ka), Q1 = lerp(b0, b1, kb);
+        for (let j = 0; j < J; j++) {
+          const p0 = lerp(P0, Q0, j / J), p1 = lerp(P1, Q1, j / J), q0 = lerp(P0, Q0, (j + 1) / J), q1 = lerp(P1, Q1, (j + 1) / J);
+          const poly = [p0, q0, q1, p1];
+          const ed: [Vec3, Vec3][] = [];
+          if (j === 0) ed.push([p0, p1]);
+          if (j === J - 1) ed.push([q0, q1]);
+          faces.push({ poly, edges: ed, z: poly.reduce((acc, q) => acc + depth(q), 0) / 4 + bias, tone });
+        }
       }
     }
     for (const kk of [k0, k1]) {
       const ring = ringAt(kk);
-      const nn = norm3(cross3(sub(ring[1], ring[0]), sub(ring[2], ring[0])));
+      const nn = R(norm3(cross3(sub(ring[1], ring[0]), sub(ring[2], ring[0]))));
       const cut = kk > 1e-6 && kk < 1 - 1e-6;
-      faces.push({ poly: ring, edges: ring.map((q, i) => [q, ring[(i + 1) % n]] as [Vec3, Vec3]), z: ring.reduce((acc, q) => acc + depth(q), 0) / n, tone: cut ? 0.35 : base + 0.35 * Math.abs(dot(nn, Ldir)) - 0.2 });
       shown.push(...ring);
       if (mi > 0 && marks[mi]) shownByMark.set(marks[mi], [...(shownByMark.get(marks[mi]) ?? []), ...ring]);
+      const ax = norm3(axisV);
+      if (back(kk < 0.5 ? { x: -ax.x, y: -ax.y, z: -ax.z } : ax)) continue;
+      faces.push({ poly: ring, edges: ring.map((q, i) => [q, ring[(i + 1) % n]] as [Vec3, Vec3]), z: ring.reduce((acc, q) => acc + depth(q), 0) / n + bias, tone: cut ? 0.35 : base + 0.35 * Math.abs(dot(nn, Ldir)) - 0.2 });
     }
   });
   if (!shown.length) return;

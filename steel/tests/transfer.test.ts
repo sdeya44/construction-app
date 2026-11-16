@@ -69,4 +69,27 @@ describe('דילול עמודים — קורה נושאת', () => {
       expect(kb.some((id) => id.startsWith(`KB.${f[2].id}.L.`))).toBe(false);
     }
   });
+  it('TB-U6: קורה נושאת ארוכה מחומר הגלם — חיבורי המשך מוברגים; splice=none — מוט אחד', () => {
+    const b = defaultBuilding(); const f = [...b.frames].sort((x, y) => x.y - y.y);
+    b.transfers = [{ id: 'T1', lineId: 'L', from: f[0].id, to: f[4].id, removed: [f[1].id, f[2].id, f[3].id], profile: 'IPE600', support: 'A2', seat: 'B1' }];
+    const d = generate(newProject('x', b));
+    expect(errs(d)).toEqual([]);
+    expect(d.connections.filter((c) => c.id.startsWith('C.RS.TB.T1')).length).toBeGreaterThanOrEqual(1);
+    expect(d.parts.filter((p) => p.memberId === 'TB.T1').every((p) => p.length <= 12000)).toBe(true);
+    b.transfers[0].splice = 'none';
+    const d2 = generate(newProject('x', b));
+    expect(d2.connections.filter((c) => c.id.startsWith('C.RS.TB.T1')).length).toBe(0);
+  });
+  it('KB-SIDE: הגדרה לכל צד — ירידה שונה מאריכה רק את אלכסוני אותו צד; on=false מבטל', () => {
+    const b = defaultBuilding();
+    b.kneeBraces = { ...defaultKneeBraces(), enabled: true, sides: { 'R.R.L': { drop: 1200 }, 'L.L.R': { on: false } } };
+    const d = generate(newProject('x', b));
+    const len = (id: string) => { const m = d.byId.get(id)!; return Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y, m.end.z - m.start.z); };
+    const fr = b.frames[0].id;
+    expect(d.byId.get(`KB.${fr}.L.L.R`)).toBeUndefined();
+    const b0 = defaultBuilding(); b0.kneeBraces = { ...defaultKneeBraces(), enabled: true };
+    const d0 = generate(newProject('x', b0));
+    const len0 = (() => { const m = d0.byId.get(`KB.${fr}.R.R.L`)!; return Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y, m.end.z - m.start.z); })();
+    expect(len(`KB.${fr}.R.R.L`)).toBeGreaterThan(len0 + 300);
+  });
 });

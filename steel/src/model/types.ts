@@ -214,6 +214,8 @@ export interface TransferDef {
   profile: string;
   support: TbSupport;
   seat: TbSeat;
+  /** קורה ארוכה מחומר הגלם: auto (ברירת מחדל) — חיבורי המשך מוברגים מחוץ לאזורי המושבים; none — מוט אחד (הזמנה מיוחדת) */
+  splice?: 'auto' | 'none';
 }
 
 export type WallId = 'L' | 'R' | 'F' | 'B';
@@ -263,7 +265,10 @@ export interface KneeBraceParams {
   weldSize: Mm;
   /** חיבורים שבוטלו ידנית: מזהה "קו.מישור.צד" */
   exclude: string[];
+  /** הגדרה לכל צד בנפרד (מזהה "קו.מישור.צד"): ביטול / ירידה / זווית / מרחק / חתך — דורס את הכללי */
+  sides?: Record<string, KneeSideOverride>;
 }
+export interface KneeSideOverride { on?: boolean; drop?: Mm; angle?: number; reach?: Mm; mode?: 'angle' | 'reach'; profile?: string }
 
 export interface ProjectMeta {
   name: string;
@@ -446,6 +451,8 @@ export interface Member {
   refUp: Vec3;
   startCut?: Plane;
   endCut?: Plane;
+  /** פלטה בלבד: קיטום 45° בשתי הפינות בצד u=side·b/2 בשני הקצוות (מקשח — מעבר לרדיוס השורש של הפרופיל) */
+  snip?: { side: -1 | 1; c: number };
   source: 'generated' | 'manual';
   manualPlacement: boolean;
   purlin?: PurlinInfo;

@@ -26,7 +26,7 @@ export function sheetToSvg(sh: Sheet): string {
     if (e.k === 'line') out.push(`<line x1="${e.a.x.toFixed(3)}" y1="${Y(e.a.y)}" x2="${e.b.x.toFixed(3)}" y2="${Y(e.b.y)}" ${st}/>`);
     else if (e.k === 'poly' && e.shade !== undefined) {
       const g = shadeRgb(e.shade, mono);
-      out.push(`<polygon points="${e.pts.map((q) => `${q.x.toFixed(2)},${Y(q.y)}`).join(' ')}" fill="${g}" stroke="${g}" stroke-width="0.06"/>`);
+      out.push(`<polygon points="${e.pts.map((q) => `${q.x.toFixed(2)},${Y(q.y)}`).join(' ')}" fill="${g}" stroke="${g}" stroke-width="0.14"/>`);
     }
     else if (e.k === 'poly') out.push(`<${e.closed ? 'polygon' : 'polyline'} points="${e.pts.map((q) => `${q.x.toFixed(3)},${Y(q.y)}`).join(' ')}" fill="${e.fill ? hex(fillOf(mono)) : 'none'}" ${st}/>`);
     else if (e.k === 'circle') out.push(`<circle cx="${e.c.x.toFixed(3)}" cy="${Y(e.c.y)}" r="${e.r.toFixed(3)}" fill="none" ${st}/>`);

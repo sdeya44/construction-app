@@ -211,6 +211,42 @@ export function generate(project: Project): DerivedModel {
       out.push(...tr.members);
       connections.push(...tr.connections);
       issues.push(...tr.issues);
+      // קורה נושאת ארוכה מחומר הגלם: חיבורי המשך מוברגים (פלטות קצה), מחוץ לאזורי המושבים
+      {
+        const stock = project.settings.stockLength, allow = Math.max(10, project.settings.kerf * 3);
+        const tbSpl: Record<string, number[]> = {};
+        for (const def of b.transfers ?? []) {
+          const tb = tr.members.find((m) => m.id === `TB.${def.id}`);
+          if (!tb || def.splice === 'none') continue;
+          const L = Math.hypot(tb.end.x - tb.start.x, tb.end.y - tb.start.y, tb.end.z - tb.start.z);
+          if (L <= stock - allow) continue;
+          const seats = tr.connections.filter((c) => c.type === 'tb-seat' && c.members[0] === tb.id).map((c) => { const p0 = tr.members.find((m) => c.parts.includes(m.id) && m.kind === 'plate'); return p0 ? Math.abs((p0.start.y + p0.end.y) / 2 - tb.start.y) : null; }).filter((t): t is number => t !== null);
+          // חלוקה לחלקים שווים; תפר שנופל ליד מושב מוזז ממנו (450 מ"מ); אם חלק חורג מהמוט — חלק נוסף
+          let ts: number[] = [];
+          for (let n = Math.ceil(L / (stock - allow)); n < 12; n++) {
+            ts = [];
+            for (let k = 1; k < n; k++) {
+              const t0 = (L * k) / n, prev = ts.length ? ts[ts.length - 1] : 0;
+              // שני כיווני הזזה מהמושב — עדיפות לזה שמשאיר את החלק הקודם בתוך אורך המוט
+              const clear = (t: number) => { for (let it = 0; it < 10; it++) { const hit = seats.find((sy) => Math.abs(sy - t) < 450); if (hit === undefined) return t; t = hit + (t >= hit ? 450 : -450); } return t; };
+              const hitA = seats.find((sy) => Math.abs(sy - t0) < 450);
+              const cands = hitA === undefined ? [t0] : [clear(hitA - 450), clear(hitA + 450)];
+              const ok = cands.filter((t) => t - prev <= stock - allow).sort((a2, b2) => Math.abs(a2 - t0) - Math.abs(b2 - t0));
+              ts.push(Math.round(ok[0] ?? cands.sort((a2, b2) => a2 - b2)[0]));
+            }
+            const cuts = [0, ...ts, L];
+            if (cuts.every((c, i) => !i || c - cuts[i - 1] <= stock - allow)) break;
+          }
+          if (ts.some((t, i) => (i ? t - ts[i - 1] : t) > stock - allow) || L - ts[ts.length - 1] > stock - allow) issues.push({ code: 'TB_SPLICE', severity: 'warning', elementId: tb.id, message: `קורה נושאת ${def.id}: חלק ארוך מחומר הגלם אחרי הזזת חיבור ההמשך מהמושבים — לבדיקה` });
+          tbSpl[tb.id] = ts;
+          issues.push({ code: 'TB_SPLICE', severity: 'info', elementId: tb.id, message: `קורה נושאת ${def.id} (${(L / 1000).toFixed(2)} מ') ארוכה מחומר הגלם — חולקה ל-${ts.length + 1} חלקים עם חיבורי המשך מוברגים ב-${ts.map((t) => (t / 1000).toFixed(2)).join(', ')} מ' מהקצה` });
+        }
+        if (Object.keys(tbSpl).length) {
+          projEff = { ...projEff, splices: { ...projEff.splices, ...tbSpl } };
+          const bs2 = buildBeamSplices(projEff, out.filter((m) => m.id in tbSpl), tbSpl, new Set(Object.keys(tbSpl)), new Set(Object.keys(tbSpl)));
+          out.push(...bs2.members); connections.push(...bs2.connections); issues.push(...bs2.issues);
+        }
+      }
       if (tr.drop.size || tr.shortCols.size) {
         // חיבורים שתלויים בעמוד שהתקצר (ראש עמוד, קורה לצד עמוד, אלכסון) — הקורות יושבות עכשיו על הקורה הנושאת
         const dropConn = connections.filter((c) => c.members.some((mid) => tr.drop.has(mid)) || ((c.type === 'eave' || c.type === 'rafter-side') && c.members.some((mid) => tr.shortCols.has(mid))));

@@ -145,7 +145,11 @@ export function computeFabrication(project: Project, d: DerivedModel): Fabricati
     const first = p.index === 1, last = p.t1 >= axialExtent(m).tMax - 0.01;
     const holes = memberHoles(m, d).filter((h) => h.t >= p.t0 - 0.01 && h.t <= p.t1 + 0.01).map((h) => ({ ...h, t: h.t - p.t0 }));
     const cutStart = first ? cutAngle(m, 'start') : 0, cutEnd = last ? cutAngle(m, 'end') : 0;
-    const sig = [m.kind, p.profile, p.material, r1(p.length), cutStart, cutEnd, holes.map((h) => `${h.face}${r1(h.t)}/${r1(h.c)}/${r1(h.c2 ?? 0)}/${h.d}`).join(';')].join('|');
+    // חתימה: חורים באגף/ווב — מיקום לאורך ורוחב בלבד (c2 = צד ראש הבורג, לא משנה ייצור); חלק הפוך קצה-לקצה זהה
+    const hs = (rev: boolean) => holes.map((h) => h.face === 'section' ? `${h.face}${r1(h.t)}/${r1(h.c)}/${r1(h.c2 ?? 0)}/${h.d}` : `${h.face}${r1(rev ? p.length - h.t : h.t)}/${r1(h.c)}/${h.d}`).sort().join(';');
+    const fwd = [m.kind, p.profile, p.material, r1(p.length), cutStart, cutEnd, hs(false)].join('|');
+    const rev = holes.some((h) => h.face === 'section') ? fwd : [m.kind, p.profile, p.material, r1(p.length), cutEnd, cutStart, hs(true)].join('|');
+    const sig = rev < fwd ? rev : fwd;
     parts.push({
       ...p, mark: '', provisional: false, kind: m.kind, desc: m.partDesc ?? `${m.profile}`,
       weight: (massPerMeter(pr, getMaterial(p.material).density) * p.length) / 1000,
@@ -180,7 +184,9 @@ export function computeFabrication(project: Project, d: DerivedModel): Fabricati
     if (!m || !ps.length) return null;
     if (ps.length === 1) return ps[0].id;
     const t = dot(sub(pt, m.start), localFrame(m).ex);
-    return (ps.find((x) => t >= x.t0 - 1 && t <= x.t1 + 1) ?? ps[0]).id;
+    // בתוך תחום חלק; אחרת (פלטת המשך בעובי התפר) — החלק הקרוב ביותר
+    const dist = (x: MarkedPart) => (t < x.t0 ? x.t0 - t : t > x.t1 ? t - x.t1 : 0);
+    return [...ps].sort((a, b) => dist(a) - dist(b))[0].id;
   };
   for (const c of d.connections) for (const w of c.welds) {
     if (w.location !== 'shop') continue;

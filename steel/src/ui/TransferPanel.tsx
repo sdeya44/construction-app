@@ -45,6 +45,13 @@ function TransferRow({ t, onChange, onRemove }: { t: TransferDef; onChange: (pat
           {SEATS.map((s) => <option key={s} value={s}>{s} · {SEAT_HE[s]}</option>)}
         </select></div>
       <div className="hint">{SEAT_HINT[t.seat]}</div>
+      {span * 1000 > p.settings.stockLength - 30 && <>
+        <div className="field"><label>חלוקה (ארוך מ-{(p.settings.stockLength / 1000).toFixed(1)} מ')</label>
+          <select className="inp" data-testid={`tb-splice-${t.id}`} value={t.splice ?? 'auto'} onChange={(e) => onChange({ splice: e.target.value as 'auto' | 'none' })}>
+            <option value="auto">אוטומטית — חיבורי המשך מוברגים מחוץ למושבים</option>
+            <option value="none">ללא — מוט אחד (הזמנה מיוחדת / הובלה ארוכה)</option>
+          </select></div>
+      </>}
     </div>
   );
 }

@@ -42,9 +42,27 @@ export function memberSolid(m: Member): Solid {
     return t === null ? q : add(q, scale(f.ex, t));
   };
 
-  const rings = [prof.outline.outer, ...prof.outline.holes];
-  const S = rings.map((r) => r.map((p) => place(p, m.start, startPlane)));
-  const E = rings.map((r) => r.map((p) => place(p, m.end, endPlane)));
+  // מקשח עם קיטום פינות: טבעת משושה — הקודקודים בצד הקיטום מוזזים לאורך הציר ב-c בכל קצה
+  const snip = m.snip && prof.family === 'PL' && m.snip.c > 0 ? m.snip : null;
+  let outer = prof.outline.outer;
+  let shift: number[] = outer.map(() => 0);
+  if (snip) {
+    const b = prof.dims.b, t = prof.dims.t, c = Math.min(snip.c, b / 2, f.length / 2 - 1), sd = snip.side;
+    const raw: [number, number, number][] = [[-b / 2, -t / 2, 0], [b / 2, -t / 2, 0], [b / 2, t / 2, 0], [-b / 2, t / 2, 0]];
+    const out: [number, number, number][] = [];
+    raw.forEach((q, i) => {
+      if (Math.sign(q[0]) !== sd) { out.push(q); return; }
+      // הנקודה הנוספת על הצלע האופקית (v קבוע): לפני הקודקוד אם הצלע הקודמת אופקית, אחרת אחריו
+      const prev = raw[(i + 3) % 4];
+      const ins: [number, number, number] = [q[0] - sd * c, q[1], 0];
+      if (Math.abs(prev[1] - q[1]) < 1e-9) out.push(ins, [q[0], q[1], 1]); else out.push([q[0], q[1], 1], ins);
+    });
+    outer = out.map(([u, v]) => ({ u, v }));
+    shift = out.map((q) => q[2] * c);
+  }
+  const rings = [outer, ...prof.outline.holes];
+  const S = rings.map((r, ri) => r.map((p, i) => { const q = place(p, m.start, startPlane); return ri === 0 && shift[i] ? add(q, scale(f.ex, shift[i])) : q; }));
+  const E = rings.map((r, ri) => r.map((p, i) => { const q = place(p, m.end, endPlane); return ri === 0 && shift[i] ? add(q, scale(f.ex, -shift[i])) : q; }));
 
   const tris: number[] = [];
   const pushTri = (a: Vec3, b: Vec3, c: Vec3) => tris.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
@@ -58,9 +76,17 @@ export function memberSolid(m: Member): Solid {
     }
   });
   // מכסים
-  const contour = prof.outline.outer.map((p) => new Vector2(p.u, p.v));
+  const contour = outer.map((p) => new Vector2(p.u, p.v));
   const holes = prof.outline.holes.map((h) => h.map((p) => new Vector2(p.u, p.v)));
-  const faces = ShapeUtils.triangulateShape(contour, holes);
+  let faces = ShapeUtils.triangulateShape(contour, holes);
+  if (snip) {
+    // שני מישורים בכל קצה: פאת הקצה (קודקודים לא מוזזים) ופאת הקיטום (רצף: נקודה נוספת, מוזזים, נקודה נוספת)
+    const n6 = outer.length, fan = (ids: number[]) => ids.slice(1, -1).map((_, k) => [ids[0], ids[k + 1], ids[k + 2]]);
+    const st = shift.findIndex((x, i) => x > 0 && !(shift[(i - 1 + n6) % n6] > 0));
+    const cham = [(st - 1 + n6) % n6, st, (st + 1) % n6, (st + 2) % n6];
+    const endF = [(st + 2) % n6, (st + 3) % n6, (st + 4) % n6, (st + 5) % n6];
+    faces = [...fan(endF), ...fan(cham)];
+  }
   const flat = (arr: Vec3[][]) => arr.flat();
   const sFlat = flat(S), eFlat = flat(E);
   for (const [a, b, c] of faces) {
@@ -79,6 +105,10 @@ export function memberSolid(m: Member): Solid {
       if (isSharp(r, i)) seg(S[ri][i], E[ri][i]);
     }
   });
+  if (snip) { // קו המפגש בין פאת הקצה לפאת הקיטום
+    const ins = outer.map((_, i) => i).filter((i) => !shift[i] && (shift[(i + 1) % outer.length] || shift[(i - 1 + outer.length) % outer.length]));
+    if (ins.length === 2) { seg(S[0][ins[0]], S[0][ins[1]]); seg(E[0][ins[0]], E[0][ins[1]]); }
+  }
   return { tris, edges, startRing: S[0], endRing: E[0], du, dv };
 }
 

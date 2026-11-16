@@ -45,22 +45,27 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
       for (const s of sides) {
         const key = `${jn.line.id}.${pl.id}.${s < 0 ? 'L' : 'R'}`;
         if (kb.exclude.includes(key)) continue;
+        // הגדרה לכל צד בנפרד (מפתחים שונים — אורכים שונים): דריסה של ההגדרות הכלליות
+        const ov = kb.sides?.[key];
+        if (ov?.on === false) continue;
+        const kq = { ...kb, ...(ov ?? {}) };
+        const profK = ov?.profile ? tryProfile(ov.profile) ?? prof : prof;
         // נקודת החיבור לקורה: לפי זווית מהאופק (ברירת מחדל 45°) או מרחק אופקי קבוע
-        let xR = jn.line.x + s * kb.reach;
-        if ((kb.mode ?? 'angle') === 'angle') {
+        let xR = jn.line.x + s * kq.reach;
+        if ((kq.mode ?? 'angle') === 'angle') {
           const sl0 = (pl.b.z - pl.a.z) / (pl.b.x - pl.a.x);
           const hv0 = rp.props.h * Math.sqrt(1 + sl0 * sl0);
           const xF = jn.line.x + s * cp.props.h / 2;
           const und0 = (x: number) => (raf.anchor === 'top' ? zAt(pl, x) : zAt(pl, x) + hv0 / 2) - hv0;
-          const zC0 = und0(xF) - kb.drop;
-          const tA = Math.tan((Math.max(15, Math.min(75, kb.angle ?? 45)) * Math.PI) / 180);
+          const zC0 = und0(xF) - kq.drop;
+          const tA = Math.tan((Math.max(15, Math.min(75, kq.angle ?? 45)) * Math.PI) / 180);
           // zC0 + tA·|x−xF| = und0(x) ⇒ פתרון ליניארי לאורך הצד s
           const slopeS = sl0 * s; // שינוי גובה תחתית הקורה לכל מ"מ בכיוון s
           const dx = (und0(xF) - zC0) / (tA - slopeS);
           if (dx > 0) xR = xF + s * dx;
         }
         // הקורה חייבת להמשיך מעבר לנקודת החיבור + חצי פלטה
-        if (xR - kb.plateL / 2 < lo - 1 || xR + kb.plateL / 2 > hi + 1) continue;
+        if (xR - kq.plateL / 2 < lo - 1 || xR + kq.plateL / 2 > hi + 1) continue;
         const sl = (pl.b.z - pl.a.z) / (pl.b.x - pl.a.x);
         const hv = rp.props.h * Math.sqrt(1 + sl * sl);
         const tosAt = (x: number) => (raf.anchor === 'top' ? zAt(pl, x) : zAt(pl, x) + hv / 2);
@@ -68,7 +73,7 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
         const underFace = tosAt(xFace) - hv;
         // עמוד מקוצר (קורה נושאת על ראש העמוד): נקודת החיבור יורדת מתחת לפלטת הראש
         const colTop = Math.max(col.start.z, col.end.z);
-        const zC = colTop < underFace - 50 ? Math.min(underFace - kb.drop, colTop - 160) : underFace - kb.drop;
+        const zC = colTop < underFace - 50 ? Math.min(underFace - kq.drop, colTop - 160) : underFace - kq.drop;
         if (zC < col.start.z + 500) { out.issues.push({ code: 'KNEE_LOW', severity: 'warning', message: `אלכסון ${key} מסגרת ${fi}: נקודת החיבור לעמוד נמוכה מדי` }); continue; }
         // מישורי המארחים: אגף העמוד (נורמל לכיוון הקורה) ותחתית הקורה (נורמל כלפי מטה)
         const exr = norm(v3(1, 0, sl));
@@ -81,28 +86,28 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
         const dir = norm(sub(R0, C0));
         const id = `C.KB.${f.id}.${key}`;
         const bid = `KB.${f.id}.${key}`;
-        if ((kb.detail ?? 'fin') !== 'flange') {
+        if ((kq.detail ?? 'fin') !== 'flange') {
           // פרט הלקוח: פח מרותך לעמוד/לקורה במישור המסגרת, לשונית בחריץ ה-RHS, 2 ברגים בחפיפה
-          const common = { cid: id, desc: 'אלכסון', memberId: bid, prof, profile: kb.profile, finT: kb.plateT, tongueT: kb.plateT, bolt: kb.bolt, bolts: kb.boltsPerEnd ?? 2, weldSize: kb.weldSize, mat, pn: Y, side: 1 as const };
+          const common = { cid: id, desc: 'אלכסון', memberId: bid, prof: profK, profile: kq.profile, finT: kq.plateT, tongueT: kq.plateT, bolt: kq.bolt, bolts: kq.boltsPerEnd ?? 2, weldSize: kq.weldSize, mat, pn: Y, side: 1 as const };
           const jc = finJoint({ ...common, tag: 'C', hostId: col.id, P: lineHitPlane(C0, dir, colFace), n: colFace.normal, d: dir });
           const jr = finJoint({ ...common, tag: 'R', hostId: raf.id, P: lineHitPlane(C0, dir, rafUnder), n: rafUnder.normal, d: scale(dir, -1) });
           if (dot(sub(jr.start, jc.start), dir) < 300) { out.issues.push({ code: 'KNEE_SHORT', severity: 'warning', message: `אלכסון ${key} מסגרת ${fi}: קצר מדי לפרט הזיז` }); continue; }
           out.members.push({
-            id: bid, kind: 'brace', label: `אלכסון עמוד-קורה ציר ${jn.line.label} מסגרת ${fi}`, start: jc.start, end: jr.start, profile: kb.profile, material: mat,
-            rollDeg: 0, mirror: false, anchor: 'center', refUp: Y, source: 'generated', manualPlacement: false, connId: id, partDesc: `אלכסון ${kb.profile}`,
+            id: bid, kind: 'brace', label: `אלכסון עמוד-קורה ציר ${jn.line.label} מסגרת ${fi}`, start: jc.start, end: jr.start, profile: kq.profile, material: mat,
+            rollDeg: 0, mirror: false, anchor: 'center', refUp: Y, source: 'generated', manualPlacement: false, connId: id, partDesc: `אלכסון ${kq.profile}`,
           }, ...jc.members, ...jr.members);
           out.issues.push(...jc.issues, ...jr.issues);
           out.connections.push({ id, type: 'knee', label: `אלכסון עמוד-קורה ציר ${jn.line.label} (${s < 0 ? 'שמאל' : 'ימין'}) מסגרת ${fi}`, members: [col.id, raf.id], parts: [bid, ...jc.parts, ...jr.parts], bolts: [...jc.bolts, ...jr.bolts], welds: [...jc.welds, ...jr.welds], status: 'not-verified', fixity: 'pinned', overridden: false });
           continue;
         }
-        const T2 = kb.plateT;
+        const T2 = kq.plateT;
         const offPlane = (pl0: Plane, k: number): Plane => ({ point: add(pl0.point, scale(pl0.normal, k)), normal: pl0.normal });
         const cutC = offPlane(colFace, T2), cutR = offPlane(rafUnder, T2);
         const A = lineHitPlane(C0, dir, cutC), B = lineHitPlane(C0, dir, cutR);
         out.members.push({
-          id: bid, kind: 'brace', label: `אלכסון עמוד-קורה ציר ${jn.line.label} מסגרת ${fi}`, start: A, end: B, profile: kb.profile, material: mat,
+          id: bid, kind: 'brace', label: `אלכסון עמוד-קורה ציר ${jn.line.label} מסגרת ${fi}`, start: A, end: B, profile: kq.profile, material: mat,
           rollDeg: 0, mirror: false, anchor: 'center', refUp: Y, source: 'generated', manualPlacement: false, connId: id,
-          startCut: { point: A, normal: scale(colFace.normal, -1) }, endCut: { point: B, normal: scale(rafUnder.normal, -1) }, partDesc: `אלכסון ${kb.profile}`,
+          startCut: { point: A, normal: scale(colFace.normal, -1) }, endCut: { point: B, normal: scale(rafUnder.normal, -1) }, partDesc: `אלכסון ${kq.profile}`,
         });
         const bolts: BoltInfo[] = [], welds: WeldInfo[] = [], parts: string[] = [bid];
         // שני קצוות: [שם, מישור מארח, נקודת ציר על המארח, כיוון "אורך" הפלטה על המארח, מארח]
@@ -117,29 +122,29 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
           const endp = `${id}.${k}`;
           const hp = getProfile(hostM.profile);
           const tfh = hp.dims.tf ?? hp.dims.t ?? 10;
-          for (const [pid, off, desc] of [[endp, kb.plateT / 2, 'פלטת קצה לאלכסון']] as const) {
+          for (const [pid, off, desc] of [[endp, kq.plateT / 2, 'פלטת קצה לאלכסון']] as const) {
             const c = add(P, scale(n, off));
             out.members.push({
-              id: pid, kind: 'plate', label: `${desc} PL${kb.plateT}×${kb.plateW}×${kb.plateL}`, start: sub(c, scale(lDir, kb.plateL / 2)), end: add(c, scale(lDir, kb.plateL / 2)),
-              profile: `PL${kb.plateW}x${kb.plateT}`, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: n,
-              source: 'generated', manualPlacement: false, connId: id, partDesc: `${desc} PL${kb.plateT}×${kb.plateW}×${kb.plateL}`,
+              id: pid, kind: 'plate', label: `${desc} PL${kq.plateT}×${kq.plateW}×${kq.plateL}`, start: sub(c, scale(lDir, kq.plateL / 2)), end: add(c, scale(lDir, kq.plateL / 2)),
+              profile: `PL${kq.plateW}x${kq.plateT}`, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: n,
+              source: 'generated', manualPlacement: false, connId: id, partDesc: `${desc} PL${kq.plateT}×${kq.plateW}×${kq.plateL}`,
             });
             parts.push(pid);
           }
-          welds.push({ id: `${id}.W${k}`, connId: id, type: 'fillet', a: kb.weldSize, length: 4 * prof.props.b, location: 'shop', between: [bid, endp], from: P, to: P });
+          welds.push({ id: `${id}.W${k}`, connId: id, type: 'fillet', a: kq.weldSize, length: 4 * profK.props.b, location: 'shop', between: [bid, endp], from: P, to: P });
           // ברגים: 2 עמודות (wDir) × 2 שורות (lDir), מחוץ להיטל האלכסון על הפלטה
           const sinA = Math.abs(dot(dir, n)) || 1;
-          const footL = prof.props.h / sinA / 2 + nutR; // חצי אורך היטל האלכסון + אום
-          if (kb.pitch / 2 < footL) out.issues.push({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `אלכסון ${key} מסגרת ${fi}: מרווח ברגים ${kb.pitch} קטן מהיטל האלכסון — הגדל מרווח ואורך פלטה` });
+          const footL = profK.props.h / sinA / 2 + nutR; // חצי אורך היטל האלכסון + אום
+          if (kq.pitch / 2 < footL) out.issues.push({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `אלכסון ${key} מסגרת ${fi}: מרווח ברגים ${kq.pitch} קטן מהיטל האלכסון — הגדל מרווח ואורך פלטה` });
           // מרכז הברגים: נקודת הציר על הפלטה מוזזת לאורך lDir כך שההיטל ממורכז
-          for (const [ci, gy] of [[1, -kb.gauge / 2], [2, kb.gauge / 2]] as const) for (const [ri, px] of [[1, -kb.pitch / 2], [2, kb.pitch / 2]] as const) {
+          for (const [ci, gy] of [[1, -kq.gauge / 2], [2, kq.gauge / 2]] as const) for (const [ri, px] of [[1, -kq.pitch / 2], [2, kq.pitch / 2]] as const) {
             const head = add(add(add(P, scale(n, T2)), scale(wDir, gy)), scale(lDir, px));
-            bolts.push(makeBolt(`${id}.B${k}${ci}${ri}`, id, head, scale(n, -1), kb.bolt, kb.plateT + tfh, 'site', [endp, hostM.id], lDir, out.members));
+            bolts.push(makeBolt(`${id}.B${k}${ci}${ri}`, id, head, scale(n, -1), kq.bolt, kq.plateT + tfh, 'site', [endp, hostM.id], lDir, out.members));
           }
           const twh = hp.dims.tw ?? 8;
-          if (kb.gauge / 2 - nutR < twh / 2 + 1) out.issues.push({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `אלכסון ${key} מסגרת ${fi}: אום בתוך ${hostM.id} קרוב לווב — הגדל מרווח לרוחב` });
-          if (kb.plateW > hp.props.b + 0.5) out.issues.push({ code: 'PLATE_WIDE', severity: 'info', elementId: id, message: `אלכסון ${key} מסגרת ${fi}: הפלטה רחבה מאגף ${hostM.id}` });
-          const e1 = kb.plateL / 2 - kb.pitch / 2, e2 = kb.plateW / 2 - kb.gauge / 2;
+          if (kq.gauge / 2 - nutR < twh / 2 + 1) out.issues.push({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `אלכסון ${key} מסגרת ${fi}: אום בתוך ${hostM.id} קרוב לווב — הגדל מרווח לרוחב` });
+          if (kq.plateW > hp.props.b + 0.5) out.issues.push({ code: 'PLATE_WIDE', severity: 'info', elementId: id, message: `אלכסון ${key} מסגרת ${fi}: הפלטה רחבה מאגף ${hostM.id}` });
+          const e1 = kq.plateL / 2 - kq.pitch / 2, e2 = kq.plateW / 2 - kq.gauge / 2;
           if (Math.min(e1, e2) < 1.2 * d0) out.issues.push({ code: 'BOLT_EDGE', severity: 'warning', elementId: id, message: `אלכסון ${key} מסגרת ${fi}: מרחק שפה ${Math.min(e1, e2)} < 1.2·d0` });
         }
         parts.push(...bolts.map((b) => b.id));

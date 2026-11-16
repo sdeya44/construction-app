@@ -71,7 +71,7 @@ export function effectiveSplices(project: Project, members: Member[], supports: 
  * חיבור המשך לקורת I (פרט הלקוח "חיבור עקרוני הארכה"): שתי פלטות קצה PL12 מרותכות לקצוות (מסגריה),
  * מוגבהות מעל ומתחת לאגפים, מוברגות זו לזו בשטח M16: שורה מחוץ לכל אגף ושתי שורות בין האגפים, 2 עמודות.
  */
-export function buildBeamSplices(project: Project, members: Member[], splices: Record<string, number[]>, auto: Set<string>): { members: Member[]; connections: Connection[]; issues: ValidationIssue[] } {
+export function buildBeamSplices(project: Project, members: Member[], splices: Record<string, number[]>, auto: Set<string>, flushTop: Set<string> = new Set()): { members: Member[]; connections: Connection[]; issues: ValidationIssue[] } {
   const out = { members: [] as Member[], connections: [] as Connection[], issues: [] as ValidationIssue[] };
   const T = BEAM_SPLICE_T, ext = 60;
   const bolt = { d: 16, grade: '8.8', standard: 'ISO 4017', clearance: 2 };
@@ -87,7 +87,9 @@ export function buildBeamSplices(project: Project, members: Member[], splices: R
     const f = localFrame(m);
     const h = pr.props.h, b = pr.props.b, tf = pr.dims.tf ?? 10, tw = pr.dims.tw ?? 7;
     const vc = m.anchor === 'top' ? -h / 2 : 0; // מרכז החתך ביחס לקו
-    const Hp = h + 2 * ext, W = b;
+    // flushTop (קורה נושאת): פלטה סמויה מלמעלה — שטוחה עם האגף העליון (מעליה מושבים/קורות גג), בולטת רק למטה
+    const flush = flushTop.has(m.id);
+    const Hp = flush ? h + ext : h + 2 * ext, W = b, pc = flush ? -ext / 2 : 0;
     const eS = Math.max(25, Math.ceil((1.2 * d0) / 5) * 5);
     const g = Math.max(W - 2 * eS, 0);
     const vOut = h / 2 + ext - eE, vIn = h / 2 - tf - nutR - 8;
@@ -99,13 +101,13 @@ export function buildBeamSplices(project: Project, members: Member[], splices: R
       const plates: string[] = [];
       for (const [pid, dt] of [[`${id}.PL1`, -T / 2], [`${id}.PL2`, T / 2]] as const) {
         out.members.push({
-          id: pid, kind: 'plate', label: `פלטת המשך PL${T}×${W}×${Hp}`, start: at(dt, -Hp / 2), end: at(dt, Hp / 2), profile: `PL${W}x${T}`, material: m.material,
+          id: pid, kind: 'plate', label: `פלטת המשך PL${T}×${W}×${Hp}`, start: at(dt, pc - Hp / 2), end: at(dt, pc + Hp / 2), profile: `PL${W}x${T}`, material: m.material,
           rollDeg: 0, mirror: false, anchor: 'center', refUp: f.ex, source: 'generated', manualPlacement: false, connId: id, partDesc: `פלטת המשך PL${T}×${W}×${Hp}`,
         });
         plates.push(pid);
       }
       // אופציה: פלטות חיזוק משולשות במישור הווב, מעל ומתחת לכל פלטה (מסגריה)
-      if (project.settings.spliceStiffeners) {
+      if (project.settings.spliceStiffeners && !flush) {
         const Ls = 2 * ext, ts = 8;
         for (const [sg, pid] of [[-1, plates[0]], [1, plates[1]]] as const) for (const up of [1, -1]) {
           const sid = `${pid}.ST${up > 0 ? 'T' : 'B'}`;
@@ -121,13 +123,15 @@ export function buildBeamSplices(project: Project, members: Member[], splices: R
         }
       }
       const bolts: BoltInfo[] = [];
-      for (const dv of [vOut, vIn, -vIn, -vOut]) for (const du of [-g / 2, g / 2]) {
+      for (const dv of flush ? [vIn, -vIn, -vOut] : [vOut, vIn, -vIn, -vOut]) for (const du of [-g / 2, g / 2]) {
         bolts.push(makeBolt(`${id}.B${bolts.length + 1}`, id, at(-T, dv, du), f.ex, bolt, 2 * T, 'site', plates.slice(0, 2), f.v, out.members));
       }
       if (g / 2 - tw / 2 < nutR) out.issues.push({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `${m.label}: חיבור המשך — אום קרוב לווב (אגף צר)` });
       if (vOut - vIn < 2.2 * d0) out.issues.push({ code: 'BOLT_EDGE', severity: 'warning', elementId: id, message: `${m.label}: חיבור המשך — מרווח שורות קטן` });
       const per = 2 * b + 2 * (h - 2 * tf) + 2 * (b - tw);
-      const welds: WeldInfo[] = plates.map((pid, i) => ({ id: `${id}.W${i + 1}`, connId: id, type: 'fillet', a: 6, length: Math.round(per), location: 'shop', between: [m.id, pid], from: at(0, 0), to: at(0, 0) }));
+      // מיקום הריתוך = מרכז הפלטה (כך כל פלטה משויכת לחלק שאליו היא מרותכת — לפני/אחרי התפר)
+      const cOf = (pid: string) => { const pm = out.members.find((x) => x.id === pid)!; return v3((pm.start.x + pm.end.x) / 2, (pm.start.y + pm.end.y) / 2, (pm.start.z + pm.end.z) / 2); };
+      const welds: WeldInfo[] = plates.map((pid, i) => ({ id: `${id}.W${i + 1}`, connId: id, type: 'fillet', a: 6, length: Math.round(per), location: 'shop', between: [m.id, pid], from: cOf(pid), to: cOf(pid) }));
       out.connections.push({
         id, type: 'beam-splice', label: `חיבור המשך ${m.label} (${(t / 1000).toFixed(2)} מ')${auto.has(m.id) ? ' — אוטומטי' : ''}`,
         members: [m.id], parts: [...plates, ...bolts.map((x) => x.id)], bolts, welds, status: 'not-verified', fixity: 'rigid', overridden: false,

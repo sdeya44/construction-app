@@ -46,7 +46,8 @@ describe('שרטוטים', () => {
     expect(t('frame')).toBeLessThan(p.building.frames.length);
     // חלקים: פרופילים — גיליון לכל סימון; פלטות — בגיליונות פלטות משולבים, כל סימון פעם אחת
     const plateMarks = new Set(fab.parts.filter((x) => d.byId.get(x.memberId)?.kind === 'plate').map((x) => x.mark));
-    expect(t('part')).toBe(new Set(fab.parts.map((x) => x.mark)).size - plateMarks.size);
+    const anchorMarks = new Set(fab.parts.filter((x) => d.byId.get(x.memberId)?.kind === 'anchor').map((x) => x.mark));
+    expect(t('part')).toBe(new Set(fab.parts.map((x) => x.mark)).size - plateMarks.size - anchorMarks.size);
     expect(cat.filter((c) => c.type === 'plates').flatMap((c) => c.refs ?? []).sort()).toEqual([...plateMarks].sort());
     expect(t('assembly')).toBe(new Set(fab.assemblies.map((x) => x.mark)).size);
     expect(new Set(cat.map((c) => c.id)).size).toBe(cat.length);
@@ -133,5 +134,26 @@ print(json.dumps({'n':len(ents),'layers':sorted(l.dxf.name for l in doc.layers),
     expect(r.layers).toEqual(expect.arrayContaining(['OUTLINE', 'DIM', 'AXIS', 'TITLE']));
     expect(r.heb).toBe(true);
     expect(r.hasdim).toBe(true);
+  });
+});
+
+describe('מספור וחלקים', () => {
+  it('MK-01: קושרות גג זהות (גם הפוכות קצה-לקצה) מקבלות סימון אחד', async () => {
+    const { numberParts } = await import('../src/commands/commands');
+    let p = newProject('x', defaultBuilding()); p = numberParts().run(p);
+    const d = generate(p); const fab = computeFabrication(p, d);
+    const roof = new Set(fab.parts.filter((x) => x.memberId.startsWith('BR.R')).map((x) => x.mark));
+    const wall = new Set(fab.parts.filter((x) => x.memberId.startsWith('BR.W')).map((x) => x.mark));
+    expect(roof.size).toBe(1);
+    expect(wall.size).toBe(1);
+  });
+  it('ST-01: מקשח TB עם קיטום פינות — מתאר משושה בגיליון הפלטה', async () => {
+    const b = defaultBuilding(); const f = [...b.frames].sort((x, y) => x.y - y.y);
+    b.transfers = [{ id: 'T1', lineId: 'L', from: f[1].id, to: f[3].id, removed: [f[2].id], profile: 'IPE600', support: 'A1', seat: 'B1' }];
+    const d = generate(newProject('x', b));
+    const st = d.members.find((m) => m.id.endsWith('.STR'))!;
+    expect(st.snip?.c).toBeGreaterThan(20);
+    const { memberSolid } = await import('../src/geometry/solid');
+    expect(memberSolid(st).startRing.length).toBe(6);
   });
 });

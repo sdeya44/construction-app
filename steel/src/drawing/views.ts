@@ -40,7 +40,9 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
   // חלקי פרופיל — גיליון לכל חלק; פלטות — כמה פלטות בגיליון (A4: 6, A3: 8), ממוינות לפי גודל
   const isPlate = (mk: string) => d.byId.get(fab.parts.find((x) => x.mark === mk)?.memberId ?? '')?.kind === 'plate';
   const parts = [...new Set(fab.parts.map((x) => x.mark))].sort(num);
-  for (const m of parts.filter((x) => !isPlate(x))) out.push({ id: `D-PART-${m}`, type: 'part', number: `P-${m}`, title: `שרטוט חלק ${m}`, ref: m });
+  // מוטות עיגון — ללא גיליון חלק (מופיעים ברשימת החומרים ובתוכנית ברגי העיגון)
+  const isAnchor = (mk: string) => d.byId.get(fab.parts.find((x) => x.mark === mk)?.memberId ?? '')?.kind === 'anchor';
+  for (const m of parts.filter((x) => !isPlate(x) && !isAnchor(x))) out.push({ id: `D-PART-${m}`, type: 'part', number: `P-${m}`, title: `שרטוט חלק ${m}`, ref: m });
   const plates = parts.filter(isPlate);
   const per = (p.settings.paper ?? 'A4') === 'A4' ? 6 : 8;
   for (let i = 0; i * per < plates.length; i++) {
@@ -780,11 +782,12 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       // תלת־ממד מוצלל של החיבור (חלקי החיבור + קטע מהאלמנטים הראשיים סביבו)
       {
         const near = (m: Member) => { const s0 = cachedSolidPure(m); return [...s0.startRing, ...s0.endRing].some((q) => Math.hypot(q.x - C.x, q.y - C.y, q.z - C.z) < 2500); };
-        const isoMs = ms.filter((m) => m.kind !== 'bolt' || m.id.endsWith('.S')).filter(near);
+        // האלמנטים הראשיים תמיד (מקוצרים סביב החיבור); ברגים מלאים — ראש, גוף ואום (כך החור "ממולא" ונראה נכון)
+        const isoMs = ms.filter((m) => c.members.includes(m.id) || near(m));
         const clipLoc = (q: Vec3) => ({ t: Math.max(Math.abs(q.x - C.x), Math.abs(q.y - C.y), Math.abs(q.z - C.z)), u: 0, v: 0 });
         void clipLoc;
         renderIso(sh, isoMs.map((m) => (c.members.includes(m.id) ? trimNear(m, C, R * 1.6) : m)), isoMs.map((m) => fab.parts.find((x) => x.memberId === m.id)?.mark ?? ''),
-          { x0: area.x1 - 125, x1: area.x1 - 4, y0: area.y0 + 4, y1: y - 16 }, null, () => ({ t: 0, u: 0, v: 0 }), 'תלת־ממד (ללא קנ"מ)');
+          { x0: area.x1 - 125, x1: area.x1 - 4, y0: area.y0 + 4, y1: y - 16 }, null, () => ({ t: 0, u: 0, v: 0 }), 'תלת־ממד (ללא קנ"מ)', [], isoRot(c, d, C), true);
       }
       T(planar ? 'מבט: בניצב למישור הפלטה.' : 'מבט: חתך במישור המסגרת (לאורך Y). חלקים חתוכים – ממולאים.');
       T('גיאומטריה בלבד — אין בדיקת חוזק לברגים, ריתוכים ופלטות.');
@@ -814,6 +817,27 @@ export function sheetHash(sh: Sheet): string {
 }
 
 /** קיטום אלמנט ראשי לקטע סביב נקודה (לתלת־ממד של פרט חיבור): קו ייחוס חדש בתחום ±r לאורך הציר. */
+/** צד צפייה לתלת־ממד של חיבור: הצופה בצד שבו נמצאות הפלטות ביחס לאלמנטים הראשיים */
+function isoRot(c: Connection, d: DerivedModel, C: Vec3): number {
+  const plates = c.parts.map((x) => d.byId.get(x)).filter((m): m is Member => !!m && (m.kind === 'plate' || m.kind === 'cleat'));
+  if (!plates.length) return 0;
+  const pc = plates.reduce((a, m) => ({ x: a.x + (m.start.x + m.end.x) / 2 / plates.length, y: a.y + (m.start.y + m.end.y) / 2 / plates.length }), { x: 0, y: 0 });
+  // מרכז האלמנטים הראשיים: הנקודה הקרובה ל-C על כל ציר
+  const mains = c.members.map((x) => d.byId.get(x)).filter((m): m is Member => !!m);
+  const near = mains.map((m) => { const f = localFrame(m); const t = Math.max(0, Math.min(f.length, dot(sub(C, m.start), f.ex))); return { x: m.start.x + f.ex.x * t, y: m.start.y + f.ex.y * t }; });
+  const mc = near.length ? near.reduce((a, q) => ({ x: a.x + q.x / near.length, y: a.y + q.y / near.length }), { x: 0, y: 0 }) : { x: C.x, y: C.y };
+  const v = { x: pc.x - mc.x, y: pc.y - mc.y };
+  if (Math.hypot(v.x, v.y) < 5) return 0;
+  // הצופה בברירת המחדל בכיוון (−1,−1); אחרי סיבוב k: R(−k)·(−1,−1)
+  let best = 0, bv = -Infinity;
+  for (let k = 0; k < 4; k++) {
+    const a = (-k * Math.PI) / 2, w = { x: -Math.cos(a) + Math.sin(a), y: -Math.sin(a) - Math.cos(a) };
+    const sc = w.x * v.x + w.y * v.y;
+    if (sc > bv + 1e-6) { bv = sc; best = k; }
+  }
+  return best;
+}
+
 function trimNear(m: Member, C: Vec3, r: number): Member {
   const f = localFrame(m);
   const t = dot(sub(C, m.start), f.ex);

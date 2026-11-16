@@ -145,10 +145,11 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
         res.members.push(cap); parts.push(cap.id);
         welds.push(weld(id, 1, c.id, cap.id, 2 * (cp.props.h + cb), v3(x, fy, zB - 20)));
         // מקשחי ווב ב-TB מעל העמוד (שני צדי הווב)
-        const rr = tbp.dims.r ?? 15, sw = (tb - tw) / 2 - rr - 3;
+        // מקשח צמוד לווב ולשני האגפים (לריתוך מלא), פינות פנימיות קטומות 45° מעבר לרדיוס השורש r
+        const rr = tbp.dims.r ?? 15, sw = Math.floor((tb - tw) / 2 - 5), cS = Math.ceil(rr + 5);
         for (const s2 of [1, -1]) {
-          const xc2 = x + s2 * (tw / 2 + rr + 1 + sw / 2);
-          const st = plate(`${id}.ST${s2 > 0 ? 'R' : 'L'}`, `מקשח ווב PL10`, v3(xc2, fy, zB + tf + rr + 1), v3(xc2, fy, zTop - tf - rr - 1), sw, 10, Y, 'center', id);
+          const xc2 = x + s2 * (tw / 2 + 0.5 + sw / 2);
+          const st: Member = { ...plate(`${id}.ST${s2 > 0 ? 'R' : 'L'}`, `מקשח ווב PL10×${sw}×${Math.round(h - 2 * tf - 1)}, קיטום ${cS}×45°`, v3(xc2, fy, zB + tf + 0.5), v3(xc2, fy, zTop - tf - 0.5), sw, 10, Y, 'center', id), snip: { side: (-s2) as -1 | 1, c: cS } };
           res.members.push(st); parts.push(st.id); welds.push(weld(id, 2 + (s2 > 0 ? 0 : 1), tbId, st.id, 2 * (h - 2 * tf), v3(x, fy, zB + h / 2)));
         }
         let k = 0;

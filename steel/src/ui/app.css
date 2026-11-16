@@ -548,3 +548,8 @@ select.inp { padding: 0 6px; }
 
 .quote-client { grid-column: 1 / -1; display: grid; gap: 4px; border-top: 1px dashed var(--line); padding-top: 8px; max-width: 520px; }
 .quote-client textarea { width: 100%; font: inherit; direction: rtl; }
+.mini-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+.mini-table th, .mini-table td { padding: 2px 3px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: middle; }
+.mini-table th { font-weight: 600; color: var(--muted, #667); }
+.mini-table td .inp, .mini-table td input:not([type=checkbox]) { width: 74px; min-width: 0; }
+.mini-table td.num { font-variant-numeric: tabular-nums; }
