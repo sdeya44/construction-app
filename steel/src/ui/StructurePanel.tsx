@@ -8,7 +8,7 @@ import { resolveBays, wallBays } from '../geometry/bracing';
 import { catalogNames } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
-import { LenField, NumField, ProfilePicker, TextField } from './fields';
+import { Adv, LenField, NumField, ProfilePicker, TextField } from './fields';
 import { Icon } from './icons';
 import { KneeEditor, SectionEditor } from './SectionEditor';
 import { BaysSchematic, GussetSchematic, PortalSchematic, RidgeSchematic } from './schematics';
@@ -196,10 +196,12 @@ function WallLines({ nb }: { nb: number }) {
       {ls.map((l) => (
         <BaysSchematic key={`s${l.id}`} count={nb} bays={resolveBays(cur.get(l.id) ?? [], nb)} label={`קיר ציר ${l.label} — חזית`} testId={`sch-wall-${l.id}`} onChange={(x) => setLine(l.id, x)} />
       ))}
+      <Adv id="wl" label="מתקדם — מפתחים בשדות">
       {ls.map((l, i) => (
         <div className="field" key={l.id}><label>ציר {l.label}{i === 0 ? ' (שמאל)' : i === ls.length - 1 ? ' (ימין)' : ' (פנימי)'}</label>
           <BayPicker testId={i === 0 ? 'br-wl' : i === ls.length - 1 ? 'br-wr' : `br-w-${l.id}`} bays={cur.get(l.id) ?? []} count={nb} onChange={(x) => setLine(l.id, x)} /></div>
       ))}
+      </Adv>
     </>
   );
 }
@@ -213,6 +215,7 @@ function PortalFields() {
       <PortalSchematic />
       <div className="field prof"><label>קורת אגד</label><ProfilePicker testId="pb-beam" value={p.beam} families={['RHS', 'SHS']} onCommit={(v) => set({ beam: v })} /></div>
       <div className="field prof"><label>אלכסונים</label><ProfilePicker testId="pb-brace" value={p.brace} families={['RHS', 'SHS', 'CHS']} onCommit={(v) => set({ brace: v })} /></div>
+      <Adv id="pb" label="מתקדם — מידות בשדות, פלטות וברגים">
       <div className="field"><label>מרווח מתחת לקורה הראשית</label><NumField testId="pb-gap" value={p.gap} suffix='מ"מ' onCommit={(v) => set({ gap: Math.max(0, v) })} /></div>
       <div className="field"><label>ירידה על העמוד</label><NumField testId="pb-drop" value={p.drop} suffix='מ"מ' onCommit={(v) => set({ drop: Math.max(200, v) })} /></div>
       <div className="field"><label>זווית אלכסון</label><NumField testId="pb-angle" value={p.angle} suffix="°" onCommit={(v) => set({ angle: Math.max(20, Math.min(70, v)) })} /></div>
@@ -223,6 +226,7 @@ function PortalFields() {
         <select className="inp" data-testid="pb-beam-bolts" value={p.beamBolts ?? 2} onChange={(e) => set({ beamBolts: Number(e.target.value) })}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}×M{p.bolt.d} — {n / 2} {n === 2 ? 'שורה' : 'שורות'} של 2 לרוחב</option>)}</select></div>
       <div className="field"><label>קורת אגד בשאר המפתחים</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="pb-cont" checked={p.continuous ?? true} onChange={(e) => set({ continuous: e.target.checked })} />{(p.continuous ?? true) ? 'כן — ללא אלכסונים' : 'לא'}</label></div>
       <div className="field"><label>קוטר בורג</label><NumField value={p.bolt.d} suffix="M" onCommit={(v) => set({ bolt: { ...p.bolt, d: Math.round(v) } })} /></div>
+      </Adv>
       <div className="hint">פרט חיבור (לכל הקצוות, פרט הלקוח): פח מרותך לעמוד/לקורה במסגריה; בקצה ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. קורת האגד מוסטת בעובי פח מציר העמודים; האלכסונים על ציר העמודים. בשאר המפתחים של הציר — קורת אגד בלבד, להעברת הכוחות האופקיים לאגד.</div>
     </>
   );
@@ -242,9 +246,11 @@ function RidgeReinfEditor() {
       </div>
       <RidgeSchematic />
       {rr.type === 'plate' && <>
+        <Adv id="rr" label="מתקדם — מידות בשדות">
         <div className="field"><label>עומק הגבהה מתחת לקורה</label><NumField testId="rr-depth" value={rr.depth} suffix='מ"מ' onCommit={(v) => set({ depth: v })} /></div>
         <div className="field"><label>אורך החיזוק מהרכס</label><NumField value={rr.length} suffix='מ"מ' onCommit={(v) => set({ length: v })} /></div>
         <div className="field"><label>עובי פלטת חיזוק</label><NumField value={rr.stiffT} suffix='מ"מ' onCommit={(v) => set({ stiffT: v })} /></div>
+        </Adv>
       </>}
       {rr.type === 'tie' && <>
         <div className="field prof"><label>חתך הפרופיל</label><ProfilePicker testId="rr-tie" value={rr.tieProfile} families={['IPE', 'UPN', 'HEA', 'RHS']} onCommit={(v) => set({ tieProfile: v })} /></div>
@@ -289,7 +295,9 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
           ? <div className="field prof"><label>חתך</label><ProfilePicker value={br.roof.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ roof: { ...br.roof, profile: v } })} /></div>
           : <RhsFields />}
         <BaysSchematic count={nb} bays={resolveBays(br.roof.bays, nb)} label="קושרות גג — תוכנית" testId="sch-roof-bays" onChange={(x) => set({ roof: { ...br.roof, bays: x } })} />
+        <Adv id="roofbays" label="מתקדם — מפתחים בשדות">
         <div className="field"><label>מפתחים</label><BayPicker testId="br-roof-bays" bays={br.roof.bays} count={nb} onChange={(x) => set({ roof: { ...br.roof, bays: x } })} /></div>
+        </Adv>
         <div className="hint">שיפוע ארוך מחולק אוטומטית לכמה פנלי X לאורך השיפוע, כך שאלכסון לא יעלה על אורך חומר הגלם.</div>
       </>}
       </>}
@@ -322,11 +330,13 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
       {(on('roof') || on('walls')) && (br.roof.enabled && (br.roof.type ?? 'x') === 'x' || br.walls.enabled && (br.walls.type ?? 'x') === 'x') && <>
         <div className="panel-title">חיבור קושרות X</div>
         <GussetSchematic />
+        <Adv id="brc" label="מתקדם — מידות בשדות">
         <div className="field"><label>קוטר בורג</label><NumField testId="brc-d" value={br.conn.bolt.d} suffix="M" onCommit={(v) => set({ conn: { ...br.conn, bolt: { ...br.conn.bolt, d: Math.round(v) } } })} /></div>
         <div className="field"><label>ברגים בכל קצה</label><NumField testId="brc-n" value={br.conn.boltsPerEnd} onCommit={(v) => set({ conn: { ...br.conn, boltsPerEnd: Math.max(1, Math.round(v)) } })} /></div>
         <div className="field"><label>מרווח ברגים</label><NumField value={br.conn.pitch} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, pitch: v } })} /></div>
         <div className="field"><label>מרחק קצה</label><NumField value={br.conn.endDist} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, endDist: v } })} /></div>
         <div className="field"><label>עובי פח חיבור</label><NumField value={br.conn.gussetT} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, gussetT: v } })} /></div>
+        </Adv>
         <div className="field"><label>בורג בהצטלבות</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="brc-cross" checked={br.conn.crossBolt} onChange={(e) => set({ conn: { ...br.conn, crossBolt: e.target.checked } })} />{br.conn.crossBolt ? 'כן' : 'לא'}</label></div>
       </>}
       {(on('roof') || on('walls') || on('ties')) && <div className="hint">קושרות X עובדות במתיחה בלבד. פח החיבור מרותך לווב הקורה/העמוד במסגריה, הזוויתן מוברג בשטח; בהצטלבות פח מילוי ובורג. שורת קשירה באמצע כל מפתח, צמודה לאגף התחתון של הפטות. בדיקת חוזק — אינה מבוצעת.</div>}

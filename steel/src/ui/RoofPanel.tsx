@@ -1,5 +1,5 @@
 import { proposeSplicesFor, setCleat, setPurlinSide, setPurlinSystem, setSection, type Command } from '../commands/commands';
-import { NumField } from './fields';
+import { Adv, NumField } from './fields';
 import { fromMm } from '../core/units';
 import type { Member, PurlinSideParams } from '../model/types';
 import { MATERIALS } from '../profiles/materials';
@@ -28,14 +28,15 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
       {prm.enabled && <>
         <div className="field prof"><label>חתך הפטה</label><ProfilePicker testId={tid('profile')} role="purlin" value={prm.profile} families={['C', 'Z', 'RHS', 'IPE', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>
         <PurlinSlopeSchematic side={side} items={items} mono={mono} />
-        <div className="field"><label>{mono ? 'מרחק ראשון מקצה ההתחלה' : 'מרחק ראשון מהרכס'}</label><LenField testId={tid('first')} mm={prm.first} unit={u} onCommit={(v) => set({ first: v })} /></div>
         <div className="field"><label>חלוקה</label>
           <select className="inp" data-testid={tid('mode')} value={prm.layout ?? 'fixed'} onChange={(e) => set({ layout: e.target.value as 'fixed' | 'even' })}>
             <option value="even">אוטומטית — מרווחים שווים</option><option value="fixed">מרווח קבוע, שארית במפתח האחרון</option>
           </select>
         </div>
-        <div className="field"><label>{(prm.layout ?? 'fixed') === 'even' ? 'מרווח מרבי' : 'מרווח רגיל'}</label><LenField testId={tid('spacing')} mm={prm.spacing} unit={u} onCommit={(v) => set({ spacing: v })} /></div>
         <SideIssues pkey={side} />
+        <Adv id="pside" label="מתקדם — מידות בשדות, אופן מדידה, פתיחת החתך">
+        <div className="field"><label>{mono ? 'מרחק ראשון מקצה ההתחלה' : 'מרחק ראשון מהרכס'}</label><LenField testId={tid('first')} mm={prm.first} unit={u} onCommit={(v) => set({ first: v })} /></div>
+        <div className="field"><label>{(prm.layout ?? 'fixed') === 'even' ? 'מרווח מרבי' : 'מרווח רגיל'}</label><LenField testId={tid('spacing')} mm={prm.spacing} unit={u} onCommit={(v) => set({ spacing: v })} /></div>
         <div className="field"><label title="מקצה קורת הגג עד הפנים החיצוניות של הפטה או התומך — הפטה יושבת כולה על הקורה">פטה אחרונה – מרווח מקצה הקורה</label><LenField testId={tid('edge')} mm={prm.edgeOffset} unit={u} onCommit={(v) => set({ edgeOffset: v })} /></div>
         <div className="field"><label>אופן מדידה</label>
           <select className="inp" value={prm.measure} data-testid={tid('measure')} onChange={(e) => set({ measure: e.target.value as PurlinSideParams['measure'] })}>
@@ -47,6 +48,7 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
             <option value="up">{OPENING.up}</option><option value="down">{OPENING.down}</option>
           </select>
         </div>
+        </Adv>
         {prm.measure === 'horizontal' && <div className="issue warning"><span className="ic">!</span>המרחקים נמדדים בהיטל אופקי ולא לאורך השיפוע.</div>}
         <table className="tbl" data-testid={tid('layout')}>
           <thead><tr><th>#</th><th>לאורך שיפוע</th><th>אופקי</th><th>מרווח</th></tr></thead>
@@ -73,6 +75,7 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
         </div>
         {prm.cleat.enabled && <>
           <CleatSchematic side={side} />
+          <Adv id="cleat" label="מתקדם — מידות התומך בשדות">
           <div className="field"><label>גובה</label>
             <div className="row" style={{ flexWrap: 'nowrap' }}>
               {prm.cleat.height === null
@@ -98,6 +101,7 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
               {[10, 12, 16, 20].map((x) => <option key={x} value={x}>M{x}</option>)}
             </select>
           </div>
+          </Adv>
           <div className="hint">מרותך לקורה במסגריה, מוברג לווב הפטה בשטח. הרגל הניצבת צמודה לווב (0 מ"מ), רגל הבסיס פונה הרחק מהאגף התחתון.</div>
         </>}
         {prm.manualPositions && (

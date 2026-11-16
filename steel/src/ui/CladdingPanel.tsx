@@ -1,10 +1,11 @@
-import { WallCladSchematic } from './schematics';
+import { OpeningsSchematic, WallCladSchematic } from './schematics';
+import { useState } from 'react';
 import { useMemo } from 'react';
 import { setBuilding } from '../commands/commands';
 import { claddingTakeoff, defaultCladding, WALL_HE } from '../geometry/cladding';
 import type { CladdingParams, OpeningDef, WallId } from '../model/types';
 import { store, useStore } from '../store';
-import { LenField, NumField, ProfilePicker, TextField } from './fields';
+import { Adv, LenField, NumField, ProfilePicker, TextField } from './fields';
 import { Icon } from './icons';
 
 export type CladSection = 'roof' | 'walls' | 'openings' | 'takeoff';
@@ -15,6 +16,7 @@ const m = (mm: number) => (mm / 1000).toFixed(2);
 export function CladdingPanel({ section }: { section?: CladSection } = {}) {
   const show = (k: CladSection) => !section || section === k;
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
+  const [opSel0, setOpSel] = useState<number | null>(null);
   // גובה ראש הקיר (לשרטוט): עמודי הקיר בפועל
   const eaveOf = (w: string) => { const cols = d.members.filter((m) => m.kind === 'column'); const xs = cols.map((c) => c.start.x); const pick = w === 'L' ? cols.filter((c) => c.start.x === Math.min(...xs)) : w === 'R' ? cols.filter((c) => c.start.x === Math.max(...xs)) : cols; return pick.length ? Math.max(...pick.map((c) => Math.max(c.start.z, c.end.z))) - p.building.baseElevation : 6000; };
   const unit = p.displayUnit;
@@ -31,6 +33,7 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
     );
   }
   const ops = cl.openings;
+  const opSel = opSel0 !== null && opSel0 < ops.length ? opSel0 : ops.length ? ops.length - 1 : null;
   const setOp = (i: number, patch: Partial<OpeningDef>) => set({ openings: ops.map((o, k) => (k === i ? { ...o, ...patch } : o)) });
   return (
     <div className="panel-body" data-testid="clad-panel">
@@ -61,6 +64,7 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
               <b>{WALL_HE[w]}</b>
               <WallCladSchematic n={n} bays={bays} bottom={pw.bottom ?? cl.walls.bottom} top={pw.top ?? null} eave={eaveOf(w)} testId={`sch-clad-${w}`} labelOf={lab}
                 onBays={(b) => setW({ bays: b })} onBottom={(v) => setW({ bottom: v })} onTop={(v) => setW({ top: v })} />
+              <Adv id={`clad-${w}`} label="מתקדם — בשדות">
               <div className="row" style={{ flexWrap: 'wrap', gap: 8, margin: '4px 0' }}>
                 <span className="hint">מפתחים מחופים:</span>
                 {bays.map((on, i) => <label key={i} className="row" title={`מפתח ${lab(i)}`}><input type="checkbox" checked={on} data-testid={`clad-bay-${w}-${i}`} onChange={(e) => setW({ bays: bays.map((x, k) => (k === i ? e.target.checked : x)) })} />{lab(i)}</label>)}
@@ -68,14 +72,17 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
               <div className="field"><label>תחתית החיפוי מעל ±0.00</label><LenField mm={pw.bottom ?? cl.walls.bottom} unit="mm" testId={`clad-bottom-${w}`} onCommit={(v) => setW({ bottom: v })} /></div>
               <div className="field"><label><input type="checkbox" checked={pw.top === undefined || pw.top === null} data-testid={`clad-totop-${w}`} onChange={(e) => setW({ top: e.target.checked ? null : 2500 })} /> עד הגג</label>
                 {pw.top !== undefined && pw.top !== null ? <LenField mm={pw.top} unit="mm" testId={`clad-top-${w}`} onCommit={(v) => setW({ top: v })} /> : <span className="hint">ראש החיפוי בקו הגג</span>}</div>
+              </Adv>
             </div>
           );
         })}
         <div className="hint">מפתח לא מחופה — ללא פטות קיר (ובקיר קצה גם ללא עמודי רוח). גובה עליון חלקי — פטה בראש החיפוי ופח עליון.</div>
+        <Adv id="clad-walls" label="מתקדם — סוג פנל, רוחב כיסוי, ברגים">
         <div className="field"><label>סוג פנל</label><TextField value={cl.walls.panel} onCommit={(v) => set({ walls: { ...cl.walls, panel: v } })} /></div>
         <div className="field"><label>רוחב כיסוי</label><LenField mm={cl.walls.cover} unit="mm" onCommit={(v) => set({ walls: { ...cl.walls, cover: v } })} /></div>
         <div className="field"><label>תחתית החיפוי (ברירת מחדל לכל הקירות)</label><LenField mm={cl.walls.bottom} unit="mm" onCommit={(v) => set({ walls: { ...cl.walls, bottom: v } })} /></div>
         <div className="field"><label>ברגים לקיר (למ"ר)</label><NumField value={cl.wallScrewsPerM2} onCommit={(v) => set({ wallScrewsPerM2: v })} /></div>
+        </Adv>
         <div className="panel-title">פטות קיר</div>
         <label className="row"><input type="checkbox" checked={cl.girts.enabled} onChange={(e) => set({ girts: { ...cl.girts, enabled: e.target.checked } })} />פטות קיר</label>
         <div className="field prof"><label>חתך</label><ProfilePicker testId="clad-girt" value={cl.girts.profile} families={['C', 'Z', 'RHS', 'UPN']} onCommit={(v) => set({ girts: { ...cl.girts, profile: v } })} /></div>
@@ -89,17 +96,27 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
       </>}
       {show('openings') && <>
         <div className="panel-title">פתחים (שערים, דלתות, חלונות)</div>
+        {(['L', 'R', 'F', 'B'] as WallId[]).filter((w) => ops.some((o) => o.wall === w)).map((w) => {
+          const fr = [...p.building.frames].sort((a, b) => a.y - b.y), ls = [...(d.section?.lines ?? [])].sort((a, b) => a.x - b.x);
+          const side = w === 'L' || w === 'R';
+          const ticks = side ? fr.map((f) => f.y - fr[0].y) : ls.map((l) => l.x - (ls[0]?.x ?? 0));
+          const len = Math.max(...ticks, 1);
+          return <OpeningsSchematic key={w} wall={w} len={len} eave={eaveOf(w)} ticks={ticks} ops={ops.map((o, i) => ({ i, o })).filter((q) => q.o.wall === w)}
+            sel={opSel} onSel={setOpSel} setOp={setOp} testId={`sch-op-${w}`} />;
+        })}
         {ops.map((o, i) => (
-          <div key={o.id} className="op-card" data-testid={`op-${i}`}>
+          <div key={o.id} className={`op-card${opSel === i ? ' sel' : ''}`} data-testid={`op-${i}`} onClick={() => setOpSel(i)}>
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <TextField value={o.label ?? o.id} onCommit={(v) => setOp(i, { label: v })} />
               <button className="icon-btn" aria-label="מחיקת פתח" onClick={() => set({ openings: ops.filter((_, k) => k !== i) })}><Icon name="trash" /></button>
             </div>
             <div className="field"><label>קיר</label><select className="inp" value={o.wall} onChange={(e) => setOp(i, { wall: e.target.value as WallId })}>{(['L', 'R', 'F', 'B'] as WallId[]).map((w) => <option key={w} value={w}>{WALL_HE[w]}</option>)}</select></div>
+            <Adv id="op" label="מתקדם — מידות בשדות">
             <div className="field"><label>{o.wall === 'L' || o.wall === 'R' ? 'מרחק מהמסגרת הראשונה' : 'מרחק מציר שמאל'}</label><LenField mm={o.pos} unit={unit} onCommit={(v) => setOp(i, { pos: v })} /></div>
             <div className="field"><label>רוחב</label><LenField mm={o.width} unit={unit} onCommit={(v) => setOp(i, { width: v })} /></div>
             <div className="field"><label>גובה</label><LenField mm={o.height} unit={unit} onCommit={(v) => setOp(i, { height: v })} /></div>
             <div className="field"><label>אדן מעל ±0.00 (0 = שער)</label><LenField mm={o.sill} unit={unit} onCommit={(v) => setOp(i, { sill: v })} /></div>
+            </Adv>
           </div>
         ))}
         <div className="row" style={{ gap: 6 }}>

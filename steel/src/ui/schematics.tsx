@@ -2,7 +2,7 @@ import { setBuilding, setCleat, setKneeBraces, setPurlinSide } from '../commands
 import { purlinParams } from '../geometry/purlins';
 import { defaultKneeBraces } from '../geometry/knee';
 import { defaultPortal } from '../geometry/portal';
-import type { BraceConnParams, CleatParams, Member, PortalBraceParams, PurlinSideParams, RidgeReinfParams } from '../model/types';
+import type { BraceConnParams, CleatParams, Member, OpeningDef, PortalBraceParams, PurlinSideParams, RidgeReinfParams } from '../model/types';
 import { tryProfile } from '../profiles/library';
 import { store, useStore } from '../store';
 import { S, Schematic, type SDim } from './Schematic';
@@ -90,7 +90,7 @@ export function PurlinSlopeSchematic({ side, items, mono }: { side: string; item
   const P = (s: number): [number, number] => [xA + ((xB - xA) * s) / L, yA + ((yB - yA) * s) / L];
   const even = (prm.layout ?? 'fixed') === 'even';
   const dims: SDim[] = [
-    { a: P(0), b: P(ss[0]), off: -9, value: prm.first, testId: `sch-${side}-s0`, onCommit: (v) => set({ first: v }) },
+    { a: P(0), b: P(ss[0]), off: -17, value: prm.first, testId: `sch-${side}-s0`, onCommit: (v) => set({ first: v }) },
     ...(ss.length > 1 ? [{ a: P(ss[0]), b: P(ss[1]), off: -9, value: even ? prm.spacing : ss[1] - ss[0], text: `${Math.round(even ? prm.spacing : ss[1] - ss[0])}${even ? ' (מרבי)' : ''}`, testId: `sch-${side}-s1`, onCommit: (v: number) => set({ spacing: v }) } as SDim] : []),
     { a: P(ss[ss.length - 1]), b: P(L - 120 + 120), off: -9, value: prm.edgeOffset, text: `${Math.round(prm.edgeOffset)} (שפה)`, testId: `sch-${side}-s2`, onCommit: (v) => set({ edgeOffset: v }) },
     { a: [0, 0], b: [0, 0], off: 0, value: ss.length, labelOnly: true, derived: true, at: [100, 92], text: `${ss.length} פטות · ${prm.profile}` },
@@ -283,3 +283,35 @@ export function WallCladSchematic({ n, bays, bottom, top, eave, onBays, onBottom
     </Schematic>
   );
 }
+
+// ======================================================================== פתחים בקיר
+/** חזית קיר עם הפתחים: לחיצה על פתח בוחרת; מיקום, רוחב, גובה ואדן — בלחיצה על המידה */
+export function OpeningsSchematic({ wall, len, eave, ticks, ops, sel, onSel, setOp, testId }: {
+  wall: string; len: number; eave: number; ticks: number[];
+  ops: { i: number; o: OpeningDef }[]; sel: number | null; onSel: (i: number) => void; setOp: (i: number, patch: Partial<OpeningDef>) => void; testId: string;
+}) {
+  const x0 = 14, x1 = 196, yG = 86, yE = 16;
+  const kx = (x1 - x0) / Math.max(len, 1), kz = (yG - yE) / Math.max(eave, 1);
+  const X = (p: number) => x0 + p * kx, Y = (z: number) => yG - z * kz;
+  const cur = ops.find((q) => q.i === sel)?.o;
+  const dims: SDim[] = cur ? [
+    { a: [X(0), yG + 2], b: [X(cur.pos), yG + 2], off: -7, value: cur.pos, testId: `${testId}-pos`, onCommit: (v) => setOp(sel!, { pos: v }) },
+    { a: [X(cur.pos), Y(cur.sill + cur.height)], b: [X(cur.pos + cur.width), Y(cur.sill + cur.height)], off: 6, value: cur.width, testId: `${testId}-w`, onCommit: (v) => setOp(sel!, { width: v }) },
+    { a: [X(cur.pos + cur.width), Y(cur.sill)], b: [X(cur.pos + cur.width), Y(cur.sill + cur.height)], off: -6, value: cur.height, testId: `${testId}-h`, onCommit: (v) => setOp(sel!, { height: v }) },
+    { a: [X(cur.pos) - 2, yG], b: [X(cur.pos) - 2, Y(cur.sill)], off: 6, value: cur.sill, text: cur.sill > 0 ? `${Math.round(cur.sill)} (אדן)` : '0 (שער)', testId: `${testId}-sill`, onCommit: (v) => setOp(sel!, { sill: Math.max(0, v) }) },
+  ] : [];
+  return (
+    <Schematic w={210} h={104} dims={dims} testId={testId} caption={`${WALL_HE_S[wall] ?? wall}: לחיצה על פתח לבחירה · מידות ✎ (מיקום מתחילת הקיר, רוחב, גובה, אדן)`}>
+      <rect x={x0} y={yE} width={x1 - x0} height={yG - yE} className="bay on clad" />
+      {ticks.map((t, k) => <line key={k} x1={X(t)} y1={yE} x2={X(t)} y2={yG} className="sm-main" strokeWidth={1.6} />)}
+      <line x1={x0 - 4} y1={yG} x2={x1 + 4} y2={yG} className="sm-main" strokeWidth={1} />
+      {ops.map(({ i, o }) => (
+        <g key={i} className="bay-cell" data-testid={`${testId}-op-${i}`} onClick={() => onSel(i)}>
+          <rect x={X(o.pos)} y={Y(o.sill + o.height)} width={o.width * kx} height={o.height * kz} className={i === sel ? 'op-r sel' : 'op-r'} />
+          <text x={X(o.pos + o.width / 2)} y={Y(o.sill + o.height / 2)} className="sm-lbl-s" textAnchor="middle" dominantBaseline="middle">{o.label ?? o.id}</text>
+        </g>
+      ))}
+    </Schematic>
+  );
+}
+const WALL_HE_S: Record<string, string> = { L: 'קיר שמאל', R: 'קיר ימין', F: 'קיר חזית', B: 'קיר אחורי' };

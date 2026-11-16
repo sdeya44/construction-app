@@ -57,3 +57,26 @@ test('SCH-02: מסבך "מספריים" — הגבהה בלחיצה; גיליו�
   expect(errs).toEqual([]);
   await shot(page, 'SCH_05_scissor');
 });
+
+test('SCH-03: הגדלת שרטוט, עריכה בחלון המוגדל; פתחים בקיר על השרטוט', async ({ page }) => {
+  await boot(page);
+  await page.getByTestId('nav-r:left').click();
+  await page.getByTestId('sch-purlins-left-zoom').click();
+  await expect(page.getByTestId('sch-purlins-left-big')).toBeVisible();
+  await page.getByTestId('sch-purlins-left-L').getByTestId('sch-left-s0').dispatchEvent('click');
+  await page.getByTestId('sch-purlins-left-L').getByTestId('sch-left-s0-inp').fill('420');
+  await page.getByTestId('sch-purlins-left-L').getByTestId('sch-left-s0-inp').press('Enter');
+  expect((await st(page)).purlins.left.first).toBe(420);
+  await shot(page, 'SCH_06_zoom');
+  await page.getByTestId('sch-purlins-left-close').click();
+  // פתחים
+  await page.getByTestId('tab-clad').click();
+  await page.getByTestId('nav-w:openings').click();
+  if (await page.getByTestId('clad-enable').count()) await page.getByTestId('clad-enable').click();
+  await page.getByTestId('op-add-door').click();
+  await expect(page.getByTestId('sch-op-F')).toBeVisible();
+  await page.getByTestId('sch-op-F').getByTestId('sch-op-F-w').dispatchEvent('click');
+  await page.getByTestId('sch-op-F-w-inp').fill('5000'); await page.getByTestId('sch-op-F-w-inp').press('Enter');
+  expect((await st(page)).cladding.openings[0].width).toBe(5000);
+  await shot(page, 'SCH_07_openings');
+});

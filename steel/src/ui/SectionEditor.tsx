@@ -3,7 +3,7 @@ import { setKneeBraces, setSection } from '../commands/commands';
 import { defaultKneeBraces } from '../geometry/knee';
 import { lineLabel, moveLines, setAxisCount, setPlaneEndZ, setPlaneSlope, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
 import { store, useStore } from '../store';
-import { LenField, NumField, ProfilePicker } from './fields';
+import { Adv, LenField, NumField, ProfilePicker } from './fields';
 import { Icon } from './icons';
 import type { KneeSideOverride } from '../model/types';
 import { KneeSchematic } from './schematics';
@@ -157,6 +157,7 @@ export function KneeEditor() {
         {(kb.mode ?? 'angle') === 'angle'
           ? <div className="field"><label>זווית מהאופק</label><NumField testId="kb-angle" value={kb.angle ?? 45} suffix="°" onCommit={(v) => set({ angle: Math.max(15, Math.min(75, v)) })} /></div>
           : <div className="field"><label>מרחק על הקורה (אופקי)</label><NumField testId="kb-reach" value={kb.reach} suffix='מ"מ' onCommit={(v) => set({ reach: v })} /></div>}
+        <Adv id="kb" label="מתקדם — פרט חיבור, ברגים, עובי, הגדרה לכל צד">
         <div className="field"><label>פרט חיבור</label>
           <select className="inp" data-testid="kb-detail" value={kb.detail === 'flange' ? 'flange' : 'fin'} onChange={(e) => set({ detail: e.target.value as 'fin' | 'flange' })}>
             <option value="fin">פח מרותך + לשונית בחריץ ה-RHS (פרט הלקוח)</option><option value="flange">פלטת קצה מוברגת לאגף המארח</option>
@@ -167,6 +168,7 @@ export function KneeEditor() {
           : <div className="field"><label>פלטת קצה / ברגים</label><span className="readonly">{kb.plateT}×{kb.plateW}×{kb.plateL} · 4×M{kb.bolt.d}</span></div>}
         <div className="field"><label>עובי פלטות</label><NumField testId="kb-t" value={kb.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: Math.max(6, v) })} /></div>
         <KneeSides />
+        </Adv>
         <div className="hint">בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. פרט הלקוח: פח מרותך לעמוד ולקורה (במישור המסגרת, מסגריה); בקצות ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. אין בדיקת חוזק.</div>
       </>}
     </>

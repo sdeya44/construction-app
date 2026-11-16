@@ -9,6 +9,8 @@ export async function boot(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  // בבדיקות: קטעי "מתקדם" פתוחים (השדות נבדקים ישירות; אצל המשתמש — סגורים כברירת מחדל)
+  await page.addInitScript(() => { const g = Storage.prototype.getItem; Storage.prototype.getItem = function (k: string) { return k.startsWith('ksp-adv-') ? '1' : g.call(this, k); }; });
   await page.goto('/');
   await page.waitForFunction(() => !!(window as any).__ksp?.viewport?.model);
   await page.waitForTimeout(300);

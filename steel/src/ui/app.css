@@ -617,3 +617,28 @@ select.inp { padding: 0 6px; }
 .schem .bay.on { fill: #efe8fb; }
 .schem .bay.on.clad { fill: #dfe9f2; stroke: #8fb0cc; }
 .schem .bay-cell:hover .bay { stroke: #7a3fc4; stroke-width: 0.8; }
+.schem-zoom { position: absolute; top: 4px; left: 4px; z-index: 2; border: 1px solid var(--line); background: #fff; border-radius: 6px; width: 24px; height: 24px; line-height: 20px; font-size: 15px; cursor: pointer; color: #1f5a3f; padding: 0; }
+.schem-zoom:hover { background: #eef6f1; }
+.schem-modal { position: fixed; inset: 0; z-index: 60; background: rgba(20, 28, 24, 0.45); display: flex; align-items: center; justify-content: center; }
+.schem-modal-in { background: var(--panel, #fff); border-radius: 14px; padding: 12px; width: min(94vw, 980px); max-height: 92vh; overflow: auto; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+.schem-modal-in .schem { margin: 0; }
+.schem-modal-in .schem-cap { font-size: 14px; }
+.schem-close { position: absolute; top: 10px; right: 12px; z-index: 3; }
+details.adv { border: 1px dashed var(--line); border-radius: 8px; margin: 6px 0; padding: 0 8px; }
+details.adv > summary { cursor: pointer; font-size: 12px; color: #667; padding: 5px 0; list-style: revert; }
+details.adv[open] > summary { color: #1f5a3f; font-weight: 600; }
+details.adv .adv-body { padding-bottom: 6px; }
+.schem .op-r { fill: #fff; stroke: #6d7a73; stroke-width: 0.6; }
+.schem .op-r.sel { fill: #f3ecff; stroke: #7a3fc4; stroke-width: 1; }
+.op-card.sel { border-color: #7a3fc4; }
+.tb-lbl { font-size: 12px; font-weight: 600; margin: 6px 0 3px; }
+.tile-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.pic-tile { display: flex; flex-direction: column; align-items: center; width: 74px; padding: 3px 2px; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; font-size: 10.5px; line-height: 1.15; text-align: center; }
+.pic-tile b { font-size: 12px; }
+.pic-tile span { color: #666; }
+.pic-tile.on { border-color: #1f5a3f; background: #eef6f1; box-shadow: inset 0 0 0 1px #1f5a3f; }
+.pic-tile:hover { border-color: #7a3fc4; }
+.schem-modal-in { width: min(94vw, 760px); }
+.schem-modal-in .schem .sdim .sd-text { font-size: 4.6px; }
+.schem-modal-in .schem .sm-lbl { font-size: 4px; }
+.schem-modal-in .schem .sm-lbl-s { font-size: 3.4px; }

@@ -20,6 +20,36 @@ function useLineLabel() {
 }
 function frameNo(id: string) { const fr = [...store.state.project.building.frames].sort((a, b) => a.y - b.y); return fr.findIndex((f) => f.id === id) + 1; }
 
+/** ציורים קטנים (מבט צד) לבחירת התמיכה והמושב */
+const BEAM = '#c4600a', COL = '#3d4a44', PLT = '#7a3fc4';
+function SupPic({ k }: { k: TbSupport }) {
+  // עמוד במרכז, קורה נושאת אופקית מגיעה משמאל
+  const col = <rect x={k === 'A1' ? 26 : 34} y={k === 'A1' ? 22 : 6} width={10} height={k === 'A1' ? 20 : 36} fill="#dfe5e1" stroke={COL} strokeWidth={1} />;
+  return (
+    <svg viewBox="0 0 60 44" width={54} height={40} aria-hidden="true">
+      {col}
+      {k === 'A1' && <><rect x={4} y={10} width={52} height={10} fill="#fde8d7" stroke={BEAM} /><rect x={22} y={20} width={18} height={2.5} fill={PLT} /></>}
+      {k !== 'A1' && <rect x={2} y={12} width={k === 'A3' ? 30 : 28} height={12} fill="#fde8d7" stroke={BEAM} />}
+      {k === 'A2' && <rect x={30} y={10} width={3} height={16} fill={PLT} />}
+      {k === 'A3' && <rect x={24} y={14} width={12} height={8} fill="none" stroke={PLT} strokeWidth={1.4} />}
+      {k === 'A4' && <><rect x={28} y={12} width={6} height={12} fill="none" stroke={PLT} strokeWidth={1.4} /></>}
+      {k === 'A5' && <><rect x={20} y={24} width={14} height={3} fill={PLT} /><polygon points="33,27 33,36 24,27" fill={PLT} /></>}
+    </svg>
+  );
+}
+function SeatPic({ k }: { k: TbSeat }) {
+  // קורה נושאת בחתך (I) למטה, קורת גג משופעת מעליה
+  return (
+    <svg viewBox="0 0 60 44" width={54} height={40} aria-hidden="true">
+      <path d="M22 30h16M30 30v10M22 40h16" stroke={BEAM} strokeWidth={2.4} fill="none" />
+      {k === 'B1' && <><rect x={20} y={25} width={20} height={4} fill={PLT} /><polygon points="22,25 38,25 38,21" fill={PLT} /><line x1={2} y1={23} x2={58} y2={13} stroke={COL} strokeWidth={5} /></>}
+      {k === 'B2' && <><polygon points="22,29 38,29 38,25" fill={PLT} /><line x1={2} y1={27} x2={58} y2={17} stroke={COL} strokeWidth={5} /></>}
+      {k === 'B3' && <><rect x={27} y={16} width={6} height={13} fill="#e3e8e5" stroke={PLT} /><line x1={2} y1={18} x2={34} y2={11} stroke={COL} strokeWidth={5} /></>}
+      {k === 'B4' && <><rect x={33} y={30} width={2.5} height={10} fill={PLT} /><line x1={36} y1={36} x2={58} y2={32} stroke={COL} strokeWidth={6} /></>}
+    </svg>
+  );
+}
+
 /** שורת עריכה של קורה נושאת אחת (בחלון ובפאנל) */
 function TransferRow({ t, onChange, onRemove }: { t: TransferDef; onChange: (patch: Partial<TransferDef>) => void; onRemove?: () => void }) {
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
@@ -47,15 +77,17 @@ function TransferRow({ t, onChange, onRemove }: { t: TransferDef; onChange: (pat
           <div className="field prof"><label>קורה נושאת</label><ProfilePicker testId={`tb-prof-${t.id}`} value={t.profile} families={['IPE', 'HEA', 'HEB']} onCommit={(v) => onChange({ profile: v })} /></div>
           {u && <div className={`sz-note sz-${st}`} style={{ margin: '2px 0 6px' }}>{SIZE_LABEL[st]} — {u.text}</div>}
         </>}
-      {t.kind !== 'truss' && <div className="field"><label>תמיכה בעמוד</label>
-        <select className="inp" data-testid={`tb-sup-${t.id}`} value={t.support} onChange={(e) => onChange({ support: e.target.value as TbSupport })}>
-          {SUPPORTS.map((s) => <option key={s} value={s}>{s} · {SUPPORT_HE[s]}</option>)}
-        </select></div>}
-      {t.kind !== 'truss' && <div className="hint">{SUP_HINT[t.support]}</div>}
-      <div className="field"><label>קורת גג על הקורה</label>
-        <select className="inp" data-testid={`tb-seat-${t.id}`} value={t.seat} onChange={(e) => onChange({ seat: e.target.value as TbSeat })}>
-          {SEATS.map((s) => <option key={s} value={s}>{s} · {SEAT_HE[s]}</option>)}
-        </select></div>
+      {t.kind !== 'truss' && <>
+        <div className="tb-lbl">תמיכה בעמוד</div>
+        <div className="tile-row" role="radiogroup" aria-label="תמיכה בעמוד">
+          {SUPPORTS.map((k) => <button key={k} role="radio" aria-checked={t.support === k} className={`pic-tile${t.support === k ? ' on' : ''}`} data-testid={`tb-sup-tile-${t.id}-${k}`} title={SUP_HINT[k]} onClick={() => onChange({ support: k })}><SupPic k={k} /><b>{k}</b><span>{SUPPORT_HE[k]}</span></button>)}
+        </div>
+        <div className="hint">{SUP_HINT[t.support]}</div>
+      </>}
+      <div className="tb-lbl">קורת גג על הקורה</div>
+      <div className="tile-row" role="radiogroup" aria-label="קורת גג על הקורה">
+        {SEATS.filter((k) => !(t.kind === 'truss' && k === 'B4')).map((k) => <button key={k} role="radio" aria-checked={t.seat === k} className={`pic-tile${t.seat === k ? ' on' : ''}`} data-testid={`tb-seat-tile-${t.id}-${k}`} title={SEAT_HINT[k]} onClick={() => onChange({ seat: k })}><SeatPic k={k} /><b>{k}</b><span>{SEAT_HE[k]}</span></button>)}
+      </div>
       <div className="hint">{SEAT_HINT[t.seat]}</div>
       {span * 1000 > p.settings.stockLength - 30 && <>
         <div className="field"><label>חלוקה (ארוך מ-{(p.settings.stockLength / 1000).toFixed(1)} מ')</label>

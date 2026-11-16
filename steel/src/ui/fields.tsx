@@ -119,3 +119,16 @@ export function ProfilePicker({ value, onCommit, families, testId, placeholder, 
     </div>
   );
 }
+
+/** "מתקדם" מתקפל — הגדרות שמשתמשים בהן לעיתים רחוקות (המצב נשמר במכשיר) */
+export function Adv({ id, children, label = 'מתקדם' }: { id: string; children: React.ReactNode; label?: string }) {
+  const key = `ksp-adv-${id}`;
+  let init = false;
+  try { init = localStorage.getItem(key) === '1'; } catch { /* */ }
+  return (
+    <details className="adv" data-testid={`adv-${id}`} open={init || undefined} onToggle={(e) => { try { localStorage.setItem(key, (e.currentTarget as HTMLDetailsElement).open ? '1' : '0'); } catch { /* */ } }}>
+      <summary>{label}</summary>
+      <div className="adv-body">{children}</div>
+    </details>
+  );
+}

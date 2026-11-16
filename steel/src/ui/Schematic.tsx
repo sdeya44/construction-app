@@ -24,7 +24,24 @@ export interface SDim {
   derived?: boolean;
 }
 
-export function Schematic({ w, h, children, dims, testId, caption }: { w: number; h: number; children: ReactNode; dims: SDim[]; testId?: string; caption?: string }) {
+export function Schematic(props: { w: number; h: number; children: ReactNode; dims: SDim[]; testId?: string; caption?: string }) {
+  const [big, setBig] = useState(false);
+  return (
+    <>
+      <SchemBody {...props} onZoom={() => setBig(true)} />
+      {big && (
+        <div className="schem-modal" role="dialog" aria-label="שרטוט מוגדל" data-testid={props.testId ? `${props.testId}-big` : undefined} onClick={(e) => { if (e.target === e.currentTarget) setBig(false); }}>
+          <div className="schem-modal-in">
+            <button className="btn small schem-close" data-testid={props.testId ? `${props.testId}-close` : undefined} onClick={() => setBig(false)}>✕ סגירה</button>
+            <SchemBody {...props} testId={props.testId ? `${props.testId}-L` : undefined} />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function SchemBody({ w, h, children, dims, testId, caption, onZoom }: { w: number; h: number; children: ReactNode; dims: SDim[]; testId?: string; caption?: string; onZoom?: () => void }) {
   const [edit, setEdit] = useState<{ i: number; v: string } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const label = (d: SDim) => d.text ?? `${Math.round(d.value * 10) / 10}${d.unit ?? ''}`;
@@ -52,6 +69,7 @@ export function Schematic({ w, h, children, dims, testId, caption }: { w: number
   const editPos = edit ? geom(dims[edit.i]).mid : null;
   return (
     <div className="schem" ref={box} data-testid={testId}>
+      {onZoom && <button className="schem-zoom" title="הגדלה" aria-label="הגדלת השרטוט" data-testid={testId ? `${testId}-zoom` : undefined} onClick={onZoom}>⤢</button>}
       <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label={caption ?? 'שרטוט'}>
         <defs>
           <marker id="sarr" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L6,3 L0,6 z" className="sd-arrow" /></marker>
