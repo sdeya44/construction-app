@@ -1,7 +1,7 @@
 import { add, rotateAxis, sub, v3, type Vec3 } from '../core/vec';
 import { degToRad } from '../core/units';
 import { generate, placementBasis } from '../geometry/generate';
-import type { ValidationIssue, ApprovalStatus, BuildingParams, KneeBraceParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
+import type { TransferDef, ValidationIssue, ApprovalStatus, BuildingParams, KneeBraceParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
 import { purlinParams } from '../geometry/purlins';
 import { effectiveSplices } from '../geometry/autoSplice';
 import { defaultKneeBraces } from '../geometry/knee';
@@ -9,7 +9,7 @@ import type { CustomSection } from '../model/section';
 import { commitNumbering, computeFabrication } from '../fab/marks';
 import { hasErrors, validateBuilding } from '../model/validate';
 import { catalogNames, tryProfile } from '../profiles/library';
-import { assessBraceCandidate, suggestSize } from '../model/sizing';
+import { assessBraceCandidate, suggestSize, suggestTransferProfile } from '../model/sizing';
 import { suggestEavePlate } from '../geometry/eavePlate';
 import { MATERIALS } from '../profiles/materials';
 
@@ -661,4 +661,46 @@ export function applySizingSuggestion(): Command {
       return n;
     },
   };
+}
+
+/**
+ * דילול עמודים: מעמודים שנבחרו — רצפים בכל שורה; לכל רצף קורה נושאת בין העמודים הסמוכים שנותרו.
+ * עמוד ראשון/אחרון בשורה לא ניתן לבטל (אין תמיכה לקורה). מוזג עם קורות נושאות קיימות באותה שורה.
+ */
+export function planOmissions(p: Project, columnIds: string[]): { defs: TransferDef[]; errors: string[] } {
+  const d = generate(p);
+  const fr = [...p.building.frames].sort((a, b) => a.y - b.y);
+  const errors: string[] = [];
+  const byLine = new Map<string, Set<string>>();
+  for (const id of columnIds) {
+    const m = d.byId.get(id);
+    if (!m || m.kind !== 'column' || !m.lineId || !m.frameId) continue;
+    byLine.set(m.lineId, (byLine.get(m.lineId) ?? new Set()).add(m.frameId));
+  }
+  // עמודים שכבר בוטלו בשורה — נכללים ברצף
+  for (const t of p.building.transfers ?? []) for (const f of t.removed) byLine.set(t.lineId, (byLine.get(t.lineId) ?? new Set()).add(f));
+  const defs: TransferDef[] = [];
+  const ipe = catalogNames().find((g) => g.family === 'IPE')?.names ?? [];
+  for (const [lineId, set] of byLine) {
+    const idx = fr.map((f, i) => (set.has(f.id) ? i : -1)).filter((i) => i >= 0);
+    let k = 0;
+    while (k < idx.length) {
+      let j = k; while (j + 1 < idx.length && idx[j + 1] === idx[j] + 1) j++;
+      const a = idx[k] - 1, b2 = idx[j] + 1;
+      const label = d.section?.lines.find((l) => l.id === lineId)?.label ?? lineId;
+      if (a < 0 || b2 >= fr.length) errors.push(`שורה ${label}: לא ניתן לבטל את העמוד הראשון/האחרון בשורה — אין עמוד שיתמוך בקורה הנושאת`);
+      else {
+        const old = (p.building.transfers ?? []).find((t) => t.lineId === lineId && t.removed.some((f) => idx.slice(k, j + 1).includes(fr.findIndex((q) => q.id === f))));
+        const def: TransferDef = { id: old?.id ?? `${lineId}${fr[a].id}`, lineId, from: fr[a].id, to: fr[b2].id, removed: idx.slice(k, j + 1).map((i) => fr[i].id), profile: old?.profile ?? 'IPE400', support: old?.support ?? 'A1', seat: old?.seat ?? 'B1' };
+        if (!old) def.profile = suggestTransferProfile(p, d, def, ipe) ?? 'IPE600';
+        defs.push(def);
+      }
+      k = j + 1;
+    }
+  }
+  return { defs, errors };
+}
+
+export function setTransfers(defs: TransferDef[], label = 'דילול עמודים — קורות נושאות'): Command {
+  return { label, run: (p) => { const n = clone(p); n.building.transfers = defs.length ? clone(defs) : undefined; return n; } };
 }

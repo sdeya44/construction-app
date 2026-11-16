@@ -100,16 +100,20 @@ export function buildWallFraming(_project: Project, b: BuildingParams, sec: NSec
     const ln = w === 'L' ? lines[0] : lines[lines.length - 1];
     const sgn = w === 'L' ? -1 : 1;
     const cols = fr.map((f) => colOf(ln.id, f.id));
-    if (cols.some((c) => !c)) continue;
-    const ch = (tryProfile(cols[0]!.profile)?.props.h ?? 200) / 2;
+    const have = cols.filter((c): c is Member => !!c);
+    if (have.length < 2) continue;
+    const ch = (tryProfile(have[0].profile)?.props.h ?? 200) / 2;
     const xF = ln.x + sgn * ch;
-    const eaveZ = Math.min(...cols.map((c) => Math.max(c!.start.z, c!.end.z)));
+    // עמודים שבוטלו (דילול) — המפתחים הסמוכים ללא פטות קיר; עמודים מקוצרים — לפי הגבוהים
+    const eaveZ = Math.max(...have.map((c) => Math.max(c.start.z, c.end.z)));
+    if (have.length < cols.length) issues.push({ code: 'GIRT_TB', severity: 'info', message: `${WALL_HE[w]}: במפתחים ליד עמודים שבוטלו אין פטות קיר (פתח) — לחיפוי נדרשים עמודי רוח` });
     const zs = gp.enabled ? levelsFor(w, eaveZ) : [];
     const y0 = fr[0].y;
     const wc = wallCfg(cl, w);
     zs.forEach((z, li) => {
       for (let k = 0; k < fr.length - 1; k++) {
-        if (!wc.covered(k)) continue; // מפתח לא מחופה — ללא פטות קיר
+        if (!wc.covered(k) || !cols[k] || !cols[k + 1]) continue; // מפתח לא מחופה / עמוד מבוטל — ללא פטות קיר
+        if (z > Math.min(Math.max(cols[k]!.start.z, cols[k]!.end.z), Math.max(cols[k + 1]!.start.z, cols[k + 1]!.end.z)) - 100) continue;
         const segs = cutByOpenings(w, fr[k].y, fr[k + 1].y, z, (t) => y0 + t);
         segs.forEach(([a, bb], si) => out.push(mk(`GT.${w}.${String(li + 1).padStart(2, '0')}.${k + 1}${segs.length > 1 ? String.fromCharCode(97 + si) : ''}`, `פטת קיר ${w === 'L' ? 'שמאל' : 'ימין'} ${li + 1} · מפתח ${k + 1}`,
           v3(xF, a, z), v3(xF, bb, z), gProf, v3(sgn, 0, 0), 'purlin', { id: w, role: 'girt', level: li + 1 })));

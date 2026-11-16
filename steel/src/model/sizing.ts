@@ -55,7 +55,7 @@ const E = 210000; // MPa
 const fyOf = (m: Member) => { try { return getMaterial(m.material).fy ?? 235; } catch { return 235; } };
 const f1 = (n: number) => n.toFixed(1), f2 = (n: number) => n.toFixed(2);
 
-interface Ctx { cl?: Project['building']['cladding']; cfg: SizingCfg; trib: Map<string, number>; rafterSpan: Map<string, number>; bay: number; purlinS: Map<string, number>; crossed: Set<string> }
+interface Ctx { p: Project; transfers: NonNullable<Project['building']['transfers']>; cl?: Project['building']['cladding']; cfg: SizingCfg; trib: Map<string, number>; rafterSpan: Map<string, number>; bay: number; purlinS: Map<string, number>; crossed: Set<string> }
 
 function context(p: Project, d: DerivedModel): Ctx {
   const cfg = sizingCfg(p);
@@ -69,7 +69,8 @@ function context(p: Project, d: DerivedModel): Ctx {
   // מפתח קורה: בין העמודים שתומכים בה (זיז — כפליים מאורך הזיז)
   const rafterSpan = new Map<string, number>();
   for (const m of d.members.filter((x) => x.kind === 'rafter')) {
-    const xs = d.members.filter((c) => c.kind === 'column' && c.frameId === m.frameId).map((c) => c.start.x).sort((a, b) => a - b);
+    const xs = [...d.members.filter((c) => c.kind === 'column' && c.frameId === m.frameId).map((c) => c.start.x),
+      ...(p.building.transfers ?? []).filter((t) => t.removed.includes(m.frameId ?? '')).map((t) => d.section?.lines.find((l) => l.id === t.lineId)?.x).filter((x): x is number => x !== undefined)].sort((a, b) => a - b);
     const x0 = Math.min(m.start.x, m.end.x), x1 = Math.max(m.start.x, m.end.x), xm = (x0 + x1) / 2;
     let L = x1 - x0;
     const l = [...xs].reverse().find((x) => x <= xm + 1), r = xs.find((x) => x >= xm - 1);
@@ -83,7 +84,7 @@ function context(p: Project, d: DerivedModel): Ctx {
     purlinS.set(m.id, purlinParams(p.building.purlins, k).spacing);
   }
   const crossed = new Set(d.connections.filter((c) => c.type === 'brace-cross').flatMap((c) => c.members));
-  return { cl: p.building.cladding, cfg, trib, rafterSpan, bay, purlinS, crossed };
+  return { p, transfers: p.building.transfers ?? [], cl: p.building.cladding, cfg, trib, rafterSpan, bay, purlinS, crossed };
 }
 
 /** הערכת אלמנט אחד; profName — לבדיקת מועמד בבוחר הפרופילים */
@@ -135,6 +136,10 @@ function assess(m: Member, c: Ctx, d: DerivedModel, profName?: string): SizeResu
     const uD = dl / (L / cfg.purlinDefl);
     const util = Math.max(uM, uD);
     return { status: status(util, false, util < cfg.lowUtil), util, text: `מפתח ${f1(L / 1000)} מ' · מרווח ${f2(s / 1000)} מ' · ניצולת כפיפה ${f2(uM)} (כולל יניקת רוח) · שקיעה ${f1(dl)} מ"מ (L/${cfg.purlinDefl}=${f1(L / cfg.purlinDefl)})` };
+  }
+  if (m.kind === 'beam' && m.id.startsWith('TB.')) {
+    const def = c.transfers.find((t) => `TB.${t.id}` === m.id);
+    if (def) { const r = transferUtil(c.p, d, def, profName ?? m.profile); return { status: status(r.util, false, r.util < cfg.lowUtil), util: r.util, text: r.text }; }
   }
   if (m.kind === 'girt' && m.wall && c.cl) {
     // מסגור קיר: עומס רוח אופקי על הקיר (ללא כבידה), כפיפה פשוטה ושקיעה L/150
@@ -213,4 +218,42 @@ export function suggestSize(p: Project, d: DerivedModel, role: 'column' | 'rafte
     if (st === 'big' && !firstNotSmall) firstNotSmall = n;
   }
   return firstNotSmall;
+}
+
+/**
+ * קורה נושאת: עומסים נקודתיים מקורות הגג במסגרות ללא עמוד (תגובת קורת גג ≈ עומס גג × רוחב העמסה × חצי האורך האופקי),
+ * קורה פשוטה בין העמודים הנותרים; ניצולת = max(מומנט / (W·fy), שקיעה / (L/300)).
+ */
+export function transferUtil(p: Project, d: DerivedModel, def: NonNullable<Project['building']['transfers']>[number], profName: string): { util: number; text: string } {
+  const cfg = sizingCfg(p);
+  const pr = tryProfile(profName); if (!pr) return { util: 9, text: 'חתך לא מוכר' };
+  const fr = [...p.building.frames].sort((a, b) => a.y - b.y);
+  const f0 = fr.find((f) => f.id === def.from), f1 = fr.find((f) => f.id === def.to);
+  const x = d.section?.lines.find((l) => l.id === def.lineId)?.x;
+  if (!f0 || !f1 || x === undefined) return { util: 0, text: '' };
+  const L = f1.y - f0.y;
+  const w = cfg.gamma * (cfg.dead + Math.max(cfg.live, cfg.snow));
+  const trib = (f: typeof fr[number]) => { const i = fr.indexOf(f); return ((i > 0 ? f.y - fr[i - 1].y : 0) + (i < fr.length - 1 ? fr[i + 1].y - f.y : 0)) / 2; };
+  const loads: { a: number; P: number }[] = [];
+  for (const fid of def.removed) {
+    const f = fr.find((q) => q.id === fid); if (!f) continue;
+    const half = d.members.filter((m) => m.kind === 'rafter' && m.frameId === fid && Math.min(m.start.x, m.end.x) - 1 <= x && Math.max(m.start.x, m.end.x) + 1 >= x)
+      .reduce((s2, m) => s2 + Math.abs(m.end.x - m.start.x) / 2, 0) || 3500;
+    loads.push({ a: f.y - f0.y, P: (w * (trib(f) / 1000) * (half / 1000)) });
+  }
+  const RA = loads.reduce((s2, q) => s2 + (q.P * (L - q.a)) / L, 0);
+  let M = 0;
+  for (const q of loads) { const Mx = RA * (q.a / 1000) - loads.filter((o) => o.a < q.a).reduce((s2, o) => s2 + o.P * ((q.a - o.a) / 1000), 0); M = Math.max(M, Mx); }
+  const fy = 235, E2 = 210000, I = pr.props.Iy || 1;
+  const dl = loads.reduce((s2, q) => { const a = Math.min(q.a, L - q.a); return s2 + ((q.P / cfg.gamma) * 1000 * a * (3 * L * L - 4 * a * a)) / (48 * E2 * I); }, 0);
+  const uM = (M * 1e6) / ((pr.props.Wy ?? 1) * fy), uD = dl / (L / 300);
+  const util = Math.max(uM, uD);
+  return { util, text: `קורה נושאת · מפתח ${(L / 1000).toFixed(2)} מ' · ${loads.length} קורות גג (P≈${loads.length ? Math.max(...loads.map((q) => q.P)).toFixed(1) : 0} kN) · M≈${M.toFixed(1)} kNm · ניצולת כפיפה ${uM.toFixed(2)} · שקיעה ${dl.toFixed(1)} מ"מ (L/300=${(L / 300).toFixed(1)})` };
+}
+
+/** חתך מוצע לקורה נושאת: הקטן ביותר במשפחה שעומד בניצולת 0.9 */
+export function suggestTransferProfile(p: Project, d: DerivedModel, def: NonNullable<Project['building']['transfers']>[number], names: string[]): string | null {
+  const num = (n: string) => Number(n.replace(/^[A-Z]+/, '').split(/x/i)[0]) || 0;
+  for (const n of [...names].sort((a, b) => num(a) - num(b))) { try { if (transferUtil(p, d, def, n).util <= 0.9) return n; } catch { /* */ } }
+  return null;
 }

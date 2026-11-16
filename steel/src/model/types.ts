@@ -195,6 +195,25 @@ export interface BuildingParams {
   ridgeReinf?: RidgeReinfParams;
   /** חיפוי גג וקירות, פטות קיר, עמודי רוח, פתחים ומזחלות */
   cladding?: CladdingParams;
+  /** דילול עמודים: קורות נושאות בין העמודים שנותרו בשורה */
+  transfers?: TransferDef[];
+}
+
+/** תמיכת הקורה הנושאת בעמוד: A1 על ראש העמוד; A2 פלטת קצה; A3 פלטת סנפיר; A4 זוויתני ווב; A5 תושבת */
+export type TbSupport = 'A1' | 'A2' | 'A3' | 'A4' | 'A5';
+/** חיבור קורת הגג לקורה הנושאת: B1 כיסא + 2 פלטות; B2 טריז לאגף; B3 עמוד קצר; B4 חיבור צד לווב */
+export type TbSeat = 'B1' | 'B2' | 'B3' | 'B4';
+export interface TransferDef {
+  id: string;
+  /** שורת העמודים (מזהה קו בחתך) */
+  lineId: string;
+  /** מסגרות העמודים הנותרים (תמיכות הקורה) */
+  from: string; to: string;
+  /** מסגרות שהעמודים בהן מבוטלים */
+  removed: string[];
+  profile: string;
+  support: TbSupport;
+  seat: TbSeat;
 }
 
 export type WallId = 'L' | 'R' | 'F' | 'B';
@@ -273,7 +292,7 @@ export interface MemberOverride {
 
 export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'girt' | 'cleat' | 'plate' | 'bolt' | 'anchor';
 
-export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee' | 'ridge-tie' | 'beam-splice';
+export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee' | 'ridge-tie' | 'beam-splice' | 'tb-support' | 'tb-seat';
 export type ApprovalStatus = 'not-verified' | 'for-review' | 'approved';
 
 /** חיבור מבוסס פלטה וקבוצת ברגים (קורה-עמוד, רכס, פלטת בסיס). */

@@ -12,6 +12,7 @@ import { buildPurlins } from './purlins';
 import type { Connection, SupportPoint } from '../model/types';
 import { buildConnections, checkClashes } from './connections';
 import { buildWallFraming } from './cladding';
+import { buildTransfers, prepareTransfers } from './transfer';
 import { buildBracing } from './bracing';
 
 const HEB_LETTERS = 'אבגדהוזחטיכלמנסעפצקרשת';
@@ -120,6 +121,8 @@ export function generate(project: Project): DerivedModel {
   const deleted = new Set(project.deleted);
   let supports: SupportPoint[] = [];
   const structuralError = hasErrors(issues);
+  // דילול עמודים: עמודים מוסרים נכנסים ל-deleted; ב-A1 העמודים התומכים מתקצרים
+  const tbPlans = !structuralError && sec ? prepareTransfers(project, bEff, sec, members, deleted, issues) : [];
   if (!structuralError && sec) {
     const pr = buildPurlins(bEff, sec, deleted);
     members.push(...pr.members);
@@ -201,6 +204,23 @@ export function generate(project: Project): DerivedModel {
       for (const m of wf.members) { const o = project.memberOverrides[m.id]; if (o?.profile) m.profile = o.profile; if (o?.material) m.material = o.material; if (o?.rollDeg !== undefined) m.rollDeg = o.rollDeg; if (o?.mirror !== undefined) m.mirror = o.mirror; }
       out.push(...wf.members.filter((m) => !hidden.has(m.id)));
       issues.push(...wf.issues);
+    }
+    // קורות נושאות, חיבורי תמיכה ומושבים; הסרת אלמנטים שנשענו על עמודים מוסרים/מקוצרים
+    if (tbPlans.length) {
+      const tr = buildTransfers(project, tbPlans, out);
+      out.push(...tr.members);
+      connections.push(...tr.connections);
+      issues.push(...tr.issues);
+      if (tr.drop.size || tr.shortCols.size) {
+        // חיבורים שתלויים בעמוד שהתקצר (ראש עמוד, קורה לצד עמוד, אלכסון) — הקורות יושבות עכשיו על הקורה הנושאת
+        const dropConn = connections.filter((c) => c.members.some((mid) => tr.drop.has(mid)) || ((c.type === 'eave' || c.type === 'rafter-side' || c.type === 'knee') && c.members.some((mid) => tr.shortCols.has(mid))));
+        const dc = new Set(dropConn.map((c) => c.id));
+        const keepIss = issues.filter((i) => !(i.elementId && dc.has(i.elementId))); issues.length = 0; issues.push(...keepIss);
+        const dropIds = new Set([...tr.drop, ...dropConn.flatMap((c) => c.parts.flatMap((pid) => [pid, `${pid}.H`, `${pid}.S`, `${pid}.N`]))]);
+        const keep = out.filter((m) => !dropIds.has(m.id)); out.length = 0; out.push(...keep);
+        connections = connections.filter((c) => !dropConn.includes(c));
+        if (tr.drop.size) issues.push({ code: 'TB_DROP', severity: 'info', message: `דילול עמודים: הוסרו ${tr.drop.size} אלמנטים (אלכסונים/קושרות) שנשענו על עמודים שבוטלו או קוצרו` });
+      }
     }
     byId = new Map(out.map((m) => [m.id, m]));
     issues.push(...checkClashes(connections, byId));

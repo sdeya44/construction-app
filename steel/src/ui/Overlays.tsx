@@ -8,6 +8,7 @@ import type { Viewport } from '../view/viewport';
 import { CONN_TYPE, SectionSvg } from './ConnectionEditor';
 import { Icon } from './icons';
 import { fabFor } from '../fab/useFab';
+import { OmitDialog } from './TransferPanel';
 import { KIND_LABEL } from './TreePanel';
 
 /** פקודה בלוח הפקודות / בתפריט. keys = קיצור מקלדת להצגה. */
@@ -32,6 +33,7 @@ export function ContextBar({ vp, onMore, onOpenConn }: { vp: Viewport | null; on
   const tool = useStore((s) => s.tool);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [editProf, setEditProf] = useState(false);
+  const [omit, setOmit] = useState<string[] | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -55,6 +57,7 @@ export function ContextBar({ vp, onMore, onOpenConn }: { vp: Viewport | null; on
   useEffect(() => setEditProf(false), [sel]);
 
   const ms = sel.map((id) => d.byId.get(id)).filter((m): m is Member => !!m);
+  if (omit) return <OmitDialog columnIds={omit} onClose={() => setOmit(null)} />;
   if (!ms.length || !pos || tool !== 'select') return null;
   const editable = ms.filter((m) => m.kind !== 'bolt');
   const profs = [...new Set(editable.map((m) => m.profile))];
@@ -89,6 +92,7 @@ export function ContextBar({ vp, onMore, onOpenConn }: { vp: Viewport | null; on
         const [key, label] = settingsOf(single.id, single.kind, single.purlin?.paramKey ?? (single.purlin?.side === 'R' ? 'right' : 'left'))!;
         return <button className="ctx-btn pri" data-testid="ctx-settings" title={label} onClick={() => window.dispatchEvent(new CustomEvent('ksp-quick', { detail: { key, label } }))}>⚙ מידות והגדרות</button>;
       })()}
+      {ms.some((m) => m.kind === 'column') && <button className="ctx-btn pri" data-testid="ctx-omit" title="ביטול העמודים שנבחרו והחלפתם בקורה נושאת בין העמודים שנותרו" onClick={() => setOmit(ms.filter((m) => m.kind === 'column').map((m) => m.id))}>בטל עמודים</button>}
       <button className="ctx-btn" onClick={() => store.set({ isolated: [...sel] })}>בודד</button>
       {single && <button className="ctx-btn" data-testid="ctx-isolate-asm" title="הצג רק את המכלול (החלק הראשי והחלקים המרותכים אליו) והברגים שלו" onClick={() => {
         const st = store.state, { fab } = fabFor(st.project, st.derived);
