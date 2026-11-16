@@ -201,7 +201,9 @@ export type WallId = 'L' | 'R' | 'F' | 'B';
 export interface OpeningDef { id: string; wall: WallId; /** מרחק מתחילת הקיר (L/R: מהמסגרת הראשונה; F/B: מציר שמאל) */ pos: Mm; width: Mm; height: Mm; sill: Mm; label?: string }
 export interface CladdingParams {
   roof: { enabled: boolean; panel: string; cover: Mm; eaveExt: Mm };
-  walls: { enabled: boolean; sides: Record<WallId, boolean>; panel: string; cover: Mm; bottom: Mm };
+  walls: { enabled: boolean; sides: Record<WallId, boolean>; panel: string; cover: Mm; bottom: Mm;
+    /** לכל קיר: מפתחים מחופים (L/R: בין מסגרות; F/B: בין שורות העמודים), גובה תחתון/עליון מעל ±0.00 (ריק = ברירת מחדל / עד הגג) */
+    per?: Partial<Record<WallId, { bays?: boolean[]; bottom?: Mm; top?: Mm | null }>> };
   girts: { enabled: boolean; profile: string; first: Mm; spacing: Mm };
   posts: { enabled: boolean; profile: string; maxSpacing: Mm };
   jambProfile: string;

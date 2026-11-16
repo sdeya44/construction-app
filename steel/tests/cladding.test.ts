@@ -63,3 +63,24 @@ describe('חיפוי, IFC והצעת מחיר ללקוח', () => {
     expect(p2.building.rafterProfile).not.toBe('IPE300');
   });
 });
+
+describe('חיפוי חלקי', () => {
+  it('CL-04: מפתחים לא מחופים ללא פטות; חיפוי עליון חלקי עם פטה בראשו ופח עליון; שדה לא מחופה בקיר קצה ללא עמודי רוח', () => {
+    const b = defaultBuilding(); b.cladding = defaultCladding();
+    b.cladding.walls.per = { L: { bays: [true, false, false, true, true], top: 3000 }, F: { bays: [false, true, true] } };
+    const p = newProject('x', b); const d = generate(p);
+    expect(d.issues.filter((i) => i.severity === 'error')).toEqual([]);
+    const gL = d.members.filter((m) => m.wall?.id === 'L' && m.wall.role === 'girt');
+    // מפתחים 2–3 ו-3–4 (y 6000..18000) ללא פטות
+    expect(gL.some((m) => Math.min(m.start.y, m.end.y) >= 6000 - 1 && Math.max(m.start.y, m.end.y) <= 18000 + 1)).toBe(false);
+    expect(Math.max(...gL.map((m) => m.start.z))).toBeCloseTo(2950, 0);
+    // קיר קדמי: שדה א-ב (x<6000) לא מחופה — אין עמוד רוח ב-x=6000? עמודי רוח קיימים רק בשדות מחופים
+    expect(d.members.filter((m) => m.wall?.id === 'F' && m.wall.role === 'post').every((m) => m.start.x > 0)).toBe(true);
+    const t = claddingTakeoff(p, d)!;
+    expect(t.flashings.some((f) => f.name.includes('פח עליון'))).toBe(true);
+    expect(t.flashings.some((f) => f.name.includes('שפה'))).toBe(true);
+    const sheetsL = t.wallSheets.filter((r) => r.where.includes('שמאל'));
+    expect(sheetsL[0].length).toBe(3000);
+    expect(sheetsL[0].count).toBe(Math.ceil(18000 / 1000));
+  });
+});

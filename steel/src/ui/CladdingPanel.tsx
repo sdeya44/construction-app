@@ -47,9 +47,29 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
         <div className="row" style={{ flexWrap: 'wrap', gap: 10 }}>
           {(['L', 'R', 'F', 'B'] as WallId[]).map((w) => <label key={w} className="row"><input type="checkbox" checked={cl.walls.sides[w]} data-testid={`clad-side-${w}`} onChange={(e) => set({ walls: { ...cl.walls, sides: { ...cl.walls.sides, [w]: e.target.checked } } })} />{WALL_HE[w]}</label>)}
         </div>
+        {(['L', 'R', 'F', 'B'] as WallId[]).filter((w) => cl.walls.sides[w]).map((w) => {
+          const pw = cl.walls.per?.[w] ?? {};
+          const n = w === 'L' || w === 'R' ? Math.max(0, p.building.frames.length - 1) : Math.max(0, (d.section?.lines.length ?? 2) - 1);
+          const lab = (i: number) => (w === 'L' || w === 'R' ? `${i + 1}–${i + 2}` : `${d.section?.lines[i]?.label ?? i + 1}–${d.section?.lines[i + 1]?.label ?? i + 2}`);
+          const setW = (patch: Partial<NonNullable<typeof pw>>) => set({ walls: { ...cl.walls, per: { ...(cl.walls.per ?? {}), [w]: { ...pw, ...patch } } } });
+          const bays = Array.from({ length: n }, (_, i) => pw.bays?.[i] ?? true);
+          return (
+            <div key={w} className="op-card" data-testid={`clad-wall-${w}`}>
+              <b>{WALL_HE[w]}</b>
+              <div className="row" style={{ flexWrap: 'wrap', gap: 8, margin: '4px 0' }}>
+                <span className="hint">מפתחים מחופים:</span>
+                {bays.map((on, i) => <label key={i} className="row" title={`מפתח ${lab(i)}`}><input type="checkbox" checked={on} data-testid={`clad-bay-${w}-${i}`} onChange={(e) => setW({ bays: bays.map((x, k) => (k === i ? e.target.checked : x)) })} />{lab(i)}</label>)}
+              </div>
+              <div className="field"><label>תחתית החיפוי מעל ±0.00</label><LenField mm={pw.bottom ?? cl.walls.bottom} unit="mm" testId={`clad-bottom-${w}`} onCommit={(v) => setW({ bottom: v })} /></div>
+              <div className="field"><label><input type="checkbox" checked={pw.top === undefined || pw.top === null} data-testid={`clad-totop-${w}`} onChange={(e) => setW({ top: e.target.checked ? null : 2500 })} /> עד הגג</label>
+                {pw.top !== undefined && pw.top !== null ? <LenField mm={pw.top} unit="mm" testId={`clad-top-${w}`} onCommit={(v) => setW({ top: v })} /> : <span className="hint">ראש החיפוי בקו הגג</span>}</div>
+            </div>
+          );
+        })}
+        <div className="hint">מפתח לא מחופה — ללא פטות קיר (ובקיר קצה גם ללא עמודי רוח). גובה עליון חלקי — פטה בראש החיפוי ופח עליון.</div>
         <div className="field"><label>סוג פנל</label><TextField value={cl.walls.panel} onCommit={(v) => set({ walls: { ...cl.walls, panel: v } })} /></div>
         <div className="field"><label>רוחב כיסוי</label><LenField mm={cl.walls.cover} unit="mm" onCommit={(v) => set({ walls: { ...cl.walls, cover: v } })} /></div>
-        <div className="field"><label>תחתית החיפוי מעל ±0.00</label><LenField mm={cl.walls.bottom} unit="mm" onCommit={(v) => set({ walls: { ...cl.walls, bottom: v } })} /></div>
+        <div className="field"><label>תחתית החיפוי (ברירת מחדל לכל הקירות)</label><LenField mm={cl.walls.bottom} unit="mm" onCommit={(v) => set({ walls: { ...cl.walls, bottom: v } })} /></div>
         <div className="field"><label>ברגים לקיר (למ"ר)</label><NumField value={cl.wallScrewsPerM2} onCommit={(v) => set({ wallScrewsPerM2: v })} /></div>
         <div className="panel-title">פטות קיר</div>
         <label className="row"><input type="checkbox" checked={cl.girts.enabled} onChange={(e) => set({ girts: { ...cl.girts, enabled: e.target.checked } })} />פטות קיר</label>

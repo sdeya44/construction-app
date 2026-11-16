@@ -40,6 +40,17 @@ function roofAt(sec: NSection, x: number): number | null {
 
 interface Support { x: number; top: number; depth: number }
 
+/** הגדרות חיפוי לקיר: מפתח מחופה? גובה תחתון ועליון (מ"מ מעל ±0.00; עליון null = עד הגג) */
+export function wallCfg(cl: CladdingParams, w: WallId) {
+  const pw = cl.walls.per?.[w];
+  return {
+    on: cl.walls.enabled && cl.walls.sides[w],
+    covered: (i: number) => cl.walls.enabled && cl.walls.sides[w] && (pw?.bays?.[i] ?? true),
+    bottom: pw?.bottom ?? cl.walls.bottom,
+    top: pw?.top ?? null,
+  };
+}
+
 export function buildWallFraming(_project: Project, b: BuildingParams, sec: NSection, members: Member[]): { members: Member[]; issues: ValidationIssue[] } {
   const out: Member[] = [], issues: ValidationIssue[] = [];
   const cl = b.cladding;
@@ -54,11 +65,16 @@ export function buildWallFraming(_project: Project, b: BuildingParams, sec: NSec
   const rafDepth = raf?.props.h ?? 300;
   const underRoof = (x: number) => { const z = roofAt(sec, x); return z === null ? null : z - (b.heightRef === 'TOS' ? rafDepth : rafDepth / 2); };
   const gp = cl.girts;
-  const levelsTo = (top: number) => {
+  /** מפלסי פטות קיר בין תחתית החיפוי לראשו: מתחת לגג — 150 מתחת לקו; בגובה עליון חלקי — פטה בראש החיפוי */
+  const levelsFor = (w: WallId, roofTop: number) => {
+    const c = wallCfg(cl, w);
+    const lo = c.bottom > 0 ? base + c.bottom + 50 : base + gp.first;
+    const partialTop = c.top !== null && base + c.top < roofTop - 150;
+    const hi = partialTop ? base + c.top! - 50 : roofTop - 150;
     const zs: number[] = [];
-    for (let z = base + gp.first; z <= top - 120; z += gp.spacing) zs.push(z);
-    if (zs.length && top - 150 - zs[zs.length - 1] > gp.spacing * 0.45) zs.push(top - 150);
-    return zs;
+    for (let z = lo; z <= hi + 30 - (partialTop ? 0 : 0); z += gp.spacing) zs.push(z);
+    if (!zs.length || hi - zs[zs.length - 1] > gp.spacing * 0.45) zs.push(hi);
+    return zs.filter((z) => z <= roofTop - 120);
   };
   const opsOf = (w: WallId) => cl.openings.filter((o) => o.wall === w);
   /** קטעי פטה לאחר הורדת פתחים: [a,b] לאורך הקיר בגובה z */
@@ -88,10 +104,12 @@ export function buildWallFraming(_project: Project, b: BuildingParams, sec: NSec
     const ch = (tryProfile(cols[0]!.profile)?.props.h ?? 200) / 2;
     const xF = ln.x + sgn * ch;
     const eaveZ = Math.min(...cols.map((c) => Math.max(c!.start.z, c!.end.z)));
-    const zs = gp.enabled ? levelsTo(eaveZ) : [];
+    const zs = gp.enabled ? levelsFor(w, eaveZ) : [];
     const y0 = fr[0].y;
+    const wc = wallCfg(cl, w);
     zs.forEach((z, li) => {
       for (let k = 0; k < fr.length - 1; k++) {
+        if (!wc.covered(k)) continue; // מפתח לא מחופה — ללא פטות קיר
         const segs = cutByOpenings(w, fr[k].y, fr[k + 1].y, z, (t) => y0 + t);
         segs.forEach(([a, bb], si) => out.push(mk(`GT.${w}.${String(li + 1).padStart(2, '0')}.${k + 1}${segs.length > 1 ? String.fromCharCode(97 + si) : ''}`, `פטת קיר ${w === 'L' ? 'שמאל' : 'ימין'} ${li + 1} · מפתח ${k + 1}`,
           v3(xF, a, z), v3(xF, bb, z), gProf, v3(sgn, 0, 0), 'purlin', { id: w, role: 'girt', level: li + 1 })));
@@ -113,9 +131,12 @@ export function buildWallFraming(_project: Project, b: BuildingParams, sec: NSec
     }
     if (sup.length < 2) continue;
     // עמודי רוח
+    const wcE = wallCfg(cl, w);
+    const fieldOf = (x: number) => { let k = 0; for (let i = 0; i < lines.length - 1; i++) if (x > lines[i].x + 1) k = i; return k; };
     if (cl.posts.enabled) {
       const add2: Support[] = [];
       for (let i = 0; i < sup.length - 1; i++) {
+        if (!wcE.covered(i)) continue; // שדה לא מחופה — ללא עמודי רוח
         const gap = sup[i + 1].x - sup[i].x, n = Math.ceil(gap / cl.posts.maxSpacing) - 1;
         for (let k = 1; k <= n; k++) {
           const x = sup[i].x + (gap * k) / (n + 1);
@@ -131,10 +152,11 @@ export function buildWallFraming(_project: Project, b: BuildingParams, sec: NSec
     const yF = f.y + sgn * (Math.max(...sup.map((q) => q.depth)) / 2);
     const xL = lines[0].x;
     const topMax = Math.max(...sup.map((q) => q.top));
-    const zs = gp.enabled ? levelsTo(topMax) : [];
+    const zs = gp.enabled ? levelsFor(w, topMax) : [];
     zs.forEach((z, li) => {
       for (let i = 0; i < sup.length - 1; i++) {
         const A = sup[i], B = sup[i + 1];
+        if (!wcE.covered(fieldOf((A.x + B.x) / 2))) continue;
         // הפטה חייבת להישען על שני התומכים ולהישאר מתחת לגג לכל אורכה
         const rA = underRoof(A.x), rB = underRoof(B.x);
         if (z > Math.min(A.top, B.top) - 100 || (rA !== null && z > rA - 150) || (rB !== null && z > rB - 150)) continue;
@@ -232,43 +254,77 @@ export function claddingTakeoff(p: Project, d: DerivedModel): CladdingTakeoff | 
     const colTop = (x: number) => Math.max(...d.members.filter((m) => m.kind === 'column' && Math.abs(m.start.x - x) < 1).map((m) => Math.max(m.start.z, m.end.z)), base);
     const ops = (w: WallId) => cl.openings.filter((o) => o.wall === w);
     const opArea = (w: WallId) => ops(w).reduce((a1, o) => a1 + (o.width / 1000) * (o.height / 1000), 0);
-    const bottom = base + cl.walls.bottom;
-    let hMax = 0;
+    let edgeV = 0, topEdge = 0, baseLen = 0, sillLen = 0;
+    /** קטעים רציפים מחופים לאורך קיר: [התחלה, סוף] */
+    const runs = (cuts: number[], covered: (i: number) => boolean) => {
+      const out: [number, number][] = [];
+      for (let i = 0; i < cuts.length - 1; i++) if (covered(i)) { const l = out[out.length - 1]; if (l && Math.abs(l[1] - cuts[i]) < 1) l[1] = cuts[i + 1]; else out.push([cuts[i], cuts[i + 1]]); }
+      return out;
+    };
+    const cornerCovered: Record<string, number> = {};
     for (const w of ['L', 'R'] as const) {
-      if (!cl.walls.sides[w]) continue;
-      const x = w === 'L' ? xL : xR, H = colTop(x) - bottom;
-      hMax = Math.max(hMax, H);
-      const n = Math.ceil(Wy / cl.walls.cover);
-      res.wallSheets.push({ where: WALL_HE[w], panel: cl.walls.panel, count: n, length: Math.round(H) });
-      res.wallArea += (Wy / 1000) * (H / 1000) - opArea(w);
+      const c = wallCfg(cl, w); if (!c.on) continue;
+      const x = w === 'L' ? xL : xR;
+      const bottom = base + c.bottom, top = Math.min(colTop(x), c.top !== null ? base + c.top : Infinity), H = top - bottom;
+      if (H <= 0) continue;
+      const cuts = fr.map((f) => f.y); cuts[0] = y0; cuts[cuts.length - 1] = y1;
+      const rs = runs(cuts, c.covered);
+      let len = 0;
+      for (const [a, bb] of rs) {
+        len += bb - a; edgeV += 2 * H;
+        res.surfaces.push({ kind: 'wall', pts: [v3(x, a, bottom), v3(x, bb, bottom), v3(x, bb, top), v3(x, a, top)] });
+        if (Math.abs(a - y0) < 1) cornerCovered[`S${w}F`] = H;
+        if (Math.abs(bb - y1) < 1) cornerCovered[`S${w}B`] = H;
+      }
+      if (!len) continue;
+      res.wallSheets.push({ where: WALL_HE[w], panel: cl.walls.panel, count: Math.ceil(len / cl.walls.cover), length: Math.round(H) });
+      res.wallArea += (len / 1000) * (H / 1000) - opArea(w);
       res.openingArea += opArea(w);
-      res.surfaces.push({ kind: 'wall', pts: [v3(x, y0, bottom), v3(x, y1, bottom), v3(x, y1, bottom + H), v3(x, y0, bottom + H)] });
+      if (c.top !== null && top < colTop(x) - 1) topEdge += len;
+      if (c.bottom > 0) sillLen += len; else baseLen += len;
     }
     for (const w of ['F', 'B'] as const) {
-      if (!cl.walls.sides[w]) continue;
+      const c = wallCfg(cl, w); if (!c.on) continue;
       const y = w === 'F' ? fr[0].y : fr[fr.length - 1].y;
-      // פנלים אנכיים ברוחב כיסוי: אורך כל פנל עד קו הגג (הנקודה הגבוהה ברוחב הפנל)
+      const bottom = base + c.bottom, cap = c.top !== null ? base + c.top : Infinity;
+      const roofZ = (x: number) => Math.min(cap, (roofAt(sec, x) ?? bottom) + lift);
+      const rs = runs(xs, c.covered);
       const lens = new Map<number, number>();
-      let area = 0;
-      for (let x = xL; x < xR - 1; x += cl.walls.cover) {
-        const xe = Math.min(xR, x + cl.walls.cover);
-        const top = Math.max(roofAt(sec, x) ?? 0, roofAt(sec, xe) ?? 0) + lift;
-        const L = Math.round(top - bottom);
-        lens.set(L, (lens.get(L) ?? 0) + 1);
-        area += ((xe - x) / 1000) * (((roofAt(sec, x) ?? 0) + (roofAt(sec, xe) ?? 0)) / 2 + lift - bottom) / 1000;
+      let area = 0, len = 0;
+      for (const [a, bb] of rs) {
+        for (let x = a; x < bb - 1; x += cl.walls.cover) {
+          const xe = Math.min(bb, x + cl.walls.cover);
+          const L = Math.round(Math.max(roofZ(x), roofZ(xe)) - bottom);
+          if (L > 0) lens.set(L, (lens.get(L) ?? 0) + 1);
+          area += ((xe - x) / 1000) * Math.max(0, (roofZ(x) + roofZ(xe)) / 2 - bottom) / 1000;
+        }
+        len += bb - a;
+        edgeV += Math.max(0, roofZ(a) - bottom) + Math.max(0, roofZ(bb) - bottom);
+        const knots = [...new Set([a, ...sec.planes.flatMap((pl) => [pl.a.x, pl.b.x]).filter((x) => x > a && x < bb), bb])].sort((a1, a2) => a1 - a2);
+        const pts: Vec3[] = [v3(bb, y, bottom), v3(a, y, bottom), ...knots.map((x) => v3(x, y, roofZ(x)))];
+        res.surfaces.push({ kind: 'wall', pts });
+        if (Math.abs(a - xL) < 1) cornerCovered[`E${w}L`] = roofZ(a) - bottom;
+        if (Math.abs(bb - xR) < 1) cornerCovered[`E${w}R`] = roofZ(bb) - bottom;
+        if (c.top !== null) { for (let x = a; x < bb; x += 250) if (roofZ(x) >= cap - 1) topEdge += Math.min(250, bb - x); }
       }
+      if (!len) continue;
       for (const [L, n] of [...lens].sort((a1, a2) => a2[0] - a1[0])) res.wallSheets.push({ where: WALL_HE[w], panel: cl.walls.panel, count: n, length: L });
       res.wallArea += area - opArea(w);
       res.openingArea += opArea(w);
-      const pts: Vec3[] = [v3(xR, y, bottom), v3(xL, y, bottom)];
-      const knots = [...new Set([xL, ...sec.planes.flatMap((pl) => [pl.a.x, pl.b.x]), xR])].filter((x) => x >= xL - 1 && x <= xR + 1).sort((a1, a2) => a1 - a2);
-      for (const x of knots) pts.push(v3(x, y, (roofAt(sec, x) ?? bottom) + lift));
-      res.surfaces.push({ kind: 'wall', pts });
+      if (c.bottom > 0) sillLen += len; else baseLen += len;
     }
-    if (hMax) res.flashings.push({ name: 'פחי פינה', length: 4 * hMax });
-    const perim = 2 * (Wy + (xR - xL));
+    // פינות: כששני הקירות הניצבים מחופים בפינה — פח פינה; כל שפה אנכית אחרת — פח קצה
+    let corner = 0;
+    for (const [a, bq] of [['SLF', 'EFL'], ['SLB', 'EBL'], ['SRF', 'EFR'], ['SRB', 'EBR']]) {
+      const h1 = cornerCovered[a], h2 = cornerCovered[bq];
+      if (h1 !== undefined && h2 !== undefined) { corner += Math.min(h1, h2); edgeV -= h1 + h2; }
+    }
+    if (corner) res.flashings.push({ name: 'פחי פינה', length: corner });
+    if (edgeV > 1) res.flashings.push({ name: 'פחי שפה אנכיים (קצה חיפוי חלקי)', length: edgeV });
+    if (topEdge > 1) res.flashings.push({ name: 'פח עליון (ראש חיפוי חלקי)', length: topEdge });
     const doors = cl.openings.filter((o) => o.sill === 0).reduce((a1, o) => a1 + o.width, 0);
-    res.flashings.push({ name: 'פח בסיס (סף קיר)', length: Math.max(0, perim - doors) });
+    if (baseLen) res.flashings.push({ name: 'פח בסיס (סף קיר)', length: Math.max(0, baseLen - doors) });
+    if (sillLen) res.flashings.push({ name: 'פח תחתון / מים (חיפוי מעל קיר)', length: sillLen });
     const opPer = cl.openings.reduce((a1, o) => a1 + o.width * (o.sill > 0 ? 2 : 1) + 2 * o.height, 0);
     if (opPer) res.flashings.push({ name: 'פחי פתחים (משקוף, צדדים, אדן)', length: opPer });
     res.screws += res.wallArea * cl.wallScrewsPerM2;
