@@ -1,3 +1,4 @@
+import { applyStandard } from '../persist/shopStandard';
 import { useEffect, useState, type ReactNode } from 'react';
 import { copyMembers, mirrorMembers, moveMembers, rotateMembers } from '../commands/commands';
 import { uniformFrames, defaultBuilding, newProject } from '../model/defaults';
@@ -64,7 +65,7 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
     if (!cand || errors.length) return;
     const bb: BuildingParams = tpl ? { ...cand, section: tpl.make(), kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined } : { ...cand, kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined };
     if (clad) bb.cladding = defaultCladding();
-    let p = newProject(name, bb);
+    let p = applyStandard(newProject(name, bb)); // סטנדרט מסגריה שמור (אם קיים)
     p.meta.number = number; p.meta.client = client;
     if (autoSize) { try { p = applySizingSuggestion().run(p); } catch { /* נשאר עם החתכים שנבחרו */ } }
     store.loadProject(p, true);

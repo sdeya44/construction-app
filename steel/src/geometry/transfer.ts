@@ -9,6 +9,7 @@ import { add, norm, scale, sub, v3, type Plane, type Vec3 } from '../core/vec';
 import { getProfile, tryProfile } from '../profiles/library';
 import type { BoltInfo, BuildingParams, Connection, FrameDef, Member, Project, TransferDef, ValidationIssue, WeldInfo } from '../model/types';
 import type { NLine, NSection } from '../model/section';
+import { buildTrussPlane } from './truss';
 import { makeBolt } from './connections';
 
 const Z = v3(0, 0, 1), X = v3(1, 0, 0), Y = v3(0, 1, 0);
@@ -47,15 +48,22 @@ function rafterGeom(r: Member) {
 export function prepareTransfers(project: Project, b: BuildingParams, sec: NSection, members: Member[], deleted: Set<string>, issues: ValidationIssue[]): TbPlan[] {
   const out: TbPlan[] = [];
   const fr = sortFrames(b);
-  for (const def of b.transfers ?? []) {
+  for (let def of b.transfers ?? []) {
     const line = sec.lines.find((l) => l.id === def.lineId);
     const i0 = fr.findIndex((f) => f.id === def.from), i1 = fr.findIndex((f) => f.id === def.to);
     if (!line || i0 < 0 || i1 < 0 || i1 - i0 < 2) { issues.push({ code: 'TB_INVALID', severity: 'error', message: `קורה נושאת ${def.id}: שורה או מסגרות תמיכה לא קיימות` }); continue; }
     const frames = fr.slice(i0, i1 + 1);
     const removed = frames.slice(1, -1).filter((f) => def.removed.includes(f.id));
     if (!removed.length) continue;
+    const isTruss = def.kind === 'truss' && !!def.truss;
+    if (isTruss && def.support !== 'A1') issues.push({ code: 'TB_TRUSS', severity: 'info', message: `מסבך נושא ${def.id}: נתמך על ראש העמוד (A1) — הגדרת התמיכה בצד הוחלפה` });
+    if (isTruss) def = { ...def, support: 'A1', seat: def.seat === 'B4' ? 'B1' : def.seat, profile: def.truss!.profiles.top };
     const prof = tryProfile(def.profile);
     if (!prof) { issues.push({ code: 'PROFILE', severity: 'error', message: `קורה נושאת ${def.id}: חתך לא מוכר ${def.profile}` }); continue; }
+    const pBot = isTruss ? tryProfile(def.truss!.profiles.bottom) : null;
+    if (isTruss && !pBot) { issues.push({ code: 'PROFILE', severity: 'error', message: `מסבך נושא ${def.id}: חתך חגורה תחתונה לא מוכר` }); continue; }
+    // גובה כולל מתחת לפני העליון: קורה — h; מסבך — חצי חגורה עליונה + גובה צירים + חצי חגורה תחתונה
+    const hTot = isTruss ? prof.props.h / 2 + def.truss!.depth + pBot!.props.h / 2 : prof.props.h;
     for (const f of removed) deleted.add(colId(f.id, line.id));
     const side = def.support !== 'A1';
     let seat = def.seat;
@@ -90,7 +98,7 @@ export function prepareTransfers(project: Project, b: BuildingParams, sec: NSect
     if (!side) for (const fid of [def.from, def.to]) {
       const c = members.find((m) => m.id === colId(fid, line.id));
       if (!c) continue;
-      const zc = zTop - prof.props.h - 20;
+      const zc = zTop - hTot - 20;
       c.end = v3(c.end.x, c.end.y, zc); c.endCut = undefined;
       c.label = `${c.label} (מקוצר — קורה נושאת)`;
     }
@@ -100,8 +108,8 @@ export function prepareTransfers(project: Project, b: BuildingParams, sec: NSect
 }
 
 /** בניית ה-TB, חיבורי התמיכה והמושבים; ניקוי אלמנטים שתלויים בעמודים שהוסרו/קוצרו */
-export function buildTransfers(project: Project, plans: TbPlan[], members: Member[]): { members: Member[]; connections: Connection[]; issues: ValidationIssue[]; drop: Set<string>; shortCols: Set<string> } {
-  const res = { members: [] as Member[], connections: [] as Connection[], issues: [] as ValidationIssue[], drop: new Set<string>(), shortCols: new Set<string>() };
+export function buildTransfers(project: Project, plans: TbPlan[], members: Member[]): { members: Member[]; connections: Connection[]; issues: ValidationIssue[]; drop: Set<string>; shortCols: Set<string>; trussSplices: Record<string, number[]> } {
+  const res = { members: [] as Member[], connections: [] as Connection[], issues: [] as ValidationIssue[], drop: new Set<string>(), shortCols: new Set<string>(), trussSplices: {} as Record<string, number[]> };
   const mat = project.building.material;
   const byId = new Map(members.map((m) => [m.id, m]));
   const plate = (id: string, desc: string, start: Vec3, end: Vec3, w: number, t: number, refUp: Vec3, anchor: Member['anchor'], connId: string, endCut?: Plane): Member => ({
@@ -129,6 +137,38 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
       profile: def.profile, material: mat, rollDeg: 0, mirror: false, anchor: 'top', refUp: Z, source: 'generated', manualPlacement: false, lineId: line.id,
     };
     res.members.push(TB);
+    // ---------- מסבך נושא: חגורה תחתונה, אנכיים ואלכסונים (מרותכים), חיבורי המשך באמצע שדות
+    const tr = def.kind === 'truss' && def.truss ? def.truss : null;
+    const pB = tr ? getProfile(tr.profiles.bottom) : null;
+    const bcId = `${tbId}.BC`;
+    const zBC = tr ? zTop - h / 2 - tr.depth : 0;
+    if (tr) {
+      TB.label = `מסבך נושא ציר ${line.label} — חגורה עליונה`;
+      const BC: Member = { ...TB, id: bcId, label: `מסבך נושא ציר ${line.label} — חגורה תחתונה`, start: v3(x, ys, zBC), end: v3(x, ye, zBC), profile: tr.profiles.bottom, anchor: 'center' };
+      res.members.push(BC);
+      const n = Math.max(2, tr.panels);
+      const nodes = Array.from({ length: n + 1 }, (_, i) => y0 + ((y1 - y0) * i) / n);
+      const tp = buildTrussPlane({ idBase: `${tbId}.TR`, connId: `C.TBT.${def.id}`, label: `מסבך נושא ציר ${line.label}`, origin: v3(x, 0, 0), e: Y, nodes,
+        top: { z: () => zTop - h / 2, h, memberAt: () => tbId }, bot: { z: () => zBC, h: pB!.props.h, memberAt: () => bcId }, spec: tr, mat });
+      res.members.push(...tp.members); res.connections.push(tp.connection); res.issues.push(...tp.issues);
+      // מושבים בצמתים: מסגרת שאינה על צומת — אזהרה
+      for (const f of pl.supported) if (!nodes.some((sN) => Math.abs(sN - f.y) < 5)) { res.issues.push({ code: 'TB_TRUSS', severity: 'warning', elementId: tbId, message: `מסבך נושא ${def.id}: קורת הגג במסגרת ${f.id} אינה על צומת — התאם את מספר השדות לכפולה של מספר המפתחים` }); break; }
+      // חיבורי המשך: באמצע שדה (בחגורה חופשית מצמתים)
+      const stock = project.settings.stockLength - 30;
+      let panelsCut: number[] = [];
+      if (Array.isArray(tr.splice)) panelsCut = tr.splice.filter((i) => i >= 0 && i < n);
+      else if (tr.splice === 'auto' && ye - ys > stock) {
+        let prev = ys;
+        for (let i = 0; i < n; i++) {
+          const mid = (nodes[i] + nodes[i + 1]) / 2, nextMid = i + 1 < n ? (nodes[i + 1] + nodes[i + 2]) / 2 : ye;
+          if ((i + 1 < n ? nextMid : ye) - prev > stock && mid - prev > 500) { panelsCut.push(i); prev = mid; }
+        }
+      }
+      const ts = panelsCut.map((i) => Math.round((nodes[i] + nodes[i + 1]) / 2 - ys));
+      if (ts.length) res.trussSplices[tbId] = ts, res.trussSplices[bcId] = ts;
+      const pieces = [0, ...ts, ye - ys].map((t2, i, a2) => (i ? t2 - a2[i - 1] : 0)).slice(1);
+      if (pieces.some((L) => L > stock)) res.issues.push({ code: 'TB_SPLICE', severity: 'warning', elementId: tbId, message: `מסבך נושא ${def.id}: קטע חגורה ארוך מחומר הגלם (${(Math.max(...pieces) / 1000).toFixed(2)} מ') — סמן חיבור המשך בשדה` });
+    }
     const span = (y1 - y0) / 1000;
     res.issues.push({ code: 'TB_INFO', severity: 'info', elementId: tbId, message: `קורה נושאת ציר ${line.label}: ${def.profile}, מפתח ${span.toFixed(2)} מ' — ${SUPPORT_HE[def.support]} · ${SEAT_HE[pl.seat]}. גיאומטריה בלבד; היציבות לרוחב של המסגרות ללא עמוד — דרך קושרות, באישור מהנדס` });
 
@@ -138,23 +178,26 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
       const fy = frames.find((f) => f.id === fid)!.y;
       const id = `C.TBS.${def.id}.${fid}`;
       const parts: string[] = []; const bolts: BoltInfo[] = []; const welds: WeldInfo[] = [];
-      const zB = zTop - h;
+      // תמיכה: קורה — ה-TB עצמה; מסבך — החגורה התחתונה יושבת על פלטת הראש
+      const sP = tr ? pB! : tbp, sId = tr ? bcId : tbId;
+      const sh = sP.props.h, sbw = sP.props.b, stw = sP.dims.tw ?? 8, stf = sP.dims.tf ?? 12;
+      const zB = tr ? zBC - sh / 2 : zTop - h;
       if (def.support === 'A1') {
-        const capL = cb + 160, capW = Math.max(cp.props.h, tb) + 40;
+        const capL = cb + 160, capW = Math.max(cp.props.h, sbw) + 40;
         const cap = plate(`${id}.CAP`, `פלטת ראש עמוד PL20×${Math.round(capW)}×${Math.round(capL)}`, v3(x, fy - capL / 2, zB), v3(x, fy + capL / 2, zB), capW, 20, Z, 'top', id);
         res.members.push(cap); parts.push(cap.id);
         welds.push(weld(id, 1, c.id, cap.id, 2 * (cp.props.h + cb), v3(x, fy, zB - 20)));
         // מקשחי ווב ב-TB מעל העמוד (שני צדי הווב)
         // מקשח צמוד לווב ולשני האגפים (לריתוך מלא), פינות פנימיות קטומות 45° מעבר לרדיוס השורש r
-        const rr = tbp.dims.r ?? 15, sw = Math.floor((tb - tw) / 2 - 5), cS = Math.ceil(rr + 5);
+        const rr = sP.dims.r ?? 15, sw = Math.floor((sbw - stw) / 2 - 5), cS = Math.ceil(rr + 5);
         for (const s2 of [1, -1]) {
-          const xc2 = x + s2 * (tw / 2 + 0.5 + sw / 2);
-          const st: Member = { ...plate(`${id}.ST${s2 > 0 ? 'R' : 'L'}`, `מקשח ווב PL10×${sw}×${Math.round(h - 2 * tf - 1)}, קיטום ${cS}×45°`, v3(xc2, fy, zB + tf + 0.5), v3(xc2, fy, zTop - tf - 0.5), sw, 10, Y, 'center', id), snip: { side: (-s2) as -1 | 1, c: cS } };
-          res.members.push(st); parts.push(st.id); welds.push(weld(id, 2 + (s2 > 0 ? 0 : 1), tbId, st.id, 2 * (h - 2 * tf), v3(x, fy, zB + h / 2)));
+          const xc2 = x + s2 * (stw / 2 + 0.5 + sw / 2);
+          const st: Member = { ...plate(`${id}.ST${s2 > 0 ? 'R' : 'L'}`, `מקשח ווב PL10×${sw}×${Math.round(sh - 2 * stf - 1)}, קיטום ${cS}×45°`, v3(xc2, fy, zB + stf + 0.5), v3(xc2, fy, zB + sh - stf - 0.5), sw, 10, Y, 'center', id), snip: { side: (-s2) as -1 | 1, c: cS } };
+          res.members.push(st); parts.push(st.id); welds.push(weld(id, 2 + (s2 > 0 ? 0 : 1), sId, st.id, 2 * (sh - 2 * stf), v3(x, fy, zB + sh / 2)));
         }
         let k = 0;
-        for (const dx of [-(tb / 2 - 30), tb / 2 - 30]) for (const dy of [-(cb / 2 + 45), cb / 2 + 45]) {
-          bolts.push(makeBolt(`${id}.B${++k}`, id, v3(x + dx, fy + dy, zB - 20), Z, BOLT, 20 + tf, 'site', [cap.id, tbId], X, res.members));
+        for (const dx of [-(sbw / 2 - 30), sbw / 2 - 30]) for (const dy of [-(cb / 2 + 45), cb / 2 + 45]) {
+          bolts.push(makeBolt(`${id}.B${++k}`, id, v3(x + dx, fy + dy, zB - 20), Z, BOLT, 20 + stf, 'site', [cap.id, sId], X, res.members));
         }
       } else {
         /* צד */

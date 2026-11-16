@@ -4,6 +4,7 @@ import { zAt, type SectionTopology } from '../model/section';
 import { getProfile, tryProfile } from '../profiles/library';
 import { hw, makeBolt } from './connections';
 import { finJoint } from './finJoint';
+import { trussFrames } from './truss';
 
 /** ברירת מחדל לפי תוכניות הלקוח: RHS80/80/4, פלטת קצה 180×280×14 בכל קצה, 4×M16 (שתי עמודות × שתי שורות) */
 export function defaultKneeBraces(): KneeBraceParams {
@@ -33,7 +34,9 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
   const X = v3(1, 0, 0), Y = v3(0, 1, 0), Z = v3(0, 0, 1);
   const d0 = kb.bolt.d + kb.bolt.clearance;
   const nutR = hw(kb.bolt.d).s / Math.sqrt(3) + 2;
+  const trF = new Set(trussFrames(project));
   for (const f of project.building.frames) {
+    if (trF.has(f.id)) continue; // מסבך גג — החגורה התחתונה במקום האלכסון
     const fi = project.building.frames.indexOf(f) + 1;
     for (const jn of topo.junctions) {
       const col = byId.get(`${f.id}.COL.${jn.line.id}`), raf = byId.get(jn.plane.rafterId(f.id));

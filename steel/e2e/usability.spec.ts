@@ -139,9 +139,6 @@ test('USE-07: עריכה על המודל — שיפוע, גובה עמודים �
   expect([pu.left.spacing, pu.right.spacing, ...Object.values(pu.planes ?? {}).map((x: any) => x.spacing)]).toContain(1200);
   // חלונית הגדרות מתוך תומך שנבחר
   await page.evaluate(() => { const k = (window as any).__ksp; const c = k.store.state.derived.members.find((m: any) => m.kind === 'cleat'); k.store.select([c.id]); });
-  await page.getByTestId('ctx-settings').click();
-  await expect(page.getByTestId('quick-panel')).toBeVisible();
+  await expect(page.getByTestId('hub-settings')).toBeVisible();
   await shot(page, 'USE-07_quick');
-  await page.getByTestId('quick-close').click();
-  await expect(page.getByTestId('quick-panel')).toHaveCount(0);
 });

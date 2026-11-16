@@ -9,9 +9,10 @@ import { store, useStore } from '../store';
 import { cachedSolid } from '../view/scene';
 import { LenField, NumField } from './fields';
 import { Icon } from './icons';
+import { PlateWizard } from './PlateWizard';
 
 const STATUS: Record<ApprovalStatus, string> = { 'not-verified': 'לא מאומת', 'for-review': 'לבדיקה', approved: 'מאושר' };
-export const CONN_TYPE: Record<Connection['type'], string> = { eave: 'עמוד-קורה (שתי פלטות מוברגות)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה', 'rafter-side': 'קורה לצד עמוד (פלטת קצה)', knee: 'אלכסון עמוד-קורה', 'ridge-tie': 'פרופיל חיזוק אופקי ברכס', 'beam-splice': 'חיבור המשך קורה (פלטות קצה)', 'tb-support': 'קורה נושאת ↔ עמוד', 'tb-seat': 'קורת גג על קורה נושאת' };
+export const CONN_TYPE: Record<Connection['type'], string> = { eave: 'עמוד-קורה (שתי פלטות מוברגות)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה', 'rafter-side': 'קורה לצד עמוד (פלטת קצה)', knee: 'אלכסון עמוד-קורה', 'ridge-tie': 'פרופיל חיזוק אופקי ברכס', 'beam-splice': 'חיבור המשך קורה (פלטות קצה)', 'tb-support': 'קורה נושאת ↔ עמוד', 'tb-seat': 'קורת גג על קורה נושאת', truss: 'מסבך — צמתים מרותכים', 'truss-splice': 'חיבור המשך חגורת מסבך', 'truss-end': 'חגורה תחתונה ↔ עמוד' };
 const BOLT_D = [10, 12, 16, 20, 24];
 
 /** רשימת החיבורים של אלמנט + כפתור פתיחת עורך. */
@@ -77,6 +78,7 @@ export function ConnectionEditor() {
         }}><Icon name="isolate" />הצג בתלת־ממד</button>
         {store.state.isolated && <button className="btn small" onClick={() => store.set({ isolated: null })}>הצג הכל</button>}
       </div>
+      <PlateWizard c={c} />
       <SectionSvg c={c} />
       <div className="field"><label>סטטוס</label>
         <select className="inp" data-testid="conn-status" value={c.status} onChange={(e) => {

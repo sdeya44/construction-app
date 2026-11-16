@@ -11,7 +11,7 @@ import { RoofPanel, type RoofSection } from './RoofPanel';
 import { BracePanel, StructurePanel, type BraceSection, type StructSection } from './StructurePanel';
 import { MenuPic } from './pics';
 import { CladdingPanel, type CladSection } from './CladdingPanel';
-import { TransferPanel } from './TransferPanel';
+import { RoofTrussPanel, TransferPanel } from './TransferPanel';
 import { IssuesPanel, KIND_LABEL, TreePanel } from './TreePanel';
 
 /**
@@ -25,9 +25,9 @@ export type NavKey =
   | 'conns' | `c:${Connection['type']}`
   | 'issues' | `i:${Severity}`
   | 'brace' | `b:${BraceSection}`
-  | 'clad' | `w:${CladSection}` | 'b:tb';
+  | 'clad' | `w:${CladSection}` | 'b:tb' | 'b:truss';
 
-const ORDER_C: Connection['type'][] = ['eave', 'ridge', 'base', 'rafter-side', 'knee', 'ridge-tie', 'purlin-cleat', 'purlin-splice', 'beam-splice', 'brace-end', 'brace-cross', 'brace', 'tb-support', 'tb-seat'];
+const ORDER_C: Connection['type'][] = ['eave', 'ridge', 'base', 'rafter-side', 'knee', 'ridge-tie', 'purlin-cleat', 'purlin-splice', 'beam-splice', 'brace-end', 'brace-cross', 'brace', 'tb-support', 'tb-seat', 'truss', 'truss-splice', 'truss-end'];
 const KINDS: MemberKind[] = ['column', 'rafter', 'purlin', 'girt', 'brace', 'cleat', 'plate', 'anchor', 'beam'];
 const SEV_LABEL: Record<Severity, string> = { error: 'שגיאות', warning: 'אזהרות', info: 'מידע' };
 
@@ -84,6 +84,7 @@ export function SideNav({ nav, setNav, onOpenConn }: { nav: NavKey; setNav: (k: 
           { key: 'b:walls', label: 'קשיחות קירות / אגד B', pic: 'walls' },
           { key: 'b:ties', label: 'שורות קשירה לפטות', pic: 'ties' },
           { key: 'b:tb', label: 'קורות נושאות (דילול עמודים)', n: store.state.project.building.transfers?.length || undefined, pic: 'frames' },
+          { key: 'b:truss', label: 'מסבכי גג', n: store.state.project.building.roofTruss?.enabled ? d.connections.filter((c) => c.type === 'truss' && c.id.startsWith('C.TR.')).length : undefined, pic: 'roofX' },
         ])}
         {group('clad', 'חיפוי ופתחים', 'tab-clad', 'walls', [
           { key: 'w:roof', label: 'חיפוי גג ומזחלות', pic: 'slope' },
@@ -126,6 +127,7 @@ export function NavContent({ nav, onOpenConn }: { nav: NavKey; onOpenConn: (id: 
   if (g === 's') return <StructurePanel section={k as StructSection} />;
   if (g === 'r') return <RoofPanel section={k as RoofSection} />;
   if (nav === 'b:tb') return <TransferPanel />;
+  if (nav === 'b:truss') return <RoofTrussPanel />;
   if (g === 'b') return <BracePanel part={k as BraceSection} />;
   if (g === 'w') return <CladdingPanel section={k as CladSection} />;
   if (g === 'k') return <ElementsTable kind={k as MemberKind} />;

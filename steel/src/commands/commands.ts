@@ -5,6 +5,7 @@ import type { TransferDef, ValidationIssue, ApprovalStatus, BuildingParams, Knee
 import { purlinParams } from '../geometry/purlins';
 import { effectiveSplices } from '../geometry/autoSplice';
 import { defaultKneeBraces } from '../geometry/knee';
+import { defaultSideConn } from '../model/defaults';
 import type { CustomSection } from '../model/section';
 import { commitNumbering, computeFabrication } from '../fab/marks';
 import { hasErrors, validateBuilding } from '../model/validate';
@@ -458,13 +459,14 @@ export function resetConnection(id: string): Command {
 }
 
 /** עדכון ברירת מחדל לסוג חיבור (חל על כל החיבורים שלא שונו ידנית). */
-export function setConnectionDefault(type: 'eave' | 'ridge' | 'base', patch: Partial<PlateConnParams>): Command {
+export function setConnectionDefault(type: 'eave' | 'ridge' | 'base' | 'side', patch: Partial<PlateConnParams>): Command {
   return {
     label: 'עדכון ברירת מחדל לחיבורים',
     run: (p) => {
       checkPlate(patch);
       const n = clone(p);
-      n.connectionDefaults[type] = { ...n.connectionDefaults[type], ...clone(patch), bolt: { ...n.connectionDefaults[type].bolt, ...(patch.bolt ?? {}) } };
+      const cur = type === 'side' ? (n.connectionDefaults.side ?? defaultSideConn()) : n.connectionDefaults[type];
+      n.connectionDefaults[type] = { ...cur, ...clone(patch), bolt: { ...cur.bolt, ...(patch.bolt ?? {}) } };
       return n;
     },
   };

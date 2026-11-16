@@ -37,7 +37,7 @@ const mk = (id: string, label: string, profile: string, start: Vec3, end: Vec3, 
  * קושרות X בגג ובקירות ושורות קשירה לפטות. קושרות X עובדות במתיחה בלבד (לפי תוכנית K-02).
  * חיבור: פח מרותך במסגריה, זוויתן מוברג בשטח (M16), בורג בהצטלבות — החלטת משתמש 15.11.2026.
  */
-export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: Member[], eff: BuildingParams, stockLen = 12000): BracingResult {
+export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: Member[], eff: BuildingParams, stockLen = 12000, profOf?: (id: string) => string | undefined): BracingResult {
   const res: BracingResult = { members: [], connections: [], issues: [] };
   const br = b.bracing;
   const frames = b.frames;
@@ -118,6 +118,8 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
   // ---- קושרות קיר: במישור ציר העמודים, פח חיבור מרותך לווב העמוד בכל קצה
   if (br.walls.enabled) {
     const ctw = col.dims.tw ?? col.dims.t ?? 6;
+    // עובי הווב של העמוד בפועל (חתך שהוחלף לעמוד מסוים)
+    const twOf = (id: string) => { const n = profOf?.(id); const pr = n ? tryProfile(n) : null; return pr ? pr.dims.tw ?? pr.dims.t ?? ctw : ctw; };
     const ls = [...topo.sec.lines].sort((p, q) => p.x - q.x);
     for (const [lid, bays] of wallBays(b.bracing, ls.map((l) => l.id))) {
       const l = ls.find((q) => q.id === lid)!;
@@ -140,7 +142,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         const z0 = b.baseElevation + 300, z1 = eave - rafV - 60 - 150;
         if (z1 - z0 < 1000) { res.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `קושרת קיר ציר ${l.label} מפתח ${bay + 1}: גובה קטן מדי` }); continue; }
         xbrace(`W${bay + 1}.${side}`, `קושרת קיר ציר ${l.label} מפתח ${bay + 1}`, br.walls.profile, v3(x, 0, z0), v3(1, 0, 0), v3(0, 0, 1),
-          { y: f0.y, w: 0 }, { y: f1.y, w: z1 - z0 }, f0.y + ctw / 2, f1.y - ctw / 2, `${f0.id}.COL.${l.id}`, `${f1.id}.COL.${l.id}`);
+          { y: f0.y, w: 0 }, { y: f1.y, w: z1 - z0 }, f0.y + twOf(`${f0.id}.COL.${l.id}`) / 2, f1.y - twOf(`${f1.id}.COL.${l.id}`) / 2, `${f0.id}.COL.${l.id}`, `${f1.id}.COL.${l.id}`);
       }
     }
   }

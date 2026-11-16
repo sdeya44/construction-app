@@ -12,6 +12,10 @@ import { NumField, ProfilePicker } from './fields';
 import { KIND_LABEL } from './TreePanel';
 import { SpliceEditor } from './SpliceEditor';
 import { ConnectionEditor, MemberConnections } from './ConnectionEditor';
+import { NavContent, type NavKey } from './SideNav';
+import { PlateWizard } from './PlateWizard';
+import { trussFrames } from '../geometry/truss';
+import type { Member } from '../model/types';
 
 const f1 = (n: number, d = 1) => n.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
 
@@ -91,23 +95,21 @@ function PropertiesInner() {
   const frameNo = m.frameId ? p.building.frames.findIndex((f) => f.id === m.frameId) + 1 : 0;
   const conns = d.connections.filter((c) => c.members.includes(m.id) || c.parts.includes(m.id)).length;
   const mark = fab.parts.find((x) => x.memberId === m.id)?.mark;
+  const plateLike = m.kind === 'plate' || m.kind === 'cleat' || m.kind === 'bolt' || m.kind === 'anchor';
   return (
     <div className="panel-body" data-testid="props-single">
       <div className="el-head">
         <div className="k">{KIND_LABEL[m.kind]}{frameNo > 0 ? ` · מסגרת ${frameNo}` : ''}{m.side ? ` · ${m.side === 'L' ? 'שמאל' : 'ימין'}` : ''} <span className={`badge ${m.source === 'manual' ? 'warn' : 'blue'}`}>{m.source === 'manual' ? 'ידני' : 'פרמטרי'}</span></div>
         <div className="t"><b>{mark ?? m.label}</b><span className="mono" data-testid="prop-id">{m.id}</span></div>
       </div>
-      {settingsOf(m.id, m.kind, m.purlin?.paramKey ?? (m.purlin?.side === 'R' ? 'right' : m.purlin ? 'left' : undefined)) && (() => {
-        const [key, label] = settingsOf(m.id, m.kind, m.purlin?.side === 'R' ? 'right' : 'left')!;
-        return <button className="btn small link-nav" data-testid="goto-settings" onClick={() => window.dispatchEvent(new CustomEvent('ksp-nav', { detail: key }))}>⚙ {label}</button>;
-      })()}
       <div className="ptabs" role="tablist">
         <button role="tab" className={ptab === 'basic' ? 'on' : ''} onClick={() => setPtab('basic')} data-testid="ptab-basic">בסיסי</button>
         <button role="tab" className={ptab === 'conns' ? 'on' : ''} onClick={() => setPtab('conns')} data-testid="ptab-conns">חיבורים{conns ? ` ${conns}` : ''}</button>
         <button role="tab" className={ptab === 'adv' ? 'on' : ''} onClick={() => setPtab('adv')} data-testid="ptab-adv">מתקדם</button>
       </div>
       {ptab === 'basic' && <>
-        {pr && (
+        {plateLike && <HubSettings m={m} />}
+        {pr && !plateLike && (
           <div className="sec-card">
             <SectionShape outline={pr.outline.outer} />
             <div style={{ minWidth: 0 }}>
@@ -125,7 +127,7 @@ function PropertiesInner() {
               <div><button className="btn small" style={{ marginTop: 4 }} onClick={() => store.exec(resetOverrides([m.id]))}>החזר לפרמטרי</button></div></div>
           </div>
         )}
-        <div className="field prof"><label>חתך</label><ProfilePicker testId="prop-profile" value={m.profile} onCommit={(v) => store.exec(setMemberProps([m.id], { profile: v }))} /></div>
+        {!plateLike && <ProfileScope m={m} />}
         <div className="field"><label>חומר</label>
           <select className="inp" value={m.material} onChange={(e) => store.exec(setMemberProps([m.id], { material: e.target.value }))}>
             {MATERIALS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
@@ -155,6 +157,7 @@ function PropertiesInner() {
         </dl>
         {m.purlin && <PurlinInfoBlock id={m.id} />}
         <div className="hint">שינוי חל מיד · Ctrl+Z לביטול</div>
+        {!plateLike && <HubSettings m={m} />}
       </>}
       {ptab === 'conns' && <>
         <MemberConnections memberId={m.id} />
@@ -186,6 +189,66 @@ function PropertiesInner() {
           <div className="hint">{pr.verified ? `מקור: ${pr.source}.` : `מחושב מגיאומטריית החתך. ${pr.note ?? ''} אסור לשימוש בחישובי חוזק עד ייבוא קטלוג מאומת.`}</div>
         </>}
       </>}
+    </div>
+  );
+}
+
+const FAMS: Record<string, string[]> = { column: ['HEA', 'HEB', 'IPE', 'HEM', 'RHS', 'SHS'], rafter: ['IPE', 'HEA', 'HEB', 'RHS'], beam: ['IPE', 'HEA', 'HEB', 'RHS', 'SHS'], purlin: ['C', 'Z'], girt: ['C', 'Z'], brace: ['L', 'RHS', 'SHS', 'CHS', 'UPN'] };
+const PLURAL: Record<string, string> = { column: 'העמודים', rafter: 'קורות הגג', beam: 'הקורות', purlin: 'הפטות', girt: 'פטות הקיר', brace: 'האלכסונים', plate: 'הפלטות', cleat: 'התומכים' };
+/** קבוצת "הדומים": אותו סוג ואותו תפקיד (קידומת מזהה) ואותו חתך נוכחי */
+export function similarOf(m: Member, all: Member[]): Member[] {
+  const role = (x: Member) => x.id.split('.').filter((t) => !/^F\d+$/.test(t) && !/^\d+$/.test(t)).slice(0, 2).join('.');
+  const r = role(m);
+  return all.filter((x) => x.kind === m.kind && x.profile === m.profile && (x.kind === 'column' || x.kind === 'rafter' || role(x) === r));
+}
+
+/** חתך: סוג ← מידה, עם היקף השינוי — האלמנט הזה או כל הדומים בפרויקט */
+function ProfileScope({ m }: { m: Member }) {
+  const d = useStore((s) => s.derived);
+  const [scope, setScope] = useState<'one' | 'all'>('one');
+  const sim = similarOf(m, d.members);
+  const role = m.kind === 'column' || m.kind === 'rafter' || m.kind === 'purlin' ? m.kind : undefined;
+  return (
+    <>
+      <div className="field prof"><label>חתך</label><ProfilePicker testId="prop-profile" value={m.profile} families={FAMS[m.kind]} role={role}
+        onCommit={(v) => store.exec(setMemberProps(scope === 'all' ? sim.map((x) => x.id) : [m.id], { profile: v }))} /></div>
+      {sim.length > 1 && (
+        <div className="seg scope-seg" role="radiogroup" aria-label="היקף השינוי">
+          <button className={`tbtn${scope === 'one' ? ' on' : ''}`} data-testid="scope-one" onClick={() => setScope('one')}>רק האלמנט הזה</button>
+          <button className={`tbtn${scope === 'all' ? ' on' : ''}`} data-testid="scope-all" onClick={() => setScope('all')}>כל {PLURAL[m.kind] ?? 'הדומים'} ב-{m.profile} ({sim.length})</button>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** כל ההגדרות שקובעות את האלמנט — בתוך הפאנל (במקום חלונית צפה / מעבר לעץ) */
+function HubSettings({ m }: { m: Member }) {
+  const d = useStore((s) => s.derived);
+  // פלטה / תומך / בורג / מוט עיגון: אשף הפלטה של החיבור שלהם
+  if (m.kind === 'plate' || m.kind === 'cleat' || m.kind === 'bolt' || m.kind === 'anchor') {
+    const base = m.id.replace(/\.(H|S|N)$/, '');
+    const c = (m.connId && d.connById.get(m.connId)) || d.connections.find((x) => x.parts.includes(m.id) || x.parts.includes(base));
+    if (c && m.kind !== 'cleat') return <PlateWizard c={c} plateId={m.kind === 'plate' ? m.id : undefined} />;
+    if (c) return <><PlateWizard c={c} plateId={m.id} /><HubNav m={m} /></>;
+  }
+  return <HubNav m={m} />;
+}
+
+function HubNav({ m }: { m: Member }) {
+  const navOpen = useStore((s) => s.navKey);
+  const key = settingsOf(m.id, m.kind, m.purlin?.paramKey ?? (m.purlin?.side === 'R' ? 'right' : m.purlin ? 'left' : undefined));
+  const inTruss = m.kind === 'rafter' && !!m.frameId && trussFrames(store.state.project).includes(m.frameId);
+  const nav = inTruss ? 'b:truss' : (m.kind === 'column' || m.kind === 'rafter') && !m.id.startsWith('TB.') ? 's:geometry' : m.id.startsWith('TB.') ? 'b:tb' : key?.[0];
+  const label = inTruss ? 'מסבך גג (קורת הגג = חגורה עליונה)' : (m.kind === 'column' || m.kind === 'rafter') && !m.id.startsWith('TB.') ? 'גיאומטריה: גבהים, שיפועים וצירים (לכל המסגרות)' : key?.[1];
+  if (!nav) return null;
+  const GROUP: Record<string, string> = { s: 'structure', b: 'brace', r: 'roof', w: 'clad' };
+  const open = navOpen === nav || (!!navOpen && GROUP[nav.split(':')[0]] === navOpen && nav !== 'b:tb' && nav !== 'b:truss');
+  if (open) return <div className="hub-set" data-testid="hub-settings"><div className="hub-set-h">⚙ {label}</div><div className="hint">ההגדרות פתוחות בתפריט מימין.</div></div>;
+  return (
+    <div className="hub-set" data-testid="hub-settings">
+      <div className="hub-set-h">⚙ {label}</div>
+      <NavContent nav={nav as NavKey} onOpenConn={(id) => store.set({ activeConn: id })} />
     </div>
   );
 }

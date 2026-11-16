@@ -11,6 +11,7 @@ import { store, useStore } from '../store';
 import { LenField, NumField, ProfilePicker, TextField } from './fields';
 import { Icon } from './icons';
 import { KneeEditor, SectionEditor } from './SectionEditor';
+import { PortalSchematic } from './schematics';
 import { MenuPic } from './pics';
 
 export function ProfileDatalist() {
@@ -206,6 +207,7 @@ function PortalFields() {
   const set = (patch: Partial<PortalBraceParams>) => store.exec(setBuilding({ bracing: { ...br, walls: { ...br.walls, portal: { ...p, ...patch } } } }));
   return (
     <>
+      <PortalSchematic />
       <div className="field prof"><label>קורת אגד</label><ProfilePicker testId="pb-beam" value={p.beam} families={['RHS', 'SHS']} onCommit={(v) => set({ beam: v })} /></div>
       <div className="field prof"><label>אלכסונים</label><ProfilePicker testId="pb-brace" value={p.brace} families={['RHS', 'SHS', 'CHS']} onCommit={(v) => set({ brace: v })} /></div>
       <div className="field"><label>מרווח מתחת לקורה הראשית</label><NumField testId="pb-gap" value={p.gap} suffix='מ"מ' onCommit={(v) => set({ gap: Math.max(0, v) })} /></div>

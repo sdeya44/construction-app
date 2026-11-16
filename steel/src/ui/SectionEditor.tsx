@@ -6,6 +6,7 @@ import { store, useStore } from '../store';
 import { LenField, NumField, ProfilePicker } from './fields';
 import { Icon } from './icons';
 import type { KneeSideOverride } from '../model/types';
+import { KneeSchematic } from './schematics';
 
 /**
  * בונה החתך המודולרי (החלטת משתמש 15.11.2026): תבניות + טבלת צירי עמודים + טבלת מישורי גג, עם תצוגה מקדימה.
@@ -144,6 +145,7 @@ export function KneeEditor() {
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="kb-on" checked={kb.enabled} onChange={(e) => set({ enabled: e.target.checked })} />פעיל {kb.enabled ? `(${n})` : ''}</label>
       </div>
       {kb.enabled && <>
+        <KneeSchematic />
         <div className="field prof"><label>חתך</label><ProfilePicker testId="kb-profile" value={kb.profile} families={['RHS', 'SHS', 'CHS', 'L', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>
         <div className="field"><label>ירידה על העמוד</label><NumField testId="kb-drop" value={kb.drop} suffix='מ"מ' onCommit={(v) => set({ drop: v })} /></div>
         <div className="field"><label>קביעת הנקודה על הקורה</label>

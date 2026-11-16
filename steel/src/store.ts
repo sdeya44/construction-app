@@ -39,6 +39,8 @@ export interface AppState {
   undoLabel?: string; redoLabel?: string;
   /** חיבור פתוח בעורך החיבורים */
   activeConn: string | null;
+  /** הצומת הפתוח בעץ התפריטים (למניעת כפילות עם פאנל האלמנט) */
+  navKey?: string;
   /** חלון בדיקת פלטת ראש עמוד (מזהה חיבור) */
   eaveCheck: string | null;
   measure: { a?: { x: number; y: number; z: number }; b?: { x: number; y: number; z: number } };

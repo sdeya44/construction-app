@@ -556,3 +556,59 @@ select.inp { padding: 0 6px; }
 .ctx-pop { position: absolute; top: calc(100% + 4px); right: 0; z-index: 8; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column; gap: 5px; white-space: normal; min-width: 300px; }
 .ctx-pop-row { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
 .ctx-pop .prof-pick { min-width: 280px; }
+/* שרטוט סכמטי אינטראקטיבי */
+.schem { position: relative; border: 1px solid var(--line); border-radius: 10px; background: #fbfaf7; margin: 6px 0 8px; }
+.schem svg { width: 100%; height: auto; display: block; }
+.schem-cap { font-size: 11px; color: var(--muted, #667); padding: 0 8px 6px; }
+.schem .sm-main { stroke: #3d4a44; stroke-linecap: square; fill: none; }
+.schem .sm-sec { stroke: #9a8a68; stroke-linecap: round; fill: none; }
+.schem .sm-hi { stroke: #7a3fc4; stroke-linecap: round; fill: none; }
+.schem .sm-thin { stroke: #8a948e; stroke-width: 0.6; fill: none; stroke-dasharray: 2 1.5; }
+.schem .sm-plate { fill: #e3e8e5; stroke: #3d4a44; stroke-width: 0.6; }
+.schem .sm-host { fill: #d6dcd8; stroke: #6d7a73; stroke-width: 0.5; fill-opacity: 0.6; }
+.schem .sm-bolt { fill: #fff; stroke: #b00020; stroke-width: 0.6; }
+.schem .sm-lbl { font-size: 6px; fill: #333; }
+.schem .sm-lbl-s { font-size: 5px; fill: #666; }
+.schem .sdim .sd-line, .schem .sdim .sd-ext { stroke: #1f5fa8; stroke-width: 0.35; }
+.schem .sdim .sd-ext { stroke-dasharray: 1 0.8; }
+.schem .sd-arrow { fill: #1f5fa8; }
+.schem .sdim .sd-text { font-size: 7px; fill: #1f5fa8; font-weight: 700; }
+.schem .sdim.live .sd-text { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; }
+.schem .sdim.live .sd-text:hover { fill: #7a3fc4; }
+.schem .sdim.derived .sd-text { fill: #777; font-weight: 400; }
+.schem .sdim.derived .sd-line { stroke: #999; }
+.schem-inp { position: absolute; transform: translate(-50%, -50%); width: 78px; z-index: 3; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+.hub-set { margin-top: 10px; border-top: 2px solid var(--line); padding-top: 6px; }
+.hub-set-h { font-weight: 700; font-size: 13px; margin-bottom: 4px; color: #1f5a3f; }
+.hub-set .panel-body { padding: 0; }
+.scope-seg { display: flex; flex-wrap: wrap; gap: 4px; margin: -2px 0 8px; }
+.scope-seg .tbtn { font-size: 12px; }
+.plate-wiz { border: 1px solid #c9b8e8; border-radius: 10px; padding: 6px 8px; margin: 6px 0 10px; background: #fcfbff; }
+.pw-h { font-size: 13px; margin-bottom: 2px; }
+.pw-why { margin: 2px 0 6px; padding-inline-start: 16px; font-size: 12px; color: #444; }
+.pw-why li.bad { color: #b00020; font-weight: 600; }
+.pw-fields { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 12px; margin-bottom: 6px; }
+.pw-fields label { display: flex; align-items: center; gap: 4px; }
+.pw-fields .inp { width: 70px; }
+.pw-fields .pm { display: inline-flex; align-items: center; gap: 3px; }
+.pw-std { gap: 6px; flex-wrap: wrap; }
+.truss-wiz { border: 1px solid #b9d0e8; border-radius: 10px; padding: 6px 8px; margin: 6px 0 10px; background: #fbfdff; }
+.truss-wiz .tw-cell { fill: transparent; cursor: pointer; }
+.truss-wiz .tw-cell:hover { fill: rgba(122, 63, 196, 0.08); }
+.truss-wiz .tw-node { fill: #fff; stroke: #333; stroke-width: 0.5; }
+.truss-wiz .tw-node.click { cursor: pointer; }
+.truss-wiz .tw-node.click:hover { stroke: #7a3fc4; stroke-width: 1; }
+.truss-wiz .tw-node.on { fill: #555; }
+.truss-wiz .tw-spl { cursor: pointer; }
+.truss-wiz .tw-spl rect { fill: #fff; stroke: #ccc; stroke-width: 0.4; }
+.truss-wiz .tw-spl text { font-size: 5px; fill: #999; }
+.truss-wiz .tw-spl.on rect { stroke: #b00020; fill: #fdecee; }
+.truss-wiz .tw-spl.on text { fill: #b00020; }
+.truss-wiz .tw-spl-line { stroke: #b00020; stroke-width: 0.7; stroke-dasharray: 1.5 1; }
+.tw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0; font-size: 12px; }
+.tw-lbl { color: #555; margin-inline-start: 4px; }
+.tw-sw { display: inline-block; width: 10px; height: 3px; margin-inline-end: 4px; vertical-align: middle; }
+.tw-prof .prof-pick { min-width: 0; }
+.tw-prof td.sz-small { color: #c4600a; font-weight: 700; }
+.tw-prof td.sz-ok { color: #21844a; font-weight: 700; }
+.tw-prof td.sz-big { color: #7a3fc4; }

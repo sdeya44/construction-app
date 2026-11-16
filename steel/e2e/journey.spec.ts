@@ -62,8 +62,7 @@ test('SIM-01/02: בניית סככה מאפס ושינויים — מספר פע
   });
   await task('כל התומכים: רוחב 120 (מתוך תומך שנבחר)', 'בחירת תומך ← "הגדרות כל התומכים" ← שדה', async () => {
     await page.evaluate(() => { const k = (window as any).__ksp; const c = k.store.state.derived.members.find((m: any) => m.kind === 'cleat'); k.store.select([c.id]); });
-    await click('goto-settings');
-    await expect(page.getByTestId('nav-crumb')).toContainText('תומכים');
+    await expect(page.getByTestId('hub-settings')).toBeVisible();
   });
   await task('מציאת "חומר גלם" בחיפוש', 'Ctrl+K ← הקלדה ← Enter', async () => {
     await page.keyboard.press('Control+k');
@@ -72,8 +71,7 @@ test('SIM-01/02: בניית סככה מאפס ושינויים — מספר פע
   });
   await task('אלכסון נבחר ← הגדרות לכל האלכסונים', 'בחירת אלכסון ← קישור', async () => {
     await page.evaluate(() => { const k = (window as any).__ksp; k.store.select(['KB.F2.B.P1.L']); });
-    await click('goto-settings');
-    await expect(page.getByTestId('nav-crumb')).toContainText('אלכסוני עמוד-קורה');
+    await expect(page.getByTestId('hub-settings')).toContainText('אלכסוני עמוד-קורה');
   });
   await task('הסתרת הודעות "לידיעה"', 'בדיקות ← הסתר סוג', async () => {
     await click('rail-issues');

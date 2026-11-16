@@ -19,14 +19,31 @@ test('KB-02: אלכסוני עמוד-קורה — הגדרה לכל צד: ביט
   expect(await n()).toBe(n0);
 });
 
-test('CTX-PROF: שינוי חתך מהסרגל — סוג ← מידה, ו"החל על כל העמודים"', async ({ page }) => {
+test('HUB-01: לחיצה על עמוד — חתך (סוג ← מידה) עם היקף "כל העמודים" + הגדרות הגיאומטריה באותו פאנל', async ({ page }) => {
   await boot(page);
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
-  await page.getByTestId('ctx-profile').click();
-  await page.getByTestId('ctx-prof-family').selectOption('HEB');
-  await page.getByTestId('ctx-prof-size').selectOption('HEB200');
-  await shot(page, 'CTX_profile_pop');
-  await page.getByTestId('ctx-prof-all').click();
+  await expect(page.getByTestId('hub-settings')).toBeVisible();
+  await page.getByTestId('scope-all').click();
+  await page.getByTestId('prop-profile-family').selectOption('HEB');
+  await page.getByTestId('prop-profile-size').selectOption('HEB200');
+  await shot(page, 'HUB_01_column');
   const p = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind === 'column').map((m: any) => m.profile))]);
   expect(p).toEqual(['HEB200']);
+});
+
+test('HUB-02: לחיצה על אלכסון אגד B — שרטוט סכמטי עם מידות לעריכה בלחיצה', async ({ page }) => {
+  await boot(page);
+  await page.getByTestId('nav-b:walls').click();
+  await page.getByTestId('br-walls-portal').click();
+  await page.getByTestId('nav-b:knee').click(); // תפריט אחר פתוח — ההגדרות של האגד בפאנל האלמנט
+  const id = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BB.'))?.id);
+  await page.evaluate((i) => (window as any).__ksp.store.select([i]), id);
+  await expect(page.getByTestId('hub-settings')).toBeVisible();
+  await page.getByTestId('hub-settings').getByTestId('sch-pb-drop').click();
+  await page.getByTestId('sch-pb-drop-inp').fill('900'); await page.getByTestId('sch-pb-drop-inp').press('Enter');
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.walls.portal.drop)).toBe(900);
+  await page.getByTestId('hub-settings').getByTestId('sch-pb-angle').click();
+  await page.getByTestId('sch-pb-angle-inp').fill('40'); await page.getByTestId('sch-pb-angle-inp').press('Enter');
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.walls.portal.angle)).toBe(40);
+  await shot(page, 'HUB_02_portal');
 });

@@ -12,6 +12,7 @@ export const NAV_INDEX: { key: NavKey; label: string; words: string }[] = [
   { key: 'r:system', label: 'מערכת פטות', words: 'פטות חומר פטה גלוון' },
   { key: 'r:left', label: 'שיפועים ותומכים', words: 'פטה מרווח פטות מרחק ראשון רכס חלוקה ידנית תומך זוויתן גובה תומך ברגים תומכים פתיחת פטה פטה מתחילה שמאל ימין' },
   { key: 'r:splices', label: 'חיבורי המשך פטות', words: 'חיבור המשך פטה תפר פלטה מפתחים אורך קטע' },
+  { key: 'b:truss', label: 'מסבכי גג', words: 'מסבך סבכה truss חגורה אלכסון אנך Warren Pratt Howe' },
   { key: 'b:knee', label: 'אלכסוני עמוד-קורה', words: 'אלכסון עמוד קורה 45 זווית ירידה knee brace לשונית פח RHS80' },
   { key: 'b:ridge', label: 'חיזוק רכס', words: 'רכס קודקוד פלטה מוגבהת חיזוק משולש פרופיל אופקי IPE160' },
   { key: 'b:roof', label: 'קושרות גג', words: 'קושרות גג X זוויתן סבכה אופקית RHS פנל מפתח קשור' },
@@ -27,6 +28,8 @@ export const NAV_INDEX: { key: NavKey; label: string; words: string }[] = [
 /** מאלמנט שנבחר — אל ההגדרות הכלליות שקובעות אותו (שינוי לכולם במקום אחד) */
 export function settingsOf(id: string, kind: string, side?: string): [string, string] | null {
   if (id.startsWith('KB.') || id.startsWith('C.KB.')) return ['b:knee', 'הגדרות כל אלכסוני עמוד-קורה'];
+  if (id.startsWith('TB.') || id.startsWith('C.TB')) return ['b:tb', 'קורה / מסבך נושא'];
+  if (id.startsWith('TR.') || /\.BC\.\d+$/.test(id) || id.startsWith('C.TR')) return ['b:truss', 'מסבכי גג — אשף המסבך'];
   if (id.startsWith('BB.') || id.startsWith('C.BB.') || id.startsWith('BR.W')) return ['b:walls', 'הגדרות קשיחות קירות / אגד B'];
   if (id.startsWith('BR.R') || id.startsWith('HB.') || id.startsWith('C.HB.')) return ['b:roof', 'הגדרות קושרות גג'];
   if (id.startsWith('BR.T')) return ['b:ties', 'הגדרות שורות קשירה'];

@@ -39,6 +39,7 @@ export function App() {
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [nav, setNav] = useState<NavKey>('structure');
   const tab = navGroup(nav);
+  useEffect(() => { if (store.state.navKey !== nav) store.set({ navKey: nav }); }, [nav]);
   const setTab = (t: SideTab) => setNav(t);
   const [mtab, setMtab] = useState<MobileTab>(null);
   const [mode, setMode] = useState<'model' | 'drawings' | 'production'>('model');
@@ -241,7 +242,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.17.2</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.18</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}

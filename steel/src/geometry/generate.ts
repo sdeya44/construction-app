@@ -13,6 +13,7 @@ import type { Connection, SupportPoint } from '../model/types';
 import { buildConnections, checkClashes } from './connections';
 import { buildWallFraming } from './cladding';
 import { buildTransfers, prepareTransfers } from './transfer';
+import { buildRoofTrusses, roofTrussRafterSplices } from './truss';
 import { buildBracing } from './bracing';
 
 const HEB_LETTERS = 'אבגדהוזחטיכלמנסעפצקרשת';
@@ -179,7 +180,9 @@ export function generate(project: Project): DerivedModel {
   const fatal = structuralError || issues.some((i) => i.severity === 'error' && i.code === 'PROFILE' && /\.(COL|RAF)\b/.test(i.elementId ?? ''));
   if (!fatal && topo) {
     // חיבורי המשך: שנקבעו + אוטומטיים לאלמנטים ארוכים מחומר הגלם
-    const eff = effectiveSplices(project, out, supports);
+    // מסבכי גג: חיבורי המשך בקורת הגג (חגורה עליונה) באמצע שדה — לפני החלוקה האוטומטית
+    const rtSpl = roofTrussRafterSplices(project, out);
+    const eff = effectiveSplices(Object.keys(rtSpl).length ? { ...project, splices: { ...rtSpl, ...project.splices } } : project, out, supports);
     projEff = { ...project, splices: eff.splices };
     const cr = buildConnections(projEff, out, byId, supports.filter((sp) => getProfileSafe(byId.get(sp.purlinId)!.profile)), topo);
     const hidden = new Set(project.deleted);
@@ -191,7 +194,7 @@ export function generate(project: Project): DerivedModel {
     connections.push(...bs.connections);
     issues.push(...bs.issues);
     if (eff.auto.size) issues.push({ code: 'AUTO_SPLICE', severity: 'info', message: `חיבורי המשך אוטומטיים ב-${eff.auto.size} אלמנטים ארוכים מחומר הגלם (${(project.settings.stockLength / 1000).toFixed(1)} מ') — לשינוי: בחר אלמנט ← "חיבורי המשך"` });
-    const bb = buildBracing(b, topo, out.filter((m) => m.purlin), bEff, project.settings.stockLength);
+    const bb = buildBracing(b, topo, out.filter((m) => m.purlin), bEff, project.settings.stockLength, (id) => byId.get(id)?.profile);
     out.push(...bb.members.filter((m) => !hidden.has(m.id)));
     // חלוקה אוטומטית גם לשורות הקשירה הארוכות
     const effT = effectiveSplices(projEff, bb.members, []);
@@ -205,6 +208,13 @@ export function generate(project: Project): DerivedModel {
       out.push(...wf.members.filter((m) => !hidden.has(m.id)));
       issues.push(...wf.issues);
     }
+    // מסבכי גג: חגורה תחתונה, אנכיים ואלכסונים (מרותכים), חיבורי המשך וחגורה–עמוד (מוברגים)
+    if (b.roofTruss?.enabled) {
+      const rtr = buildRoofTrusses(projEff, out, projEff.splices);
+      out.push(...rtr.members.filter((m) => !hidden.has(m.id)));
+      connections.push(...rtr.connections);
+      issues.push(...rtr.issues);
+    }
     // קורות נושאות, חיבורי תמיכה ומושבים; הסרת אלמנטים שנשענו על עמודים מוסרים/מקוצרים
     if (tbPlans.length) {
       const tr = buildTransfers(project, tbPlans, out);
@@ -217,7 +227,7 @@ export function generate(project: Project): DerivedModel {
         const tbSpl: Record<string, number[]> = {};
         for (const def of b.transfers ?? []) {
           const tb = tr.members.find((m) => m.id === `TB.${def.id}`);
-          if (!tb || def.splice === 'none') continue;
+          if (!tb || def.splice === 'none' || def.kind === 'truss') continue;
           const L = Math.hypot(tb.end.x - tb.start.x, tb.end.y - tb.start.y, tb.end.z - tb.start.z);
           if (L <= stock - allow) continue;
           const seats = tr.connections.filter((c) => c.type === 'tb-seat' && c.members[0] === tb.id).map((c) => { const p0 = tr.members.find((m) => c.parts.includes(m.id) && m.kind === 'plate'); return p0 ? Math.abs((p0.start.y + p0.end.y) / 2 - tb.start.y) : null; }).filter((t): t is number => t !== null);
@@ -241,9 +251,11 @@ export function generate(project: Project): DerivedModel {
           tbSpl[tb.id] = ts;
           issues.push({ code: 'TB_SPLICE', severity: 'info', elementId: tb.id, message: `קורה נושאת ${def.id} (${(L / 1000).toFixed(2)} מ') ארוכה מחומר הגלם — חולקה ל-${ts.length + 1} חלקים עם חיבורי המשך מוברגים ב-${ts.map((t) => (t / 1000).toFixed(2)).join(', ')} מ' מהקצה` });
         }
+        // מסבך נושא: חיבורי המשך באמצע שדות, בשתי החגורות
+        Object.assign(tbSpl, tr.trussSplices);
         if (Object.keys(tbSpl).length) {
           projEff = { ...projEff, splices: { ...projEff.splices, ...tbSpl } };
-          const bs2 = buildBeamSplices(projEff, out.filter((m) => m.id in tbSpl), tbSpl, new Set(Object.keys(tbSpl)), new Set(Object.keys(tbSpl)));
+          const bs2 = buildBeamSplices(projEff, out.filter((m) => m.id in tbSpl), tbSpl, new Set(Object.keys(tbSpl)), new Set(Object.keys(tbSpl).filter((k) => !k.endsWith('.BC'))));
           out.push(...bs2.members); connections.push(...bs2.connections); issues.push(...bs2.issues);
         }
       }

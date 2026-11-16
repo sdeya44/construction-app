@@ -251,6 +251,31 @@ export function transferUtil(p: Project, d: DerivedModel, def: NonNullable<Proje
   return { util, text: `קורה נושאת · מפתח ${(L / 1000).toFixed(2)} מ' · ${loads.length} קורות גג (P≈${loads.length ? Math.max(...loads.map((q) => q.P)).toFixed(1) : 0} kN) · M≈${M.toFixed(1)} kNm · ניצולת כפיפה ${uM.toFixed(2)} · שקיעה ${dl.toFixed(1)} מ"מ (L/300=${(L / 300).toFixed(1)})` };
 }
 
+/** עומסים נקודתיים על קורה/מסבך נושא (קנ"ט, מרחק מהתמיכה הראשונה במ"מ) */
+export function transferLoads(p: Project, d: DerivedModel, def: NonNullable<Project['building']['transfers']>[number]): { L: number; points: [number, number][] } {
+  const cfg = sizingCfg(p);
+  const fr = [...p.building.frames].sort((a, b) => a.y - b.y);
+  const f0 = fr.find((f) => f.id === def.from), f1 = fr.find((f) => f.id === def.to);
+  const x = d.section?.lines.find((l) => l.id === def.lineId)?.x;
+  if (!f0 || !f1 || x === undefined) return { L: 0, points: [] };
+  const w = cfg.gamma * (cfg.dead + Math.max(cfg.live, cfg.snow));
+  const trib = (f: typeof fr[number]) => { const i = fr.indexOf(f); return ((i > 0 ? f.y - fr[i - 1].y : 0) + (i < fr.length - 1 ? fr[i + 1].y - f.y : 0)) / 2; };
+  const points: [number, number][] = [];
+  for (const fid of def.removed) {
+    const f = fr.find((q) => q.id === fid); if (!f) continue;
+    const half = d.members.filter((m) => m.kind === 'rafter' && m.frameId === fid && Math.min(m.start.x, m.end.x) - 1 <= x && Math.max(m.start.x, m.end.x) + 1 >= x).reduce((s2, m) => s2 + Math.abs(m.end.x - m.start.x) / 2, 0) || 3500;
+    points.push([f.y - f0.y, w * (trib(f) / 1000) * (half / 1000)]);
+  }
+  return { L: f1.y - f0.y, points };
+}
+/** עומס אחיד על מסבך גג (קנ"ט/מ') לפי מרווח המסגרות */
+export function roofTrussLoad(p: Project): number {
+  const cfg = sizingCfg(p);
+  const fr = [...p.building.frames].sort((a, b) => a.y - b.y);
+  const sp = fr.length > 1 ? Math.max(...fr.slice(1).map((f, i) => f.y - fr[i].y)) : 6000;
+  return cfg.gamma * (cfg.dead + Math.max(cfg.live, cfg.snow)) * (sp / 1000);
+}
+
 /** חתך מוצע לקורה נושאת: הקטן ביותר במשפחה שעומד בניצולת 0.9 */
 export function suggestTransferProfile(p: Project, d: DerivedModel, def: NonNullable<Project['building']['transfers']>[number], names: string[]): string | null {
   const num = (n: string) => Number(n.replace(/^[A-Z]+/, '').split(/x/i)[0]) || 0;

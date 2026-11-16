@@ -197,9 +197,34 @@ export interface BuildingParams {
   cladding?: CladdingParams;
   /** דילול עמודים: קורות נושאות בין העמודים שנותרו בשורה */
   transfers?: TransferDef[];
+  /** מסבכי גג: קורת הגג = חגורה עליונה; חגורה תחתונה + אנכיים/אלכסונים מרותכים במסגריה */
+  roofTruss?: RoofTrussParams;
 }
 
 /** תמיכת הקורה הנושאת בעמוד: A1 על ראש העמוד; A2 פלטת קצה; A3 פלטת סנפיר; A4 זוויתני ווב; A5 תושבת */
+/** מסבך: שדה — אלכסון עולה (/), יורד (\\), X או ריק; אנך בכל צומת (כן/לא) */
+export type TrussCell = '/' | '\\' | 'X' | '';
+export interface TrussSpec {
+  panels: number;
+  /** גובה בין צירי החגורות בקצה (מ"מ) */
+  depth: Mm;
+  cells: TrussCell[];
+  verts: boolean[];
+  profiles: { top: string; bottom: string; endDiag: string; diag: string; vert: string };
+  /** חיבורי המשך בחגורות: auto — לפי אורך המוט; none; או מספרי שדות (התפר באמצע השדה) */
+  splice: 'auto' | 'none' | number[];
+  pattern?: 'warren-v' | 'warren' | 'pratt' | 'howe' | 'custom';
+  symmetric?: boolean;
+}
+export interface RoofTrussParams {
+  enabled: boolean;
+  /** מסגרות עם מסבך: all או רשימת מזהי מסגרות */
+  frames: 'all' | string[];
+  /** flat: חגורה תחתונה אופקית; parallel: מקבילה לגג */
+  shape: 'flat' | 'parallel';
+  spec: TrussSpec;
+}
+
 export type TbSupport = 'A1' | 'A2' | 'A3' | 'A4' | 'A5';
 /** חיבור קורת הגג לקורה הנושאת: B1 כיסא + 2 פלטות; B2 טריז לאגף; B3 עמוד קצר; B4 חיבור צד לווב */
 export type TbSeat = 'B1' | 'B2' | 'B3' | 'B4';
@@ -214,6 +239,9 @@ export interface TransferDef {
   profile: string;
   support: TbSupport;
   seat: TbSeat;
+  /** beam (ברירת מחדל) או מסבך נושא */
+  kind?: 'beam' | 'truss';
+  truss?: TrussSpec;
   /** קורה ארוכה מחומר הגלם: auto (ברירת מחדל) — חיבורי המשך מוברגים מחוץ לאזורי המושבים; none — מוט אחד (הזמנה מיוחדת) */
   splice?: 'auto' | 'none';
 }
@@ -297,7 +325,7 @@ export interface MemberOverride {
 
 export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'girt' | 'cleat' | 'plate' | 'bolt' | 'anchor';
 
-export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee' | 'ridge-tie' | 'beam-splice' | 'tb-support' | 'tb-seat';
+export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee' | 'ridge-tie' | 'beam-splice' | 'tb-support' | 'tb-seat' | 'truss' | 'truss-splice' | 'truss-end';
 export type ApprovalStatus = 'not-verified' | 'for-review' | 'approved';
 
 /** חיבור מבוסס פלטה וקבוצת ברגים (קורה-עמוד, רכס, פלטת בסיס). */

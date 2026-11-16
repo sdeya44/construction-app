@@ -1,8 +1,5 @@
-import { settingsOf } from './navIndex';
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { setMemberProps } from '../commands/commands';
 import type { Connection, Member } from '../model/types';
-import { MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
 import type { Viewport } from '../view/viewport';
 import { CONN_TYPE, SectionSvg } from './ConnectionEditor';
@@ -10,10 +7,7 @@ import { Icon } from './icons';
 import { fabFor } from '../fab/useFab';
 import { OmitDialog } from './TransferPanel';
 import { KIND_LABEL } from './TreePanel';
-import { ProfilePicker } from './fields';
 
-const FAMILIES_FOR: Record<string, string[]> = { column: ['HEA', 'HEB', 'IPE', 'HEM', 'RHS', 'SHS'], rafter: ['IPE', 'HEA', 'HEB', 'RHS'], beam: ['IPE', 'HEA', 'HEB'], purlin: ['C', 'Z'], girt: ['C', 'Z'], brace: ['L', 'RHS', 'SHS', 'CHS', 'UPN'] };
-const KIND_PLURAL: Record<string, string> = { column: 'עמודים', rafter: 'קורות הגג', beam: 'הקורות', purlin: 'הפטות', girt: 'פטות הקיר', brace: 'האלכסונים', plate: 'הפלטות' };
 
 /** פקודה בלוח הפקודות / בתפריט. keys = קיצור מקלדת להצגה. */
 export interface Cmd { id: string; label: string; group: string; keys?: string; search?: string; run: () => void; disabled?: boolean; danger?: boolean; icon?: string }
@@ -31,14 +25,12 @@ export function connectionsOf(m: Member, conns: Connection[], byId: Map<string, 
 const ORDER: Record<string, number> = { eave: 0, ridge: 1, base: 2, 'purlin-splice': 3, 'brace-end': 4, 'brace-cross': 5, 'purlin-cleat': 6, brace: 7 };
 
 // ---------------------------------------------------------------- סרגל הקשרי
-export function ContextBar({ vp, onMore, onOpenConn }: { vp: Viewport | null; onMore: (x: number, y: number) => void; onOpenConn: (id: string) => void }) {
+export function ContextBar({ vp, onMore }: { vp: Viewport | null; onMore: (x: number, y: number) => void; onOpenConn: (id: string) => void }) {
   const sel = useStore((s) => s.selection);
   const d = useStore((s) => s.derived);
   const tool = useStore((s) => s.tool);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const [editProf, setEditProf] = useState(false);
   const [omit, setOmit] = useState<string[] | null>(null);
-  const [pending, setPending] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -59,17 +51,11 @@ export function ContextBar({ vp, onMore, onOpenConn }: { vp: Viewport | null; on
     upd();
     return () => { vp.frameListeners.delete(upd); };
   }, [vp, sel, d]);
-  useEffect(() => setEditProf(false), [sel]);
 
   const ms = sel.map((id) => d.byId.get(id)).filter((m): m is Member => !!m);
   if (omit) return <OmitDialog columnIds={omit} onClose={() => setOmit(null)} />;
   if (!ms.length || !pos || tool !== 'select') return null;
-  const editable = ms.filter((m) => m.kind !== 'bolt');
-  const profs = [...new Set(editable.map((m) => m.profile))];
-  const mats = [...new Set(editable.map((m) => m.material))];
   const single = ms.length === 1 ? ms[0] : null;
-  const conns = single ? connectionsOf(single, d.connections, d.connById) : [];
-  const ids = editable.map((m) => m.id);
   const similar = () => {
     const keys = new Set(ms.map((m) => `${m.kind}|${m.profile}`));
     store.select(d.members.filter((m) => keys.has(`${m.kind}|${m.profile}`)).map((m) => m.id));
@@ -77,39 +63,9 @@ export function ContextBar({ vp, onMore, onOpenConn }: { vp: Viewport | null; on
   return (
     <div className="ctxbar" ref={ref} role="toolbar" aria-label="סרגל הקשרי" data-testid="ctxbar" style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}>
       <span className="ctx-title">{single ? <><b>{KIND_LABEL[single.kind]}</b> <span className="mono">{single.id}</span></> : <b data-testid="ctx-count">{ms.length} נבחרו</b>}</span>
-      {editable.length > 0 && <button className={`chip${profs.length > 1 ? ' varies' : ''}`} onClick={() => setEditProf(!editProf)} title="שינוי חתך" data-testid="ctx-profile">{profs.length === 1 ? <span className="mono">{profs[0]}</span> : 'חתך: משתנה'} ▾</button>}
-      {editable.length > 0 && editProf && (() => {
-        // שינוי חתך: סוג פרופיל ← מידה; היקף: הנבחרים בלבד או כל האלמנטים מאותו סוג ותפקיד
-        const kinds = [...new Set(editable.map((m) => m.kind))];
-        const sameAll = d.members.filter((m) => kinds.includes(m.kind) && m.source === 'generated' && (profs.includes(m.profile))).map((m) => m.id);
-        const fam = (FAMILIES_FOR[kinds[0]] ?? undefined);
-        return (
-          <div className="ctx-pop" data-testid="ctx-profile-pop" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="ctx-pop-row"><ProfilePicker testId="ctx-prof" value={pending ?? (profs.length === 1 ? profs[0] : '')} varies={!pending && profs.length > 1} families={fam}
-              role={kinds.length === 1 && (kinds[0] === 'column' || kinds[0] === 'rafter' || kinds[0] === 'purlin') ? kinds[0] : undefined}
-              onCommit={(v) => { setPending(v); }} /></div>
-            {pending && <div className="ctx-pop-row">
-              <button className="btn small primary" data-testid="ctx-prof-sel" onClick={() => { store.exec(setMemberProps(ids, { profile: pending })); setPending(null); setEditProf(false); }}>החל על הנבחרים ({ids.length})</button>
-              {sameAll.length > ids.length && <button className="btn small" data-testid="ctx-prof-all" onClick={() => { store.exec(setMemberProps(sameAll, { profile: pending })); setPending(null); setEditProf(false); }}>החל על כל ה{KIND_PLURAL[kinds[0]] ?? 'דומים'} ב-{profs.join('/')} ({sameAll.length})</button>}
-            </div>}
-          </div>
-        );
-      })()}
-      {editable.length > 0 && (
-        <label className={`chip sel${mats.length > 1 ? ' varies' : ''}`} title="חומר">
-          <select value={mats.length === 1 ? mats[0] : ''} data-testid="ctx-material" onChange={(e) => e.target.value && store.exec(setMemberProps(ids, { material: e.target.value }))}>
-            {mats.length > 1 && <option value="">חומר: משתנה</option>}
-            {MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.id}</option>)}
-          </select>
-        </label>
-      )}
+      <span className="ctx-hint">עריכה בפאנל המאפיינים ←</span>
       <span className="ctx-sep" />
-      {single && conns.length > 0 && <button className="ctx-btn" onClick={() => onOpenConn([...conns].sort((a, b) => ORDER[a.type] - ORDER[b.type])[0].id)} data-testid="ctx-conns">חיבורים <span className="cnt">{conns.length}</span></button>}
       {!single && <button className="ctx-btn" onClick={similar} data-testid="ctx-similar">בחר דומים</button>}
-      {single && settingsOf(single.id, single.kind, single.purlin?.paramKey ?? (single.purlin?.side === 'R' ? 'right' : 'left')) && (() => {
-        const [key, label] = settingsOf(single.id, single.kind, single.purlin?.paramKey ?? (single.purlin?.side === 'R' ? 'right' : 'left'))!;
-        return <button className="ctx-btn pri" data-testid="ctx-settings" title={label} onClick={() => window.dispatchEvent(new CustomEvent('ksp-quick', { detail: { key, label } }))}>⚙ מידות והגדרות</button>;
-      })()}
       {ms.some((m) => m.kind === 'column') && <button className="ctx-btn pri" data-testid="ctx-omit" title="ביטול העמודים שנבחרו והחלפתם בקורה נושאת בין העמודים שנותרו" onClick={() => setOmit(ms.filter((m) => m.kind === 'column').map((m) => m.id))}>בטל עמודים</button>}
       <button className="ctx-btn" onClick={() => store.set({ isolated: [...sel] })}>בודד</button>
       {single && <button className="ctx-btn" data-testid="ctx-isolate-asm" title="הצג רק את המכלול (החלק הראשי והחלקים המרותכים אליו) והברגים שלו" onClick={() => {
