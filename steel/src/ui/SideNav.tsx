@@ -1,5 +1,6 @@
 import { IssueList } from './IssueList';
 import { DetailLibrary } from './DetailLibrary';
+import { ParamSheet } from './ParamSheet';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Connection, MemberKind, Severity } from '../model/types';
 import { cutLength } from '../geometry/solid';
@@ -26,7 +27,7 @@ export type NavKey =
   | 'conns' | `c:${Connection['type']}`
   | 'issues' | `i:${Severity}`
   | 'brace' | `b:${BraceSection}`
-  | 'clad' | `w:${CladSection}` | 'b:tb' | 'b:truss' | 'special' | 'c:library';
+  | 'clad' | `w:${CladSection}` | 'b:tb' | 'b:truss' | 'special' | 'c:library' | 's:sheet';
 
 const ORDER_C: Connection['type'][] = ['custom', 'eave', 'ridge', 'base', 'rafter-side', 'knee', 'ridge-tie', 'purlin-cleat', 'purlin-splice', 'beam-splice', 'brace-end', 'brace-cross', 'brace', 'tb-support', 'tb-seat', 'truss', 'truss-splice', 'truss-end'];
 const KINDS: MemberKind[] = ['column', 'rafter', 'purlin', 'girt', 'brace', 'cleat', 'plate', 'anchor', 'beam'];
@@ -78,6 +79,7 @@ export function SideNav({ nav, setNav, onOpenConn, treeOnly }: { nav: NavKey; se
       <nav className="nav-tree" aria-label="עץ תפריטים">
         {/* סדר העבודה: 1 מבנה ← 2 גג ופטות ← 3 חיזוקים ← 4 קירות וחיפוי ← 5 מיוחדים; אחריהם — רשימות ובדיקות */}
         {group('structure', '1 · מבנה', 'tab-structure', 'geometry', [
+          { key: 's:sheet', label: 'גיליון פרמטרים — הכל בטבלה', pic: 'project' },
           { key: 's:project', label: 'פרויקט והגדרות', pic: 'project' }, { key: 's:geometry', label: 'צירים, מסגרות וגבהים', pic: 'geometry' },
           { key: 's:profiles', label: 'חתכים וחומר', pic: 'profiles' },
         ])}
@@ -126,7 +128,7 @@ const GROUP_LABEL: Record<string, [string, string]> = {
 /** פירורי לחם מעל התוכן: איפה אני (קבוצה › פריט) עם התמונה */
 /** שם קצר לסעיף בעץ (לכותרת הפאנל). item=true — רק שם הסעיף בלי הקבוצה */
 const ITEM_LABEL: Record<string, string> = {
-  's:project': 'פרויקט והגדרות', 's:geometry': 'צירים, מסגרות וגבהים', 's:profiles': 'חתכים וחומר', 'r:system': 'מערכת פטות', 'r:left': 'פטות ותושבות', 'r:right': 'שיפוע ימין', 'r:splices': 'חיבורי המשך פטות',
+  's:sheet': 'גיליון פרמטרים', 's:project': 'פרויקט והגדרות', 's:geometry': 'צירים, מסגרות וגבהים', 's:profiles': 'חתכים וחומר', 'r:system': 'מערכת פטות', 'r:left': 'פטות ותושבות', 'r:right': 'שיפוע ימין', 'r:splices': 'חיבורי המשך פטות',
   'b:knee': 'אלכסוני עמוד-קורה', 'b:roof': 'קושרות גג', 'b:walls': 'קשיחות קירות', 'b:ties': 'שורות קשירה', 'b:ridge': 'חיזוק רכס', 'b:tb': 'דילול עמודים', 'b:truss': 'מסבכי גג',
   'w:roof': 'חיפוי גג', 'w:walls': 'חיפוי קירות', 'w:openings': 'פתחים', 'w:takeoff': 'כמויות חיפוי', 'c:library': 'ספריית פרטים',
 };
@@ -157,6 +159,7 @@ export function NavContent({ nav, onOpenConn }: { nav: NavKey; onOpenConn: (id: 
   if (nav === 'clad') return <CladdingPanel />;
   if (nav === 'special') return <><TransferPanel /><RoofTrussPanel /></>;
   if (nav === 'c:library') return <DetailLibrary />;
+  if (nav === 's:sheet') return <ParamSheet />;
   const [g, k] = nav.split(':') as [string, string];
   if (g === 's') return <StructurePanel section={k as StructSection} />;
   if (g === 'r') return <RoofPanel section={k as RoofSection} />;

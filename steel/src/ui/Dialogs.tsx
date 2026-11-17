@@ -1,5 +1,5 @@
 import { applyStandard } from '../persist/shopStandard';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { copyMembers, mirrorMembers, moveMembers, rotateMembers } from '../commands/commands';
 import { uniformFrames, defaultBuilding, newProject } from '../model/defaults';
 import { fromFileJson } from '../model/migrate';
@@ -10,7 +10,10 @@ import { deleteProject, listProjects, listSnapshots, loadProject, loadSnapshot, 
 import { store, useStore } from '../store';
 import { cachedSolid } from '../view/scene';
 import { LenField, NumField, ProfilePicker } from './fields';
-import { SECTION_TEMPLATES } from '../model/section';
+import { SECTION_TEMPLATES, toCustomSection } from '../model/section';
+import { generate } from '../geometry/generate';
+import { massPerMeter, tryProfile } from '../profiles/library';
+import { getMaterial } from '../profiles/materials';
 import { SectionPreview } from './SectionEditor';
 import { defaultKneeBraces } from '../geometry/knee';
 import { applySizingSuggestion } from '../commands/commands';
@@ -39,7 +42,25 @@ const GableSvg = () => <svg viewBox="0 0 100 40"><path d="M10 38V18L50 4l40 14v2
 const MonoSvg = () => <svg viewBox="0 0 100 40"><path d="M10 38V20L90 6v32" fill="none" stroke="currentColor" strokeWidth="2.5" /></svg>;
 
 /** אשף מבנה חדש. ערכי ברירת מחדל = מבנה GEO-01. */
+const WZ_STEPS = ['סוג מבנה', 'מידות', 'חתכים', 'גג ופטות', 'חיזוקים', 'חיפוי וסיכום'];
+const CLEATS: [NonNullable<CleatStyle>, string, string][] = [['run', 'זוויתן שוכב', 'L לאורך הפטה'], ['stand', 'זוויתן עומד', 'L40×40 · 2 חורים'], ['plate', 'פלטה + משולש', 'גם בתפר — 4 חורים']];
+type CleatStyle = 'run' | 'stand' | 'plate' | undefined;
+
+/** תוכנית מבט-על: צירים לרוחב, מסגרות לאורך */
+function PlanPreview({ width, frames }: { width: number; frames: { y: number }[] }) {
+  const L = frames.length ? frames[frames.length - 1]!.y : 1;
+  const k = Math.min(260 / Math.max(L, 1), 120 / Math.max(width, 1));
+  const w = width * k, h = L * k;
+  return (
+    <svg viewBox={`-10 -10 ${h + 20} ${w + 20}`} className="wz-plan" role="img" aria-label="תוכנית מסגרות">
+      <rect x={0} y={0} width={h} height={w} fill="none" stroke="currentColor" strokeWidth={1} opacity={0.5} />
+      {frames.map((f, i) => <g key={i}><line x1={f.y * k} y1={0} x2={f.y * k} y2={w} stroke="currentColor" strokeWidth={1.6} /><rect x={f.y * k - 2.5} y={-2.5} width={5} height={5} /><rect x={f.y * k - 2.5} y={w - 2.5} width={5} height={5} /></g>)}
+    </svg>
+  );
+}
+
 export function NewProjectDialog({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState(0);
   const [name, setName] = useState('פרויקט חדש');
   const [number, setNumber] = useState('');
   const [client, setClient] = useState('');
@@ -51,8 +72,12 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const [knee, setKnee] = useState(false);
   const [autoSize, setAutoSize] = useState(true);
   const [clad, setClad] = useState(true);
+  const [cladWalls, setCladWalls] = useState(true);
   const u: 'm' = 'm';
   const set = (p: Partial<BuildingParams>) => setB({ ...b, ...p });
+  const setPurl = (f: (s: BuildingParams['purlins']['left']) => void) => {
+    const pu = structuredClone(b.purlins); f(pu.left); f(pu.right); set({ purlins: pu });
+  };
   const build = (): BuildingParams | null => {
     if (!(count >= 2 && count <= 200)) return null;
     return { ...b, frames: uniformFrames(Math.round(count), length) };
@@ -61,10 +86,28 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const issues = cand ? validateBuilding(cand) : [{ code: 'FRAMES', severity: 'error' as const, message: 'מספר מסגרות 2–200' }];
   const errors = issues.filter((i) => i.severity === 'error');
   const tpl = SECTION_TEMPLATES.find((t) => t.id === kind);
+  const make = (): BuildingParams | null => {
+    if (!cand || errors.length) return null;
+    const bb: BuildingParams = { ...cand, ...(tpl ? { section: tpl.make() } : {}), kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined };
+    if (clad) { bb.cladding = defaultCladding(); if (!cladWalls) { bb.cladding.walls.enabled = false; bb.cladding.girts.enabled = false; bb.cladding.posts.enabled = false; } }
+    return bb;
+  };
+  // תצוגה חיה: יצירת המודל מהבחירות הנוכחיות (בלי התאמת חתכים — זו רצה ביצירה)
+  const key = JSON.stringify([b, length, count, kind, knee, clad, cladWalls]);
+  const live = useMemo(() => {
+    const bb = make();
+    if (!bb) return null;
+    try {
+      const d = generate(newProject(name, bb));
+      let kg = 0;
+      for (const x of d.parts) { const pr = tryProfile(x.profile); if (pr) kg += (massPerMeter(pr, getMaterial(x.material).density) * x.length) / 1000; }
+      return { members: d.members.length, conns: d.connections.length, err: d.issues.filter((i) => i.severity === 'error').length, warn: d.issues.filter((i) => i.severity === 'warning').length, kg, sec: bb.section ?? toCustomSection(bb, d.roof) };
+    } catch { return null; }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
   const create = () => {
-    if (!cand || errors.length) return;
-    const bb: BuildingParams = tpl ? { ...cand, section: tpl.make(), kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined } : { ...cand, kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined };
-    if (clad) bb.cladding = defaultCladding();
+    const bb = make();
+    if (!bb) return;
     let p = applyStandard(newProject(name, bb)); // סטנדרט מסגריה שמור (אם קיים)
     p.meta.number = number; p.meta.client = client;
     if (autoSize) { try { p = applySizingSuggestion().run(p); } catch { /* נשאר עם החתכים שנבחרו */ } }
@@ -73,47 +116,120 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
     onClose();
     setTimeout(() => (window as any).__ksp?.viewport?.fitAll(), 50);
   };
+  const bay = count > 1 ? length / (count - 1) : 0;
+  const card = (on: boolean, onClick: () => void, title: string, sub: string, testId?: string, pic?: ReactNode) => (
+    <button className={`tpl wz-card${on ? ' on' : ''}`} onClick={onClick} data-testid={testId} aria-pressed={on}>{pic}<span><b>{title}</b><small>{sub}</small></span></button>
+  );
+  const style = b.purlins.left.cleat.style ?? 'run';
   return (
     <Dialog title="פרויקט חדש" onClose={onClose} wide testId="new-dialog"
-      footer={<><button className="btn primary" disabled={!!errors.length} onClick={create} data-testid="create">יצירת מבנה</button><button className="btn" onClick={onClose}>ביטול</button></>}>
-      <div className="grid2">
-        <div>
-          <div className="panel-title">פרויקט</div>
-          <div className="field wide"><label>שם</label><input className="inp" value={name} onChange={(e) => setName(e.target.value)} data-testid="np-name" /></div>
-          <div className="field wide"><label>מספר</label><input className="inp" value={number} onChange={(e) => setNumber(e.target.value)} /></div>
-          <div className="field wide"><label>לקוח</label><input className="inp" value={client} onChange={(e) => setClient(e.target.value)} /></div>
-          <div className="panel-title">סוג מבנה</div>
-          <div className="tpl-grid np-types">
-            <button className={`tpl${kind === 'gable' ? ' on' : ''}`} onClick={() => { setKind('gable'); set({ roofType: 'gable', eaveRight: b.eaveLeft, ridgeX: b.width / 2, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 300 } } }); }} data-testid="np-gable"><GableSvg /><span>דו־שיפועי (2 צירים)</span></button>
-            <button className={`tpl${kind === 'mono' ? ' on' : ''}`} onClick={() => { setKind('mono'); set({ roofType: 'mono', eaveRight: b.eaveLeft + 1000, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 0 } } }); }} data-testid="np-mono"><MonoSvg /><span>חד־שיפועי (2 צירים)</span></button>
-            {SECTION_TEMPLATES.filter((t) => t.id !== 'gable-2' && t.id !== 'mono-2').map((t) => (
-              <button key={t.id} className={`tpl${kind === t.id ? ' on' : ''}`} title={t.desc} data-testid={`np-${t.id}`} onClick={() => { setKind(t.id); setKnee(true); }}><SectionPreview section={t.make()} small /><span>{t.name}</span></button>
-            ))}
-          </div>
-          <label className="row" style={{ marginTop: 6 }}><input type="checkbox" checked={knee} data-testid="np-knee" onChange={(e) => setKnee(e.target.checked)} />אלכסוני עמוד-קורה (RHS, 45°)</label>
-          <label className="row" style={{ marginTop: 4 }}><input type="checkbox" checked={clad} data-testid="np-clad" onChange={(e) => setClad(e.target.checked)} />חיפוי גג וקירות, פטות קיר, עמודי רוח ומזחלות</label>
-          <label className="row" style={{ marginTop: 4 }} title="הקטן ביותר שמסומן 'סביר' בבדיקת הגדלים, באותה משפחת פרופיל; כולל התאמת פלטות ראש עמוד ובסיס. הערכה בלבד — לא תכן."><input type="checkbox" checked={autoSize} data-testid="np-autosize" onChange={(e) => setAutoSize(e.target.checked)} />התאמת חתכים לפי כללי אצבע (עמודים, קורות, פטות, קושרות)</label>
-        </div>
-        <div>
-          <div className="panel-title">ממדים</div>
-          {tpl && <div className="sec-prev"><SectionPreview section={tpl.make()} /><div className="hint" style={{ margin: '2px 4px' }}>{tpl.desc}. צירים, גבהים, קונזולות ושיפועים — נערכים אחרי היצירה במבנה ← גיאומטריה (כולל גרירה בתצוגה).</div></div>}
-          <div className="field"><label>אורך</label><LenField testId="np-length" mm={length} unit={u} onCommit={setLength} /></div>
-          <div className="field"><label>מספר מסגרות</label><NumField testId="np-count" value={count} onCommit={(v) => setCount(Math.round(v))} /></div>
-          {!tpl && <>
-          <div className="field"><label>רוחב</label><LenField testId="np-width" mm={b.width} unit={u} onCommit={(v) => set(b.roofType === 'gable' ? { width: v, ridgeX: v / 2 } : { width: v })} /></div>
-          <div className="field"><label>גובה ציר א (שמאל)</label><LenField testId="np-eaveL" mm={b.eaveLeft} unit={u} onCommit={(v) => set(b.roofType === 'gable' && b.eaveLeft === b.eaveRight ? { eaveLeft: v, eaveRight: v } : { eaveLeft: v })} /></div>
-          <div className="field"><label>גובה ציר ב (ימין)</label><LenField testId="np-eaveR" mm={b.eaveRight} unit={u} onCommit={(v) => set({ eaveRight: v })} /></div>
-          {b.roofType === 'gable' && <>
-            <div className="field"><label>מיקום רכס</label><LenField mm={b.ridgeX} unit={u} onCommit={(v) => set({ ridgeX: v })} /></div>
-            <div className="field"><label>שיפוע שמאל</label><NumField testId="np-slope" value={b.slopeLeftPct} suffix="%" onCommit={(v) => set({ slopeLeftPct: v })} /></div>
+      footer={<>
+        <button className="btn" disabled={step === 0} onClick={() => setStep(step - 1)} data-testid="wz-prev">→ הקודם</button>
+        {step < WZ_STEPS.length - 1 && <button className="btn" onClick={() => setStep(step + 1)} data-testid="wz-next">הבא ←</button>}
+        <button className="btn primary" disabled={!!errors.length} onClick={create} data-testid="create" title="אפשר ליצור מכל שלב — השאר נשאר בברירת המחדל">יצירת מבנה</button>
+        <button className="btn" onClick={onClose}>ביטול</button>
+      </>}>
+      <div className="wz">
+        <nav className="wz-steps" aria-label="שלבי האשף">
+          {WZ_STEPS.map((t, i) => (
+            <button key={t} className={`${i === step ? 'on' : ''}${i < step ? ' done' : ''}`} onClick={() => setStep(i)} data-testid={`wz-step-${i}`}>
+              <span className="k">{i < step ? '✓' : i + 1}</span>{t}
+            </button>
+          ))}
+          <div className="hint" style={{ marginTop: 'auto' }}>אפשר לקפוץ בין השלבים וליצור מכל שלב. הכל ניתן לשינוי אחר כך.</div>
+        </nav>
+        <section className="wz-form">
+          {step === 0 && <>
+            <div className="panel-title">פרויקט</div>
+            <div className="field wide"><label>שם</label><input className="inp" value={name} onChange={(e) => setName(e.target.value)} data-testid="np-name" /></div>
+            <div className="field wide"><label>מספר</label><input className="inp" value={number} onChange={(e) => setNumber(e.target.value)} /></div>
+            <div className="field wide"><label>לקוח</label><input className="inp" value={client} onChange={(e) => setClient(e.target.value)} /></div>
+            <div className="panel-title">סוג מבנה</div>
+            <div className="tpl-grid np-types">
+              <button className={`tpl${kind === 'gable' ? ' on' : ''}`} onClick={() => { setKind('gable'); set({ roofType: 'gable', eaveRight: b.eaveLeft, ridgeX: b.width / 2, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 300 } } }); }} data-testid="np-gable"><GableSvg /><span>דו־שיפועי (2 צירים)</span></button>
+              <button className={`tpl${kind === 'mono' ? ' on' : ''}`} onClick={() => { setKind('mono'); set({ roofType: 'mono', eaveRight: b.eaveLeft + 1000, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 0 } } }); }} data-testid="np-mono"><MonoSvg /><span>חד־שיפועי (2 צירים)</span></button>
+              {SECTION_TEMPLATES.filter((t) => t.id !== 'gable-2' && t.id !== 'mono-2').map((t) => (
+                <button key={t.id} className={`tpl${kind === t.id ? ' on' : ''}`} title={t.desc} data-testid={`np-${t.id}`} onClick={() => { setKind(t.id); setKnee(true); }}><SectionPreview section={t.make()} small /><span>{t.name}</span></button>
+              ))}
+            </div>
           </>}
+          {step === 1 && <>
+            <div className="panel-title">מידות</div>
+            <div className="field"><label>אורך</label><LenField testId="np-length" mm={length} unit={u} onCommit={setLength} /></div>
+            <div className="field"><label>מספר מסגרות</label><NumField testId="np-count" value={count} onCommit={(v) => setCount(Math.round(v))} /></div>
+            <div className="field"><label>מרווח מסגרות</label><LenField testId="np-bay" mm={bay} unit={u} onCommit={(v) => { if (v > 0) setCount(Math.max(2, Math.round(length / v) + 1)); }} /></div>
+            {tpl ? <div className="hint">{tpl.desc}. צירים, גבהים, קונזולות ושיפועים של תבנית — נערכים אחרי היצירה במבנה ← צירים, מסגרות וגבהים (כולל גרירה בתצוגה), או בגיליון הפרמטרים.</div> : <>
+              <div className="field"><label>רוחב</label><LenField testId="np-width" mm={b.width} unit={u} onCommit={(v) => set(b.roofType === 'gable' ? { width: v, ridgeX: v / 2 } : { width: v })} /></div>
+              <div className="field"><label>גובה ציר א (שמאל)</label><LenField testId="np-eaveL" mm={b.eaveLeft} unit={u} onCommit={(v) => set(b.roofType === 'gable' && b.eaveLeft === b.eaveRight ? { eaveLeft: v, eaveRight: v } : { eaveLeft: v })} /></div>
+              <div className="field"><label>גובה ציר ב (ימין)</label><LenField testId="np-eaveR" mm={b.eaveRight} unit={u} onCommit={(v) => set({ eaveRight: v })} /></div>
+              {b.roofType === 'gable' && <>
+                <div className="field"><label>מיקום רכס</label><LenField mm={b.ridgeX} unit={u} onCommit={(v) => set({ ridgeX: v })} /></div>
+                <div className="field"><label>שיפוע שמאל</label><NumField testId="np-slope" value={b.slopeLeftPct} suffix="%" onCommit={(v) => set({ slopeLeftPct: v })} /></div>
+              </>}
+            </>}
+            <div className="hint">מרווחים לא אחידים ומפלס תחתית שונה לכל ציר — אחרי היצירה, בטבלת הצירים והמסגרות.</div>
           </>}
-          <div className="field prof"><label>חתך עמוד</label><ProfilePicker value={b.columnProfile} families={['HEA', 'HEB', 'HEM', 'IPE', 'RHS', 'SHS']} onCommit={(v) => set({ columnProfile: v })} /></div>
-          <div className="field prof"><label>חתך קורה</label><ProfilePicker value={b.rafterProfile} families={['IPE', 'HEA', 'HEB', 'RHS']} onCommit={(v) => set({ rafterProfile: v })} /></div>
-        </div>
+          {step === 2 && <>
+            <div className="panel-title">חתכים</div>
+            <div className="field prof"><label>חתך עמוד</label><ProfilePicker value={b.columnProfile} families={['HEA', 'HEB', 'HEM', 'IPE', 'RHS', 'SHS']} onCommit={(v) => set({ columnProfile: v })} /></div>
+            <div className="field prof"><label>חתך קורה</label><ProfilePicker value={b.rafterProfile} families={['IPE', 'HEA', 'HEB', 'RHS']} onCommit={(v) => set({ rafterProfile: v })} /></div>
+            <label className="row" style={{ marginTop: 8 }} title="הקטן ביותר שמסומן 'סביר' בבדיקת הגדלים, באותה משפחת פרופיל; כולל התאמת פלטות ראש עמוד ובסיס. הערכה בלבד — לא תכן."><input type="checkbox" checked={autoSize} data-testid="np-autosize" onChange={(e) => setAutoSize(e.target.checked)} />התאמת חתכים לפי כללי אצבע (עמודים, קורות, פטות, קושרות)</label>
+            <div className="hint">עם ההתאמה מסומנת — החתכים שכאן הם נקודת התחלה בלבד; ההתאמה רצה ביצירה. הערכה בלבד, לא תכן מאושר.</div>
+          </>}
+          {step === 3 && <>
+            <div className="panel-title">פטות</div>
+            <div className="field prof"><label>חתך פטה</label><ProfilePicker value={b.purlins.left.profile} families={['C', 'Z', 'RHS']} onCommit={(v) => setPurl((s) => { s.profile = v; })} testId="np-purlin" /></div>
+            <div className="field"><label>מרווח פטות</label><LenField testId="np-pspacing" mm={b.purlins.left.spacing} unit={u} onCommit={(v) => setPurl((s) => { s.spacing = v; })} /></div>
+            <div className="field"><label>חלוקה</label><select className="inp" value={b.purlins.left.layout ?? 'fixed'} onChange={(e) => setPurl((s) => { s.layout = e.target.value as 'fixed' | 'even'; })}><option value="fixed">מרווח קבוע — שארית במפתח האחרון</option><option value="even">חלוקה שווה — המרווח הוא מרבי</option></select></div>
+            <div className="panel-title">תושבת פטה</div>
+            <div className="wz-cards">
+              {CLEATS.map(([k, t, sub]) => card(style === k, () => setPurl((s) => { s.cleat.style = k; }), t, sub, `np-cleat-${k}`))}
+            </div>
+          </>}
+          {step === 4 && <>
+            <div className="panel-title">חיזוקים</div>
+            <div className="wz-cards">
+              {card(knee, () => setKnee(!knee), 'אלכסוני עמוד-קורה', knee ? 'פעיל · RHS · 45°' : 'כבוי', 'np-knee-card')}
+              {card(b.bracing.roof.enabled, () => set({ bracing: { ...b.bracing, roof: { ...b.bracing.roof, enabled: !b.bracing.roof.enabled } } }), 'קושרות גג', b.bracing.roof.enabled ? 'X במפתחי הקצה' : 'כבוי', 'np-roofx')}
+              {card(b.bracing.walls.enabled, () => set({ bracing: { ...b.bracing, walls: { ...b.bracing.walls, enabled: !b.bracing.walls.enabled } } }), 'קשיחות קירות', b.bracing.walls.enabled ? 'X במפתחי הקצה' : 'כבוי', 'np-wallx')}
+            </div>
+            <label className="row" style={{ marginTop: 6 }}><input type="checkbox" checked={knee} data-testid="np-knee" onChange={(e) => setKnee(e.target.checked)} />אלכסוני עמוד-קורה (RHS, 45°)</label>
+            <div className="hint">לחיצה מפעילה/מכבה. מפתחים, חתכים ופרטים — במסך העבודה (3 · חיזוקים).</div>
+          </>}
+          {step === 5 && <>
+            <div className="panel-title">חיפוי</div>
+            <div className="wz-cards">
+              {card(!clad, () => setClad(false), 'ללא חיפוי', 'סככה פתוחה', 'np-clad-none')}
+              {card(clad && !cladWalls, () => { setClad(true); setCladWalls(false); }, 'גג בלבד', 'פח + מזחלות', 'np-clad-roof')}
+              {card(clad && cladWalls, () => { setClad(true); setCladWalls(true); }, 'גג וקירות', 'פטות קיר + עמודי רוח', 'np-clad-walls')}
+            </div>
+            <label className="row" style={{ marginTop: 4 }}><input type="checkbox" checked={clad} data-testid="np-clad" onChange={(e) => setClad(e.target.checked)} />חיפוי (גג{cladWalls ? ' וקירות' : ''})</label>
+            <div className="panel-title">סיכום</div>
+            <div className="wz-sum" data-testid="wz-summary">
+              <span>{tpl ? tpl.name : kind === 'mono' ? 'חד־שיפועי' : 'דו־שיפועי'}</span>
+              {!tpl && <span>{(b.width / 1000).toFixed(2)} × {(length / 1000).toFixed(2)} מ'</span>}
+              <span>{count} מסגרות · מרווח {(bay / 1000).toFixed(2)} מ'</span>
+              {!tpl && <span>גובה {(b.eaveLeft / 1000).toFixed(2)}{b.eaveRight !== b.eaveLeft ? `/${(b.eaveRight / 1000).toFixed(2)}` : ''} מ'{b.roofType === 'gable' ? ` · ${b.slopeLeftPct}%` : ''}</span>}
+              <span>{b.columnProfile} / {b.rafterProfile}{autoSize ? ' (יותאמו)' : ''}</span>
+              <span>פטות {b.purlins.left.profile} @ {(b.purlins.left.spacing / 1000).toFixed(2)} · {CLEATS.find(([k]) => k === style)?.[1]}</span>
+              <span>{[knee && 'אלכסונים', b.bracing.roof.enabled && 'קושרות גג', b.bracing.walls.enabled && 'קשיחות קירות'].filter(Boolean).join(' · ') || 'ללא חיזוקים'}</span>
+              <span>{!clad ? 'ללא חיפוי' : cladWalls ? 'חיפוי גג וקירות' : 'חיפוי גג'}</span>
+            </div>
+          </>}
+          {issues.map((i, k) => <div key={k} className={`issue ${i.severity}`}><span className="ic">{i.severity === 'error' ? '✕' : '!'}</span>{i.message}</div>)}
+        </section>
+        <section className="wz-view" data-testid="wz-view">
+          {live?.sec && <SectionPreview section={live.sec} />}
+          <PlanPreview width={tpl ? (live?.sec ? Math.max(...live.sec.lines.map((l) => l.x)) - Math.min(...live.sec.lines.map((l) => l.x)) : b.width) : b.width} frames={cand?.frames ?? []} />
+          {live ? (
+            <div className="wz-stat">
+              <span>{live.members} אלמנטים</span><span>{live.conns} חיבורים</span>
+              <span>~{Math.round(live.kg / 100) * 100} ק"ג{autoSize ? ' (לפני התאמה)' : ''}</span>
+              <span className={`badge ${live.err ? 'err' : live.warn ? 'warn' : 'ok'}`} data-testid="wz-check">{live.err ? `${live.err} שגיאות` : live.warn ? `${live.warn} אזהרות` : '✓ ללא שגיאות'}</span>
+            </div>
+          ) : <div className="hint">יש לתקן את השגיאות כדי לראות תצוגה.</div>}
+        </section>
       </div>
-      {issues.map((i, k) => <div key={k} className={`issue ${i.severity}`}><span className="ic">{i.severity === 'error' ? '✕' : '!'}</span>{i.message}</div>)}
-      <div className="hint">כל הפרמטרים ניתנים לשינוי לאחר היצירה (לשונית "מבנה"). מרווחים לא אחידים — בטבלת המסגרות.</div>
     </Dialog>
   );
 }

@@ -758,3 +758,38 @@ details.adv .adv-body { padding-bottom: 6px; }
 .type-card svg { width: 34px; height: 34px; flex: none; fill: none; stroke: var(--text); stroke-width: 1.3; color: var(--brand); }
 .type-card b { display: block; font-size: 13px; }
 .type-card small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.3; }
+
+/* גיליון פרמטרים */
+.ps-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.ps-bar .inp { flex: 1; min-width: 140px; }
+.ps-tbl { width: 100%; max-width: 980px; }
+.ps-bar { max-width: 980px; }
+.ps-tbl td { vertical-align: middle; }
+.ps-tbl .ps-val { min-width: 130px; width: 380px; }
+.ps-tbl .ps-val .inp, .ps-tbl .ps-val select { width: 100%; }
+.ps-grp td { background: var(--panel-2); font-weight: 700; color: var(--brand); padding-top: 8px; }
+.ps-chg td:first-child { box-shadow: inset -3px 0 0 var(--warn); font-weight: 600; }
+.ps-diff { color: var(--warn); text-decoration: line-through; font-family: ui-monospace, monospace; font-size: 12px; }
+.ps-ovrow td { background: var(--panel-2); }
+.ps-ovlist { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; margin-bottom: 6px; }
+
+/* אשף פרויקט חדש */
+.dialog:has(.wz) { width: min(1180px, 100%); }
+.wz { display: grid; grid-template-columns: 170px minmax(0, 1fr) minmax(0, 1fr); gap: 16px; min-height: 440px; }
+.wz-steps { display: flex; flex-direction: column; gap: 2px; border-inline-end: 1px solid var(--line); padding-inline-end: 10px; }
+.wz-steps > button { display: flex; align-items: center; gap: 8px; background: none; border: 0; border-radius: 8px; padding: 8px; cursor: pointer; text-align: start; color: var(--muted); font-weight: 600; }
+.wz-steps > button .k { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--panel-2); font-size: 12px; flex: none; }
+.wz-steps > button.on { background: var(--brand-soft); color: var(--brand); }
+.wz-steps > button.on .k { background: var(--brand); color: #fff; }
+.wz-steps > button.done .k { background: var(--brand-soft); color: var(--ok); }
+.wz-form { min-width: 0; }
+.wz-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.wz-card { text-align: start; }
+.wz-card > span { display: flex; flex-direction: column; gap: 2px; }
+.wz-card small { color: var(--muted); font-weight: 400; }
+.wz-view { display: flex; flex-direction: column; gap: 10px; background: var(--panel-2); border-radius: 12px; padding: 12px; min-width: 0; color: var(--brand); }
+.wz-view .sec-prev, .wz-view > svg { max-width: 100%; }
+.wz-plan { width: 100%; max-height: 160px; }
+.wz-stat { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--text); align-items: center; margin-top: auto; }
+.wz-sum { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; background: var(--panel-2); border-radius: 10px; padding: 10px 12px; }
+@media (max-width: 860px) { .wz { grid-template-columns: 1fr; } .wz-steps { flex-direction: row; overflow-x: auto; border: 0; padding: 0; } .wz-steps > button { white-space: nowrap; } .wz-steps .hint { display: none; } }

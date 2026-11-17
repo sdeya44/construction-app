@@ -1,0 +1,56 @@
+import { expect, test } from '@playwright/test';
+import { boot } from './helpers';
+
+const st = (page: import('@playwright/test').Page) => page.evaluate(() => {
+  const s = (window as any).__ksp.store.state; const b = s.project.building;
+  return { frames: b.frames.length, width: b.width, style: b.purlins.left.cleat.style, spacing: b.purlins.left.spacing, roofX: b.bracing.roof.enabled, walls: b.cladding?.walls.enabled, roofClad: b.cladding?.roof.enabled, err: s.derived.issues.filter((i: any) => i.severity === 'error').length, rafter: b.rafterProfile, ov: Object.keys(s.project.memberOverrides).length };
+});
+
+test('WZ-01: אשף פרויקט חדש — שלבים, תצוגה חיה, תושבת עומדת, חיפוי גג בלבד', async ({ page }) => {
+  const errors = await boot(page);
+  await page.getByTestId('btn-new').click();
+  await expect(page.getByTestId('wz-view')).toBeVisible();
+  await expect(page.getByTestId('wz-check')).toContainText('ללא שגיאות');
+  await page.getByTestId('wz-next').click();
+  await page.getByTestId('np-width').fill('20'); await page.getByTestId('np-width').press('Enter');
+  await page.getByTestId('np-bay').fill('5'); await page.getByTestId('np-bay').press('Enter');
+  await expect(page.getByTestId('np-count')).toHaveValue('7');
+  await page.getByTestId('wz-step-2').click();
+  await page.getByTestId('np-autosize').uncheck();
+  await page.getByTestId('wz-step-3').click();
+  await page.getByTestId('np-cleat-stand').click();
+  await page.getByTestId('np-pspacing').fill('1.2'); await page.getByTestId('np-pspacing').press('Enter');
+  await page.getByTestId('wz-step-4').click();
+  await page.getByTestId('np-roofx').click();
+  await page.getByTestId('wz-step-5').click();
+  await page.getByTestId('np-clad-roof').click();
+  await expect(page.getByTestId('wz-summary')).toContainText('7 מסגרות');
+  await expect(page.getByTestId('wz-summary')).toContainText('זוויתן עומד');
+  await page.getByTestId('create').click();
+  expect(await st(page)).toMatchObject({ frames: 7, width: 20000, style: 'stand', spacing: 1200, roofX: false, walls: false, roofClad: true, err: 0 });
+  expect(errors).toEqual([]);
+});
+
+test('PS-01: גיליון פרמטרים — עריכה בטבלה, חריגים והחזרה לכללי, השוואה למהדורה', async ({ page }) => {
+  const errors = await boot(page);
+  await page.getByTestId('nav-s:sheet').click();
+  await expect(page.getByTestId('param-sheet')).toBeVisible();
+  await page.getByTestId('ps-מספר מסגרות').fill('8'); await page.getByTestId('ps-מספר מסגרות').press('Enter');
+  expect((await st(page)).frames).toBe(8);
+  // חריג: קורה אחת עם חתך משלה
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => { const n = structuredClone(p); n.memberOverrides['PL.L.04'] = { profile: 'C250x75x20x3' }; return n; } }); });
+  await page.getByTestId('ps-ov-פטות — חתך').click();
+  await page.getByTestId('ps-ovclear-פטות — חתך').click();
+  expect((await st(page)).ov).toBe(0);
+  // אישור מהדורה ושינוי — השורה מסומנת כשונתה
+  await page.evaluate(() => { const k = (window as any).__ksp; const n = structuredClone(k.store.state.project); n.revision.log.push({ rev: 'A', date: '', note: '', status: 'approved', snapshot: JSON.stringify(n) }); k.store.loadProject(n, false); });
+  await page.getByTestId('nav-s:sheet').click();
+  await page.getByTestId('ps-only').check();
+  await expect(page.locator('[data-testid^="ps-row-"]')).toHaveCount(0);
+  await page.getByTestId('ps-only').uncheck();
+  await page.getByTestId('ps-שיפוע גג').fill('12'); await page.getByTestId('ps-שיפוע גג').press('Enter');
+  await page.getByTestId('ps-only').check();
+  await expect(page.getByTestId('ps-row-שיפוע גג')).toBeVisible();
+  await expect(page.getByTestId('ps-row-שיפוע גג')).toContainText('10%');
+  expect(errors).toEqual([]);
+});

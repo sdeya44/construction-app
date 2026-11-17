@@ -44,7 +44,7 @@ export function App() {
   const [wide, setWide] = useState(() => !window.matchMedia('(max-width: 860px)').matches);
   useEffect(() => { const mq = window.matchMedia('(max-width: 860px)'); const on = () => setWide(!mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on); }, []);
   const [lp, setLp] = useState<'nav' | 'sel'>('nav');
-  const setNav = (k: NavKey) => { setNavRaw(k); setLp('nav'); };
+  const setNav = (k: NavKey) => { setNavRaw(k); setLp('nav'); setLpFull(k === 's:sheet' && !window.matchMedia('(max-width: 860px)').matches); };
   const [treeHidden, setTreeHiddenS] = useState(() => { try { return localStorage.getItem('ksp-tree-hidden') === '1'; } catch { return false; } });
   const setTreeHidden = (v: boolean) => { setTreeHiddenS(v); try { localStorage.setItem('ksp-tree-hidden', v ? '1' : '0'); } catch { /* */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 30); };
   const [lpFull, setLpFull] = useState(false);
@@ -260,7 +260,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.25</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.26</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}

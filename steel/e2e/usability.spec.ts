@@ -7,6 +7,7 @@ test('USE-01: פרויקט חדש מתבנית מודולרית עם אלכסו�
   const errors = await boot(page);
   await page.getByTestId('btn-new').click();
   await page.getByTestId('np-gable-inner').click();
+  await page.getByTestId('wz-step-4').click();
   await expect(page.getByTestId('np-knee')).toBeChecked();
   await page.getByTestId('create').click();
   const b = await page.evaluate(() => { const s = (window as any).__ksp.store.state; return { lines: s.project.building.section?.lines.length, knee: s.derived.connections.filter((c: any) => c.type === 'knee').length, err: s.derived.issues.filter((i: any) => i.severity === 'error').length }; });

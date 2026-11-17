@@ -50,7 +50,9 @@ test('CLAD-01: פרויקט חדש עם חיפוי והתאמת חתכים — �
   page.on('dialog', (d) => d.accept());
   await boot(page);
   await page.getByTestId('btn-new').click();
+  await page.getByTestId('wz-step-5').click();
   await expect(page.getByTestId('np-clad')).toBeChecked();
+  await page.getByTestId('wz-step-2').click();
   await expect(page.getByTestId('np-autosize')).toBeChecked();
   await page.getByTestId('create').click();
   const st = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { err: d.issues.filter((i: any) => i.severity === 'error').length, girts: d.members.filter((m: any) => m.kind === 'girt').length }; });
