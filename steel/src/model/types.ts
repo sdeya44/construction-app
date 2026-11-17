@@ -212,6 +212,22 @@ export interface BuildingParams {
   transfers?: TransferDef[];
   /** מסבכי גג: קורת הגג = חגורה עליונה; חגורה תחתונה + אנכיים/אלכסונים מרותכים במסגריה */
   roofTruss?: RoofTrussParams;
+  /** כנף ניצבת (סככת L): סככה נמוכה שהמסגרת הראשונה שלה נשענת על עמודי הצד של הסככה הראשית */
+  wing?: WingDef;
+}
+
+export interface WingDef {
+  enabled: boolean;
+  /** הצד של הסככה הראשית שאליו מחוברת הכנף: L = ציר ראשון (x קטן), R = ציר אחרון */
+  side: 'L' | 'R';
+  /** המסגרת הראשית שבה מתחילה הכנף, ורוחב הכנף במספר מפתחים של הסככה הראשית */
+  fromFrame: string; bays: number;
+  /** אורך הכנף מהסככה הראשית החוצה, ומספר המסגרות שלה (כולל המסגרת הנשענת) */
+  length: Mm; frames: number;
+  roofType: 'gable' | 'mono';
+  /** גובה מרזב הכנף (TOS); שיפוע באחוזים; חד-שיפועי: הצד הגבוה */
+  eave: Mm; slopePct: number; monoHigh?: 'start' | 'end';
+  columnProfile?: string; rafterProfile?: string;
 }
 
 /** תמיכת הקורה הנושאת בעמוד: A1 על ראש העמוד; A2 פלטת קצה; A3 פלטת סנפיר; A4 זוויתני ווב; A5 תושבת */
@@ -704,4 +720,8 @@ export interface DerivedModel {
   connById: Map<string, Connection>;
   /** חתך מנורמל (צירים ומישורי גג) */
   section?: import('./section').NSection;
+  /** כנף (סככת L): קו החיבור ותחום המפתחים */
+  wing?: { side: 'L' | 'R'; xLine: number; y0: number; y1: number; off: number; dir: 1 | -1;
+    /** מודל הכנף במערכת המקומית שלה (לחיפוי, מזחלות ושרטוטים) ומיפוי נקודה לעולם */
+    local?: { project: Project; derived: DerivedModel; mainProject: Project; P: (q: { x: number; y: number; z: number }) => { x: number; y: number; z: number } } };
 }

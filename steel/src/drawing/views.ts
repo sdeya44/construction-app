@@ -291,18 +291,27 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       });
       const raf = getProfile(b.rafterProfile);
       for (const m of d.members.filter((x) => x.kind === 'rafter')) {
-        const hb = raf.props.b / 2;
+        const hb = (tryProfile(m.profile)?.props.b ?? raf.props.b) / 2;
         const xs = [m.start.x, m.end.x];
-        v.poly([{ x: xs[0], y: m.start.y - hb }, { x: xs[1], y: m.start.y - hb }, { x: xs[1], y: m.start.y + hb }, { x: xs[0], y: m.start.y + hb }], true, 'OUTLINE');
+        // קורה בכיוון כלשהו בתוכנית (גם קורות הכנף, שמסובבות 90°)
+        const L2 = Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y) || 1;
+        const nx = -(m.end.y - m.start.y) / L2 * hb, ny = (m.end.x - m.start.x) / L2 * hb;
+        v.poly([{ x: m.start.x + nx, y: m.start.y + ny }, { x: m.end.x + nx, y: m.end.y + ny }, { x: m.end.x - nx, y: m.end.y - ny }, { x: m.start.x - nx, y: m.start.y - ny }], true, 'OUTLINE');
+        if (m.id.startsWith('W.')) continue;
         // סימון הרכבה על כל קורה
         const mk = asmOf(m.id);
         if (mk) v.text({ x: xs[0] + (xs[1] - xs[0]) * 0.22, y: m.start.y + hb + 2.2 * v.scale }, mk, 2.5, 'center', 'MARK', 0, true);
       }
       for (const m of d.members.filter((x) => x.kind === 'column')) {
-        const c = getProfile(m.profile);
+        const c0 = getProfile(m.profile);
+        // עמוד מסובב (כנף): הגובה לאורך Y
+        const c = Math.abs(m.refUp.y) > Math.abs(m.refUp.x) ? { props: { h: c0.props.b, b: c0.props.h } } : c0;
         v.poly([{ x: m.start.x - c.props.h / 2, y: m.start.y - c.props.b / 2 }, { x: m.start.x + c.props.h / 2, y: m.start.y - c.props.b / 2 }, { x: m.start.x + c.props.h / 2, y: m.start.y + c.props.b / 2 }, { x: m.start.x - c.props.h / 2, y: m.start.y + c.props.b / 2 }], true, 'OUTLINE', true);
       }
-      const purl = d.members.filter((m) => m.purlin);
+      // פטות הכנף: קווים בלבד (המידות והתוויות — לסככה הראשית)
+      for (const m of d.members.filter((x) => x.purlin && x.id.startsWith('W.'))) v.line({ x: m.start.x, y: m.start.y }, { x: m.end.x, y: m.end.y }, 'OUTLINE');
+      if (d.wing) { const wm = d.members.filter((x) => x.id.startsWith('W.') && x.kind === 'rafter'); if (wm.length) { const cx = wm.reduce((a1, m) => a1 + m.start.x + m.end.x, 0) / (2 * wm.length), cy = wm.reduce((a1, m) => a1 + m.start.y + m.end.y, 0) / (2 * wm.length); v.text({ x: cx, y: cy }, `כנף (L) · פטות ${wm[0] && d.members.find((x) => x.purlin && x.id.startsWith('W.'))?.profile}`, 2.5, 'center', 'MARK', 0, true); } }
+      const purl = d.members.filter((m) => m.purlin && !m.id.startsWith('W.'));
       for (const m of purl) v.line({ x: m.start.x, y: m.start.y }, { x: m.end.x, y: m.end.y }, 'OUTLINE');
       // תווית אחת לכל שיפוע: חתך וסימוני החלקים
       for (const side of ['L', 'R', 'M'] as const) {

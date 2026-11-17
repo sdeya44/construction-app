@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { copyMembers, mirrorMembers, moveMembers, rotateMembers } from '../commands/commands';
 import { uniformFrames, defaultBuilding, newProject } from '../model/defaults';
 import { fromFileJson } from '../model/migrate';
-import type { BuildingParams } from '../model/types';
+import type { BuildingParams, WingDef } from '../model/types';
 import { validateBuilding } from '../model/validate';
 import { pickFile } from '../persist/files';
 import { deleteProject, listProjects, listSnapshots, loadProject, loadSnapshot, type ProjectSummary, type SnapshotInfo } from '../persist/idb';
@@ -19,6 +19,7 @@ import { defaultKneeBraces } from '../geometry/knee';
 import { applySizingSuggestion } from '../commands/commands';
 import { backupDownload } from '../persist/fileLink';
 import { defaultCladding } from '../geometry/cladding';
+import { defaultWing } from '../geometry/wing';
 import { Icon } from './icons';
 
 export function Dialog({ title, onClose, children, footer, wide, testId }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean; testId?: string }) {
@@ -39,6 +40,7 @@ export function Dialog({ title, onClose, children, footer, wide, testId }: { tit
 }
 
 const GableSvg = () => <svg viewBox="0 0 100 40"><path d="M10 38V18L50 4l40 14v20" fill="none" stroke="currentColor" strokeWidth="2.5" /></svg>;
+const LSvg = ({ gable }: { gable?: boolean }) => <svg viewBox="0 0 100 40"><path d={gable ? 'M8 38V20L30 10l22 10v18M52 26l20-6 20 6v12H52z' : 'M8 38V18L52 12v26M52 24l40 4v10H52z'} fill="none" stroke="currentColor" strokeWidth="2.5" /></svg>;
 const MonoSvg = () => <svg viewBox="0 0 100 40"><path d="M10 38V20L90 6v32" fill="none" stroke="currentColor" strokeWidth="2.5" /></svg>;
 
 /** אשף מבנה חדש. ערכי ברירת מחדל = מבנה GEO-01. */
@@ -47,12 +49,16 @@ const CLEATS: [NonNullable<CleatStyle>, string, string][] = [['run', 'זווית
 type CleatStyle = 'run' | 'stand' | 'plate' | undefined;
 
 /** תוכנית מבט-על: צירים לרוחב, מסגרות לאורך */
-function PlanPreview({ width, frames }: { width: number; frames: { y: number }[] }) {
+function PlanPreview({ width, frames, wing }: { width: number; frames: { y: number; id?: string }[]; wing?: WingDef }) {
   const L = frames.length ? frames[frames.length - 1]!.y : 1;
-  const k = Math.min(260 / Math.max(L, 1), 120 / Math.max(width, 1));
+  const wl = wing ? wing.length : 0;
+  const k = Math.min(260 / Math.max(L, 1), 120 / Math.max(width + wl, 1));
   const w = width * k, h = L * k;
+  const fi = wing ? frames.findIndex((f) => f.id === wing.fromFrame) : -1;
+  const wy0 = fi >= 0 ? frames[fi]!.y * k : 0, wy1 = fi >= 0 ? frames[Math.min(frames.length - 1, fi + wing!.bays)]!.y * k : 0;
   return (
-    <svg viewBox={`-10 -10 ${h + 20} ${w + 20}`} className="wz-plan" role="img" aria-label="תוכנית מסגרות">
+    <svg viewBox={`-10 -10 ${h + 20} ${w + wl * k + 20}`} className="wz-plan" role="img" aria-label="תוכנית מסגרות">
+      {wing && fi >= 0 && <rect x={wy0} y={w} width={wy1 - wy0} height={wl * k} fill="currentColor" opacity={0.15} stroke="currentColor" />}
       <rect x={0} y={0} width={h} height={w} fill="none" stroke="currentColor" strokeWidth={1} opacity={0.5} />
       {frames.map((f, i) => <g key={i}><line x1={f.y * k} y1={0} x2={f.y * k} y2={w} stroke="currentColor" strokeWidth={1.6} /><rect x={f.y * k - 2.5} y={-2.5} width={5} height={5} /><rect x={f.y * k - 2.5} y={w - 2.5} width={5} height={5} /></g>)}
     </svg>
@@ -69,6 +75,8 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const [count, setCount] = useState(6);
   /** סוג המבנה: gable / mono (קלאסי) או מזהה תבנית מודולרית */
   const [kind, setKind] = useState<string>('gable');
+  /** סככת L: כנף דו/חד-שיפועית */
+  const [lWing, setLWing] = useState<null | 'gable' | 'mono'>(null);
   const [knee, setKnee] = useState(false);
   const [autoSize, setAutoSize] = useState(true);
   const [clad, setClad] = useState(true);
@@ -89,11 +97,12 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const make = (): BuildingParams | null => {
     if (!cand || errors.length) return null;
     const bb: BuildingParams = { ...cand, ...(tpl ? { section: tpl.make() } : {}), kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined };
+    if (lWing && !tpl) bb.wing = defaultWing(bb, lWing);
     if (clad) { bb.cladding = defaultCladding(); if (!cladWalls) { bb.cladding.walls.enabled = false; bb.cladding.girts.enabled = false; bb.cladding.posts.enabled = false; } }
     return bb;
   };
   // תצוגה חיה: יצירת המודל מהבחירות הנוכחיות (בלי התאמת חתכים — זו רצה ביצירה)
-  const key = JSON.stringify([b, length, count, kind, knee, clad, cladWalls]);
+  const key = JSON.stringify([b, length, count, kind, knee, clad, cladWalls, lWing]);
   const live = useMemo(() => {
     const bb = make();
     if (!bb) return null;
@@ -146,10 +155,12 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
             <div className="field wide"><label>לקוח</label><input className="inp" value={client} onChange={(e) => setClient(e.target.value)} /></div>
             <div className="panel-title">סוג מבנה</div>
             <div className="tpl-grid np-types">
-              <button className={`tpl${kind === 'gable' ? ' on' : ''}`} onClick={() => { setKind('gable'); set({ roofType: 'gable', eaveRight: b.eaveLeft, ridgeX: b.width / 2, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 300 } } }); }} data-testid="np-gable"><GableSvg /><span>דו־שיפועי (2 צירים)</span></button>
-              <button className={`tpl${kind === 'mono' ? ' on' : ''}`} onClick={() => { setKind('mono'); set({ roofType: 'mono', eaveRight: b.eaveLeft + 1000, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 0 } } }); }} data-testid="np-mono"><MonoSvg /><span>חד־שיפועי (2 צירים)</span></button>
+              <button className={`tpl${kind === 'gable' && !lWing ? ' on' : ''}`} onClick={() => { setLWing(null); setKind('gable'); set({ roofType: 'gable', eaveRight: b.eaveLeft, ridgeX: b.width / 2, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 300 } } }); }} data-testid="np-gable"><GableSvg /><span>דו־שיפועי (2 צירים)</span></button>
+              <button className={`tpl${kind === 'mono' && !lWing ? ' on' : ''}`} onClick={() => { setLWing(null); setKind('mono'); set({ roofType: 'mono', eaveRight: b.eaveLeft + 1000, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 0 } } }); }} data-testid="np-mono"><MonoSvg /><span>חד־שיפועי (2 צירים)</span></button>
+              <button className={`tpl${lWing === 'gable' ? ' on' : ''}`} title="סככה דו-שיפועית + כנף דו-שיפועית ניצבת (רכס ניצב)" data-testid="np-L-gable" onClick={() => { setLWing('gable'); setKind('gable'); set({ roofType: 'gable', eaveRight: b.eaveLeft, ridgeX: b.width / 2, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 300 } } }); }}><LSvg gable /><span>צורת L — דו-שיפועי</span></button>
+              <button className={`tpl${lWing === 'mono' ? ' on' : ''}`} title="סככה חד-שיפועית + כנף חד-שיפועית נשענת על הצד הגבוה" data-testid="np-L-mono" onClick={() => { setLWing('mono'); setKind('mono'); set({ roofType: 'mono', eaveRight: b.eaveLeft + 1000, purlins: { ...b.purlins, left: { ...b.purlins.left, first: 0 } } }); }}><LSvg /><span>צורת L — חד-שיפועי</span></button>
               {SECTION_TEMPLATES.filter((t) => t.id !== 'gable-2' && t.id !== 'mono-2').map((t) => (
-                <button key={t.id} className={`tpl${kind === t.id ? ' on' : ''}`} title={t.desc} data-testid={`np-${t.id}`} onClick={() => { setKind(t.id); setKnee(true); }}><SectionPreview section={t.make()} small /><span>{t.name}</span></button>
+                <button key={t.id} className={`tpl${kind === t.id ? ' on' : ''}`} title={t.desc} data-testid={`np-${t.id}`} onClick={() => { setLWing(null); setKind(t.id); setKnee(true); }}><SectionPreview section={t.make()} small /><span>{t.name}</span></button>
               ))}
             </div>
           </>}
@@ -206,7 +217,7 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
             <label className="row" style={{ marginTop: 4 }}><input type="checkbox" checked={clad} data-testid="np-clad" onChange={(e) => setClad(e.target.checked)} />חיפוי (גג{cladWalls ? ' וקירות' : ''})</label>
             <div className="panel-title">סיכום</div>
             <div className="wz-sum" data-testid="wz-summary">
-              <span>{tpl ? tpl.name : kind === 'mono' ? 'חד־שיפועי' : 'דו־שיפועי'}</span>
+              <span>{tpl ? tpl.name : kind === 'mono' ? 'חד־שיפועי' : 'דו־שיפועי'}{lWing ? ` + כנף ${lWing === 'gable' ? 'דו-שיפועית' : 'חד-שיפועית'} (צורת L)` : ''}</span>
               {!tpl && <span>{(b.width / 1000).toFixed(2)} × {(length / 1000).toFixed(2)} מ'</span>}
               <span>{count} מסגרות · מרווח {(bay / 1000).toFixed(2)} מ'</span>
               {!tpl && <span>גובה {(b.eaveLeft / 1000).toFixed(2)}{b.eaveRight !== b.eaveLeft ? `/${(b.eaveRight / 1000).toFixed(2)}` : ''} מ'{b.roofType === 'gable' ? ` · ${b.slopeLeftPct}%` : ''}</span>}
@@ -220,7 +231,7 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
         </section>
         <section className="wz-view" data-testid="wz-view">
           {live?.sec && <SectionPreview section={live.sec} />}
-          <PlanPreview width={tpl ? (live?.sec ? Math.max(...live.sec.lines.map((l) => l.x)) - Math.min(...live.sec.lines.map((l) => l.x)) : b.width) : b.width} frames={cand?.frames ?? []} />
+          <PlanPreview wing={lWing && !tpl && cand ? defaultWing({ ...b, frames: cand.frames }, lWing) : undefined} width={tpl ? (live?.sec ? Math.max(...live.sec.lines.map((l) => l.x)) - Math.min(...live.sec.lines.map((l) => l.x)) : b.width) : b.width} frames={cand?.frames ?? []} />
           {live ? (
             <div className="wz-stat">
               <span>{live.members} אלמנטים</span><span>{live.conns} חיבורים</span>

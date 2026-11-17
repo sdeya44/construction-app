@@ -80,3 +80,29 @@ test('SC-01: שינוי חתך לאלמנט אחד — התוכנה שואלת "
   await expect(page.getByTestId('conncard-tag')).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('LW-UI: סככת L מהאשף — דו-שיפועי וחד-שיפועי; עריכת הכנף מהפאנל; גיליון מזחלה', async ({ page }) => {
+  const errors = await boot(page);
+  const s = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { err: d.issues.filter((i: any) => i.severity === 'error').map((i: any) => i.message), wing: d.members.filter((m: any) => m.id.startsWith('W.')).length, seats: d.connections.filter((c: any) => c.id.startsWith('C.WS.F')).length }; });
+  for (const t of ['L-gable', 'L-mono']) {
+    await page.getByTestId('btn-new').click();
+    await page.getByTestId(`np-${t}`).click();
+    await expect(page.getByTestId('wz-check')).toContainText('ללא שגיאות');
+    await page.getByTestId('create').click();
+    const r = await s();
+    expect(r.err).toEqual([]);
+    expect(r.wing).toBeGreaterThan(100);
+    expect(r.seats).toBe(3);
+  }
+  // עריכה: צד שמאל, 3 מפתחים
+  await page.getByTestId('nav-b:wing').click();
+  await page.getByTestId('wing-side').selectOption('L');
+  await page.getByTestId('wing-bays').fill('3'); await page.getByTestId('wing-bays').press('Enter');
+  const r2 = await s();
+  expect(r2.err).toEqual([]);
+  expect(r2.seats).toBe(4);
+  // גיליון מזחלה קיים בשרטוטים
+  await page.getByTestId('mode-drawings').click();
+  await expect(page.getByText('פרט מזחלה וירידת מרזב').first()).toBeVisible();
+  expect(errors).toEqual([]);
+});

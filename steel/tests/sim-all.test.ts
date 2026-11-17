@@ -5,6 +5,7 @@ import { defaultKneeBraces } from '../src/geometry/knee';
 import { defaultCladding } from '../src/geometry/cladding';
 import { defaultTrussSpec } from '../src/geometry/truss';
 import { SECTION_TEMPLATES } from '../src/model/section';
+import { defaultWing } from '../src/geometry/wing';
 import { computeFabrication } from '../src/fab/marks';
 import { computeBom } from '../src/fab/bom';
 import { projectToIfc } from '../src/fab/ifc';
@@ -24,6 +25,9 @@ const TEMPLATES: { id: string; make: () => BuildingParams }[] = [
   { id: 'classic-gable', make: () => defaultBuilding() },
   { id: 'classic-mono', make: () => ({ ...defaultBuilding(), roofType: 'mono', eaveRight: 7500, purlins: { ...defaultBuilding().purlins, left: { ...defaultBuilding().purlins.left, first: 0 } } }) },
   ...SECTION_TEMPLATES.map((t) => ({ id: t.id, make: () => ({ ...defaultBuilding(), section: t.make() }) })),
+  { id: 'L-gable', make: () => { const b = defaultBuilding(); b.wing = defaultWing(b, 'gable'); return b; } },
+  { id: 'L-mono', make: () => { const b = { ...defaultBuilding(), roofType: 'mono' as const, eaveRight: 7000 }; b.purlins = { ...b.purlins, left: { ...b.purlins.left, first: 0 } }; b.wing = defaultWing(b, 'mono'); return b; } },
+  { id: 'L-gable-left', make: () => { const b = defaultBuilding(); b.wing = { ...defaultWing(b, 'gable'), side: 'L', fromFrame: b.frames[2]!.id }; return b; } },
 ];
 
 type Step = { name: string; full?: boolean; mut: (b: BuildingParams, d: ReturnType<typeof generate>) => void; cmd?: (p: Project, d: ReturnType<typeof generate>) => Project };

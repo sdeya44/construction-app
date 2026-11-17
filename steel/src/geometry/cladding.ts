@@ -207,7 +207,9 @@ export interface CladdingTakeoff {
   surfaces: { kind: 'roof' | 'wall' | 'gutter' | 'pipe'; pts: Vec3[] }[];
 }
 
-export function claddingTakeoff(p: Project, d: DerivedModel): CladdingTakeoff | null {
+export function claddingTakeoff(p0: Project, d: DerivedModel): CladdingTakeoff | null {
+  // כנף: הקירות של הראשית לפי הפרויקט בלי חיפוי במפתחי הכנף; ירידות לפי הכנף
+  const p = d.wing?.local ? { ...d.wing.local.mainProject, building: { ...d.wing.local.mainProject.building, wing: p0.building.wing } } : p0;
   const b = p.building, cl = b.cladding, sec = d.section;
   if (!cl || !sec) return null;
   const fr = [...b.frames].sort((a1, a2) => a1.y - a2.y);
@@ -245,6 +247,12 @@ export function claddingTakeoff(p: Project, d: DerivedModel): CladdingTakeoff | 
     // מזחלות וירידות מרזב — לפי קצוות הקורות בפועל
     if (cl.gutter.enabled) {
       const runs = gutterRuns(b, sec, d.members);
+      // כנף: ירידות של הראשית בתחום הכנף היו עוברות דרך גג הכנף — מוזזות לקצות התחום
+      const wg = d.wing;
+      if (wg) for (const r of runs) if (r.kind === 'eave' && r.dir === wg.dir) {
+        const inside = r.downpipes.filter((q) => q.y > wg.y0 - 400 && q.y < wg.y1 + 400);
+        if (inside.length) { r.downpipes = r.downpipes.filter((q) => !inside.includes(q)); if (!r.downpipes.length) r.downpipes.push({ ...inside[0]!, y: wg.y0 > r.y0 + 1000 ? wg.y0 - 700 : wg.y1 + 700 }); }
+      }
       res.gutters.push(...gutterTakeoff(b, runs));
       res.surfaces.push(...gutterSurfaces(b, runs));
     }
@@ -341,5 +349,16 @@ export function claddingTakeoff(p: Project, d: DerivedModel): CladdingTakeoff | 
     res.screws += res.wallArea * cl.wallScrewsPerM2;
   }
   res.screws = Math.ceil(res.screws / 50) * 50;
+  // כנף (סככת L): החיפוי, המזחלות והפחים של הכנף — מחושבים במערכת שלה וממופים לעולם
+  if (d.wing?.local) {
+    const lw = d.wing.local;
+    const t2 = claddingTakeoff(lw.project, lw.derived);
+    if (t2) {
+      const tag = <T extends { where?: string; name?: string }>(r: T): T => ({ ...r, ...(r.where !== undefined ? { where: `כנף · ${r.where}` } : {}), ...(r.name !== undefined ? { name: `כנף · ${r.name}` } : {}) });
+      res.roofArea += t2.roofArea; res.wallArea += t2.wallArea; res.openingArea += t2.openingArea; res.screws += t2.screws;
+      res.roofSheets.push(...t2.roofSheets.map(tag)); res.wallSheets.push(...t2.wallSheets.map(tag)); res.flashings.push(...t2.flashings.map(tag), { name: 'כנף · פח חיבור גג הכנף לקיר הראשי', length: d.wing.y1 - d.wing.y0 }); res.gutters.push(...t2.gutters.map(tag));
+      res.surfaces.push(...t2.surfaces.map((sf) => ({ ...sf, pts: sf.pts.map((q) => lw.P(q) as Vec3) })));
+    }
+  }
   return res;
 }

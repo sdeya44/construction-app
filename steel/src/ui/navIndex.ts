@@ -14,6 +14,7 @@ export const NAV_INDEX: { key: NavKey; label: string; words: string }[] = [
   { key: 'r:system', label: 'מערכת פטות', words: 'פטות חומר פטה גלוון' },
   { key: 'r:left', label: 'שיפועים ותומכים', words: 'פטה מרווח פטות מרחק ראשון רכס חלוקה ידנית תומך זוויתן גובה תומך ברגים תומכים פתיחת פטה פטה מתחילה שמאל ימין' },
   { key: 'r:splices', label: 'חיבורי המשך פטות', words: 'חיבור המשך פטה תפר פלטה מפתחים אורך קטע' },
+  { key: 'b:wing', label: 'כנף — סככת L', words: 'כנף צורת L סככה ניצבת אגף נוסף סככה צמודה חיבור לקיר' },
   { key: 'b:truss', label: 'מסבכי גג', words: 'מסבך סבכה truss חגורה אלכסון אנך Warren Pratt Howe' },
   { key: 'b:knee', label: 'אלכסוני עמוד-קורה', words: 'אלכסון עמוד קורה 45 זווית ירידה knee brace לשונית פח RHS80' },
   { key: 'b:ridge', label: 'חיזוק רכס', words: 'רכס קודקוד פלטה מוגבהת חיזוק משולש פרופיל אופקי IPE160' },

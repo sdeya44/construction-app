@@ -13,6 +13,7 @@ import type { Connection, SupportPoint } from '../model/types';
 import { buildConnections, checkClashes } from './connections';
 import { buildWallFraming } from './cladding';
 import { buildGutterBrackets } from './gutter';
+import { generateWithWing } from './wing';
 import { buildTransfers, prepareTransfers } from './transfer';
 import { buildRoofTrusses, roofTrussRafterSplices } from './truss';
 import { buildBracing } from './bracing';
@@ -31,7 +32,13 @@ const Z = v3(0, 0, 1), X = v3(1, 0, 0);
  * גזירת המודל הפיזי מפרמטרי הפרויקט. פונקציה טהורה ודטרמיניסטית:
  * אותו Project ⇒ אותם אלמנטים, אותם מזהים, אותה גיאומטריה.
  */
+/** בניית המודל: סככה ראשית, ואם הוגדרה — כנף (צורת L) שמחוברת אליה */
 export function generate(project: Project): DerivedModel {
+  if (project.building.wing?.enabled) return generateWithWing(project, generateBase);
+  return generateBase(project);
+}
+
+export function generateBase(project: Project): DerivedModel {
   const b = project.building;
   const issues: ValidationIssue[] = validateBuilding(b);
   const members: Member[] = [];

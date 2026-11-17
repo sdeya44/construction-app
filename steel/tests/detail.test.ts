@@ -306,3 +306,37 @@ describe('מזחלה וירידות מרזב', () => {
     expect(sh.ents.some((e) => e.k === 'text' && e.s.includes('1130'))).toBe(true);
   });
 });
+
+describe('סככת L — כנף', () => {
+  it('LW-01: כנף דו-שיפועית וחד-שיפועית בשני הצדדים — ללא שגיאות, כיסאות בעמודי הראשית, חיפוי הקיר הוסר במפתחי הכנף', async () => {
+    const { defaultWing } = await import('../src/geometry/wing');
+    const { defaultCladding, claddingTakeoff } = await import('../src/geometry/cladding');
+    for (const rt of ['gable', 'mono'] as const) for (const side of ['L', 'R'] as const) {
+      const b = defaultBuilding(); b.cladding = defaultCladding(); b.kneeBraces = { ...defaultKneeBraces(), enabled: true };
+      b.wing = { ...defaultWing(b, rt), side };
+      const p = newProject('x', b); const d = generate(p);
+      expect(d.issues.filter((i) => i.severity === 'error').map((i) => `${rt}/${side}: ${i.message}`)).toEqual([]);
+      const seats = d.connections.filter((c) => c.id.startsWith('C.WS.F'));
+      expect(seats.length).toBe(3);
+      expect(seats.every((c) => c.bolts.length === 2 && c.welds.every((w) => w.location === 'shop'))).toBe(true);
+      expect(d.members.some((m) => m.id.startsWith('W.') && m.kind === 'rafter')).toBe(true);
+      // אין עמודי כנף בצד הקיר הראשי
+      const xl = side === 'R' ? 18000 : 0;
+      expect(d.members.filter((m) => m.id.startsWith('W.') && m.kind === 'column' && Math.abs(m.start.x - xl) < 600)).toEqual([]);
+      // חיפוי: אין חיפוי קיר ראשי במפתחי הכנף; גג הכנף ומזחלותיה נספרים
+      const t = claddingTakeoff(p, d)!;
+      expect(t.roofSheets.some((r) => r.where.startsWith('כנף'))).toBe(true);
+      expect(t.gutters.some((g) => g.name.startsWith('כנף'))).toBe(true);
+      const fab = computeFabrication(p, d);
+      const seatPl = fab.parts.find((x) => x.memberId === seats[0]!.parts[0])!;
+      const col = fab.parts.find((x) => x.memberId === seats[0]!.members[0])!;
+      expect(seatPl.assembly).toBe(col.assembly); // הכיסא מרותך לעמוד הראשי במסגריה
+    }
+  });
+  it('LW-02: כנף גבוהה מדי — שגיאה ברורה', async () => {
+    const { defaultWing } = await import('../src/geometry/wing');
+    const b = defaultBuilding(); b.wing = { ...defaultWing(b, 'gable'), eave: 5800 };
+    const d = generate(newProject('x', b));
+    expect(d.issues.some((i) => i.code === 'WING_HIGH')).toBe(true);
+  });
+});
