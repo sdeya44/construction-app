@@ -381,7 +381,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
         for (let i = 1; i < xsF.length && xsF.length > 2; i++) v.dim({ x: xsF[i - 1], y: b.baseElevation }, { x: xsF[i], y: b.baseElevation }, { x: 1, y: 0 }, -13);
       }
       // גובה פני עליון קורת הגג בכל ציר עמודים (מקור: קו הייחוס של העמוד)
-      colsF.forEach((c, i) => v.dim({ x: c.start.x, y: b.baseElevation }, { x: c.start.x, y: c.end.z }, { x: 0, y: 1 }, i === 0 ? 14 : i === colsF.length - 1 ? -14 : 8));
+      colsF.forEach((c, i) => v.dim({ x: c.start.x, y: c.start.z }, { x: c.start.x, y: c.end.z }, { x: 0, y: 1 }, i === 0 ? 14 : i === colsF.length - 1 ? -14 : 8));
       for (const nd of d.nodes.filter((x) => x.frameId === f.id && x.role === 'רכס')) v.dim({ x: nd.p.x, y: b.baseElevation }, { x: nd.p.x, y: nd.p.z }, { x: 0, y: 1 }, 0);
       const lbl = (m?: Member) => m && v.text({ x: (m.start.x + m.end.x) / 2, y: (m.start.z + m.end.z) / 2 + 250 }, `${asmOf(m.id)} ${m.profile}`, 2.5, 'center', 'MARK');
       for (const m of own.filter((x) => x.kind === 'rafter')) lbl(m);
@@ -393,6 +393,8 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       const xL = (xsF[0] ?? 0) - 1400;
       v.level({ x: xL, y: b.baseElevation }, 0, -1);
       for (const c of colsF.slice(0, 1)) v.level({ x: xL, y: c.end.z }, c.end.z - b.baseElevation, -1);
+      // ציר שתחתית העמוד בו במפלס אחר (חגורה/יסוד מוגבה) — מפלס ליד תחתית העמוד
+      for (const c of colsF) if (Math.abs(c.start.z - b.baseElevation) > 1) v.level({ x: c.start.x + (c.start.x < b.width / 2 ? -700 : 700), y: c.start.z }, c.start.z - b.baseElevation, c.start.x < b.width / 2 ? -1 : 1);
       // הפניות לפרטי חיבור (עיגול מקווקו + תג מספר הגיליון)
       const cat = drawingCatalog(p, d, fab);
       const seen = new Set<string>();
@@ -640,7 +642,9 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       const rows = [...groups.values()].map((g) => [g.mk, g.plate, String(g.n), String(g.anchors), g.dia, g.len]);
       const yEnd = table(sh, area.x1 - 2, area.y1 - 86, [12, 30, 11, 17, 13, 17], 'פלטות בסיס ועוגנים', ['סימון', 'פלטה', 'כמות', 'עוגנים/פלטה', 'קוטר', 'אורך [מ"מ]'], rows,
         ['סה"כ', '', String(bases.length), String(bases.reduce((a1, c) => a1 + anchorsOf(c).length, 0)), '', '']);
-      const notes = ['הערות:', '1. מפלס פני פלטה ±0.00 = מפלס בסיס העמודים.', '2. מידות לצירים במ"מ; סימון ופילוס לפני יציקה.', '3. סטיית מיקום עוגן מותרת ±3 מ"מ (EN 1090-2).', '4. מילוי גראוט לא מתכווץ מתחת לפלטה, לפי המתכנן.'];
+      const lb = Object.entries(b.lineBase ?? {}).filter(([, z]) => Math.abs(z - b.baseElevation) > 1);
+      const lineLbl = (id: string) => d.section?.lines.find((l) => l.id === id)?.label ?? id;
+      const notes = ['הערות:', lb.length ? `1. מפלס פני פלטה ±0.00 = מפלס בסיס העמודים, למעט: ${lb.map(([id, z]) => `ציר ${lineLbl(id)} ${(z - b.baseElevation) >= 0 ? '+' : ''}${((z - b.baseElevation) / 1000).toFixed(2)}`).join(', ')}.` : '1. מפלס פני פלטה ±0.00 = מפלס בסיס העמודים.', '2. מידות לצירים במ"מ; סימון ופילוס לפני יציקה.', '3. סטיית מיקום עוגן מותרת ±3 מ"מ (EN 1090-2).', '4. מילוי גראוט לא מתכווץ מתחת לפלטה, לפי המתכנן.'];
       notes.forEach((t, i) => sh.ents.push({ k: 'text', p: { x: area.x1 - 2, y: yEnd - 6 - i * 4.2 }, s: t, h: 2.5, align: 'right', layer: 'TEXT', bold: i === 0 }));
       // חתך אנכי טיפוסי בפלטת הבסיס: פלטה, עוגנים, תחתית העמוד, מפלס ±0.00, אורכי עיגון
       {

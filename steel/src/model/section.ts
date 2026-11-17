@@ -341,3 +341,15 @@ export function setPlaneSlope(sec: CustomSection, planeId: string, pct: number):
 export function shiftRoof(sec: CustomSection, dz: number): CustomSection {
   return { ...sec, template: undefined, planes: sec.planes.map((p) => ({ ...p, z0: p.z0 + dz, z1: p.z1 + dz })) };
 }
+
+/** מפלס תחתית העמוד בציר (חגורה/יסוד); בין צירים — אינטרפולציה ליניארית (עמודי רוח בקיר קצה) */
+export function lineBaseAt(b: { baseElevation: number; lineBase?: Record<string, number> }, lines: { id: string; x: number }[], x: number): number {
+  const ls = [...lines].sort((a, c) => a.x - c.x);
+  const z = (l: { id: string }) => b.lineBase?.[l.id] ?? b.baseElevation;
+  if (!ls.length) return b.baseElevation;
+  const hit = ls.find((l) => Math.abs(l.x - x) < 1); if (hit) return z(hit);
+  if (x <= ls[0].x) return z(ls[0]);
+  if (x >= ls[ls.length - 1].x) return z(ls[ls.length - 1]);
+  for (let i = 1; i < ls.length; i++) if (x <= ls[i].x) { const t = (x - ls[i - 1].x) / (ls[i].x - ls[i - 1].x); return z(ls[i - 1]) + t * (z(ls[i]) - z(ls[i - 1])); }
+  return b.baseElevation;
+}

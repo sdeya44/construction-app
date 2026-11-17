@@ -87,7 +87,6 @@ export function generate(project: Project): DerivedModel {
     b.frames.forEach((f, fi) => {
       const y = f.y;
       grid.push({ id: `GY-${f.id}`, label: String(fi + 1), dir: 'Y', pos: y });
-      const base = b.baseElevation;
       const under = new Map<string, Plane>();
       for (const pl of sec!.planes) {
         const A = v3(pl.a.x, y, pl.a.z), B = v3(pl.b.x, y, pl.b.z);
@@ -112,6 +111,9 @@ export function generate(project: Project): DerivedModel {
       for (const l of sec!.lines) {
         const ct = T.colTop.get(l.id);
         if (!ct) continue;
+        // מפלס תחתית העמוד בציר הזה (חגורה/יסוד בגובה שונה) — העמוד מתקצר, הגג לא זז
+        const base = b.lineBase?.[l.id] ?? b.baseElevation;
+        if (fi === 0 && ct.z - base < 1000) issues.push({ code: 'COL_SHORT', severity: 'error', message: `עמוד בציר ${l.label}: מפלס התחתית ${(base / 1000).toFixed(2)} גבוה מדי ביחס לראש העמוד` });
         const top = v3(l.x, y, ct.z);
         const side = !sec!.custom ? (l.id as 'L' | 'R') : undefined;
         nodes.push({ id: `${f.id}.N.B${l.id}`, p: v3(l.x, y, base), frameId: f.id, role: `בסיס ציר ${l.label}` });

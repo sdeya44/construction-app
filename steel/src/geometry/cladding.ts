@@ -9,6 +9,7 @@ import { add, norm, scale, sub, v3, type Vec3 } from '../core/vec';
 import { tryProfile } from '../profiles/library';
 import type { BuildingParams, CladdingParams, DerivedModel, Member, OpeningDef, Project, ValidationIssue, WallId } from '../model/types';
 import type { NSection } from '../model/section';
+import { lineBaseAt } from '../model/section';
 
 export function defaultCladding(): CladdingParams {
   return {
@@ -68,7 +69,9 @@ export function buildWallFraming(_project: Project, b: BuildingParams, sec: NSec
   /** מפלסי פטות קיר בין תחתית החיפוי לראשו: מתחת לגג — 150 מתחת לקו; בגובה עליון חלקי — פטה בראש החיפוי */
   const levelsFor = (w: WallId, roofTop: number) => {
     const c = wallCfg(cl, w);
-    const lo = c.bottom > 0 ? base + c.bottom + 50 : base + gp.first;
+    // קיר על ציר שהעמודים בו על חגורה מוגבהת: פטות הקיר מתחילות מעל החגורה
+    const wb = w === 'L' ? lineBaseAt(b, sec.lines, lines[0].x) : w === 'R' ? lineBaseAt(b, sec.lines, lines[lines.length - 1].x) : base;
+    const lo = Math.max(c.bottom > 0 ? base + c.bottom + 50 : base + gp.first, wb + gp.first);
     const partialTop = c.top !== null && base + c.top < roofTop - 150;
     const hi = partialTop ? base + c.top! - 50 : roofTop - 150;
     const zs: number[] = [];
@@ -147,7 +150,7 @@ export function buildWallFraming(_project: Project, b: BuildingParams, sec: NSec
           const top = underRoof(x); if (top === null) continue;
           const pp = tryProfile(cl.posts.profile);
           const id = `WP.${w}.${add2.length + 1}`;
-          out.push({ ...mk(id, `עמוד רוח ${w === 'F' ? 'קדמי' : 'אחורי'} ${add2.length + 1}`, v3(x, f.y, base), v3(x, f.y, top - 10), cl.posts.profile, v3(0, 1, 0), 'center', { id: w, role: 'post' }, f.id), refUp: v3(1, 0, 0) });
+          out.push({ ...mk(id, `עמוד רוח ${w === 'F' ? 'קדמי' : 'אחורי'} ${add2.length + 1}`, v3(x, f.y, lineBaseAt(b, sec.lines, x)), v3(x, f.y, top - 10), cl.posts.profile, v3(0, 1, 0), 'center', { id: w, role: 'post' }, f.id), refUp: v3(1, 0, 0) });
           add2.push({ x, top: top - 10, depth: pp?.props.b ?? 100 });
         }
       }

@@ -196,6 +196,8 @@ export interface BuildingParams {
   rafterProfile: string;
   material: string;
   baseElevation: Mm;
+  /** מפלס תחתית העמודים לכל ציר (פני חגורה / יסוד), מפלס מוחלט ביחס ל-±0.00; חסר = baseElevation */
+  lineBase?: Record<string, Mm>;
   purlins: PurlinSystem;
   bracing: BracingParams;
   /** חתך מודולרי (שורות עמודים ומישורי גג). חסר = מצב קלאסי לפי roofType/width/eave/ridge */

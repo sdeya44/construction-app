@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { setKneeBraces, setSection } from '../commands/commands';
+import { setBuilding, setKneeBraces, setSection } from '../commands/commands';
 import { defaultKneeBraces } from '../geometry/knee';
 import { lineLabel, moveLines, setAxisCount, setPlaneEndZ, setPlaneSlope, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
 import { store, useStore } from '../store';
@@ -44,6 +44,8 @@ export function SectionEditor() {
 
 function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' | 'mm'; apply: (s: CustomSection, label?: string) => void }) {
   const lines = [...sec.lines].sort((a, b) => a.x - b.x);
+  const lineBase = useStore((st) => st.project.building.lineBase) ?? {};
+  const baseEl = useStore((st) => st.project.building.baseElevation);
   const setLine = (id: string, x: number) => apply(moveLines(sec, new Map([[id, x]])), 'הזזת ציר');
   const setPlane = (id: string, patch: Partial<RoofPlaneDef>) => apply({ ...sec, template: undefined, planes: sec.planes.map((pl) => (pl.id === id ? { ...pl, ...patch } : pl)) });
   const newId = (pre: string, used: string[]) => { let i = 1; while (used.includes(`${pre}${i}`)) i++; return `${pre}${i}`; };
@@ -63,7 +65,7 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
         }}><Icon name="plus" />ציר</button>
       </div>
       <table className="tbl" data-testid="sec-lines">
-        <thead><tr><th>ציר</th><th>מיקום X</th><th>מפתח</th><th /></tr></thead>
+        <thead><tr><th>ציר</th><th>מיקום X</th><th>מפתח</th><th title="מפלס תחתית העמוד: פני חגורה / יסוד, ביחס ל-±0.00">תחתית עמוד</th><th /></tr></thead>
         <tbody>
           {lines.map((l, i) => (
             <tr key={l.id}>
@@ -73,11 +75,13 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
                 const delta = v - (l.x - lines[i - 1].x);
                 apply(moveLines(sec, new Map(sec.lines.filter((q) => q.x >= l.x).map((q) => [q.id, q.x + delta]))), 'שינוי מרווח צירים');
               }} /> : <span className="hint">—</span>}</td>
+              <td><LenField mm={(lineBase[l.id] ?? baseEl) - baseEl} unit={u} testId={`sec-base-${i}`} onCommit={(v) => store.exec(setBuilding({ lineBase: { ...lineBase, [l.id]: baseEl + v } }))} /></td>
               <td>{lines.length > 1 && <button className="icon-btn" title="מחיקת ציר" onClick={() => apply({ ...sec, lines: sec.lines.filter((q) => q.id !== l.id) }, 'מחיקת ציר')}><Icon name="x" /></button>}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      {Object.values(lineBase).some((z) => Math.abs(z - baseEl) > 1) && <div className="hint">תחתית עמוד מעל ±0.00 (חגורה / יסוד מוגבה): העמוד בציר מתקצר, גובה הגג לא משתנה. במסגרות ובתוכנית העיגון מופיע מפלס לכל ציר.</div>}
       <Overhangs sec={sec} unit={u} apply={apply} />
       <div className="panel-title">מישורי גג ({sec.planes.length})
         <button className="btn small" data-testid="sec-add-plane" onClick={() => {

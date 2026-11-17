@@ -184,3 +184,33 @@ describe('פטות: מרחק ראשון ודירוג', () => {
     }
   });
 });
+
+describe('מפלס תחתית עמוד לכל ציר', () => {
+  it('LB-01: חגורות בגבהים שונים (א 600, ב 300, ג 0) — העמודים מתקצרים, הגג לא זז, שרטוטים נבנים', async () => {
+    const { SECTION_TEMPLATES } = await import('../src/model/section');
+    const b = defaultBuilding(); b.section = SECTION_TEMPLATES.find((t) => t.id === 'mono-multi')!.make() as never;
+    b.kneeBraces = { ...defaultKneeBraces(), enabled: true };
+    b.bracing.walls.enabled = true;
+    const p0 = newProject('x', structuredClone(b));
+    const d0 = generate(p0);
+    b.lineBase = { A: 600, B: 300, C: 0 };
+    const p = newProject('x', b);
+    const d = generate(p);
+    expect(bad(d.issues)).toEqual([]);
+    for (const [line, z] of [['A', 600], ['B', 300], ['C', 0]] as const) {
+      const c = d.byId.get(`F2.COL.${line}`)!, c0 = d0.byId.get(`F2.COL.${line}`)!;
+      expect(c.start.z).toBe(z);
+      expect(Math.round(c.end.z)).toBe(Math.round(c0.end.z));
+    }
+    // קושרות קיר בציר א מתחילות מעל החגורה
+    const wb = d.members.filter((m) => m.id.startsWith('BR.W') && m.kind === 'brace' && Math.abs(m.start.x) < 300);
+    for (const m of wb) expect(Math.min(m.start.z, m.end.z)).toBeGreaterThan(600);
+    const fab = computeFabrication(p, d), bom = computeBom(d, fab);
+    const cat = drawingCatalog(p, d, fab);
+    for (const def of cat.filter((x) => x.type === 'anchor-plan' || x.type === 'frame')) {
+      const sh = buildSheet(def, p, d, fab, bom);
+      expect(sh.ents.length).toBeGreaterThan(10);
+      if (def.type === 'anchor-plan') expect(sh.ents.some((e) => e.k === 'text' && (e as { s: string }).s.includes('ציר א +0.60'))).toBe(true);
+    }
+  });
+});

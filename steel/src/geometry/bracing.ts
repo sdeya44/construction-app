@@ -133,13 +133,13 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
       if ((br.walls.type ?? 'x') === 'portal') {
         buildPortalLine(res, br.walls.portal ?? defaultPortal(), {
           side, label: l.label, x, frames: frames.map((f) => ({ id: f.id, y: f.y })), portalBays: resolveBays(bays, nb),
-          colProfile: b.columnProfile, zBase: b.baseElevation, zTop: eave - rafV - 60, mat,
+          colProfile: b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - 60, mat,
         });
         continue;
       }
       for (const bay of resolveBays(bays, nb)) {
         const f0 = frames[bay], f1 = frames[bay + 1];
-        const z0 = b.baseElevation + 300, z1 = eave - rafV - 60 - 150;
+        const z0 = (b.lineBase?.[l.id] ?? b.baseElevation) + 300, z1 = eave - rafV - 60 - 150;
         if (z1 - z0 < 1000) { res.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `קושרת קיר ציר ${l.label} מפתח ${bay + 1}: גובה קטן מדי` }); continue; }
         xbrace(`W${bay + 1}.${side}`, `קושרת קיר ציר ${l.label} מפתח ${bay + 1}`, br.walls.profile, v3(x, 0, z0), v3(1, 0, 0), v3(0, 0, 1),
           { y: f0.y, w: 0 }, { y: f1.y, w: z1 - z0 }, f0.y + twOf(`${f0.id}.COL.${l.id}`) / 2, f1.y - twOf(`${f1.id}.COL.${l.id}`) / 2, `${f0.id}.COL.${l.id}`, `${f1.id}.COL.${l.id}`);
