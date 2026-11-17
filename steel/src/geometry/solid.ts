@@ -26,6 +26,7 @@ export interface Solid {
 export function memberSolid(m: Member): Solid {
   const prof = getProfile(m.profile);
   const f = localFrame(m);
+  if (m.contour && m.contour.length >= 3 && prof.family === 'PL') return contourSolid(m, f, prof.dims.t);
   const vTop = Math.max(...prof.outline.outer.map((p) => p.v));
   const vBot = Math.min(...prof.outline.outer.map((p) => p.v));
   // top: פני עליון על הקו · purlin: פני תחתון על הקו וציר הווב על הקו (מגע 0 מ"מ עם האגף העליון של הקורה)
@@ -112,6 +113,35 @@ export function memberSolid(m: Member): Solid {
   return { tris, edges, startRing: S[0], endRing: E[0], du, dv };
 }
 
+/** פלטה בצורה חופשית: המתאר במישור (ex, u), עובי לאורך v. startRing = פני v−, endRing = פני v+ (צלעות העובי מחברות ביניהן). */
+function contourSolid(m: Member, f: ReturnType<typeof localFrame>, t: number): Solid {
+  let c = m.contour!;
+  let area = 0;
+  for (let i = 0; i < c.length; i++) { const a = c[i], b = c[(i + 1) % c.length]; area += a.s * b.u - b.s * a.u; }
+  if (area < 0) c = [...c].reverse();
+  const at = (p: { s: number; u: number }, k: number): Vec3 => add(add(add(m.start, scale(f.ex, p.s)), scale(f.u, p.u)), scale(f.v, k * t / 2));
+  const S = c.map((p) => at(p, -1)), E = c.map((p) => at(p, 1));
+  const tris: number[] = [], edges: number[] = [];
+  const pushTri = (a: Vec3, b: Vec3, d: Vec3) => tris.push(a.x, a.y, a.z, b.x, b.y, b.z, d.x, d.y, d.z);
+  const seg = (a: Vec3, b: Vec3) => edges.push(a.x, a.y, a.z, b.x, b.y, b.z);
+  const n = c.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    pushTri(S[i], S[j], E[j]); pushTri(S[i], E[j], E[i]);
+    seg(S[i], S[j]); seg(E[i], E[j]);
+    if (isSharp(c.map((p) => ({ u: p.s, v: p.u })), i)) seg(S[i], E[i]);
+  }
+  for (const [a, b, d] of ShapeUtils.triangulateShape(c.map((p) => new Vector2(p.s, p.u)), [])) { pushTri(S[a], S[d], S[b]); pushTri(E[a], E[b], E[d]); }
+  return { tris, edges, startRing: S, endRing: E, du: 0, dv: 0 };
+}
+
+/** שטח מתאר פלטה חופשית (mm²) */
+export function contourArea(c: { s: number; u: number }[]): number {
+  let a = 0;
+  for (let i = 0; i < c.length; i++) { const p = c[i], q = c[(i + 1) % c.length]; a += p.s * q.u - q.s * p.u; }
+  return Math.abs(a) / 2;
+}
+
 function isSharp(r: P2[], i: number): boolean {
   const n = r.length;
   const a = r[(i - 1 + n) % n], b = r[i], c = r[(i + 1) % n];
@@ -123,6 +153,7 @@ function isSharp(r: P2[], i: number): boolean {
 
 /** אורך חיתוך מעשי: האורך המרבי של האלמנט לאחר חיתוכי הקצה (על פני הקודקודים). */
 export function cutLength(m: Member): { max: number; min: number } {
+  if (m.contour) { const ss = m.contour.map((p) => p.s); const l = Math.max(...ss) - Math.min(...ss); return { max: l, min: l }; }
   const s = memberSolid(m);
   const f = localFrame(m);
   let max = 0, min = Infinity;

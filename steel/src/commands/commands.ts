@@ -1,7 +1,7 @@
 import { add, rotateAxis, sub, v3, type Vec3 } from '../core/vec';
 import { degToRad } from '../core/units';
 import { generate, placementBasis } from '../geometry/generate';
-import type { TransferDef, ValidationIssue, ApprovalStatus, BuildingParams, KneeBraceParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
+import type { CustomDetail, TransferDef, ValidationIssue, ApprovalStatus, BuildingParams, KneeBraceParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
 import { purlinParams } from '../geometry/purlins';
 import { effectiveSplices } from '../geometry/autoSplice';
 import { defaultKneeBraces } from '../geometry/knee';
@@ -705,4 +705,46 @@ export function planOmissions(p: Project, columnIds: string[]): { defs: Transfer
 
 export function setTransfers(defs: TransferDef[], label = 'דילול עמודים — קורות נושאות'): Command {
   return { label, run: (p) => { const n = clone(p); n.building.transfers = defs.length ? clone(defs) : undefined; return n; } };
+}
+
+/** שמירת פרט מותאם בספריית הפרויקט (הוספה או עדכון לפי מזהה) */
+export function saveDetail(det: CustomDetail): Command {
+  return {
+    label: `שמירת פרט "${det.name}"`,
+    run: (p) => {
+      if (!det.name.trim()) throw new CommandError('לפרט חייב להיות שם');
+      const n = clone(p);
+      const list = n.customDetails ?? [];
+      const i = list.findIndex((x) => x.id === det.id);
+      if (i >= 0) list[i] = clone(det); else list.push(clone(det));
+      n.customDetails = list;
+      return n;
+    },
+  };
+}
+/** מחיקת פרט מהספרייה — ושחרור כל הקצוות שהשתמשו בו (חזרה לפרט הרגיל) */
+export function deleteDetail(id: string): Command {
+  return {
+    label: 'מחיקת פרט מהספרייה',
+    run: (p) => {
+      const n = clone(p);
+      n.customDetails = (n.customDetails ?? []).filter((x) => x.id !== id);
+      n.detailAssign = Object.fromEntries(Object.entries(n.detailAssign ?? {}).filter(([, v]) => v !== id));
+      return n;
+    },
+  };
+}
+/** שיוך פרט לקצוות אלמנטים ("מזהה|start/end"). detail=null — חזרה לפרט הרגיל. הפרט נשמר בספרייה. */
+export function assignDetail(keys: string[], det: CustomDetail | null): Command {
+  return {
+    label: det ? `החלת פרט "${det.name}" על ${keys.length} קצוות` : `ביטול פרט מותאם ב-${keys.length} קצוות`,
+    run: (p) => {
+      let n = det ? saveDetail(det).run(p) : clone(p);
+      if (n === p) n = clone(p);
+      const a = { ...(n.detailAssign ?? {}) };
+      for (const k of keys) { if (det) a[k] = det.id; else delete a[k]; }
+      n.detailAssign = a;
+      return n;
+    },
+  };
 }

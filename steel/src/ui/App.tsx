@@ -18,6 +18,7 @@ import { moveLines, setPlaneSlope, shiftRoof, toCustomSection } from '../model/s
 import { NAV_INDEX } from './navIndex';
 import { NavContent, SideNav, type NavKey } from './SideNav';
 import { EaveCheckDialog } from './EaveCheckDialog';
+import { DetailStudio } from './DetailStudio';
 import { LayersMenu } from './LayersMenu';
 
 type DialogKind = null | 'new' | 'open' | 'move' | 'copy' | 'rotate' | 'mirror' | 'catalog';
@@ -242,7 +243,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.20</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.21</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -390,6 +391,7 @@ export function App() {
 
       {menu && ms.length > 0 && <MarkingMenu x={menu.x} y={menu.y} title={ms.length === 1 ? (ms[0]!.id.length > 12 ? KIND_LABEL[ms[0]!.kind] : ms[0]!.id) : String(ms.length)} items={menuItems()} onClose={() => setMenu(null)} />}
       <EaveCheckDialog />
+      <DetailStudio />
       {dimEdit && (
         <input className="inp num dim-edit" autoFocus data-testid="dim-edit" defaultValue={(dimEdit.value / 1000).toFixed(3)} style={{ left: dimEdit.x, top: dimEdit.y }}
           onKeyDown={(e) => { if (e.key === 'Enter') { const v = Number((e.target as HTMLInputElement).value.replace(',', '.')); const d0 = dimEdit; setDimEdit(null); if (Number.isFinite(v)) commitDim(d0.key, v * 1000, d0.value); } if (e.key === 'Escape') setDimEdit(null); }}

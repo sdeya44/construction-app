@@ -41,6 +41,12 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
     const c = d.connections.find((x) => x.type === t);
     if (c) out.push({ id: `D-CONN-${t}`, type: 'connection', number: `D-${String(i + 1).padStart(2, '0')}`, title, ref: c.id });
   });
+  // פרטים מותאמים מהספרייה — גיליון פרט לכל פרט בשימוש
+  const used = [...new Map(d.connections.filter((c) => c.custom).map((c) => [c.custom!.detailId, c])).values()];
+  used.forEach((c, k) => {
+    const nm = p.customDetails?.find((x) => x.id === c.custom!.detailId)?.name ?? 'פרט מותאם';
+    out.push({ id: `D-CONN-cd-${c.custom!.detailId}`, type: 'connection', number: `D-${String(types.length + k + 1).padStart(2, '0')}`, title: `פרט ${nm}`, ref: c.id });
+  });
   const asm = [...new Set(fab.assemblies.map((a) => a.mark))].sort(num);
   for (const m of asm) {
     out.push({ id: `D-ASM-${m}`, type: 'assembly', number: `A-${m}`, title: `שרטוט מכלול ${m}`, ref: m });

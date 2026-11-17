@@ -29,8 +29,10 @@ function distToPoly(p: P2, poly: P2[]): number {
 /** בודק נקודה בתוך פריזמה (אלמנט) — מדויק לאקסטרוזיה עם חיתוכי קצה מישוריים. */
 export class PrismTester {
   private f; private du; private dv; private outer; private holes; private sp: Plane; private ep: Plane;
+  private cont: P2[] | null = null; private th = 0;
   constructor(public m: Member) {
     const prof = getProfile(m.profile);
+    if (m.contour && prof.family === 'PL') { this.cont = m.contour.map((p) => ({ u: p.s, v: p.u })); this.th = prof.dims.t; }
     const s = memberSolid(m);
     this.f = localFrame(m); this.du = s.du; this.dv = s.dv;
     this.outer = prof.outline.outer; this.holes = prof.outline.holes;
@@ -39,6 +41,13 @@ export class PrismTester {
   }
   /** עומק חדירה מוערך (mm) אם הנקודה בפנים, אחרת 0 */
   depth(P: Vec3): number {
+    if (this.cont) {
+      const r = sub(P, this.m.start);
+      const q = { u: dot(r, this.f.ex), v: dot(r, this.f.u) }, w = Math.abs(dot(r, this.f.v));
+      if (w >= this.th / 2 - EPS || !pointInPoly(q, this.cont)) return 0;
+      const d = Math.min(distToPoly(q, this.cont), this.th / 2 - w);
+      return d > EPS ? d : 0;
+    }
     const sgnS = Math.sign(dot(this.f.ex, this.sp.normal)) || 1;
     const sgnE = Math.sign(dot(this.f.ex, this.ep.normal)) || 1;
     const a = dot(sub(P, this.sp.point), this.sp.normal) * sgnS;
@@ -59,6 +68,17 @@ export class PrismTester {
 function samples(m: Member): Vec3[] {
   const s = memberSolid(m);
   const pts: Vec3[] = [];
+  if (m.contour) {
+    // פלטה חופשית: גם רשת פנימית על שני הפנים — התנגשות באמצע הפלטה
+    const f = localFrame(m), ss = m.contour.map((p) => p.s), uu = m.contour.map((p) => p.u), t = getProfile(m.profile).dims.t;
+    const s0 = Math.min(...ss), s1 = Math.max(...ss), u0 = Math.min(...uu), u1 = Math.max(...uu);
+    const poly = m.contour.map((p) => ({ u: p.s, v: p.u }));
+    for (let i = 0; i <= 8; i++) for (let j = 0; j <= 8; j++) {
+      const q = { u: s0 + ((s1 - s0) * i) / 8, v: u0 + ((u1 - u0) * j) / 8 };
+      if (!pointInPoly(q, poly)) continue;
+      for (const k of [-0.45, 0, 0.45]) pts.push({ x: m.start.x + f.ex.x * q.u + f.u.x * q.v + f.v.x * k * t, y: m.start.y + f.ex.y * q.u + f.u.y * q.v + f.v.y * k * t, z: m.start.z + f.ex.z * q.u + f.u.z * q.v + f.v.z * k * t });
+    }
+  }
   const n = s.startRing.length;
   for (let i = 0; i < n; i++) {
     const a = s.startRing[i], b = s.endRing[i], c = s.startRing[(i + 1) % n], e = s.endRing[(i + 1) % n];
@@ -126,7 +146,7 @@ function clashParallel(a: Member, b: Member): number {
 /** בדיקת התנגשות בין שני אלמנטים. מגע 0 מ"מ אינו התנגשות. */
 export function clash(a: Member, b: Member): Clash | null {
   const fa = localFrame(a), fb = localFrame(b);
-  if (Math.abs(dot(fa.ex, fb.ex)) > 0.99999 && !a.startCut && !a.endCut && !b.startCut && !b.endCut) {
+  if (Math.abs(dot(fa.ex, fb.ex)) > 0.99999 && !a.contour && !b.contour && !a.startCut && !a.endCut && !b.startCut && !b.endCut) {
     const d = clashParallel(a, b);
     return d > 0.1 ? { a: a.id, b: b.id, depth: d } : null;
   }

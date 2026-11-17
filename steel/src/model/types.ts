@@ -327,7 +327,7 @@ export interface MemberOverride {
 
 export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'girt' | 'cleat' | 'plate' | 'bolt' | 'anchor';
 
-export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee' | 'ridge-tie' | 'beam-splice' | 'tb-support' | 'tb-seat' | 'truss' | 'truss-splice' | 'truss-end';
+export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee' | 'ridge-tie' | 'beam-splice' | 'tb-support' | 'tb-seat' | 'truss' | 'truss-splice' | 'truss-end' | 'custom';
 export type ApprovalStatus = 'not-verified' | 'for-review' | 'approved';
 
 /** חיבור מבוסס פלטה וקבוצת ברגים (קורה-עמוד, רכס, פלטת בסיס). */
@@ -417,6 +417,10 @@ export interface Project {
   connectionTemplates: ConnectionTemplate[];
   /** שינויים לתומך בודד (לפי מזהה תומך) */
   cleatOverrides: Record<string, Partial<CleatParams>>;
+  /** ספריית פרטי חיבור מותאמים (מתכון פעולות עם נוסחאות) */
+  customDetails?: CustomDetail[];
+  /** שיוך פרט מותאם לקצה אלמנט: "מזהה אלמנט|start" או "|end" ⇒ מזהה פרט */
+  detailAssign?: Record<string, string>;
   /** הודעות שהוסתרו: "קוד|*" לסוג שלם, או מפתח הודעה (issueKey) */
   dismissedIssues?: string[];
   nextFrameNo: number;
@@ -481,6 +485,8 @@ export interface Member {
   refUp: Vec3;
   startCut?: Plane;
   endCut?: Plane;
+  /** פלטה בצורה חופשית: מתאר בקואורדינטות (s לאורך ex מנקודת ההתחלה, u לרוחב); העובי לאורך v */
+  contour?: { s: number; u: number }[];
   /** פלטה בלבד: קיטום 45° בשתי הפינות בצד u=side·b/2 בשני הקצוות (מקשח — מעבר לרדיוס השורש של הפרופיל) */
   snip?: { side: -1 | 1; c: number };
   source: 'generated' | 'manual';
@@ -581,6 +587,40 @@ export interface Connection {
   /** קביעות (rigid/pinned) — מאפיין מבני בלבד, ללא אימות */
   fixity: 'rigid' | 'pinned' | 'semi';
   overridden: boolean;
+  /** חורי אוורור נוספים שהוגדרו בפרט מותאם */
+  vents?: { memberId: string; p: Vec3; axis: Vec3; d: Mm }[];
+  /** פרט מותאם: מזהה הפרט ומפתח האתר */
+  custom?: { detailId: string; site: string };
+}
+
+// ---------- פרטי חיבור מותאמים ----------
+
+/** נוסחה או מספר. משתנים: חתך ראשי (mh mb mt mtf), מארח (hh hb htf htw), זווית ang, משתני הפרט, ותוצאות פעולות קודמות (P1.w) */
+export type Expr = string;
+/**
+ * פנים שעליהן יושב רכיב:
+ *   main — האלמנט שהקצה שלו מפורט: end (קצה לאחר חיתוך), a+/a- (דפנות במישור), w+/w- (דפנות ניצבות למישור);
+ *   host — המארח: hit (הפנים שהציר פוגע בהן), opp (הפנים הנגדיות), web (הווב, בצד האלמנט);
+ *   מזהה פעולת פלטה — z+ / z- (שני פני הפלטה).
+ */
+export interface DetailRef { on: 'main' | 'host' | string; face: string; along: Expr; across: Expr }
+export type DetailOp =
+  | { k: 'cut'; id: string; kind: 'perp' | 'host' | 'vert' | 'horiz'; at: Expr }
+  | { k: 'plate'; id: string; name?: string; ref: DetailRef; mode: 'flat' | 'stand'; spin: Expr; off: Expr; shape: 'rect' | 'cham' | 'tri' | 'round'; w: Expr; h: Expr; t: Expr; ch: Expr; corners: [boolean, boolean, boolean, boolean] }
+  | { k: 'endplate'; id: string; t: Expr; w: Expr; h: Expr; dx: Expr; dy: Expr }
+  | { k: 'holes'; id: string; ref: DetailRef; rows: Expr; cols: Expr; px: Expr; py: Expr; d0: Expr }
+  | { k: 'bolts'; id: string; holes: string; d: Expr; grade: string; site: boolean }
+  | { k: 'slot'; id: string; L: Expr; w: Expr; dir: 'a' | 'w' }
+  | { k: 'vent'; id: string; d: Expr; at: Expr }
+  | { k: 'rod'; id: string; ref: DetailRef; d: Expr; L: Expr }
+  | { k: 'weld'; id: string; part: string; a: Expr; site: boolean; /** למה לרתך: main / host / מזהה פלטה. ברירת מחדל — הרכיב שהפלטה יושבת עליו */ to?: string };
+export interface DetailVar { name: string; expr: Expr; note?: string }
+export interface CustomDetail {
+  id: string; name: string; note?: string;
+  vars: DetailVar[];
+  ops: DetailOp[];
+  /** סוג האתר שעליו נבנה (לסינון ולהצעה): "brace>column" וכד' */
+  family?: string;
 }
 
 export interface SpliceInfo {

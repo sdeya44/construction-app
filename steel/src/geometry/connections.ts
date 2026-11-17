@@ -527,6 +527,7 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
   };
   const ridgeGroup: Member[] = [];
   for (const c of conns) {
+    if (c.type === 'custom') continue; // נבדק בבניית הפרט המותאם
     if (c.type === 'purlin-cleat') {
       const [pid, rid] = c.members;
       const cl = byId.get(c.parts[0]);
@@ -548,7 +549,8 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
     }
   }
   // קושרות ושורות קשירה מול עמודים, קורות, פטות, תומכים וקושרות אחרות (סינון לפי תיבה חוסמת)
-  const others = [...byId.values()].filter((m) => ['column', 'rafter', 'purlin', 'cleat', 'plate', 'brace'].includes(m.kind));
+  // חלקי פרט מותאם נבדקים בבניית הפרט עצמו
+  const others = [...byId.values()].filter((m) => ['column', 'rafter', 'purlin', 'cleat', 'plate', 'brace'].includes(m.kind) && !m.connId?.startsWith('C.CD.'));
   const boxes = new Map(others.map((m) => [m.id, aabb(m)]));
   for (const c of conns.filter((x) => x.type === 'brace' || x.type === 'knee')) {
     for (const pid of c.parts) {

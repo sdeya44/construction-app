@@ -1,6 +1,6 @@
 import { add, dot, scale, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
-import { memberSolid } from '../geometry/solid';
+import { contourArea, memberSolid } from '../geometry/solid';
 import { axialExtent } from '../geometry/parts';
 import { getProfile, massPerMeter } from '../profiles/library';
 import { getMaterial } from '../profiles/materials';
@@ -104,6 +104,12 @@ export function ventHoles(m: Member, d: DerivedModel): VentHole[] {
       out.push({ p: add(add(add(m.start, scale(f.ex, t)), scale(f.u, c)), scale(f.v, c2)), axis: scale(f.v, -sg), d: dd, t, c, c2 });
     }
   };
+  // חורי אוורור שהוגדרו בפרט מותאם
+  for (const c of d.connections) for (const v of c.vents ?? []) if (v.memberId === m.id) {
+    const r = sub(v.p, m.start);
+    out.push({ p: v.p, axis: v.axis, d: v.d, t: dot(r, f.ex), c: dot(r, f.u), c2: dot(r, f.v) });
+  }
+  if (out.length) return out;
   if (startFace !== null) push(Math.max(startFace, tMin) + dd / 2 + 15);
   if (endFace !== null) push(Math.min(endFace, tMax) - dd / 2 - 15);
   return out;
@@ -147,12 +153,13 @@ export function computeFabrication(project: Project, d: DerivedModel): Fabricati
     const cutStart = first ? cutAngle(m, 'start') : 0, cutEnd = last ? cutAngle(m, 'end') : 0;
     // חתימה: חורים באגף/ווב — מיקום לאורך ורוחב בלבד (c2 = צד ראש הבורג, לא משנה ייצור); חלק הפוך קצה-לקצה זהה
     const hs = (rev: boolean) => holes.map((h) => h.face === 'section' ? `${h.face}${r1(h.t)}/${r1(h.c)}/${r1(h.c2 ?? 0)}/${h.d}` : `${h.face}${r1(rev ? p.length - h.t : h.t)}/${r1(h.c)}/${h.d}`).sort().join(';');
-    const fwd = [m.kind, p.profile, p.material, r1(p.length), cutStart, cutEnd, hs(false)].join('|');
-    const rev = holes.some((h) => h.face === 'section') ? fwd : [m.kind, p.profile, p.material, r1(p.length), cutEnd, cutStart, hs(true)].join('|');
+    const cont = m.contour ? `C${m.contour.map((q) => `${r1(q.s)},${r1(q.u)}`).join(';')}` : '';
+    const fwd = [m.kind, p.profile, p.material, r1(p.length), cutStart, cutEnd, hs(false), cont].join('|');
+    const rev = holes.some((h) => h.face === 'section') || cont ? fwd : [m.kind, p.profile, p.material, r1(p.length), cutEnd, cutStart, hs(true), cont].join('|');
     const sig = rev < fwd ? rev : fwd;
     parts.push({
       ...p, mark: '', provisional: false, kind: m.kind, desc: m.partDesc ?? `${m.profile}`,
-      weight: (massPerMeter(pr, getMaterial(p.material).density) * p.length) / 1000,
+      weight: m.contour ? (contourArea(m.contour) * pr.dims.t * getMaterial(p.material).density) / 1e9 : (massPerMeter(pr, getMaterial(p.material).density) * p.length) / 1000,
       holes, cutStart, cutEnd, assembly: '', signature: sig,
     });
   }

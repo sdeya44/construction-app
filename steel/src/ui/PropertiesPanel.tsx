@@ -108,7 +108,11 @@ function PropertiesInner() {
         <button role="tab" className={ptab === 'adv' ? 'on' : ''} onClick={() => setPtab('adv')} data-testid="ptab-adv">מתקדם</button>
       </div>
       {ptab === 'basic' && <>
-        {plateLike && <HubSettings m={m} />}
+        {plateLike && m.connId?.startsWith('C.CD.') && d.connById.get(m.connId)?.custom && (
+          <div className="hub-set"><div className="hub-set-h">פרט מותאם: {p.customDetails?.find((x) => x.id === d.connById.get(m.connId!)!.custom!.detailId)?.name}</div>
+            <button className="btn primary" data-testid="open-studio-part" onClick={() => store.set({ detailStudio: d.connById.get(m.connId!)!.custom!.site })}>פתח בסטודיו פרטים</button></div>
+        )}
+        {plateLike && !m.connId?.startsWith('C.CD.') && <HubSettings m={m} />}
         {pr && !plateLike && (
           <div className="sec-card">
             <SectionShape outline={pr.outline.outer} />
@@ -157,9 +161,11 @@ function PropertiesInner() {
         </dl>
         {m.purlin && <PurlinInfoBlock id={m.id} />}
         <div className="hint">שינוי חל מיד · Ctrl+Z לביטול</div>
+        {!plateLike && <DetailEnds m={m} />}
         {!plateLike && <HubSettings m={m} />}
       </>}
       {ptab === 'conns' && <>
+        {!plateLike && <DetailEnds m={m} />}
         <MemberConnections memberId={m.id} />
         {!conns && <div className="hint">אין חיבורים לאלמנט זה.</div>}
         {m.kind !== 'bolt' && <SpliceEditor m={m} />}
@@ -233,6 +239,34 @@ function HubSettings({ m }: { m: Member }) {
     if (c) return <><PlateWizard c={c} plateId={m.id} /><HubNav m={m} /></>;
   }
   return <HubNav m={m} />;
+}
+
+const DETAIL_KINDS = new Set(['column', 'rafter', 'beam', 'brace', 'purlin', 'girt']);
+/** פרט חיבור בכל קצה של האלמנט: הפרט הנוכחי (רגיל/מותאם) + פתיחת הסטודיו */
+function DetailEnds({ m }: { m: Member }) {
+  const p = useStore((s) => s.project);
+  const d = useStore((s) => s.derived);
+  if (!DETAIL_KINDS.has(m.kind)) return null;
+  const lib = new Map((p.customDetails ?? []).map((x) => [x.id, x.name]));
+  return (
+    <div className="hub-set" data-testid="detail-ends">
+      <div className="hub-set-h">פרט חיבור בקצוות</div>
+      <div className="cd-ends">
+        {(['start', 'end'] as const).map((e) => {
+          const k = `${m.id}|${e}`, det = p.detailAssign?.[k];
+          const pt = e === 'start' ? m.start : m.end;
+          const near = d.connections.filter((c) => c.type !== 'custom' && (c.members.includes(m.id) || c.parts.includes(m.id))).map((c) => c.label)[0];
+          return (
+            <div className="cd-end" key={e}>
+              <span>{e === 'start' ? 'התחלה' : 'סוף'} <span className="muted mono">z {Math.round(pt.z)}</span> · {det ? <b>{lib.get(det) ?? 'פרט מותאם'}</b> : <span className="muted">{near ? 'פרט רגיל' : 'ללא חיבור'}</span>}</span>
+              <button className="btn small" data-testid={`studio-${e}`} onClick={() => store.set({ detailStudio: k })}>{det ? 'עריכה' : 'פרט חדש…'}</button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="hint">בונים פרט מחלקים: פחים, חיתוכים, חורים, ברגים וריתוך — עם נוסחאות שמתעדכנות לפי החתך.</div>
+    </div>
+  );
 }
 
 function HubNav({ m }: { m: Member }) {

@@ -13,6 +13,8 @@ export interface ShopStandard {
   cleat: Project['building']['purlins']['left']['cleat'];
   knee?: Partial<NonNullable<Project['building']['kneeBraces']>>;
   portal?: Partial<NonNullable<Project['building']['bracing']['walls']['portal']>>;
+  /** ספריית פרטי החיבור המותאמים של המסגריה */
+  details?: Project['customDetails'];
 }
 
 export function captureStandard(p: Project): ShopStandard {
@@ -24,6 +26,7 @@ export function captureStandard(p: Project): ShopStandard {
     purlinSplice: structuredClone(p.building.purlins.splice),
     cleat: structuredClone(p.building.purlins.left.cleat),
     knee: kb ? { plateT: kb.plateT, plateW: kb.plateW, plateL: kb.plateL, bolt: kb.bolt, gauge: kb.gauge, pitch: kb.pitch, weldSize: kb.weldSize, boltsPerEnd: kb.boltsPerEnd, detail: kb.detail } : undefined,
+    details: structuredClone(p.customDetails ?? []),
     portal: pt ? { plateT: pt.plateT, bolt: pt.bolt, pitch: pt.pitch, weldSize: pt.weldSize, boltsPerEnd: pt.boltsPerEnd, beamBolts: pt.beamBolts } : undefined,
   };
 }
@@ -46,6 +49,7 @@ export function applyStandard(p: Project, st: ShopStandard | null = loadStandard
   n.building.purlins.left.cleat = { ...n.building.purlins.left.cleat, ...st.cleat };
   n.building.purlins.right.cleat = { ...n.building.purlins.right.cleat, ...st.cleat };
   if (st.knee && n.building.kneeBraces) n.building.kneeBraces = { ...n.building.kneeBraces, ...st.knee };
+  if (st.details?.length) { const have = new Set((n.customDetails ?? []).map((x) => x.id)); n.customDetails = [...(n.customDetails ?? []), ...structuredClone(st.details).filter((x) => !have.has(x.id))]; }
   if (st.portal && n.building.bracing.walls.portal) n.building.bracing.walls.portal = { ...n.building.bracing.walls.portal, ...st.portal };
   return n;
 }

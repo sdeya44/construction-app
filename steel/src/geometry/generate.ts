@@ -15,6 +15,7 @@ import { buildWallFraming } from './cladding';
 import { buildTransfers, prepareTransfers } from './transfer';
 import { buildRoofTrusses, roofTrussRafterSplices } from './truss';
 import { buildBracing } from './bracing';
+import { applyCustomDetails } from './detail';
 
 const HEB_LETTERS = 'אבגדהוזחטיכלמנסעפצקרשת';
 export const xAxisLabel = (i: number) => HEB_LETTERS[i] ?? `X${i + 1}`;
@@ -270,6 +271,8 @@ export function generate(project: Project): DerivedModel {
         if (tr.drop.size) issues.push({ code: 'TB_DROP', severity: 'info', message: `דילול עמודים: הוסרו ${tr.drop.size} אלמנטים (אלכסונים/קושרות) שנשענו על עמודים שבוטלו או קוצרו` });
       }
     }
+    // פרטי חיבור מותאמים מהספרייה: מחליפים את החיבור שנבנה בקצה האלמנט
+    if (project.detailAssign && Object.keys(project.detailAssign).length) issues.push(...applyCustomDetails(project, out, connections));
     byId = new Map(out.map((m) => [m.id, m]));
     issues.push(...checkClashes(connections, byId));
   }
