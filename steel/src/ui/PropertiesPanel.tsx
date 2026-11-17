@@ -1,6 +1,6 @@
 import { settingsOf } from './navIndex';
 import { Fragment, useState } from 'react';
-import { resetOverrides, setMemberProps } from '../commands/commands';
+import { resetOverrides, setBuilding, setKneeBraces, setMemberProps, type Command } from '../commands/commands';
 import { useFab } from '../fab/useFab';
 import { fromMm } from '../core/units';
 import { dist } from '../core/vec';
@@ -15,7 +15,7 @@ import { ConnectionEditor, MemberConnections } from './ConnectionEditor';
 import { NavContent, type NavKey } from './SideNav';
 import { PlateWizard } from './PlateWizard';
 import { trussFrames } from '../geometry/truss';
-import type { Member } from '../model/types';
+import type { Member, Project } from '../model/types';
 
 const f1 = (n: number, d = 1) => n.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
 
@@ -209,19 +209,42 @@ export function similarOf(m: Member, all: Member[]): Member[] {
 }
 
 /** חתך: סוג ← מידה, עם היקף השינוי — האלמנט הזה או כל הדומים בפרויקט */
+/**
+ * אלמנטים שנבנים מהגדרה כללית (אלכסונים, קושרות, אגד B, סבכת RHS): "כל הדומים" משנה את ההגדרה עצמה;
+ * "רק האלמנט הזה" נתמך באלכסוני עמוד-קורה בלבד (בשאר — החתך קובע את פחי החיבור המשותפים).
+ */
+function profileRoute(m: Member, p: Project): { all: (v: string) => Command; one: boolean; what: string } | null {
+  const b = p.building, br = b.bracing;
+  const id = m.id;
+  if (id.startsWith('KB.')) return { all: (v) => setKneeBraces({ profile: v, sides: Object.fromEntries(Object.entries(b.kneeBraces?.sides ?? {}).map(([k, o]) => [k, { ...o, profile: undefined }])) }), one: true, what: 'אלכסוני עמוד-קורה' };
+  if (/^BR\.R/.test(id)) return { all: (v) => setBuilding({ bracing: { ...br, roof: { ...br.roof, profile: v } } }), one: false, what: 'קושרות הגג' };
+  if (/^BR\.W/.test(id)) return { all: (v) => setBuilding({ bracing: { ...br, walls: { ...br.walls, profile: v } } }), one: false, what: 'קושרות הקיר' };
+  if (/^BR\.T/.test(id)) return { all: (v) => setBuilding({ bracing: { ...br, purlinTies: { ...br.purlinTies, profile: v } } }), one: false, what: 'שורות הקשירה' };
+  if (/^BB\./.test(id) && br.walls.portal) { const isK = /\.K\d+$/.test(id); return { all: (v) => setBuilding({ bracing: { ...br, walls: { ...br.walls, portal: { ...br.walls.portal!, ...(isK ? { brace: v } : { beam: v }) } } } }), one: false, what: isK ? 'אלכסוני אגד B' : 'קורות אגד B' }; }
+  if (/^HB\./.test(id) && br.roof.rhs) { const isD = /\.D\d+$/.test(id); return { all: (v) => setBuilding({ bracing: { ...br, roof: { ...br.roof, rhs: { ...br.roof.rhs!, ...(isD ? { diag: v } : { strut: v }) } } } }), one: false, what: isD ? 'אלכסוני הסבכה' : 'מוטות הסבכה' }; }
+  return null;
+}
+
 function ProfileScope({ m }: { m: Member }) {
   const d = useStore((s) => s.derived);
+  const p = useStore((s) => s.project);
   const [scope, setScope] = useState<'one' | 'all'>('one');
   const sim = similarOf(m, d.members);
+  const route = profileRoute(m, p);
+  const eff = route && !route.one ? 'all' : scope;
   const role = m.kind === 'column' || m.kind === 'rafter' || m.kind === 'purlin' ? m.kind : undefined;
+  const commit = (v: string) => {
+    if (eff === 'all' && route) { store.exec(route.all(v)); const pre = m.id.split('.')[0] + '.'; const ov = Object.keys(p.memberOverrides).filter((x) => x.startsWith(pre) && p.memberOverrides[x]?.profile); if (ov.length) store.exec(resetOverrides(ov)); return; }
+    store.exec(setMemberProps(eff === 'all' ? sim.map((x) => x.id) : [m.id], { profile: v }));
+  };
   return (
     <>
-      <div className="field prof"><label>חתך</label><ProfilePicker testId="prop-profile" value={m.profile} families={FAMS[m.kind]} role={role}
-        onCommit={(v) => store.exec(setMemberProps(scope === 'all' ? sim.map((x) => x.id) : [m.id], { profile: v }))} /></div>
-      {sim.length > 1 && (
+      <div className="field prof"><label>חתך</label><ProfilePicker testId="prop-profile" value={m.profile} families={FAMS[m.kind]} role={role} onCommit={commit} /></div>
+      {route && !route.one && <div className="hint" style={{ marginTop: 0 }}>החתך חל על כל {route.what} — פחי החיבור נקבעים לפיו.</div>}
+      {sim.length > 1 && (!route || route.one) && (
         <div className="seg scope-seg" role="radiogroup" aria-label="היקף השינוי">
           <button className={`tbtn${scope === 'one' ? ' on' : ''}`} data-testid="scope-one" onClick={() => setScope('one')}>רק האלמנט הזה</button>
-          <button className={`tbtn${scope === 'all' ? ' on' : ''}`} data-testid="scope-all" onClick={() => setScope('all')}>כל {PLURAL[m.kind] ?? 'הדומים'} ב-{m.profile} ({sim.length})</button>
+          <button className={`tbtn${scope === 'all' ? ' on' : ''}`} data-testid="scope-all" onClick={() => setScope('all')}>{route ? `כל ${route.what} (${d.members.filter((x) => x.id.split('.')[0] === m.id.split('.')[0] && x.kind === m.kind).length})` : `כל ${PLURAL[m.kind] ?? 'הדומים'} ב-${m.profile} (${sim.length})`}</button>
         </div>
       )}
     </>

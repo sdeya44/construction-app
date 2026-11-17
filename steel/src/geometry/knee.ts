@@ -52,7 +52,8 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
         const ov = kb.sides?.[key];
         if (ov?.on === false) continue;
         const kq = { ...kb, ...(ov ?? {}) };
-        const profK = ov?.profile ? tryProfile(ov.profile) ?? prof : prof;
+        let profK = ov?.profile ? tryProfile(ov.profile) ?? prof : prof;
+        if (ov?.profile && tryProfile(ov.profile)) kq.profile = ov.profile;
         // נקודת החיבור לקורה: לפי זווית מהאופק (ברירת מחדל 45°) או מרחק אופקי קבוע
         let xR = jn.line.x + s * kq.reach;
         if ((kq.mode ?? 'angle') === 'angle') {
@@ -89,6 +90,9 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
         const dir = norm(sub(R0, C0));
         const id = `C.KB.${f.id}.${key}`;
         const bid = `KB.${f.id}.${key}`;
+        // חתך לאלמנט בודד (מפאנל האלמנט: "רק האלמנט הזה")
+        const ovM = project.memberOverrides[bid]?.profile;
+        if (ovM && tryProfile(ovM)) { kq.profile = ovM; profK = tryProfile(ovM)!; }
         if ((kq.detail ?? 'fin') !== 'flange') {
           // פרט הלקוח: פח מרותך לעמוד/לקורה במישור המסגרת, לשונית בחריץ ה-RHS, 2 ברגים בחפיפה
           const common = { cid: id, desc: 'אלכסון', memberId: bid, prof: profK, profile: kq.profile, finT: kq.plateT, tongueT: kq.plateT, bolt: kq.bolt, bolts: kq.boltsPerEnd ?? 2, weldSize: kq.weldSize, mat, pn: Y, side: 1 as const };

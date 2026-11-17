@@ -115,3 +115,17 @@ describe('פרטי חיבור מותאמים', () => {
     expect(g.contour!.length).toBe(6);
   });
 });
+
+describe('חתך אלכסונים מפאנל האלמנט', () => {
+  it('KB-PROF: "רק האלמנט הזה" משנה אלכסון עמוד-קורה בודד; הפרט מותאם לחתך החדש, ללא שגיאות', async () => {
+    const { setMemberProps } = await import('../src/commands/commands');
+    const p = kneeProject();
+    const d0 = generate(p);
+    const kb = d0.members.filter((m) => m.id.startsWith('KB.'));
+    const p2 = setMemberProps([kb[0].id], { profile: 'SHS100x5' }).run(p);
+    const d = generate(p2);
+    expect(d.byId.get(kb[0].id)!.profile).toBe('SHS100x5');
+    expect(d.byId.get(kb[1].id)!.profile).toBe(kb[1].profile);
+    expect(bad(d.issues)).toEqual([]);
+  });
+});

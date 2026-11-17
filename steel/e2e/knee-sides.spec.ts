@@ -47,3 +47,31 @@ test('HUB-02: לחיצה על אלכסון אגד B — שרטוט סכמטי ע
   expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.walls.portal.angle)).toBe(40);
   await shot(page, 'HUB_02_portal');
 });
+
+test('HUB-03: שינוי חתך מפאנל אלכסון — "רק האלמנט הזה" ו"כל האלכסונים" עובדים; קושרת גג משנה את כל הקושרות', async ({ page }) => {
+  const errors = await boot(page);
+  await page.getByTestId('nav-b:knee').click();
+  await page.getByTestId('kb-on').check();
+  const prof = (id: string) => page.evaluate((i) => (window as any).__ksp.store.state.derived.byId.get(i)?.profile, id);
+  await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
+  await page.getByTestId('scope-one').click();
+  await page.getByTestId('prop-profile-family').selectOption('SHS');
+  await page.getByTestId('prop-profile-size').selectOption('SHS100x5');
+  expect(await prof('KB.F2.L.L.R')).toBe('SHS100x5');
+  expect(await prof('KB.F3.L.L.R')).toBe('RHS80x80x4');
+  await page.evaluate(() => (window as any).__ksp.store.select(['KB.F3.L.L.R']));
+  await page.getByTestId('scope-all').click();
+  await page.getByTestId('prop-profile-family').selectOption('SHS');
+  await page.getByTestId('prop-profile-size').selectOption('SHS90x4');
+  const all = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('KB.')).map((m: any) => m.profile))]);
+  expect(all).toEqual(['SHS90x4']);
+  // קושרת גג
+  const br = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BR.R'))?.id);
+  await page.evaluate((i) => (window as any).__ksp.store.select([i]), br);
+  await page.getByTestId('prop-profile-family').selectOption('L');
+  await page.getByTestId('prop-profile-size').selectOption('L60x6');
+  const roof = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('BR.R')).map((m: any) => m.profile))]);
+  expect(roof).toEqual(['L60x6']);
+  await shot(page, 'HUB_03_brace_profile');
+  expect(errors).toEqual([]);
+});
