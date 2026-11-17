@@ -13,6 +13,9 @@ test('UX-01: סרגל הקשרי וכרטיס חיבור לאלמנט בודד; 
   await shot(page, 'UX-01_single');
   // שינוי חתך מפאנל המאפיינים (מקום אחד לכל ההגדרות)
   await page.getByTestId('prop-profile-size').selectOption('IPE330');
+  // התוכנה שואלת על היקף השינוי — כאן: רק האלמנט הזה
+  await expect(page.getByTestId('scope-ask')).toBeVisible();
+  await page.getByTestId('scope-ask-one').click();
   expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('F3.RAF.L').profile)).toBe('IPE330');
   // IPE330 (אגף 160) עם M18 ומרווח 200 — חלון בדיקת פלטת ראש העמוד נפתח
   await page.getByTestId('eave-keep').click();

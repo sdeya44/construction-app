@@ -238,3 +238,23 @@ describe('חיבורי המשך אוטומטיים בפטות', () => {
     }
   });
 });
+
+describe('חריגים ושילובים מסימולציית הממשק', () => {
+  it('MX-01: קורה עמוקה יותר ברכס (חריג) — פלטת האלכסון לא נכנסת לפלטת החיזוק של הרכס; ללא שגיאות', async () => {
+    const { SECTION_TEMPLATES } = await import('../src/model/section');
+    const { applySizingSuggestion, setMemberProps } = await import('../src/commands/commands');
+    const b = { ...defaultBuilding(), section: SECTION_TEMPLATES.find((t) => t.id === 'gable-cant')!.make() as never, kneeBraces: { ...defaultKneeBraces(), enabled: true } };
+    const p = applySizingSuggestion().run(newProject('x', b));
+    for (const sz of ['IPE330', 'IPE360', 'IPE400']) {
+      const d = generate(setMemberProps(['F1.RAF.P2'], { profile: sz }).run(p));
+      expect(d.issues.filter((i) => i.severity === 'error' && i.code !== 'EAVE_FIT').map((i) => `${sz}: ${i.message}`)).toEqual([]);
+    }
+  });
+  it('MX-02: חריג חתך לקורה — העמוד יורד לפי עומק הקורה, פח הקושרת לפי עובי הווב שלה (ללא התנגשות)', async () => {
+    const { setMemberProps } = await import('../src/commands/commands');
+    const d = generate(setMemberProps(['F1.RAF.L'], { profile: 'IPE400' }).run(newProject('x', defaultBuilding())));
+    expect(d.issues.filter((i) => i.code === 'CLASH').map((i) => i.message)).toEqual([]);
+    const c = d.byId.get('F1.COL.L')!, c2 = d.byId.get('F2.COL.L')!;
+    expect(c.end.z).toBeLessThan(c2.end.z - 50); // IPE400 עמוקה ב-100 מ"מ מ-IPE300
+  });
+});

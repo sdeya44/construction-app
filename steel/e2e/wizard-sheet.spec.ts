@@ -54,3 +54,29 @@ test('PS-01: גיליון פרמטרים — עריכה בטבלה, חריגים
   await expect(page.getByTestId('ps-row-שיפוע גג')).toContainText('10%');
   expect(errors).toEqual([]);
 });
+
+test('SC-01: שינוי חתך לאלמנט אחד — התוכנה שואלת "רק זה / כולם"; Enter לא מחיל בטעות על כולם', async ({ page }) => {
+  const errors = await boot(page);
+  const prof = (id: string) => page.evaluate((i) => (window as any).__ksp.store.state.derived.byId.get(i).profile, id);
+  await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
+  await page.getByTestId('prop-profile').fill('HEB200'); await page.getByTestId('prop-profile').press('Enter');
+  await expect(page.getByTestId('scope-ask')).toBeVisible();
+  expect(await prof('F2.COL.L')).toBe('HEA200'); // עדיין לא הוחל
+  await page.getByTestId('scope-ask-all').click();
+  expect(await prof('F5.COL.R')).toBe('HEB200');
+  // אלכסון: רק אחד
+  await page.getByTestId('nav-b:knee').click(); await page.getByTestId('kb-on').check();
+  await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
+  await page.getByTestId('prop-profile-family').selectOption('SHS');
+  await page.getByTestId('prop-profile-size').selectOption('SHS100x5');
+  await page.getByTestId('scope-ask-one').click();
+  expect(await prof('KB.F2.L.L.R')).toBe('SHS100x5');
+  expect(await prof('KB.F3.L.L.R')).toBe('RHS80x80x4');
+  // כרטיס החיבור מקופל לתג; לחיצה פותחת
+  await expect(page.getByTestId('conncard')).toHaveCount(0);
+  await page.getByTestId('conncard-tag').click();
+  await expect(page.getByTestId('conncard')).toBeVisible();
+  await page.getByTestId('cc-min').click();
+  await expect(page.getByTestId('conncard-tag')).toBeVisible();
+  expect(errors).toEqual([]);
+});

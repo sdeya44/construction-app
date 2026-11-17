@@ -146,9 +146,12 @@ class Store {
   async saveNow(reason = 'שמירה'): Promise<boolean> {
     window.clearTimeout(this.saveTimer);
     this.set({ saveState: 'saving' });
+    const snap = this.state.project;
     try {
-      await saveProject(this.state.project, reason);
-      void writeLinked(this.state.project);
+      await saveProject(snap, reason);
+      void writeLinked(snap);
+      // שינוי שנעשה בזמן השמירה — עדיין לא נשמר: נשארים "לא שמור" והשמירה המתוזמנת תשמור אותו
+      if (this.state.project !== snap) { this.set({ saveState: 'dirty' }); this.scheduleSave(); return true; }
       this.set({ saveState: 'saved' });
       return true;
     } catch (e) {

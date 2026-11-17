@@ -172,13 +172,16 @@ export function CommandPalette({ cmds, onClose, onPickElement }: { cmds: Cmd[]; 
   const stem = (w: string) => (w.length >= 4 ? w.replace(/(ים|ות|יות|ה|ת|י)$/, '') : w);
   const toks = q.toLowerCase().split(/[\s,]+/).map((w) => w.replace(/['"׳״.\-_]/g, '')).filter(Boolean);
   const hay = (c: Cmd) => norm(`${c.label} ${c.group} ${c.search ?? ''}`);
-  const cmdHits = cmds.filter((c) => {
-    if (c.disabled) return false;
-    if (!nq) return true;
-    if (norm(c.label).includes(nq) || norm(c.group).includes(nq) || (c.search && nq.length >= 2 && norm(c.search).includes(nq))) return true;
+  // דירוג: התאמה רציפה בשם (0) ← בקבוצה/מילות חיפוש (1) ← כל המילים בנפרד (2)
+  const rank = (c: Cmd): number => {
+    if (c.disabled) return -1;
+    if (!nq) return 0;
+    if (norm(c.label).includes(nq)) return 0;
+    if (norm(c.group).includes(nq) || (c.search && nq.length >= 2 && norm(c.search).includes(nq))) return 1;
     const h = hay(c);
-    return toks.length > 0 && toks.every((w) => h.includes(w) || (stem(w).length >= 3 && h.includes(stem(w))));
-  });
+    return toks.length > 0 && toks.every((w) => h.includes(w) || (stem(w).length >= 3 && h.includes(stem(w)))) ? 2 : -1;
+  };
+  const cmdHits = cmds.map((c, i) => ({ c, r: rank(c), i })).filter((x) => x.r >= 0).sort((a1, b1) => a1.r - b1.r || a1.i - b1.i).map((x) => x.c);
   const elHits = nq.length >= 2
     ? d.members.filter((m) => m.kind !== 'bolt' && (norm(m.id).includes(nq) || norm(m.label).includes(nq) || norm(m.profile).includes(nq))).slice(0, 8)
     : [];

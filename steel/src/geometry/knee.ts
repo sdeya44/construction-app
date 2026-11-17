@@ -68,6 +68,17 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
           const dx = (und0(xF) - zC0) / (tA - slopeS);
           if (dx > 0) xR = xF + s * dx;
         }
+        // רכס עם פלטות חיזוק משולשות קרוב לעמוד (קונזולה/רכס מעל עמוד): פלטת האלכסון לא נכנסת לאזור המשולש
+        const rr = project.building.ridgeReinf;
+        if (rr?.type === 'plate') for (const r of topo.ridges) {
+          if (r.pa !== pl && r.pb !== pl) continue;
+          const away = Math.sign(xR - r.x) || s;
+          const need = rr.length + kq.plateL / 2 + 30;
+          if (Math.abs(xR - r.x) >= need) continue;
+          // רכס מעבר לנקודת החיבור: מקרבים את החיבור לעמוד; רכס מאחוריה: מרחיקים
+          xR = r.x + away * need;
+        }
+        if (s * (xR - (jn.line.x + s * cp.props.h / 2)) < kq.plateL / 2 + 100) { out.issues.push({ code: 'KNEE_LOW', severity: 'warning', message: `אלכסון ${key} מסגרת ${fi}: אין מקום בין העמוד לפלטות החיזוק של הרכס — האלכסון לא נוצר` }); continue; }
         // הקורה חייבת להמשיך מעבר לנקודת החיבור + חצי פלטה
         if (xR - kq.plateL / 2 < lo - 1 || xR + kq.plateL / 2 > hi + 1) continue;
         const sl = (pl.b.z - pl.a.z) / (pl.b.x - pl.a.x);

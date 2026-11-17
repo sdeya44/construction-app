@@ -141,6 +141,7 @@ test.describe('M1 – ליבת מידול', () => {
     await page.mouse.click(c.x, c.y);
     await page.getByTestId('prop-profile').fill('HEB200');
     await page.getByTestId('prop-profile').press('Enter');
+    await page.getByTestId('scope-ask-one').click(); // שאלת היקף: רק העמוד הזה
     const prof = () => page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('F1.COL.L').profile);
     expect(await prof()).toBe('HEB200');
     await page.getByTestId('btn-undo').click();
@@ -179,6 +180,7 @@ test.describe('M1 – ליבת מידול', () => {
     const c = await screenOf(page, { x: 0, y: 0, z: 3000 });
     await page.mouse.click(c.x, c.y);
     await page.getByTestId('prop-profile').fill('SHS160x6'); await page.getByTestId('prop-profile').press('Enter');
+    await page.getByTestId('scope-ask-one').click();
     await expect(page.getByTestId('save-state')).toHaveText('נשמר במחשב', { timeout: 5000 });
     const before = await page.evaluate(() => JSON.stringify((window as any).__ksp.store.state.derived.members));
     const proj = await page.evaluate(() => JSON.stringify((window as any).__ksp.store.state.project));

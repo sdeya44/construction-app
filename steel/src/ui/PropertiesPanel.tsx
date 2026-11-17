@@ -260,7 +260,7 @@ function ProfileScope({ m }: { m: Member }) {
         <div className="scope-ask" role="alertdialog" aria-label="היקף שינוי החתך" data-testid="scope-ask">
           <div>להחיל <b className="mono">{pending}</b> על:</div>
           <div className="ss-row">
-            <button className="btn primary" autoFocus onClick={() => apply(pending, 'all')} data-testid="scope-ask-all">{allLabel}</button>
+            <button className="btn primary" onClick={() => apply(pending, 'all')} data-testid="scope-ask-all">{allLabel}</button>
             <button className="btn" onClick={() => apply(pending, 'one')} data-testid="scope-ask-one">רק האלמנט הזה</button>
             <button className="btn small" onClick={() => setPending(null)}>ביטול</button>
           </div>

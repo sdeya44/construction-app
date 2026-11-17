@@ -123,7 +123,7 @@ export function EndTypePicker({ memberId, end }: { memberId: string; end: 'start
         <TypeCard on={!assigned} title="פרט רגיל" sub={regular ? regular.label.split(' ').slice(0, 3).join(' ') : 'לפי הגדרות התוכנה'} onClick={() => store.exec(withDetailCleared(sim, null, 'חזרה לפרט הרגיל'))} testId={`et-${end}-regular`} />
         {lib.map((x) => <TypeCard key={x.id} on={assigned === x.id} title={x.name} sub="מהספרייה" onClick={() => store.exec(assignDetail(sim, x))} testId={`et-${end}-lib-${x.id}`} />)}
         {presets.filter((x) => !lib.some((l) => l.name === x.name)).map((x) => <TypeCard key={x.id} on={false} title={x.name} sub="פרט מוכן" onClick={() => store.exec(assignDetail(sim, { ...structuredClone(x), id: `cd-${Date.now().toString(36)}` }))} testId={`et-${end}-preset-${x.id}`} />)}
-        <TypeCard on={false} title={assigned ? '✎ עריכה בסטודיו' : '＋ פרט חדש בסטודיו…'} sub="בונים פרט מחלקים ושומרים לספרייה" onClick={() => store.set({ detailStudio: key })} testId={`studio-${end}-card`} />
+        <TypeCard on={false} title={assigned ? '✎ עריכה בסטודיו' : '＋ פרט חדש בסטודיו…'} sub="בונים פרט מחלקים ושומרים לספרייה" onClick={() => store.set({ detailStudio: key })} testId={`studio-${end}`} />
       </div>
       <label className="ss-radio"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} data-testid={`et-${end}-all`} /> להחיל גם על כל הקצוות הדומים{all ? ` (${sim.length})` : ''}</label>
     </div>
