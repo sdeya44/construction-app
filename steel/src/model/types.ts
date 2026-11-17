@@ -58,6 +58,15 @@ export interface CleatParams {
   /** גובה השורה התחתונה מפני הקורה. null = אוטומטי (באמצע הרגל) */
   holeHeight: Mm | null;
   weldSize: Mm;
+  /**
+   * סוג התושבת: run — זוויתן שוכב לאורך הפטה (ברירת מחדל); stand — זוויתן עומד (L40×40) עם חורים אנכיים;
+   * plate — פלטה אנכית צמודה לווב + משולש תמיכה מאחוריה.
+   */
+  style?: 'run' | 'stand' | 'plate';
+  /** זוויתן עומד: חתך (ברירת מחדל L40x40x4) */
+  standProfile?: string;
+  /** תפר פטה מעל התומך: פלטה + משולש עם 4 חורים (2 לכל פטה) במקום פלטת המשך נפרדת */
+  spliceCleat?: boolean;
 }
 
 export interface BoltSpec {

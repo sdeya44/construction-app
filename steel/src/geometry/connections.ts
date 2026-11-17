@@ -342,6 +342,8 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
 
   // ---- חיבור המשך פטה: פלטה בצד הפנימי של הווב (מול הזוויתן), 2 ברגים בכל פטה (שטח). החלטת משתמש 15.11.2026
   const splicePlates = new Map<string, { id: string; y0: number; y1: number; T: number }[]>();
+  /** תפרי פטה מעל תומך שמחוברים בתושבת התפר: "פטה|t תומך" ⇒ מיקום התפר */
+  const spliceAtCleat = new Map<string, number>();
   const sp0 = b.purlins.splice;
   for (const pur of members) {
     if (!pur.purlin || !isGen(pur)) continue;
@@ -361,6 +363,11 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
     const supT = supports.filter((x) => x.purlinId === pur.id).map((x) => dot(sub(x.p, pur.start), lf.ex));
     ts.forEach((t, k) => {
       if (!(t > 100 && t < lf.length - 100)) return; // נבדק ב-buildParts (SPLICE_RANGE)
+      // תפר מעל תומך עם "תושבת תפר" (פלטה + משולש, 4 חורים): התושבת מחברת את שני קצות הפטה — אין פלטת המשך
+      if (cl.enabled && cl.spliceCleat) {
+        const st = supT.find((x) => Math.abs(x - t) < 200);
+        if (st !== undefined) { spliceAtCleat.set(`${pur.id}|${Math.round(st)}`, t); return; }
+      }
       const id = `C.PS.${pur.id}.${k + 1}`;
       const pid = `${id}.PL`;
       // מרחק עמודת הברגים מהתפר בכל צד: לפחות jointOffset, ומחוץ לרוחב הזוויתן (+ מרווח) אם יש תומך סמוך
@@ -436,22 +443,86 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
     if (pp.family === 'Z' && H > autoH + 0.5) issue({ code: 'CLASH', severity: 'error', elementId: cid, message: `תומך ${cid}: הזוויתן (${H}) חודר לאגף העליון של פטת Z — גובה מרבי ${autoH} מ"מ`, cleatFix: { label: `גובה ${autoH}`, side, cleatId: project.cleatOverrides[cid] ? cid : undefined, patch: { height: null } } });
     const Q = add(sp.p, scale(d, wb)); // פינת הזוויתן: על מישור הגג, צמודה לפני הווב (0 מ"מ)
     const Y = v3(0, 1, 0);
-    const prof = `L${H}x${prm.base}x${prm.thickness}`;
-    const uC = cross(n, Y);
-    const mirror = dot(uC, d) < 0;
-    const cleat = partMember(cid, 'cleat', prof, sub(Q, scale(Y, prm.width / 2)), add(Q, scale(Y, prm.width / 2)), n, 'corner', id, `זוויתן L${H}×${prm.base}×${prm.thickness}, רוחב ${prm.width}`, project.building.purlins.material, mirror);
-    res.members.push(cleat);
-    const hh0 = prm.holeHeight ?? (H - (prm.rows - 1) * prm.rowPitch) / 2;
-    const bolts: BoltInfo[] = [];
     const backD = scale(d, -1);
-    for (let r = 0; r < prm.rows; r++) {
-      grid(prm.perRow, prm.pitch).forEach((gy, ci) => {
-        const head = add(add(add(Q, scale(d, prm.thickness)), scale(n, hh0 + r * prm.rowPitch)), scale(Y, gy));
-        // בורג התומך שעובר גם בפלטת חיבור המשך (תפר מעל התומך)
-        const tb = dot(sub(head, pur.start), lf.ex);
-        const spl = (splicePlates.get(pur.id) ?? []).find((q) => tb > q.y0 + 1 && tb < q.y1 - 1);
-        bolts.push(makeBolt(`${id}.B${r + 1}${ci + 1}`, id, head, backD, prm.bolt, prm.thickness + tw + (spl?.T ?? 0), 'site', spl ? [cid, pur.id, spl.id] : [cid, pur.id], n, res.members));
+    const bolts: BoltInfo[] = [];
+    const tSup = dot(sub(sp.p, pur.start), lf.ex);
+    const jointT = spliceAtCleat.get(`${pur.id}|${Math.round(tSup)}`);
+    const style = jointT !== undefined ? 'plate' : prm.style ?? 'run';
+    const weldsX: WeldInfo[] = [];
+    const extraParts: string[] = [];
+    let hh0: number, top: number;
+    if (style === 'run') {
+      const prof = `L${H}x${prm.base}x${prm.thickness}`;
+      const uC = cross(n, Y);
+      const mirror = dot(uC, d) < 0;
+      res.members.push(partMember(cid, 'cleat', prof, sub(Q, scale(Y, prm.width / 2)), add(Q, scale(Y, prm.width / 2)), n, 'corner', id, `זוויתן L${H}×${prm.base}×${prm.thickness}, רוחב ${prm.width}`, project.building.purlins.material, mirror));
+      hh0 = prm.holeHeight ?? (H - (prm.rows - 1) * prm.rowPitch) / 2;
+      for (let r = 0; r < prm.rows; r++) {
+        grid(prm.perRow, prm.pitch).forEach((gy, ci) => {
+          const head = add(add(add(Q, scale(d, prm.thickness)), scale(n, hh0 + r * prm.rowPitch)), scale(Y, gy));
+          // בורג התומך שעובר גם בפלטת חיבור המשך (תפר מעל התומך)
+          const tb = dot(sub(head, pur.start), lf.ex);
+          const spl = (splicePlates.get(pur.id) ?? []).find((q) => tb > q.y0 + 1 && tb < q.y1 - 1);
+          bolts.push(makeBolt(`${id}.B${r + 1}${ci + 1}`, id, head, backD, prm.bolt, prm.thickness + tw + (spl?.T ?? 0), 'site', spl ? [cid, pur.id, spl.id] : [cid, pur.id], n, res.members));
+        });
+      }
+      top = hh0 + (prm.rows - 1) * prm.rowPitch;
+      weldsX.push({ id: `${id}.W1`, connId: id, type: 'fillet', a: prm.weldSize, length: prm.width + 2 * prm.base, location: 'shop', between: [raf.id, cid], from: add(sub(Q, scale(Y, prm.width / 2)), scale(d, prm.base)), to: add(add(Q, scale(Y, prm.width / 2)), scale(d, prm.base)) });
+    } else if (style === 'stand') {
+      // זוויתן עומד: רגל מוברגת צמודה לווב (לאורך הפטה), רגל ניצבת מהווב החוצה; החורים אנכיים בציר התומך
+      const sprof = tryProfile(prm.standProfile ?? 'L40x40x4') ?? getProfile('L40x40x4');
+      const legB = sprof.dims.b ?? 40, legT = sprof.dims.t ?? 4;
+      const g = Math.round((legB + legT) / 2);
+      const C0 = sub(Q, scale(Y, g));
+      const uC = cross(d, n);
+      const mirror = dot(uC, Y) < 0;
+      res.members.push(partMember(cid, 'cleat', sprof.name, C0, add(C0, scale(n, H)), d, 'corner', id, `זוויתן עומד ${sprof.name} באורך ${H}`, project.building.purlins.material, mirror));
+      // זוויתן עומד: 2 חורים אנכיים (לפחות)
+      const rows = Math.max(2, prm.rows);
+      const eV = Math.ceil((1.5 * (prm.bolt.d + prm.bolt.clearance)) / 5) * 5;
+      const rp = Math.min(Math.max(prm.rowPitch, Math.ceil((2.4 * (prm.bolt.d + prm.bolt.clearance)) / 5) * 5, 60), Math.max(0, H - 2 * eV));
+      hh0 = prm.holeHeight ?? (H - (rows - 1) * rp) / 2;
+      for (let r = 0; r < rows; r++) {
+        const head = add(add(Q, scale(d, legT)), scale(n, hh0 + r * rp));
+        bolts.push(makeBolt(`${id}.B${r + 1}1`, id, head, backD, prm.bolt, legT + tw, 'site', [cid, pur.id], n, res.members));
+      }
+      top = hh0 + (rows - 1) * rp;
+      weldsX.push({ id: `${id}.W1`, connId: id, type: 'fillet', a: Math.min(prm.weldSize, legT), length: 2 * (legB + (sprof.dims.h ?? legB)), location: 'shop', between: [raf.id, cid], from: sub(Q, scale(Y, g)), to: add(sub(Q, scale(Y, g)), scale(Y, legB)) });
+    } else {
+      // פלטה אנכית צמודה לווב + משולש תמיכה מאחוריה (בצד הרחוק מהפטה); בתפר — 2 חורים לכל פטה
+      const T = prm.thickness;
+      const d0b = prm.bolt.d + prm.bolt.clearance;
+      const e = Math.max(30, Math.ceil((1.5 * d0b) / 5) * 5);
+      // בתפר: 4 חורים — 2 שורות × 2 עמודות (2 לכל פטה)
+      const rows = jointT !== undefined ? Math.max(2, prm.rows) : Math.max(1, prm.rows);
+      const rp = Math.min(Math.max(prm.rowPitch, jointT !== undefined ? Math.ceil((2.4 * d0b) / 5) * 5 : 0), Math.max(0, H - 2 * e));
+      // עמודות חורים (לאורך הפטה, ביחס לציר התומך)
+      const yJ = jointT !== undefined ? jointT - tSup : 0;
+      const cols = jointT !== undefined ? [yJ - (5 + e), yJ + (5 + e)] : grid(Math.max(2, prm.perRow % 2 ? prm.perRow + 1 : prm.perRow), Math.max(prm.pitch, 60));
+      const W = Math.ceil((Math.max(...cols) - Math.min(...cols) + 2 * e) / 5) * 5;
+      const yc = (Math.max(...cols) + Math.min(...cols)) / 2;
+      const Cp = add(add(Q, scale(d, T / 2)), scale(Y, yc));
+      res.members.push(partMember(cid, 'plate', `PL${W}x${T}`, Cp, add(Cp, scale(n, H)), d, 'center', id, `פלטת תושבת PL${T}×${W}×${H}${jointT !== undefined ? ' (תפר פטה)' : ''}`, project.building.purlins.material));
+      hh0 = prm.holeHeight ?? (H - (rows - 1) * rp) / 2;
+      for (let r = 0; r < rows; r++) cols.forEach((cy, ci) => {
+        const head = add(add(add(Q, scale(d, T)), scale(n, hh0 + r * rp)), scale(Y, cy));
+        bolts.push(makeBolt(`${id}.B${r + 1}${ci + 1}`, id, head, backD, prm.bolt, T + tw, 'site', [cid, pur.id], n, res.members));
       });
+      top = hh0 + (rows - 1) * rp;
+      // משולש תמיכה: במישור (n, d), במרכז הפלטה, מאחורי הפלטה
+      const sid = `${cid}.ST`, Bs = Math.max(40, prm.base), Hs = Math.max(40, H - 15);
+      const S0 = add(add(Q, scale(d, T)), scale(Y, yc));
+      const stub: Member = partMember(sid, 'plate', `PL${Bs}x${T}`, S0, add(S0, scale(n, Hs)), Y, 'center', id, `משולש תמיכה PL${T}×${Bs}×${Hs}`, project.building.purlins.material);
+      const fu = localFrame(stub).u, sg = dot(fu, d) >= 0 ? 1 : -1;
+      stub.contour = [{ s: 0, u: 0 }, { s: 0, u: sg * Bs }, { s: Hs, u: 0 }];
+      res.members.push(stub); extraParts.push(sid);
+      if (Math.min(...cols.map((c) => Math.abs(c - yc))) < T / 2 + hw(prm.bolt.d).s / Math.sqrt(3) + 3) issue({ code: 'BOLT_ACCESS', severity: 'warning', elementId: cid, message: `תומך ${cid}: ראש בורג קרוב למשולש התמיכה — הגדל מרווח בין הברגים` });
+      weldsX.push(
+        { id: `${id}.W1`, connId: id, type: 'fillet', a: prm.weldSize, length: 2 * W, location: 'shop', between: [raf.id, cid], from: add(Q, scale(Y, yc - W / 2)), to: add(Q, scale(Y, yc + W / 2)) },
+        { id: `${id}.W2`, connId: id, type: 'fillet', a: Math.min(prm.weldSize, 5), length: 2 * (Bs + Hs), location: 'shop', between: [cid, sid], from: S0, to: add(S0, scale(n, Hs)) },
+        { id: `${id}.W3`, connId: id, type: 'fillet', a: Math.min(prm.weldSize, 5), length: 2 * Bs, location: 'shop', between: [raf.id, sid], from: S0, to: add(S0, scale(d, Bs)) },
+      );
+      if (jointT !== undefined) issue({ code: 'SPLICE_CLEAT', severity: 'info', elementId: id, message: `תפר פטה ${pur.label} מעל התומך: תושבת פלטה + משולש עם ${bolts.length} ברגים (2 לכל פטה) במקום פלטת המשך` });
     }
     const d0 = prm.bolt.d + prm.bolt.clearance;
     const label = `תומך ${cid}`;
@@ -461,9 +532,9 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
         issue({ code: 'BOLT_OUTSIDE', severity: 'error', elementId: cid, message: `${label}: בורג ${bo.id} מחוץ לפטה או קרוב מדי לקצה שלה — הארך את קונזולת הפטות` });
       }
     }
-    const top = hh0 + (prm.rows - 1) * prm.rowPitch;
     const nIss = res.issues.length;
-    edgeChecks(label, cid, d0, prm.width / 2 - ((prm.perRow - 1) / 2) * prm.pitch, H - top, prm.perRow > 1 ? prm.pitch : null, prm.rows > 1 ? prm.rowPitch : null, res.issues);
+    if (style === 'run') edgeChecks(label, cid, d0, prm.width / 2 - ((prm.perRow - 1) / 2) * prm.pitch, H - top, prm.perRow > 1 ? prm.pitch : null, prm.rows > 1 ? prm.rowPitch : null, res.issues);
+    else edgeChecks(label, cid, d0, Math.max(30, Math.ceil((1.5 * d0) / 5) * 5), Math.min(H - top, hh0), null, null, res.issues);
     // הצעת תיקון: הרחבת הזוויתן כך שמרחק הקצה ≥ 1.2·d0 (מעוגל ל-5), או הורדת החורים
     for (const iss of res.issues.slice(nIss)) {
       const minE = Math.ceil((1.2 * d0) / 5) * 5;
@@ -478,7 +549,7 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
     }
     const h = hw(prm.bolt.d);
     // מרווח כלי עבודה: ראש הבורג מעל רגל הבסיס
-    if (hh0 - (h.s / Math.sqrt(3)) < prm.thickness + 5) issue({ code: 'BOLT_ACCESS', severity: 'warning', elementId: cid, message: `${label}: ראש הבורג קרוב לרגל הבסיס — מרווח מפתח לבדיקה` });
+    if (style === 'run' && hh0 - (h.s / Math.sqrt(3)) < prm.thickness + 5) issue({ code: 'BOLT_ACCESS', severity: 'warning', elementId: cid, message: `${label}: ראש הבורג קרוב לרגל הבסיס — מרווח מפתח לבדיקה` });
     // הבורג בתוך האזור השטוח של הווב (בין האגפים)
     if (pp.family === 'C' || pp.family === 'Z') {
       const flat0 = 2 * pp.dims.t, flat1 = pp.props.h - 2 * pp.dims.t;
@@ -486,11 +557,8 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       const protrude = boltLength(prm.bolt.d, prm.thickness + tw) - prm.thickness - tw;
       if (pp.family === 'C' && protrude > pp.dims.b - tw) issue({ code: 'BOLT_LONG', severity: 'warning', elementId: cid, message: `${label}: הבורג בולט מעבר לרוחב אגף הפטה` });
     }
-    const welds: WeldInfo[] = [{
-      id: `${id}.W1`, connId: id, type: 'fillet', a: prm.weldSize, length: prm.width + 2 * prm.base, location: 'shop', between: [raf.id, cid],
-      from: add(sub(Q, scale(Y, prm.width / 2)), scale(d, prm.base)), to: add(add(Q, scale(Y, prm.width / 2)), scale(d, prm.base)),
-    }];
-    res.connections.push({ id, type: 'purlin-cleat', label: `פטה-קורה ${sp.purlinId} / ${sp.frameId}`, members: [pur.id, raf.id], parts: [cid, ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: 'pinned', overridden: !!project.cleatOverrides[cid] });
+    const welds = weldsX;
+    res.connections.push({ id, type: 'purlin-cleat', label: `פטה-קורה ${sp.purlinId} / ${sp.frameId}`, members: [pur.id, raf.id], parts: [cid, ...extraParts, ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: 'pinned', overridden: !!project.cleatOverrides[cid] });
   }
 
   // כלל ייצור: ריתוך רק במסגריה

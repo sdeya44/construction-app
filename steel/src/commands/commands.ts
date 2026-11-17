@@ -748,3 +748,32 @@ export function assignDetail(keys: string[], det: CustomDetail | null): Command 
     },
   };
 }
+
+/** שינוי בכל תושבות הפטות (כל השיפועים) — סוג התושבת, תושבת תפר וכד'; מבטל את אותו שדה בהתאמות בודדות */
+export function setCleatEverywhere(patch: Partial<CleatParams>, label = 'עדכון סוג כל תושבות הפטות'): Command {
+  return {
+    label,
+    run: (p) => {
+      const n = clone(p);
+      const pu = n.building.purlins;
+      pu.left = { ...pu.left, cleat: { ...pu.left.cleat, ...clone(patch) } };
+      pu.right = { ...pu.right, cleat: { ...pu.right.cleat, ...clone(patch) } };
+      if (pu.planes) pu.planes = Object.fromEntries(Object.entries(pu.planes).map(([k, v]) => [k, { ...v, cleat: { ...v.cleat, ...clone(patch) } }]));
+      const keys = Object.keys(patch);
+      n.cleatOverrides = Object.fromEntries(Object.entries(n.cleatOverrides).map(([k, o]) => [k, Object.fromEntries(Object.entries(o).filter(([f]) => !keys.includes(f)))]).filter(([, o]) => Object.keys(o).length));
+      return n;
+    },
+  };
+}
+/** החלפת סוג חיבור: מבטל פרטים מותאמים בקצוות/תושבות, ואז מבצע פקודה (סוג מובנה) */
+export function withDetailCleared(keys: string[], inner: Command | null, label: string): Command {
+  return {
+    label,
+    run: (p) => {
+      let n = clone(p);
+      if (n.detailAssign) n.detailAssign = Object.fromEntries(Object.entries(n.detailAssign).filter(([k]) => !keys.includes(k)));
+      if (inner) n = inner.run(n);
+      return n;
+    },
+  };
+}

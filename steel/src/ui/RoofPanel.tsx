@@ -1,3 +1,4 @@
+import { CleatTypePicker } from './ConnTypePicker';
 import { proposeSplicesFor, setCleat, setPurlinSide, setPurlinSystem, setSection, type Command } from '../commands/commands';
 import { Adv, NumField } from './fields';
 import { fromMm } from '../core/units';
@@ -70,11 +71,12 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
             ? <><span className="badge warn">פריסה ידנית</span><button className="btn small" onClick={() => set({ manualPositions: null })}>חזרה לאוטומטי</button></>
             : <button className="btn small" data-testid={tid('manual')} onClick={() => set({ manualPositions: items.map((m) => m.purlin!.sSlope * (prm.measure === 'horizontal' ? 1 : 1)) })}>עריכה ידנית של המיקומים</button>}
         </div>
-        <div className="panel-title">תומכים (זוויתן L)
+        <div className="panel-title">תושבות פטה
           <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" checked={prm.cleat.enabled} data-testid={tid('cleat-enabled')} onChange={(e) => store.exec(setCleat(side, { enabled: e.target.checked }))} />פעיל</label>
         </div>
         {prm.cleat.enabled && <>
-          <CleatSchematic side={side} />
+          <CleatTypePicker side={side} />
+          {(prm.cleat.style ?? 'run') === 'run' && <CleatSchematic side={side} />}
           <Adv id="cleat" label="מתקדם — מידות התומך בשדות">
           <div className="field"><label>גובה</label>
             <div className="row" style={{ flexWrap: 'nowrap' }}>

@@ -126,11 +126,35 @@ function Overhangs({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' | 'm
     const patch = end === 'x0' ? { x0: x, z0: pl.z1 - s * (pl.x1 - x) } : { x1: x, z1: pl.z0 + s * (x - pl.x0) };
     apply({ ...sec, template: undefined, planes: sec.planes.map((q) => (q.id === pl.id ? { ...q, ...patch } : q)) }, 'שינוי קונזולה');
   };
+  // דירוג: ציר פנימי שבו מישור נמוך מסתיים בצד העמוד ומישור גבוה יותר נשען על ראש העמוד — לקורה הגבוהה אפשר זיז מעבר לעמוד
+  const zAtP = (pl: RoofPlaneDef, x: number) => pl.z0 + ((pl.z1 - pl.z0) * (x - pl.x0)) / (pl.x1 - pl.x0);
+  const sorted = [...sec.lines].sort((a, b) => a.x - b.x);
+  const steps: { pl: RoofPlaneDef; end: 'x0' | 'x1'; x: number; li: number; v: number }[] = [];
+  sorted.forEach((l, li) => {
+    if (li === 0 || li === sorted.length - 1) return;
+    for (const low of sec.planes) for (const lowEnd of ['x0', 'x1'] as const) {
+      if (Math.abs(low[lowEnd] - l.x) > 1) continue;
+      const zl = lowEnd === 'x0' ? low.z0 : low.z1;
+      for (const hi of sec.planes) {
+        if (hi === low) continue;
+        const end: 'x0' | 'x1' = lowEnd === 'x1' ? 'x0' : 'x1';
+        const ex = hi[end], v = end === 'x0' ? l.x - ex : ex - l.x;
+        if (v < -1 || v > 3000) continue;
+        if (zAtP(hi, l.x) <= zl + 100) continue;
+        if (!steps.some((q) => q.pl.id === hi.id && q.end === end)) steps.push({ pl: hi, end, x: l.x, li, v: Math.max(0, Math.round(v)) });
+      }
+    }
+  });
   return (
     <>
       <div className="panel-title">קונזולות</div>
       <div className="field"><label>קונזולה שמאל (מציר {lineLabel(0)})</label><LenField testId="ovh-left" mm={Math.max(0, xa - left.x0)} unit={u} onCommit={(v) => setEnd(left, 'x0', xa - v)} /></div>
       <div className="field"><label>קונזולה ימין (מציר {lineLabel(xs.length - 1)})</label><LenField testId="ovh-right" mm={Math.max(0, right.x1 - xb)} unit={u} onCommit={(v) => setEnd(right, 'x1', xb + v)} /></div>
+      {steps.map((st) => (
+        <div className="field" key={`${st.pl.id}-${st.end}`}><label>זיז קורה עליונה בדירוג — ציר {lineLabel(st.li)} ({st.end === 'x0' ? 'שמאלה' : 'ימינה'}, מעבר לעמוד)</label>
+          <LenField testId={`ovh-step-${st.li}`} mm={st.v} unit={u} onCommit={(v) => setEnd(st.pl, st.end, st.end === 'x0' ? st.x - Math.max(0, v) : st.x + Math.max(0, v))} /></div>
+      ))}
+      {steps.length > 0 && <div className="hint">זיז בדירוג: הקורה העליונה ממשיכה מעבר לעמוד מעל הגג הנמוך — מונע כניסת גשם לפתח שבין הגגות.</div>}
     </>
   );
 }

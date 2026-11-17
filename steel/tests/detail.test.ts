@@ -31,7 +31,7 @@ describe('פרטי חיבור מותאמים', () => {
     for (const m of kb.slice(0, 4)) for (const end of ['start', 'end'] as const) {
       const s = findSite(d.members, m, end)!;
       expect(s.host).toBeTruthy();
-      for (const det of detailPresets()) {
+      for (const det of detailPresets().filter((x) => x.family !== 'cleat')) {
         const r = buildDetail(s, det);
         expect(bad(r.issues), `${m.id} ${end} ${det.id}`).toEqual([]);
         expect(r.conn.bolts.length).toBeGreaterThan(0);
@@ -127,5 +127,38 @@ describe('חתך אלכסונים מפאנל האלמנט', () => {
     expect(d.byId.get(kb[0].id)!.profile).toBe('SHS100x5');
     expect(d.byId.get(kb[1].id)!.profile).toBe(kb[1].profile);
     expect(bad(d.issues)).toEqual([]);
+  });
+});
+
+describe('תושבות פטה', () => {
+  it('CL-01: שלושה סוגי תושבת + תושבת תפר (4 חורים) — ללא שגיאות והתנגשויות', () => {
+    for (const style of ['run', 'stand', 'plate'] as const) for (const sc of [false, true]) {
+      const b = defaultBuilding();
+      for (const s2 of ['left', 'right'] as const) b.purlins[s2].cleat = { ...b.purlins[s2].cleat, style, spliceCleat: sc };
+      const d = generate(newProject('x', b));
+      expect(d.issues.filter((i) => i.severity !== 'info').map((i) => i.code), `${style}/${sc}`).toEqual([]);
+      const cl = d.connections.filter((c) => c.type === 'purlin-cleat');
+      expect(cl.length).toBeGreaterThan(0);
+      if (sc) {
+        expect(d.connections.filter((c) => c.type === 'purlin-splice').length).toBe(0);
+        const sp = cl.filter((c) => c.parts.some((p) => p.endsWith('.ST')) && c.bolts.length === 4);
+        expect(sp.length).toBeGreaterThan(0);
+      }
+      if (style === 'stand') expect(d.byId.get(cl[0].parts[0])!.profile).toBe('L40x4');
+    }
+  });
+  it('CL-02: תושבת פטה בסטודיו (חציה) — פרט מוכן על כל התושבות, ללא שגיאות', () => {
+    const p = newProject('x', defaultBuilding());
+    const d0 = generate(p);
+    const c = d0.connections.find((x) => x.type === 'purlin-cleat')!;
+    const key = `${c.members[0]}|x:${c.id.split('.').pop()}`;
+    const keys = similarSites(d0.members, key, false, d0.connections);
+    expect(keys.length).toBe(d0.connections.filter((x) => x.type === 'purlin-cleat').length);
+    p.customDetails = detailPresets();
+    p.detailAssign = Object.fromEntries(keys.map((k) => [k, 'preset-cleat-plate']));
+    const d = generate(p);
+    expect(bad(d.issues)).toEqual([]);
+    expect(d.connections.filter((x) => x.type === 'purlin-cleat').length).toBe(0);
+    expect(d.connections.filter((x) => x.type === 'custom').length).toBe(keys.length);
   });
 });

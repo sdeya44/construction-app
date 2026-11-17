@@ -51,7 +51,16 @@ export function generate(project: Project): DerivedModel {
     }
     // קצה הפטה: לפחות חצי רוחב זוויתן מעבר למסגרת הקיצונית, כדי ששני הברגים יעברו בפטה
     const pu = b.purlins;
-    const cw = Math.max(pu.left.cleat.enabled ? pu.left.cleat.width / 2 : 0, b.roofType === 'gable' && pu.right.cleat.enabled ? pu.right.cleat.width / 2 : 0);
+    // חצי רוחב התושבת לאורך הפטה (לפי סוג התושבת)
+    const halfW = (c: typeof pu.left.cleat) => {
+      if (!c.enabled) return 0;
+      if (c.style === 'stand') return 30;
+      if (c.style === 'plate') { const n = Math.max(2, c.perRow % 2 ? c.perRow + 1 : c.perRow); return ((n - 1) * Math.max(c.pitch, 60)) / 2 + Math.max(30, Math.ceil((1.5 * (c.bolt.d + c.bolt.clearance)) / 5) * 5); }
+      return c.width / 2;
+    };
+    // תושבת מפרט מותאם (סטודיו) — מרווח שמרני לברגים בקצה הפטה
+    const customCleat = Object.keys(project.detailAssign ?? {}).some((k) => k.includes('|x:')) ? 80 : 0;
+    const cw = Math.max(halfW(pu.left.cleat), b.roofType === 'gable' ? halfW(pu.right.cleat) : 0, customCleat);
     const pS = Math.max(b.purlinOverhangStart, cw), pE = Math.max(b.purlinOverhangEnd, cw);
     if (pS > b.purlinOverhangStart || pE > b.purlinOverhangEnd) {
       issues.push({ code: 'PURLIN_EXT', severity: 'info', message: `לידיעה, אין צורך בפעולה: הפטות בולטות ${cw} מ"מ מעבר למסגרות הקיצוניות, עד קצה הזוויתן, כדי ששני הברגים יעברו בפטה. לשינוי — "קונזולת פטות"` });

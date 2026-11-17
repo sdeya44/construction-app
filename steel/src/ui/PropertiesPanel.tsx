@@ -15,6 +15,7 @@ import { ConnectionEditor, MemberConnections } from './ConnectionEditor';
 import { NavContent, type NavKey } from './SideNav';
 import { PlateWizard } from './PlateWizard';
 import { trussFrames } from '../geometry/truss';
+import { CleatHubCtx, CleatTypePicker, EndTypePicker } from './ConnTypePicker';
 import type { Member, Project } from '../model/types';
 
 const f1 = (n: number, d = 1) => n.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
@@ -108,6 +109,7 @@ function PropertiesInner() {
         <button role="tab" className={ptab === 'adv' ? 'on' : ''} onClick={() => setPtab('adv')} data-testid="ptab-adv">מתקדם</button>
       </div>
       {ptab === 'basic' && <>
+        {plateLike && m.kind !== 'cleat' && m.connId && (d.connById.get(m.connId)?.type === 'purlin-cleat' || d.connById.get(m.connId)?.custom?.site.includes('|x:')) && <div className="hub-set"><CleatTypePicker connId={m.connId} /></div>}
         {plateLike && m.connId?.startsWith('C.CD.') && d.connById.get(m.connId)?.custom && (
           <div className="hub-set"><div className="hub-set-h">פרט מותאם: {p.customDetails?.find((x) => x.id === d.connById.get(m.connId!)!.custom!.detailId)?.name}</div>
             <button className="btn primary" data-testid="open-studio-part" onClick={() => store.set({ detailStudio: d.connById.get(m.connId!)!.custom!.site })}>פתח בסטודיו פרטים</button></div>
@@ -160,6 +162,7 @@ function PropertiesInner() {
           <dt>סימון חלק</dt><dd>{mark ?? '—'}</dd>
         </dl>
         {m.purlin && <PurlinInfoBlock id={m.id} />}
+        {m.purlin && <div className="hub-set"><CleatTypePicker side={m.purlin.paramKey ?? (m.purlin.side === 'R' ? 'right' : 'left')} /></div>}
         <div className="hint">שינוי חל מיד · Ctrl+Z לביטול</div>
         {!plateLike && <DetailEnds m={m} />}
         {!plateLike && <HubSettings m={m} />}
@@ -259,7 +262,7 @@ function HubSettings({ m }: { m: Member }) {
     const base = m.id.replace(/\.(H|S|N)$/, '');
     const c = (m.connId && d.connById.get(m.connId)) || d.connections.find((x) => x.parts.includes(m.id) || x.parts.includes(base));
     if (c && m.kind !== 'cleat') return <PlateWizard c={c} plateId={m.kind === 'plate' ? m.id : undefined} />;
-    if (c) return <><PlateWizard c={c} plateId={m.id} /><HubNav m={m} /></>;
+    if (c) return <><PlateWizard c={c} plateId={m.id} /><CleatHubCtx.Provider value={c.type === 'purlin-cleat' ? c.id : undefined}><HubNav m={m} /></CleatHubCtx.Provider></>;
   }
   return <HubNav m={m} />;
 }
@@ -273,7 +276,7 @@ function DetailEnds({ m }: { m: Member }) {
   const lib = new Map((p.customDetails ?? []).map((x) => [x.id, x.name]));
   return (
     <div className="hub-set" data-testid="detail-ends">
-      <div className="hub-set-h">פרט חיבור בקצוות</div>
+      <div className="hub-set-h">סוג חיבור בכל קצה</div>
       <div className="cd-ends">
         {(['start', 'end'] as const).map((e) => {
           const k = `${m.id}|${e}`, det = p.detailAssign?.[k];
@@ -281,13 +284,13 @@ function DetailEnds({ m }: { m: Member }) {
           const near = d.connections.filter((c) => c.type !== 'custom' && (c.members.includes(m.id) || c.parts.includes(m.id))).map((c) => c.label)[0];
           return (
             <div className="cd-end" key={e}>
-              <span>{e === 'start' ? 'התחלה' : 'סוף'} <span className="muted mono">z {Math.round(pt.z)}</span> · {det ? <b>{lib.get(det) ?? 'פרט מותאם'}</b> : <span className="muted">{near ? 'פרט רגיל' : 'ללא חיבור'}</span>}</span>
-              <button className="btn small" data-testid={`studio-${e}`} onClick={() => store.set({ detailStudio: k })}>{det ? 'עריכה' : 'פרט חדש…'}</button>
+              <span>{e === 'start' ? 'קצה התחלה' : 'קצה סוף'} <span className="muted mono">z {Math.round(pt.z)}</span> · {det ? <b>{lib.get(det) ?? 'פרט מותאם'}</b> : <span className="muted">{near ? 'פרט רגיל' : 'ללא חיבור'}</span>}</span>
+              <EndTypePicker memberId={m.id} end={e} />
             </div>
           );
         })}
       </div>
-      <div className="hint">בונים פרט מחלקים: פחים, חיתוכים, חורים, ברגים וריתוך — עם נוסחאות שמתעדכנות לפי החתך.</div>
+      <div className="hint">בוחרים פרט רגיל, פרט מהספרייה, או בונים פרט חדש בסטודיו — והוא נוסף לרשימה.</div>
     </div>
   );
 }

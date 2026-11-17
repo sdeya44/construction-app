@@ -71,13 +71,28 @@ function Studio({ siteKey: key }: { siteKey: string }) {
   const pKey = parseSiteKey(preview);
   const pMain = base.byId.get(pKey.id);
   const site = useMemo(() => (pMain ? findSite(base.members, pMain, pKey.end) : null), [base, pMain, pKey.end]);
-  const others = useMemo(() => { if (!site) return []; const kill = partsToReplace(base.members, base.connections, site.main, site.E, site.O); return base.members.filter((x) => !kill.has(x.id) && x.id !== site.main.id && x.id !== site.host?.id && x.kind !== 'bolt' && ['column', 'rafter', 'purlin', 'cleat', 'plate', 'brace', 'beam', 'girt'].includes(x.kind)
+  const others = useMemo(() => { if (!site) return []; const kill = partsToReplace(base.members, base.connections, site.main, site.E, site.O, site.cross?.conn); return base.members.filter((x) => !kill.has(x.id) && x.id !== site.main.id && x.id !== site.host?.id && x.kind !== 'bolt' && ['column', 'rafter', 'purlin', 'cleat', 'plate', 'brace', 'beam', 'girt'].includes(x.kind)
     && Math.min(len(sub(x.start, site.P)), len(sub(x.end, site.P)), len(sub(scale(add(x.start, x.end), 0.5), site.P))) < 900); }, [base, site]);
   const res = useMemo(() => (site ? buildDetail(site, det, { others }) : null), [site, det, others]);
-  const similar = useMemo(() => ({ similar: similarSites(base.members, key, true), any: similarSites(base.members, key, false) }), [base, key]);
+  const similar = useMemo(() => ({ similar: similarSites(base.members, key, true, base.connections), any: similarSites(base.members, key, false, base.connections) }), [base, key]);
   const tags = useMemo<Tag[]>(() => {
     if (!site || !res) return [];
     const T: Tag[] = [], s = site;
+    if (s.cross) {
+      // תושבת פטה: גובה הפטה (לאורך נורמל הגג), רוחב האגף, ורוחב אגף הקורה (לאורך הפטה)
+      const o = add(s.P, scale(s.w, -Math.max(220, s.mb * 2)));
+      T.push({ k: 'mh', a: o, b: add(o, scale(s.u, s.mh)) });
+      const o2 = add(add(s.P, scale(s.w, -Math.max(330, s.mb * 3))), scale(s.u, s.mh));
+      T.push({ k: 'mb', a: o2, b: add(o2, scale(s.a, -s.mb)) });
+      const hb = res.values.hb ?? 0;
+      if (hb > 0) { const o3 = add(s.P, scale(s.a, Math.max(160, s.mb * 1.8))); T.push({ k: 'hb', a: add(o3, scale(s.w, -hb / 2)), b: add(o3, scale(s.w, hb / 2)) }); }
+      for (const [id2, g] of res.plates) {
+        const top = add(g.center, scale(g.Z, g.t / 2));
+        T.push({ k: `${id2}.w`, a: add(add(top, scale(g.X, -g.w / 2)), scale(g.Y, -g.h / 2 - 25)), b: add(add(top, scale(g.X, g.w / 2)), scale(g.Y, -g.h / 2 - 25)) });
+        T.push({ k: `${id2}.h`, a: add(add(top, scale(g.Y, -g.h / 2)), scale(g.X, g.w / 2 + 25)), b: add(add(top, scale(g.Y, g.h / 2)), scale(g.X, g.w / 2 + 25)) });
+      }
+      return T;
+    }
     const c0 = add(s.P, scale(s.u, res.sEnd + Math.max(140, s.mh * 1.4)));
     T.push({ k: 'mh', a: add(c0, scale(s.a, -s.mh / 2)), b: add(c0, scale(s.a, s.mh / 2)) });
     const c1 = add(c0, scale(s.u, 90));
@@ -140,6 +155,8 @@ function Studio({ siteKey: key }: { siteKey: string }) {
       const shape = tool.split(':')[1] as 'rect' | 'tri' | 'cham' | 'round';
       const onEnd = ref.on === 'main' && ref.face === 'end';
       addOp({ k: 'plate', id: nextId('plate'), ref, mode: onEnd || shape === 'tri' || shape === 'cham' ? 'stand' : 'flat', spin: '0', off: '0', shape, w: shape === 'tri' ? '150' : '150', h: shape === 'tri' ? '150' : '200', t: '10', ch: shape === 'cham' ? '50' : '0', corners: [shape === 'cham', false, false, false] });
+    } else if (site.cross && ['endplate', 'cut', 'slot', 'vent'].includes(tool)) {
+      return err('בתושבת פטה הפטה רציפה — אין חיתוך, חריץ או פלטת קצה. בונים את התושבת מפחים על פני הקורה ופני הווב');
     } else if (tool === 'endplate') {
       if (hit.role !== 'main') return err(HINT.endplate);
       if (det.ops.some((o) => o.k === 'endplate')) return err('לקצה הזה כבר יש פלטת קצה');
@@ -190,9 +207,21 @@ function Studio({ siteKey: key }: { siteKey: string }) {
 
   const keysFor = scope === 'one' ? [key] : scope === 'similar' ? similar.similar : similar.any;
   const errors = res.issues.filter((i) => i.severity === 'error');
-  const apply = () => { store.exec(assignDetail(keysFor, det)); setMsg(`הפרט "${det.name}" הוחל על ${keysFor.length} קצוות`); };
+  const inLib = project.customDetails?.find((x) => x.id === det.id);
+  const changed = !!inLib && JSON.stringify(inLib) !== JSON.stringify(det);
+  const apply = (asNew = false) => {
+    let d = det;
+    if (asNew) {
+      const names = new Set((project.customDetails ?? []).map((x) => x.name));
+      let nm = det.name; if (names.has(nm)) { let k = 2; while (names.has(`${det.name} (${k})`)) k++; nm = `${det.name} (${k})`; }
+      d = { ...structuredClone(det), id: `cd-${Date.now().toString(36)}`, name: nm };
+      setDetRaw(d);
+    }
+    store.exec(assignDetail(keysFor, d));
+    setMsg(`הפרט "${d.name}" ${asNew ? 'נשמר כפרט חדש ו' : ''}הוחל על ${keysFor.length} קצוות${asNew && inLib ? ` — "${inLib.name}" נשאר בספרייה כמו שהיה` : ''}`);
+  };
   const loadPreset = (p: CustomDetail, copy: boolean) => { setDet(() => (copy ? { ...structuredClone(p), id: `cd-${Date.now().toString(36)}` } : structuredClone(p))); setSel(null); };
-  const ends: [string, string][] = (['start', 'end'] as const).map((e) => { const s = findSite(base.members, main, e); return [siteKey(id, e), `${e === 'start' ? 'קצה התחלה' : 'קצה סוף'} — ${s?.host ? s.host.label : 'קצה חופשי'}`]; });
+  const ends: [string, string][] = site.cross ? [[key, `תושבת פטה על ${site.host?.label ?? ''}`]] : (['start', 'end'] as const).map((e) => { const s = findSite(base.members, main, e); return [siteKey(id, e), `${e === 'start' ? 'קצה התחלה' : 'קצה סוף'} — ${s?.host ? s.host.label : 'קצה חופשי'}`]; });
 
   return (
     <FxCtx.Provider value={{ open: openFx, det }}>
@@ -222,7 +251,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
             </div>
           ))}
           <div className="sl-grp"><h4>פרטים מוכנים</h4>
-            {detailPresets().map((p) => <button key={p.id} className="sl-tool" title={p.note} data-testid={`ds-preset-${p.id}`} onClick={() => loadPreset(p, true)}><span>{p.name}</span></button>)}
+            {detailPresets().filter((p) => (p.family === 'cleat') === !!site.cross).map((p) => <button key={p.id} className="sl-tool" title={p.note} data-testid={`ds-preset-${p.id}`} onClick={() => loadPreset(p, true)}><span>{p.name}</span></button>)}
           </div>
           {!!project.customDetails?.length && <div className="sl-grp"><h4>הספרייה שלי</h4>
             {project.customDetails.map((p) => <button key={p.id} className={`sl-tool${p.id === det.id ? ' on' : ''}`} onClick={() => loadPreset(p, false)}><span>{p.name}</span></button>)}
@@ -267,10 +296,13 @@ function Studio({ siteKey: key }: { siteKey: string }) {
             <label className="ss-radio"><input type="radio" checked={scope === 'one'} onChange={() => setScope('one')} /> רק הקצה הזה</label>
             <label className="ss-radio"><input type="radio" checked={scope === 'similar'} onChange={() => setScope('similar')} data-testid="ds-scope-similar" /> כל הקצוות הדומים, אותו חתך ({similar.similar.length})</label>
             <label className="ss-radio"><input type="radio" checked={scope === 'any'} onChange={() => setScope('any')} /> כל הקצוות הדומים, כל החתכים ({similar.any.length})</label>
-            {usedBy > 0 && <div className="hint">הפרט כבר בשימוש ב-{usedBy} קצוות נוספים — השמירה תעדכן גם אותם.</div>}
+            {inLib && <div className="hint">עורכים את הפרט "{inLib.name}" מהספרייה{usedBy > 0 ? `, שבשימוש ב-${usedBy} קצוות נוספים` : ''}. "שמור כפרט חדש" משאיר אותו כמו שהוא.</div>}
             <div className="ss-row">
-              <button className="btn primary" disabled={!det.ops.length || errors.length > 0} onClick={apply} data-testid="ds-apply" title={errors.length ? 'יש שגיאות — תקנו לפני החלה' : ''}>{errors.length ? `לא ניתן להחיל — ${errors.length} שגיאות` : `שמור והחל (${keysFor.length})`}</button>
-              <button className="btn" disabled={!det.ops.length} onClick={() => { store.exec(saveDetail(det)); setMsg('נשמר בספרייה'); }}>שמור לספרייה</button>
+              {errors.length > 0 ? <button className="btn primary" disabled data-testid="ds-apply">לא ניתן להחיל — {errors.length} שגיאות</button> : <>
+                <button className="btn primary" disabled={!det.ops.length} onClick={() => apply(!!inLib && changed)} data-testid="ds-apply">{inLib && changed ? `שמור כפרט חדש והחל (${keysFor.length})` : `שמור והחל (${keysFor.length})`}</button>
+                {inLib && changed && <button className="btn" onClick={() => apply(false)} data-testid="ds-update">עדכן את "{inLib.name}"{usedBy ? ` (גם ב-${usedBy} קצוות)` : ''}</button>}
+              </>}
+              <button className="btn" disabled={!det.ops.length} onClick={() => { if (inLib && changed) { const d = { ...structuredClone(det), id: `cd-${Date.now().toString(36)}`, name: `${det.name} (עותק)` }; setDetRaw(d); store.exec(saveDetail(d)); setMsg(`נשמר בספרייה כפרט חדש "${d.name}"`); } else { store.exec(saveDetail(det)); setMsg('נשמר בספרייה'); } }} data-testid="ds-save">{inLib && changed ? 'שמור כעותק בספרייה' : 'שמור לספרייה'}</button>
               {assignedId && <button className="btn" onClick={() => { store.exec(assignDetail([key], null)); setMsg('הקצה חזר לפרט הרגיל'); }}>חזרה לפרט הרגיל</button>}
             </div>
           </section>
@@ -315,7 +347,8 @@ function refFromHit(h: Hit, res: DetailResult, s: Site, tool: ToolId): DetailRef
   if (h.role === 'main') {
     on = 'main';
     const along = dot(sub(h.p, s.P), s.u);
-    if (dot(h.n, scale(s.u, -1)) > 0.6 || (tool.startsWith('plate') || tool === 'rod') && along - res.sEnd < 30) face = 'end';
+    if (s.cross) face = dot(h.n, s.a) >= 0 ? 'a+' : 'a-';
+    else if (dot(h.n, scale(s.u, -1)) > 0.6 || (tool.startsWith('plate') || tool === 'rod') && along - res.sEnd < 30) face = 'end';
     else if (Math.abs(dot(h.n, s.a)) >= Math.abs(dot(h.n, s.w))) face = dot(h.n, s.a) > 0 ? 'a+' : 'a-';
     else face = dot(h.n, s.w) > 0 ? 'w+' : 'w-';
   } else if (h.role === 'host') { on = 'host'; face = dot(h.n, s.n) < -0.6 ? 'opp' : 'hit'; }

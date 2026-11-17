@@ -10,6 +10,7 @@ import { cachedSolid } from '../view/scene';
 import { LenField, NumField } from './fields';
 import { Icon } from './icons';
 import { PlateWizard } from './PlateWizard';
+import { CleatTypePicker } from './ConnTypePicker';
 
 const STATUS: Record<ApprovalStatus, string> = { 'not-verified': 'לא מאומת', 'for-review': 'לבדיקה', approved: 'מאושר' };
 export const CONN_TYPE: Record<Connection['type'], string> = { eave: 'עמוד-קורה (שתי פלטות מוברגות)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה', 'rafter-side': 'קורה לצד עמוד (פלטת קצה)', knee: 'אלכסון עמוד-קורה', 'ridge-tie': 'פרופיל חיזוק אופקי ברכס', 'beam-splice': 'חיבור המשך קורה (פלטות קצה)', 'tb-support': 'קורה נושאת ↔ עמוד', 'tb-seat': 'קורת גג על קורה נושאת', truss: 'מסבך — צמתים מרותכים', 'truss-splice': 'חיבור המשך חגורת מסבך', 'truss-end': 'חגורה תחתונה ↔ עמוד', custom: 'פרט מותאם (מהספרייה)' };
@@ -141,8 +142,9 @@ export function ConnectionEditor() {
       </>}
 
       {cl && <>
-        <div className="panel-title">זוויתן</div>
-        <CleatFace cl={cl} H={Math.round(heightOf(cleatId))} issues={d.issues.filter((i) => i.elementId === cleatId)} />
+        <CleatTypePicker connId={c.id} />
+        <div className="panel-title">{(cl.style ?? 'run') === 'run' ? 'זוויתן' : (cl.style === 'stand' ? 'זוויתן עומד' : 'פלטה + משולש')} — מידות</div>
+        {(cl.style ?? 'run') === 'run' && <CleatFace cl={cl} H={Math.round(heightOf(cleatId))} issues={d.issues.filter((i) => i.elementId === cleatId)} />}
         <div className="field"><label>גובה (ריק = אוטומטי)</label>
           <div className="row" style={{ flexWrap: 'nowrap' }}>
             <LenField testId="cl-h" mm={cl.height ?? (d.byId.get(cleatId) ? Math.round(heightOf(cleatId)) : 0)} unit="mm" onCommit={(v) => setC({ height: v })} />
