@@ -16,14 +16,14 @@ import { CommandPalette, ConnCard, ContextBar, MarkingMenu, connectionsOf, type 
 import { KIND_LABEL } from './TreePanel';
 import { moveLines, setPlaneSlope, shiftRoof, toCustomSection } from '../model/section';
 import { NAV_INDEX } from './navIndex';
-import { NavContent, SideNav, type NavKey } from './SideNav';
+import { NavContent, NavCrumb, SideNav, NAV_INDEX_LABEL, navGroupOf, type NavKey } from './SideNav';
 import { EaveCheckDialog } from './EaveCheckDialog';
 import { DetailStudio } from './DetailStudio';
 import { LayersMenu } from './LayersMenu';
 
 type DialogKind = null | 'new' | 'open' | 'move' | 'copy' | 'rotate' | 'mirror' | 'catalog';
 type SideTab = 'structure' | 'roof' | 'brace' | 'tree' | 'conns' | 'issues';
-const navGroup = (k: NavKey): SideTab => (k.startsWith('s') ? 'structure' : k.startsWith('r') ? 'roof' : k.startsWith('b') ? 'brace' : k.startsWith('k') || k === 'tree' ? 'tree' : k.startsWith('c') ? 'conns' : 'issues');
+const navGroup = (k: NavKey): SideTab => { const g = navGroupOf(k); return (g === 'clad' || g === 'special' ? 'structure' : g) as SideTab; };
 type MobileTab = null | 'side' | 'props';
 
 function TB({ icon, label, on, onClick, disabled, testId, title, desk }: { icon: string; label?: string; on?: boolean; onClick: () => void; disabled?: boolean; testId?: string; title?: string; desk?: boolean }) {
@@ -38,9 +38,21 @@ export function App() {
   const host = useRef<HTMLDivElement>(null);
   const vp = useRef<Viewport | null>(null);
   const [dialog, setDialog] = useState<DialogKind>(null);
-  const [nav, setNav] = useState<NavKey>('structure');
+  const [nav, setNavRaw] = useState<NavKey>('structure');
   const tab = navGroup(nav);
-  useEffect(() => { if (store.state.navKey !== nav) store.set({ navKey: nav }); }, [nav]);
+  // מסך רחב: העץ מימין משמש לניווט בלבד; פאנל אחד משמאל מציג או את הגדרות העץ או את מאפייני הבחירה
+  const [wide, setWide] = useState(() => !window.matchMedia('(max-width: 860px)').matches);
+  useEffect(() => { const mq = window.matchMedia('(max-width: 860px)'); const on = () => setWide(!mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on); }, []);
+  const [lp, setLp] = useState<'nav' | 'sel'>('nav');
+  const setNav = (k: NavKey) => { setNavRaw(k); setLp('nav'); };
+  const [treeHidden, setTreeHiddenS] = useState(() => { try { return localStorage.getItem('ksp-tree-hidden') === '1'; } catch { return false; } });
+  const setTreeHidden = (v: boolean) => { setTreeHiddenS(v); try { localStorage.setItem('ksp-tree-hidden', v ? '1' : '0'); } catch { /* */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 30); };
+  const [lpFull, setLpFull] = useState(false);
+  const selNow = useStore((x) => x.selection), connNow = useStore((x) => x.activeConn);
+  // בחירה חדשה / חיבור פתוח ← הפאנל עובר למאפיינים; ניקוי הבחירה ← חזרה להגדרות
+  useEffect(() => { setLp(selNow.length || connNow ? 'sel' : 'nav'); }, [selNow, connNow]);
+  const navShown = !wide || lp === 'nav';
+  useEffect(() => { const k = navShown ? nav : undefined; if (store.state.navKey !== k) store.set({ navKey: k }); }, [nav, navShown]);
   const setTab = (t: SideTab) => setNav(t);
   const [mtab, setMtab] = useState<MobileTab>(null);
   const [mode, setMode] = useState<'model' | 'drawings' | 'production'>('model');
@@ -110,6 +122,8 @@ export function App() {
   }, [eaveErr.length]);
 
   // קיצורי מקשים
+  const treeHiddenRef = useRef(treeHidden); treeHiddenRef.current = treeHidden;
+  const lpFullRef = useRef(lpFull); lpFullRef.current = lpFull;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // לפי מיקום המקש (עובד גם בפריסת מקלדת עברית)
@@ -125,7 +139,7 @@ export function App() {
       else if (mod && k === 's') { e.preventDefault(); void store.saveNow('שמירה ידנית').then((ok) => ok && store.toast('ok', 'נשמר')); }
       else if (mod && k === 'a') { e.preventDefault(); store.select(store.state.derived.members.map((m) => m.id)); }
       else if (k === 'delete') { const n = store.state.selection.length; if (n && store.exec(deleteMembers(store.state.selection))) store.toast('info', `נמחקו ${n} אלמנטים — לשחזור: Ctrl+Z, או "שחזור" בסרגל הכלים`); }
-      else if (k === 'escape') { store.select([]); store.set({ tool: 'select', measure: {} }); }
+      else if (k === 'escape') { if (lpFullRef.current) { setLpFull(false); return; } store.select([]); store.set({ tool: 'select', measure: {}, activeConn: null }); }
       else if (k === 'f') vp.current?.fitAll();
       else if (k === 'z' && !mod) vp.current?.fitSelection();
       else if (k === 'm') store.set({ tool: store.state.tool === 'measure' ? 'select' : 'measure', measure: {} });
@@ -133,6 +147,7 @@ export function App() {
       else if (k === 'i') isolate();
       else if (k === 'u') showAll();
       else if (k === 'p' && !mod) { setMode('model'); setTab('roof'); }
+      else if (k === 'n' && !mod) setTreeHidden(!treeHiddenRef.current);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -269,9 +284,9 @@ export function App() {
 
       {mode === 'drawings' && <main className="mode-area"><DrawingsView /></main>}
       {mode === 'production' && <main className="mode-area"><ProductionView /></main>}
-      <main className={`workspace${!propsPinned ? ' props-collapsed' : ''}${!propsPinned && (sel.length || s.activeConn) ? ' props-float' : ''}`} style={mode !== 'model' ? { display: 'none' } : undefined}>
-        <aside className={`side side-start${sideOpen ? ' open' : ''}`}>
-          <SideNav nav={nav} setNav={setNav} onOpenConn={openConn} />
+      <main className={`workspace${!propsPinned ? ' props-collapsed' : ''}${!propsPinned && (sel.length || s.activeConn || lp === 'nav') ? ' props-float' : ''}${treeHidden ? ' tree-hidden' : ''}${lpFull ? ' lp-full' : ''}`} style={mode !== 'model' ? { display: 'none' } : undefined}>
+        <aside className={`side side-start${sideOpen ? ' open' : ''}`} data-testid="nav-tree-pane">
+          <SideNav nav={nav} setNav={setNav} onOpenConn={openConn} treeOnly={wide} />
         </aside>
         <div className="center">
           <section className="viewport-host" dir="ltr" ref={host} data-testid="viewport">
@@ -290,6 +305,7 @@ export function App() {
                 <button key={n} className={`tbtn${n === 'left' || n === 'back' ? ' desk-only' : ''}`} onClick={() => setView(n)} data-testid={`view-${n}`}>{VIEW_LABEL[n]}</button>
               ))}
             </div>
+            <button className={`tbtn desk-only${treeHidden ? '' : ' on'}`} onClick={() => setTreeHidden(!treeHidden)} title={treeHidden ? 'הצגת עץ התפריטים (N)' : 'הסתרת עץ התפריטים — יותר מקום למודל (N)'} data-testid="tree-toggle" aria-pressed={!treeHidden}>☰ תפריט</button>
             <TB icon="fit" title="התאמה למסך (F)" onClick={() => vp.current?.fitAll()} testId="fit" />
             <TB icon="zoomSel" title="התמקדות בבחירה (Z)" disabled={!sel.length} onClick={() => vp.current?.fitSelection()} desk />
             <span className="vb-sep desk-only" />
@@ -364,8 +380,17 @@ export function App() {
           )}
         </div>
         <aside className={`side side-end${propsOpen ? ' open' : ''}`} data-testid="props">
-          <button className="props-pin desk-only" data-testid="props-pin" title={propsPinned ? 'כיווץ הפאנל — יותר מקום לתלת־ממד; בבחירה הפאנל נפתח כשכבה' : 'קיבוע פאנל המאפיינים'} onClick={() => setPropsPinned(!propsPinned)}>{propsPinned ? '▸ כיווץ פאנל' : '◂ מאפיינים וסיכום'}</button>
-          <PropertiesPanel />
+          <button className="props-pin desk-only" data-testid="props-pin" title={propsPinned ? 'כיווץ הפאנל — יותר מקום לתלת־ממד; בבחירה הפאנל נפתח כשכבה' : 'קיבוע הפאנל'} onClick={() => setPropsPinned(!propsPinned)}>{propsPinned ? '▸ כיווץ פאנל' : '◂ הגדרות ומאפיינים'}</button>
+          {wide && (
+            <div className="lp-tabs" role="tablist" aria-label="תוכן הפאנל">
+              <button role="tab" aria-selected={lp === 'nav'} className={`lp-tab${lp === 'nav' ? ' on' : ''}`} onClick={() => setLp('nav')} data-testid="lp-nav" title="ההגדרות של הסעיף שנבחר בעץ">⚙ {NAV_INDEX_LABEL(nav)}</button>
+              <button role="tab" aria-selected={lp === 'sel'} className={`lp-tab${lp === 'sel' ? ' on' : ''}`} onClick={() => setLp('sel')} data-testid="lp-sel" title="מאפייני האלמנטים שנבחרו במודל">{s.activeConn ? 'חיבור' : 'מאפיינים'}{sel.length ? ` (${sel.length})` : ''}</button>
+              <button className="lp-full-btn" onClick={() => { setLpFull(!lpFull); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }} title={lpFull ? 'חזרה לגודל רגיל (Esc)' : 'פאנל במסך מלא — לעריכה של טבלאות ופרטים גדולים'} data-testid="lp-full">{lpFull ? '⤡' : '⤢'}</button>
+            </div>
+          )}
+          {wide && lp === 'nav'
+            ? <div className="nav-content" data-testid="lp-nav-content"><NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div>
+            : <PropertiesPanel />}
         </aside>
       </main>
 

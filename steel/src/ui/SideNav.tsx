@@ -1,4 +1,5 @@
 import { IssueList } from './IssueList';
+import { DetailLibrary } from './DetailLibrary';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Connection, MemberKind, Severity } from '../model/types';
 import { cutLength } from '../geometry/solid';
@@ -25,13 +26,20 @@ export type NavKey =
   | 'conns' | `c:${Connection['type']}`
   | 'issues' | `i:${Severity}`
   | 'brace' | `b:${BraceSection}`
-  | 'clad' | `w:${CladSection}` | 'b:tb' | 'b:truss';
+  | 'clad' | `w:${CladSection}` | 'b:tb' | 'b:truss' | 'special' | 'c:library';
 
-const ORDER_C: Connection['type'][] = ['eave', 'ridge', 'base', 'rafter-side', 'knee', 'ridge-tie', 'purlin-cleat', 'purlin-splice', 'beam-splice', 'brace-end', 'brace-cross', 'brace', 'tb-support', 'tb-seat', 'truss', 'truss-splice', 'truss-end'];
+const ORDER_C: Connection['type'][] = ['custom', 'eave', 'ridge', 'base', 'rafter-side', 'knee', 'ridge-tie', 'purlin-cleat', 'purlin-splice', 'beam-splice', 'brace-end', 'brace-cross', 'brace', 'tb-support', 'tb-seat', 'truss', 'truss-splice', 'truss-end'];
 const KINDS: MemberKind[] = ['column', 'rafter', 'purlin', 'girt', 'brace', 'cleat', 'plate', 'anchor', 'beam'];
 const SEV_LABEL: Record<Severity, string> = { error: 'שגיאות', warning: 'אזהרות', info: 'מידע' };
 
-export function SideNav({ nav, setNav, onOpenConn }: { nav: NavKey; setNav: (k: NavKey) => void; onOpenConn: (id: string) => void }) {
+/** קבוצת העץ של מפתח (לפתיחה אוטומטית ולפירורי לחם) */
+export function navGroupOf(nav: NavKey): string {
+  if (nav === 'b:tb' || nav === 'b:truss' || nav === 'special') return 'special';
+  if (nav === 'c:library') return 'conns';
+  return nav.includes(':') ? ({ s: 'structure', r: 'roof', b: 'brace', k: 'tree', c: 'conns', i: 'issues', w: 'clad' } as Record<string, string>)[nav[0]] : nav;
+}
+
+export function SideNav({ nav, setNav, onOpenConn, treeOnly }: { nav: NavKey; setNav: (k: NavKey) => void; onOpenConn: (id: string) => void; treeOnly?: boolean }) {
   const d = useStore((s) => s.derived);
   const roofType = useStore((s) => (s.project.building.section ? 'modular' : s.project.building.roofType));
   const [open, setOpen] = useState<Record<string, boolean>>({ structure: true, roof: true, brace: true });
@@ -62,55 +70,79 @@ export function SideNav({ nav, setNav, onOpenConn }: { nav: NavKey; setNav: (k: 
     );
   };
   // כשנבחר פריט מקבוצה סגורה (חיפוש / קישור) — פותחים את הקבוצה שלו
-  const grp = nav.includes(':') ? ({ s: 'structure', r: 'roof', b: 'brace', k: 'tree', c: 'conns', i: 'issues' } as Record<string, string>)[nav[0]] : nav;
+  const grp = navGroupOf(nav);
   if (grp && !open[grp]) setTimeout(() => setOpen((o) => ({ ...o, [grp]: true })), 0);
 
   return (
-    <div className="sidenav">
+    <div className={`sidenav${treeOnly ? ' tree-only' : ''}`}>
       <nav className="nav-tree" aria-label="עץ תפריטים">
-        {group('structure', 'מבנה', 'tab-structure', 'geometry', [
-          { key: 's:project', label: 'פרויקט והגדרות', pic: 'project' }, { key: 's:geometry', label: 'גיאומטריה, צירים ומסגרות', pic: 'geometry' },
+        {/* סדר העבודה: 1 מבנה ← 2 גג ופטות ← 3 חיזוקים ← 4 קירות וחיפוי ← 5 מיוחדים; אחריהם — רשימות ובדיקות */}
+        {group('structure', '1 · מבנה', 'tab-structure', 'geometry', [
+          { key: 's:project', label: 'פרויקט והגדרות', pic: 'project' }, { key: 's:geometry', label: 'צירים, מסגרות וגבהים', pic: 'geometry' },
           { key: 's:profiles', label: 'חתכים וחומר', pic: 'profiles' },
         ])}
-        {group('roof', 'גג ופטות', 'tab-roof', 'slope', [
+        {group('roof', '2 · גג ופטות', 'tab-roof', 'slope', [
           { key: 'r:system', label: 'מערכת פטות', pic: 'purlins' },
-          ...(roofType === 'gable' ? [{ key: 'r:left' as NavKey, label: 'שיפוע שמאל ותומכים', pic: 'slopeL' }, { key: 'r:right' as NavKey, label: 'שיפוע ימין ותומכים', pic: 'slopeR' }] : [{ key: 'r:left' as NavKey, label: roofType === 'modular' ? 'שיפועי הגג ותומכים' : 'שיפוע הגג ותומכים', pic: 'slope' }]),
+          ...(roofType === 'gable' ? [{ key: 'r:left' as NavKey, label: 'שיפוע שמאל — פטות ותושבות', pic: 'slopeL' }, { key: 'r:right' as NavKey, label: 'שיפוע ימין — פטות ותושבות', pic: 'slopeR' }] : [{ key: 'r:left' as NavKey, label: roofType === 'modular' ? 'שיפועי הגג — פטות ותושבות' : 'שיפוע הגג — פטות ותושבות', pic: 'slope' }]),
           { key: 'r:splices', label: 'חיבורי המשך פטות', n: d.splices.filter((x) => x.memberId.startsWith('PL.')).length, pic: 'splice' },
         ])}
-        {group('brace', 'חיזוקים וקשיחות', 'tab-brace', 'brace0', [
+        {group('brace', '3 · חיזוקים', 'tab-brace', 'brace0', [
           { key: 'b:knee', label: 'אלכסוני עמוד-קורה', n: connCount.get('knee') ? d.connections.filter((c) => c.id.startsWith('C.KB.')).length : undefined, pic: 'knee' },
-          { key: 'b:ridge', label: 'חיזוק רכס', pic: 'ridge' },
           { key: 'b:roof', label: 'קושרות גג', pic: 'roofX' },
           { key: 'b:walls', label: 'קשיחות קירות / אגד B', pic: 'walls' },
           { key: 'b:ties', label: 'שורות קשירה לפטות', pic: 'ties' },
-          { key: 'b:tb', label: 'קורות נושאות (דילול עמודים)', n: store.state.project.building.transfers?.length || undefined, pic: 'frames' },
-          { key: 'b:truss', label: 'מסבכי גג', n: store.state.project.building.roofTruss?.enabled ? d.connections.filter((c) => c.type === 'truss' && c.id.startsWith('C.TR.')).length : undefined, pic: 'roofX' },
+          { key: 'b:ridge', label: 'חיזוק רכס', pic: 'ridge' },
         ])}
-        {group('clad', 'חיפוי ופתחים', 'tab-clad', 'walls', [
+        {group('clad', '4 · קירות וחיפוי', 'tab-clad', 'walls', [
           { key: 'w:roof', label: 'חיפוי גג ומזחלות', pic: 'slope' },
           { key: 'w:walls', label: 'חיפוי קירות ופטות קיר', pic: 'walls' },
           { key: 'w:openings', label: 'פתחים', n: d.members.length ? (store.state.project.building.cladding?.openings.length || undefined) : undefined, pic: 'frames' },
           { key: 'w:takeoff', label: 'כתב כמויות חיפוי', pic: 'project' },
         ])}
+        {group('special', '5 · מיוחדים', 'tab-special', 'frames', [
+          { key: 'b:tb', label: 'דילול עמודים — קורות נושאות', n: store.state.project.building.transfers?.length || undefined, pic: 'frames' },
+          { key: 'b:truss', label: 'מסבכי גג', n: store.state.project.building.roofTruss?.enabled ? d.connections.filter((c) => c.type === 'truss' && c.id.startsWith('C.TR.')).length : undefined, pic: 'roofX' },
+        ])}
+        <div className="nav-sep">רשימות ובדיקה</div>
         {group('tree', 'אלמנטים', 'tab-tree', 'elements', KINDS.filter((k) => kindCount.get(k)).map((k) => ({ key: `k:${k}` as NavKey, label: KIND_LABEL[k], n: kindCount.get(k), pic: k })))}
-        {group('conns', 'חיבורים', 'tab-conns', 'conns', ORDER_C.filter((t) => connCount.get(t)).map((t) => ({ key: `c:${t}` as NavKey, label: CONN_TYPE[t], n: connCount.get(t), pic: t === 'ridge' ? 'ridge' : t === 'knee' ? 'knee' : t === 'brace' ? 'brace' : t })))}
+        {group('conns', 'חיבורים', 'tab-conns', 'conns', [
+          ...ORDER_C.filter((t) => connCount.get(t)).map((t) => ({ key: `c:${t}` as NavKey, label: CONN_TYPE[t], n: connCount.get(t), pic: t === 'ridge' ? 'ridge' : t === 'knee' ? 'knee' : t === 'brace' ? 'brace' : t })),
+          { key: 'c:library' as NavKey, label: 'ספריית פרטים', n: store.state.project.customDetails?.length || undefined, pic: 'project' },
+        ])}
         {group('issues', 'בדיקות', 'tab-issues', 'issues', (['error', 'warning', 'info'] as Severity[]).filter((s) => sevCount.get(s)).map((s) => ({ key: `i:${s}` as NavKey, label: SEV_LABEL[s], n: sevCount.get(s), cls: s === 'error' ? 'err' : s === 'warning' ? 'warn' : '', pic: s })),
           (errs + warns) > 0 ? <span className={`count ${errs ? 'err' : 'warn'}`}>{errs + warns}</span> : null)}
       </nav>
-      <div className="nav-content">
+      {!treeOnly && <div className="nav-content">
         <NavCrumb nav={nav} item={labels.get(nav)} />
         <NavContent nav={nav} onOpenConn={onOpenConn} />
-      </div>
+      </div>}
     </div>
   );
 }
 
 const GROUP_LABEL: Record<string, [string, string]> = {
-  structure: ['מבנה', 'geometry'], roof: ['גג ופטות', 'slope'], brace: ['חיזוקים וקשיחות', 'brace0'], tree: ['אלמנטים', 'elements'], conns: ['חיבורים', 'conns'], issues: ['בדיקות', 'issues'],
+  structure: ['מבנה', 'geometry'], roof: ['גג ופטות', 'slope'], brace: ['חיזוקים', 'brace0'], clad: ['קירות וחיפוי', 'walls'], special: ['מיוחדים', 'frames'], tree: ['אלמנטים', 'elements'], conns: ['חיבורים', 'conns'], issues: ['בדיקות', 'issues'],
 };
 /** פירורי לחם מעל התוכן: איפה אני (קבוצה › פריט) עם התמונה */
-function NavCrumb({ nav, item }: { nav: NavKey; item?: string }) {
-  const g = nav.includes(':') ? ({ s: 'structure', r: 'roof', b: 'brace', k: 'tree', c: 'conns', i: 'issues' } as Record<string, string>)[nav[0]] : nav;
+/** שם קצר לסעיף בעץ (לכותרת הפאנל). item=true — רק שם הסעיף בלי הקבוצה */
+const ITEM_LABEL: Record<string, string> = {
+  's:project': 'פרויקט והגדרות', 's:geometry': 'צירים, מסגרות וגבהים', 's:profiles': 'חתכים וחומר', 'r:system': 'מערכת פטות', 'r:left': 'פטות ותושבות', 'r:right': 'שיפוע ימין', 'r:splices': 'חיבורי המשך פטות',
+  'b:knee': 'אלכסוני עמוד-קורה', 'b:roof': 'קושרות גג', 'b:walls': 'קשיחות קירות', 'b:ties': 'שורות קשירה', 'b:ridge': 'חיזוק רכס', 'b:tb': 'דילול עמודים', 'b:truss': 'מסבכי גג',
+  'w:roof': 'חיפוי גג', 'w:walls': 'חיפוי קירות', 'w:openings': 'פתחים', 'w:takeoff': 'כמויות חיפוי', 'c:library': 'ספריית פרטים',
+};
+export function NAV_INDEX_LABEL(nav: NavKey, item = false): string {
+  const g = GROUP_LABEL[navGroupOf(nav)]?.[0] ?? '';
+  let it = ITEM_LABEL[nav];
+  if (!it && nav.includes(':')) {
+    const [p, k] = nav.split(':') as [string, string];
+    it = p === 'k' ? KIND_LABEL[k as keyof typeof KIND_LABEL] : p === 'c' ? CONN_TYPE[k as Connection['type']] : p === 'i' ? SEV_LABEL[k as Severity] : k;
+  }
+  if (item) return it ?? '';
+  return it ? (nav.startsWith('k:') || nav.startsWith('c:') || nav.startsWith('i:') ? `${g} · ${it}` : it) : g;
+}
+
+export function NavCrumb({ nav, item }: { nav: NavKey; item?: string }) {
+  const g = navGroupOf(nav);
   const [gl, gp] = GROUP_LABEL[g] ?? ['', 'elements'];
   return <div className="nav-crumb" data-testid="nav-crumb"><MenuPic name={gp} size={22} /><span>{gl}</span>{item && <><span className="sep">›</span><b>{item}</b></>}</div>;
 }
@@ -123,6 +155,8 @@ export function NavContent({ nav, onOpenConn }: { nav: NavKey; onOpenConn: (id: 
   if (nav === 'issues') return <IssuesPanel />;
   if (nav === 'brace') return <BracePanel />;
   if (nav === 'clad') return <CladdingPanel />;
+  if (nav === 'special') return <><TransferPanel /><RoofTrussPanel /></>;
+  if (nav === 'c:library') return <DetailLibrary />;
   const [g, k] = nav.split(':') as [string, string];
   if (g === 's') return <StructurePanel section={k as StructSection} />;
   if (g === 'r') return <RoofPanel section={k as RoofSection} />;

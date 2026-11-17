@@ -86,7 +86,9 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line-st
 .seg .tbtn:first-child { border-inline-start: 0; }
 
 /* סביבת עבודה */
-.workspace { display: grid; grid-template-columns: 330px 1fr 330px; min-height: 0; }
+.workspace { --tw: 250px; --pw: 420px; display: grid; grid-template-columns: var(--tw) 1fr var(--pw); min-height: 0; }
+.workspace.tree-hidden { --tw: 0px; }
+.workspace.tree-hidden > .side-start { display: none; }
 .center { position: relative; min-width: 0; min-height: 0; display: grid; }
 .center > .viewport-host { grid-area: 1 / 1; }
 .side { background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
@@ -209,7 +211,7 @@ select.inp { padding: 0 6px; }
 /* ניווט תחתון בטלפון */
 .mnav { display: none; }
 
-@media (max-width: 1280px) { .workspace { grid-template-columns: 250px 1fr 300px; } .search-pill { width: 220px; } .conncard { grid-template-columns: 1fr; width: 300px; } .conncard .cc-svg { display: none; } }
+@media (max-width: 1280px) { .workspace { --tw: 210px; --pw: 340px; } .workspace.tree-hidden { --tw: 0px; } .search-pill { width: 220px; } .conncard { grid-template-columns: 1fr; width: 300px; } .conncard .cc-svg { display: none; } }
 @media (max-width: 860px) {
   .app { grid-template-columns: 1fr; grid-template-rows: 50px 1fr auto; }
   .app > .rail, .app > .statusbar { display: none; }
@@ -532,15 +534,26 @@ select.inp { padding: 0 6px; }
 .props-pin { display: none; }
 @media (min-width: 861px) {
   .props-pin { display: block; background: var(--panel-2); border: 0; border-bottom: 1px solid var(--line); padding: 6px 8px; cursor: pointer; color: var(--muted); font-weight: 600; text-align: start; }
-  .workspace.props-collapsed { grid-template-columns: 330px 1fr 34px; }
+  .workspace.props-collapsed { --pw: 34px; }
   .workspace { position: relative; }
   .workspace.props-collapsed:not(.props-float) .side-end > :not(.props-pin) { display: none; }
   /* בחירה כשהפאנל מכווץ: הפאנל נפתח כשכבה מעל התלת־ממד — בלי לשנות את גודל המבט (שום דבר לא "קופץ") */
-  .workspace.props-float .side-end { position: absolute; left: 0; top: 0; bottom: 0; width: 330px; z-index: 6; box-shadow: 4px 0 18px rgba(28,36,32,.14); }
+  .workspace.props-float .side-end { position: absolute; left: 0; top: 0; bottom: 0; width: 420px; z-index: 6; box-shadow: 4px 0 18px rgba(28,36,32,.14); }
   .workspace.props-float .props-pin { writing-mode: horizontal-tb; height: auto; }
   .workspace.props-collapsed .props-pin { writing-mode: vertical-rl; height: 100%; border: 0; text-align: center; padding: 10px 6px; }
 }
-@media (min-width: 861px) and (max-width: 1280px) { .workspace.props-collapsed { grid-template-columns: 250px 1fr 34px; } }
+/* פאנל במסך מלא: מכסה את התלת־ממד (העץ נשאר לניווט) */
+@media (min-width: 861px) {
+  .workspace.lp-full .side-end { position: absolute; left: 0; top: 0; bottom: 0; right: var(--tw); width: auto; z-index: 9; box-shadow: none; }
+  .workspace.lp-full .props-pin { display: none; }
+  .workspace.tree-only .nav-tree, .sidenav.tree-only .nav-tree { max-height: none; flex: 1; border-bottom: 0; }
+}
+.lp-tabs { display: flex; align-items: stretch; gap: 2px; padding: 0 6px; border-bottom: 1px solid var(--line); background: var(--panel); flex: none; }
+.lp-tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 9px 8px 7px; cursor: pointer; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 62%; }
+.lp-tab.on { color: var(--brand); border-bottom-color: var(--brand); }
+.lp-full-btn { margin-inline-start: auto; background: none; border: 0; cursor: pointer; color: var(--muted); font-size: 16px; padding: 0 8px; }
+.lp-full-btn:hover { color: var(--brand); }
+.nav-sep { margin: 10px 4px 4px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 11.5px; color: var(--muted); font-weight: 600; }
 
 .tb-mini { font-size: 10.5px; margin-inline-start: 3px; }
 
