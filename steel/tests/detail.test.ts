@@ -191,6 +191,8 @@ describe('מפלס תחתית עמוד לכל ציר', () => {
     const b = defaultBuilding(); b.section = SECTION_TEMPLATES.find((t) => t.id === 'mono-multi')!.make() as never;
     b.kneeBraces = { ...defaultKneeBraces(), enabled: true };
     b.bracing.walls.enabled = true;
+    const { defaultCladding, claddingTakeoff } = await import('../src/geometry/cladding');
+    b.cladding = defaultCladding(); b.cladding.walls.enabled = true; b.cladding.walls.sides = { L: true, R: true, F: true, B: true }; b.cladding.posts.enabled = true;
     const p0 = newProject('x', structuredClone(b));
     const d0 = generate(p0);
     b.lineBase = { A: 600, B: 300, C: 0 };
@@ -205,6 +207,16 @@ describe('מפלס תחתית עמוד לכל ציר', () => {
     // קושרות קיר בציר א מתחילות מעל החגורה
     const wb = d.members.filter((m) => m.id.startsWith('BR.W') && m.kind === 'brace' && Math.abs(m.start.x) < 300);
     for (const m of wb) expect(Math.min(m.start.z, m.end.z)).toBeGreaterThan(600);
+    // פטות קיר בציר א מעל החגורה; עמודי רוח על יסודות ב-±0.00; חיפוי קיר א מפני החגורה
+    const girtsA = d.members.filter((m) => m.wall?.id === 'L' && m.wall.role === 'girt');
+    expect(girtsA.length).toBeGreaterThan(0);
+    for (const m of girtsA) expect(m.start.z).toBeGreaterThan(600);
+    const posts = d.members.filter((m) => m.wall?.role === 'post');
+    expect(posts.length).toBeGreaterThan(0);
+    for (const m of posts) expect(Math.min(m.start.z, m.end.z)).toBe(0);
+    const tk = claddingTakeoff(p, d)!, tk0 = claddingTakeoff(p0, d0)!;
+    const wL = (t: typeof tk) => t.surfaces.filter((x) => x.kind === 'wall' && Math.abs(x.pts[0].x - Math.min(...t.surfaces.filter((y) => y.kind === 'wall').map((y) => y.pts[0].x))) < 1)[0];
+    expect(Math.round(Math.min(...wL(tk).pts.map((q) => q.z)) - Math.min(...wL(tk0).pts.map((q) => q.z)))).toBe(600);
     const fab = computeFabrication(p, d), bom = computeBom(d, fab);
     const cat = drawingCatalog(p, d, fab);
     for (const def of cat.filter((x) => x.type === 'anchor-plan' || x.type === 'frame')) {

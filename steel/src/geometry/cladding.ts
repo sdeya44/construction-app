@@ -71,7 +71,7 @@ export function buildWallFraming(_project: Project, b: BuildingParams, sec: NSec
     const c = wallCfg(cl, w);
     // קיר על ציר שהעמודים בו על חגורה מוגבהת: פטות הקיר מתחילות מעל החגורה
     const wb = w === 'L' ? lineBaseAt(b, sec.lines, lines[0].x) : w === 'R' ? lineBaseAt(b, sec.lines, lines[lines.length - 1].x) : base;
-    const lo = Math.max(c.bottom > 0 ? base + c.bottom + 50 : base + gp.first, wb + gp.first);
+    const lo = c.bottom > 0 ? wb + c.bottom + 50 : wb + gp.first;
     const partialTop = c.top !== null && base + c.top < roofTop - 150;
     const hi = partialTop ? base + c.top! - 50 : roofTop - 150;
     const zs: number[] = [];
@@ -150,7 +150,7 @@ export function buildWallFraming(_project: Project, b: BuildingParams, sec: NSec
           const top = underRoof(x); if (top === null) continue;
           const pp = tryProfile(cl.posts.profile);
           const id = `WP.${w}.${add2.length + 1}`;
-          out.push({ ...mk(id, `עמוד רוח ${w === 'F' ? 'קדמי' : 'אחורי'} ${add2.length + 1}`, v3(x, f.y, lineBaseAt(b, sec.lines, x)), v3(x, f.y, top - 10), cl.posts.profile, v3(0, 1, 0), 'center', { id: w, role: 'post' }, f.id), refUp: v3(1, 0, 0) });
+          out.push({ ...mk(id, `עמוד רוח ${w === 'F' ? 'קדמי' : 'אחורי'} ${add2.length + 1}`, v3(x, f.y, base), v3(x, f.y, top - 10), cl.posts.profile, v3(0, 1, 0), 'center', { id: w, role: 'post' }, f.id), refUp: v3(1, 0, 0) });
           add2.push({ x, top: top - 10, depth: pp?.props.b ?? 100 });
         }
       }
@@ -272,7 +272,9 @@ export function claddingTakeoff(p: Project, d: DerivedModel): CladdingTakeoff | 
     for (const w of ['L', 'R'] as const) {
       const c = wallCfg(cl, w); if (!c.on) continue;
       const x = w === 'L' ? xL : xR;
-      const bottom = base + c.bottom, top = Math.min(colTop(x), c.top !== null ? base + c.top : Infinity), H = top - bottom;
+      // קיר על ציר שהעמודים בו על חגורה מוגבהת: החיפוי מתחיל מפני החגורה (החלטת משתמש 17.11.2026)
+      const wb = lineBaseAt(b, sec.lines, x);
+      const bottom = wb + c.bottom, top = Math.min(colTop(x), c.top !== null ? base + c.top : Infinity), H = top - bottom;
       if (H <= 0) continue;
       const cuts = fr.map((f) => f.y); cuts[0] = y0; cuts[cuts.length - 1] = y1;
       const rs = runs(cuts, c.covered);
