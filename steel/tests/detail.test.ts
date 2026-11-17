@@ -162,3 +162,25 @@ describe('תושבות פטה', () => {
     expect(d.connections.filter((x) => x.type === 'custom').length).toBe(keys.length);
   });
 });
+
+describe('פטות: מרחק ראשון ודירוג', () => {
+  it('PU-01: מרחק ראשון 0 — מזערי לפי סוג התושבת; "מרחק מדויק" משאיר 0', () => {
+    const dist = (style: 'run' | 'stand' | 'plate', ex: boolean) => {
+      const b = defaultBuilding();
+      for (const s2 of ['left', 'right'] as const) b.purlins[s2] = { ...b.purlins[s2], first: 0, firstExact: ex, cleat: { ...b.purlins[s2].cleat, style } };
+      const d = generate(newProject('x', b));
+      return Math.round(d.members.find((m) => m.id.endsWith('RAF.L'))!.end.x - d.members.find((m) => m.id === 'PL.L.01')!.start.x);
+    };
+    expect(dist('stand', false)).toBeLessThan(dist('run', false));
+    expect(dist('run', true)).toBe(0);
+  });
+  it('PU-02: גג מדורג ושן מסור — פטות ותושבות לא חודרות לעמודים (גם HEB300, שני כיווני פתיחה)', async () => {
+    const { SECTION_TEMPLATES } = await import('../src/model/section');
+    for (const tid of ['stepped', 'sawtooth']) for (const col of ['HEA200', 'HEB300']) for (const op of ['up', 'down'] as const) {
+      const b = defaultBuilding(); b.section = SECTION_TEMPLATES.find((t) => t.id === tid)!.make() as never; b.columnProfile = col;
+      for (const s2 of ['left', 'right'] as const) b.purlins[s2] = { ...b.purlins[s2], opening: op };
+      const d = generate(newProject('x', b));
+      expect(d.issues.filter((i) => i.code === 'CLASH').map((i) => i.message), `${tid}/${col}/${op}`).toEqual([]);
+    }
+  });
+});

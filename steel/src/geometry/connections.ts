@@ -660,6 +660,13 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
     if (a.kind === 'cleat' && b.kind === 'cleat' && a.connId === b.connId) continue;
     test(a, b, ' (אזור הרכס)');
   }
+  // פטות ותושבות מול עמודים (גג מדורג / שן מסור: עמוד שממשיך מעל מישור הגג)
+  {
+    const cols = [...byId.values()].filter((m) => m.kind === 'column');
+    const pc = [...byId.values()].filter((m) => m.kind === 'purlin' || m.kind === 'cleat');
+    const cb = new Map(cols.map((m) => [m.id, aabb(m)]));
+    for (const p of pc) { const bp = aabb(p); for (const c of cols) if (aabbOverlap(bp, cb.get(c.id)!)) test(p, c, ' (פטה/תושבת מול עמוד)'); }
+  }
   return out;
 }
 

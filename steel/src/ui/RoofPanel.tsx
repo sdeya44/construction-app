@@ -37,6 +37,10 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
         <SideIssues pkey={side} />
         <Adv id="pside" label="מתקדם — מידות בשדות, אופן מדידה, פתיחת החתך">
         <div className="field"><label>{mono ? 'מרחק ראשון מקצה ההתחלה' : 'מרחק ראשון מהרכס'}</label><LenField testId={tid('first')} mm={prm.first} unit={u} onCommit={(v) => set({ first: v })} /></div>
+        {!mono && <label className="ss-radio" title="ללא תיקון: מרחק 0 = הפטה בקו הרכס בדיוק. אחרת התוכנה מזיזה את הפטה כך שהפטה והתושבת לא יחצו את קו הרכס">
+          <input type="checkbox" checked={!!prm.firstExact} data-testid={tid('first-exact')} onChange={(e) => set({ firstExact: e.target.checked })} />
+          מרחק מדויק — בלי תיקון אוטומטי למרחק המזערי מהרכס
+        </label>}
         <div className="field"><label>{(prm.layout ?? 'fixed') === 'even' ? 'מרווח מרבי' : 'מרווח רגיל'}</label><LenField testId={tid('spacing')} mm={prm.spacing} unit={u} onCommit={(v) => set({ spacing: v })} /></div>
         <div className="field"><label title="מקצה קורת הגג עד הפנים החיצוניות של הפטה או התומך — הפטה יושבת כולה על הקורה">פטה אחרונה – מרווח מקצה הקורה</label><LenField testId={tid('edge')} mm={prm.edgeOffset} unit={u} onCommit={(v) => set({ edgeOffset: v })} /></div>
         <div className="field"><label>אופן מדידה</label>

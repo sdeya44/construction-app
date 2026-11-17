@@ -1,6 +1,6 @@
 import { cross, dot, norm, v3, type Vec3 } from '../core/vec';
 import { tryProfile } from '../profiles/library';
-import type { BuildingParams, Member, PurlinSideParams, PurlinSystem, SupportPoint, ValidationIssue } from '../model/types';
+import type { CleatParams, BuildingParams, Member, PurlinSideParams, PurlinSystem, SupportPoint, ValidationIssue } from '../model/types';
 import type { NSection } from '../model/section';
 
 const TOL = 1; // mm
@@ -98,6 +98,13 @@ interface SlopeLine {
 
 export interface PurlinResult { members: Member[]; supports: SupportPoint[]; issues: ValidationIssue[] }
 
+/** בליטת התושבת מהווב לצד הרחוק מהפטה, לפי סוג התושבת (זוויתן שוכב: רגל הבסיס; עומד: הרגל הניצבת; פלטה: עובי + משולש) */
+export function cleatReach(c: CleatParams): number {
+  if (c.style === 'stand') { const p = tryProfile(c.standProfile ?? 'L40x40x4'); return p?.dims.h ?? 40; }
+  if (c.style === 'plate') return c.thickness + Math.max(40, c.base);
+  return c.base;
+}
+
 /** פרמטרי פטות לפי מפתח: left / right / מזהה מישור (חתך מודולרי) */
 export function purlinParams(pu: PurlinSystem, key: string): PurlinSideParams {
   return key === 'left' ? pu.left : key === 'right' ? pu.right : pu.planes?.[key] ?? pu.left;
@@ -124,8 +131,25 @@ export function buildPurlins(b: BuildingParams, sec: NSection, deleted: Set<stri
       || sec.lines.some((l) => Math.abs(l.x - P.x) <= colH / 2 + 1);
     const topExt = (P: { x: number; z: number }, out: { x: number; z: number }) => (joined(P) ? 0 : Math.max(0, -(b.heightRef === 'TOS' ? hv : hv / 2) * out.z));
     const eE = topExt(E, dir), eS = pl.startFree ? topExt(S, { x: -dir.x, z: -dir.z }) : 0;
-    const E2 = eE > 0.01 ? { x: E.x + dir.x * eE, z: E.z + dir.z * eE } : E;
-    const S2 = eS > 0.01 ? { x: S.x - dir.x * eS, z: S.z - dir.z * eS } : S;
+    let E2 = eE > 0.01 ? { x: E.x + dir.x * eE, z: E.z + dir.z * eE } : E;
+    let S2 = eS > 0.01 ? { x: S.x - dir.x * eS, z: S.z - dir.z * eS } : S;
+    // קצה המישור בצד עמוד שממשיך למעלה (גג מדורג / שן מסור): הפטות נמדדות מפני העמוד + 10 מ"מ, לא מציר העמוד
+    const zOn = (q: typeof pl, x: number) => q.a.z + ((q.b.z - q.a.z) * (x - q.a.x)) / ((q.b.x - q.a.x) || 1e-9);
+    const atColSide = (P: { x: number; z: number }) => sec.lines.some((l) => Math.abs(l.x - P.x) < 1)
+      && sec.planes.some((q) => q !== pl && P.x >= Math.min(q.a.x, q.b.x) - 1 && P.x <= Math.max(q.a.x, q.b.x) + 1 && zOn(q, P.x) > P.z + 50);
+    // הפטה נטויה עם הגג: גובה החתך מוסיף בליטה אופקית h·sinα מול פני העמוד האנכיים
+    const ph = tryProfile(purlinParams(pu, pl.params).profile)?.props.h ?? 200;
+    const back = (colH / 2 + 10 + ph * Math.abs(dir.z)) / Math.max(0.2, Math.abs(dir.x));
+    // עמק (מרזב) מעל עמוד: שני המישורים יורדים אל העמוד — הפטה הנמוכה מתרחקת מראש העמוד
+    const isValley = (P: { x: number; z: number }) => sec.lines.some((l) => Math.abs(l.x - P.x) <= colH / 2 + 1)
+      && sec.planes.some((q) => q !== pl && [q.a, q.b].some((Q) => Math.abs(Q.x - P.x) < 1 && Math.abs(Q.z - P.z) < 1) && Math.max(q.a.z, q.b.z) > P.z + 1)
+      && Math.max(pl.a.z, pl.b.z) > P.z + 1;
+    // רכס מעל עמוד (סככת T): גם שם ראש העמוד מתחת לשני המישורים — מרחק מפני העמוד
+    const isColRidge = (P: { x: number; z: number }) => sec.lines.some((l) => Math.abs(l.x - P.x) <= colH / 2 + 1)
+      && sec.planes.some((q) => q !== pl && [q.a, q.b].some((Q) => Math.abs(Q.x - P.x) < 1 && Math.abs(Q.z - P.z) < 1) && Math.min(q.a.z, q.b.z) < P.z - 1)
+      && Math.min(pl.a.z, pl.b.z) < P.z - 1;
+    if (atColSide(E) || isValley(E) || isColRidge(E)) E2 = { x: E2.x - dir.x * back, z: E2.z - dir.z * back };
+    if (atColSide(S) || isValley(S) || isColRidge(S)) S2 = { x: S2.x + dir.x * back, z: S2.z + dir.z * back };
     return { side: pl.id, params: purlinParams(pu, pl.params), paramKey: pl.params, free: pl.startFree, S: S2, E: E2, up, rafterId: pl.rafterId, label };
   });
   const ys = b.frames.map((f) => f.y);
@@ -155,21 +179,21 @@ export function buildPurlins(b: BuildingParams, sec: NSection, deleted: Set<stri
     const cleatToStart0 = prm.cleat.enabled && (prof.family === 'Z' ? prm.opening === 'up' : prm.opening === 'down') === (dot(ln.up, sDir) > 0);
     if (prm.cleat.enabled && !cleatToStart0) {
       const wb0 = prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2;
-      towardEnd = Math.max(towardEnd, wb0 + prm.cleat.base);
+      towardEnd = Math.max(towardEnd, wb0 + cleatReach(prm.cleat));
     }
     let towardStart0 = 0;
     if (ln.free) {
       towardStart0 = dot(u0, sDir) > 0 ? Math.max(...us0) : -Math.min(...us0);
-      if (cleatToStart0) towardStart0 = Math.max(towardStart0, (prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2) + prm.cleat.base);
+      if (cleatToStart0) towardStart0 = Math.max(towardStart0, (prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2) + cleatReach(prm.cleat));
     }
     // רכס: מרחק ראשון מזערי כך שהפטה והתומך לא יחצו את קו הרכס — תיקון אוטומטי + הצעה לעדכון הערך
     let prmL = prm;
     if (!ln.free && !prm.manualPositions) {
       let ridgeExt = dot(u0, sDir) > 0 ? Math.max(...us0) : -Math.min(...us0);
-      if (cleatToStart0) ridgeExt = Math.max(ridgeExt, (prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2) + prm.cleat.base);
+      if (cleatToStart0) ridgeExt = Math.max(ridgeExt, (prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2) + cleatReach(prm.cleat));
       const kk = prm.measure === 'horizontal' ? cosA : 1;
       const minFirst = Math.ceil(((ridgeExt + 10) * kk) / 5) * 5;
-      if (prm.first < minFirst - 1e-6) {
+      if (prm.first < minFirst - 1e-6 && !prm.firstExact) {
         prmL = { ...prm, first: minFirst };
         out.issues.push({ code: 'PURLIN_FIRST_AUTO', severity: 'warning', message: `${ln.label}: מרחק ראשון ${Math.round(prm.first)} מ"מ קטן מהמזערי — הפטה הוזזה אוטומטית ל-${minFirst} מ"מ מהרכס (רוחב הפטה והתומך)`, fix: { label: `קבע ${minFirst} מ"מ`, purlinKey: ln.paramKey, patch: { first: minFirst } } });
       }
@@ -190,13 +214,13 @@ export function buildPurlins(b: BuildingParams, sec: NSection, deleted: Set<stri
     const cleatToStart = prm.cleat.enabled && (prof.family === 'Z' ? prm.opening === 'up' : prm.opening === 'down') === (dot(ln.up, sDir) > 0);
     if (!ln.free && cleatToStart) {
       const wb = prof.family === 'C' || prof.family === 'Z' ? prof.dims.t / 2 : prof.props.b / 2;
-      towardStart = Math.max(towardStart, wb + prm.cleat.base);
+      towardStart = Math.max(towardStart, wb + cleatReach(prm.cleat));
     }
     lay.s.forEach((s, i) => {
       const id = `PL.${ln.side}.${String(i + 1).padStart(2, '0')}`;
       if (deleted.has(id)) return;
       if (i === 0 && !ln.free && s - towardStart < 0) {
-        out.issues.push({ code: 'PURLIN_RIDGE', severity: 'error', elementId: id, message: `${ln.label}: הפטה הראשונה או התומך שלה חוצים את קו הרכס — הגדל את המרחק הראשון` });
+        out.issues.push({ code: 'PURLIN_RIDGE', severity: prm.firstExact ? 'warning' : 'error', elementId: id, message: `${ln.label}: הפטה הראשונה או התומך שלה חוצים את קו הרכס${prm.firstExact ? ' (מרחק ראשון מדויק לפי בחירתך — לבדוק מול הפטה בשיפוע השני)' : ' — הגדל את המרחק הראשון'}` });
       }
       const P = { x: ln.S.x + dir.x * s, z: ln.S.z + dir.z * s };
       out.members.push({
