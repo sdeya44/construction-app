@@ -12,6 +12,7 @@ import { buildPurlins } from './purlins';
 import type { Connection, SupportPoint } from '../model/types';
 import { buildConnections, checkClashes } from './connections';
 import { buildWallFraming } from './cladding';
+import { buildGutterBrackets } from './gutter';
 import { buildTransfers, prepareTransfers } from './transfer';
 import { buildRoofTrusses, roofTrussRafterSplices } from './truss';
 import { buildBracing } from './bracing';
@@ -224,6 +225,13 @@ export function generate(project: Project): DerivedModel {
       for (const m of wf.members) { const o = project.memberOverrides[m.id]; if (o?.profile) m.profile = o.profile; if (o?.material) m.material = o.material; if (o?.rollDeg !== undefined) m.rollDeg = o.rollDeg; if (o?.mirror !== undefined) m.mirror = o.mirror; }
       out.push(...wf.members.filter((m) => !hidden.has(m.id)));
       issues.push(...wf.issues);
+    }
+    // תומכי מזחלה: 2×L50/50/5 בכל קצה קורה בקצה נמוך חופשי (מרותכים לקורה במסגריה)
+    if (sec && b.cladding?.gutter.enabled && b.cladding.roof.enabled) {
+      const gb = buildGutterBrackets(bEff, sec, out);
+      out.push(...gb.members.filter((m) => !hidden.has(m.id)));
+      connections.push(...gb.connections);
+      issues.push(...gb.issues);
     }
     // מסבכי גג: חגורה תחתונה, אנכיים ואלכסונים (מרותכים), חיבורי המשך וחגורה–עמוד (מוברגים)
     if (b.roofTruss?.enabled) {

@@ -1,3 +1,4 @@
+import { gutterDev, gutterRuns, gutterSpec, gutterTakeoff } from '../geometry/gutter';
 import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import { cachedSolidPure, silhouetteEdges } from './solidCache';
@@ -36,6 +37,7 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
   out.push({ id: 'D-SIDE', type: 'side', number: 'E-01', title: 'חזיתות צד – צירים א ו-ב', ref: 'LR' });
   if (p.building.cladding?.walls.enabled && (p.building.cladding.walls.sides.F || p.building.cladding.walls.sides.B)) out.push({ id: 'D-ENDWALLS', type: 'side', number: 'E-02', title: 'קירות קצה – עמודי רוח, פטות קיר ופתחים', ref: 'FB' });
   if (p.building.cladding) out.push({ id: 'D-CLAD', type: 'cladding', number: 'K-01', title: 'חיפוי, פחים ומזחלות — כתב כמויות' });
+  if (d.section && gutterRuns(p.building, d.section, d.members).length) out.push({ id: 'D-GUTTER', type: 'gutter', number: 'K-02', title: 'פרט מזחלה וירידת מרזב' });
   const types: [string, string][] = [['eave', 'פרט חיבור קורה-עמוד'], ['ridge', 'פרט חיבור רכס'], ['base', 'פרט פלטת בסיס'], ['purlin-cleat', 'פרט תומך פטה'], ['purlin-splice', 'פרט חיבור המשך פטה'], ['brace-end', 'פרט פח חיבור קושרת'], ['brace-cross', 'פרט הצטלבות קושרות'], ['rafter-side', 'פרט חיבור קורה לצד עמוד'], ['knee', 'פרט אלכסון עמוד-קורה'], ['ridge-tie', 'פרט חיזוק רכס אופקי'], ['tb-support', 'פרט קורה נושאת ↔ עמוד'], ['tb-seat', 'פרט קורת גג על קורה נושאת'], ['truss', 'פרט צמתי מסבך'], ['truss-splice', 'פרט חיבור המשך חגורת מסבך'], ['truss-end', 'פרט חגורה תחתונה ↔ עמוד']];
   types.forEach(([t, title], i) => {
     const c = d.connections.find((x) => x.type === t);
@@ -483,6 +485,86 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       sideList.forEach((sd, i) => drawSide(sd, { ...area, y1: area.y1 - i * hh, y0: area.y1 - (i + 1) * hh }));
       break;
     }
+    case 'gutter': {
+      const runs = d.section ? gutterRuns(b, d.section, d.members) : [];
+      const r = runs.find((x) => x.kind === 'eave') ?? runs[0];
+      if (!r) break;
+      const gs = gutterSpec(b.cladding?.gutter);
+      const dir = r.dir;
+      const e0 = r.ends[0];
+      const raf = e0 ? d.byId.get(e0.rafterId) : undefined;
+      const rp = raf ? tryProfile(raf.profile) : undefined;
+      const pu = tryProfile(b.purlins.left.profile)?.props.h ?? 200;
+      const half = (area.x1 - area.x0) / 2;
+      // ---- חתך: קצה הקורה, פטה אחרונה, פח גג, המזחלה ותומך — במערכת מקומית (x החוצה מקצה הקורה, z)
+      const X0 = e0 ? e0.faceX : r.x - dir * 20;
+      const L = (x: number) => dir * (x - X0); // מרחק מקצה הקורה החוצה
+      const tos = r.zInnerTop - pu + 10;
+      const hR = rp?.props.h ?? 300;
+      const gx0 = L(r.x), gx1 = gx0 + gs.bottom;
+      const bx = { x0: -900, x1: gx1 + 80, y0: r.zBottom - 160, y1: Math.max(r.zBottom + gs.outer, tos + pu) + 120 };
+      const v = placeView(sh, bx, { x0: area.x0 + half, y0: area.y0, x1: area.x1, y1: area.y1 - 6 }, undefined, 14);
+      setScale(v);
+      // קורה (מבט צד, חתוכה), פטה ופח גג
+      v.poly([{ x: -900, y: tos }, { x: 0, y: tos }, { x: 0, y: tos - hR }, { x: -900, y: tos - hR }], false, 'OUTLINE');
+      v.line({ x: -900, y: tos - (rp?.dims.tf ?? 10) }, { x: 0, y: tos - (rp?.dims.tf ?? 10) }, 'HIDDEN');
+      v.line({ x: -900, y: tos - hR + (rp?.dims.tf ?? 10) }, { x: 0, y: tos - hR + (rp?.dims.tf ?? 10) }, 'HIDDEN');
+      v.poly([{ x: -330, y: tos }, { x: -330, y: tos + pu }, { x: -270, y: tos + pu }, { x: -270, y: tos + pu - 18 }], false, 'OUTLINE');
+      v.poly([{ x: -330, y: tos }, { x: -270, y: tos }, { x: -270, y: tos + 18 }], false, 'OUTLINE');
+      v.line({ x: -900, y: tos + pu + 2 }, { x: gx0 + gs.bottom * 0.35, y: tos + pu + 2 - gs.bottom * 0.03 }, 'THIN');
+      v.text({ x: -600, y: tos + pu + 40 }, 'פח גג', 2.5, 'center', 'TEXT');
+      v.text({ x: -500, y: tos - hR / 2 }, raf?.profile ?? '', 2.5, 'center', 'TEXT');
+      v.text({ x: -300, y: tos + pu + 60 }, b.purlins.left.profile, 2.2, 'center', 'TEXT');
+      // מזחלה
+      const g = [{ x: gx0, y: r.zInnerTop }, { x: gx0, y: r.zBottom }, { x: gx1, y: r.zBottom }, { x: gx1, y: r.zBottom + gs.outer }, { x: gx1 - gs.lip, y: r.zBottom + gs.outer }];
+      v.poly(g, false, 'CUT');
+      v.line({ x: gx0, y: r.zInnerTop }, { x: gx0 - gs.lip, y: r.zInnerTop }, 'CUT');
+      // תומך L50/50/5
+      const lh = tryProfile(gs.bracket)?.props.h ?? 50;
+      v.poly([{ x: 0, y: r.zBottom }, { x: gx1 + 20, y: r.zBottom }, { x: gx1 + 20, y: r.zBottom - 5 }, { x: 5, y: r.zBottom - 5 }, { x: 5, y: r.zBottom - lh }, { x: 0, y: r.zBottom - lh }], true, 'OUTLINE');
+      // מידות
+      v.dim({ x: gx0, y: r.zBottom }, { x: gx1, y: r.zBottom }, { x: 1, y: 0 }, -10);
+      v.dim({ x: gx0, y: r.zBottom }, { x: gx0, y: r.zInnerTop }, { x: 0, y: 1 }, 8);
+      v.dim({ x: gx1, y: r.zBottom }, { x: gx1, y: r.zBottom + gs.outer }, { x: 0, y: 1 }, -8);
+      v.dim({ x: 0, y: r.zBottom - lh }, { x: gx1 + 20, y: r.zBottom - lh }, { x: 1, y: 0 }, -18, `${Math.round(gx1 + 20)}`);
+      v.level({ x: gx1, y: r.zBottom }, r.zBottom, 1, 12);
+      v.level({ x: -900, y: tos }, tos, -1, 12);
+      v.text({ x: (gx0 + gx1) / 2, y: r.zBottom + gs.outer + 70 }, `מזחלה — פח מגולוון t=${gs.t} · פריסה ${gutterDev(gs)} מ"מ`, 2.5, 'center', 'TEXT', 0, true);
+      v.text({ x: (gx0 + gx1) / 2, y: r.zBottom - lh - 330 }, `2×${gs.bracket.replace('x', '/')} מרותכים לקצה הקורה בכל מסגרת (מסגריה)`, 2.4, 'center', 'TEXT');
+      sh.ents.push({ k: 'text', p: { x: area.x1 - 2, y: area.y1 - 3 }, s: `פרט מזחלה — חתך בקצה הקורה  1:${v.scale}`, h: 3, align: 'right', layer: 'TEXT', bold: true });
+      // ---- ירידת מרזב: מבט חזית, לאורך עמוד
+      const dp = r.downpipes[0];
+      if (dp) {
+        const H = dp.zTop - dp.zBottom;
+        const by = { x0: -900, x1: 2600, y0: dp.zBottom - 650, y1: r.zBottom + gs.outer + 300 };
+        const w = placeView(sh, by, { x0: area.x0, y0: area.y0, x1: area.x0 + half - 4, y1: area.y1 - 6 }, undefined, 14);
+        const z0 = b.lineBase?.[''] ?? b.baseElevation;
+        w.line({ x: -900, y: z0 }, { x: 900, y: z0 }, 'OUTLINE');
+        w.poly([{ x: -110, y: z0 }, { x: -110, y: r.zBottom - 200 }, { x: 110, y: r.zBottom - 200 }, { x: 110, y: z0 }], false, 'HIDDEN');
+        w.text({ x: -170, y: (z0 + r.zBottom) / 2 }, 'עמוד', 2.4, 'right', 'TEXT');
+        w.poly([{ x: -700, y: r.zBottom }, { x: 700, y: r.zBottom }, { x: 700, y: r.zBottom + gs.outer }, { x: -700, y: r.zBottom + gs.outer }], true, 'OUTLINE');
+        const R = gs.pipeD / 2;
+        const px = 300;
+        // צינור אנכי וקשת 90° ליציאה אופקית לניקוז
+        w.poly([{ x: px - R, y: dp.zTop }, { x: px - R, y: dp.zBottom + 2 * R }, { x: px - 600, y: dp.zBottom + 2 * R }], false, 'OUTLINE');
+        w.poly([{ x: px + R, y: dp.zTop }, { x: px + R, y: dp.zBottom }, { x: px - 600, y: dp.zBottom }], false, 'OUTLINE');
+        const nc = Math.max(2, Math.ceil(H / gs.clampSpacing) + 1);
+        const zs = Array.from({ length: nc }, (_, i) => dp.zBottom + 2 * R + 150 + ((H - 2 * R - 400) * i) / (nc - 1));
+        for (const z of zs) { w.line({ x: px - R - 40, y: z }, { x: px + R + 40, y: z }, 'OUTLINE'); w.line({ x: px - R - 40, y: z }, { x: -110, y: z }, 'THIN'); }
+        for (let i = 1; i < zs.length; i++) w.dim({ x: px + R, y: zs[i - 1]! }, { x: px + R, y: zs[i]! }, { x: 0, y: 1 }, -10);
+        w.dim({ x: px, y: z0 }, { x: px, y: r.zBottom }, { x: 0, y: 1 }, -26);
+        w.level({ x: 700, y: r.zBottom }, r.zBottom, 1, 10);
+        w.level({ x: 900, y: z0 }, z0, 1, 10);
+        w.text({ x: px + R + 1000, y: r.zBottom - 300 }, `שקע Ø${gs.pipeD} בתחתית המזחלה`, 2.4, 'left', 'TEXT');
+        w.text({ x: px + R + 1700, y: (dp.zTop + dp.zBottom) / 2 }, `ירידת מרזב Ø${gs.pipeD}`, 2.5, 'left', 'TEXT', 0, true);
+        w.text({ x: px + R + 1700, y: (dp.zTop + dp.zBottom) / 2 - 330 }, `שלות כל ${(gs.clampSpacing / 1000).toFixed(1)} מ' לעמוד`, 2.4, 'left', 'TEXT');
+        w.text({ x: px - 300, y: dp.zBottom - 480 }, 'קשת 90° לניקוז', 2.4, 'center', 'TEXT');
+        sh.ents.push({ k: 'text', p: { x: area.x0 + half - 6, y: area.y1 - 3 }, s: `פרט ירידת מרזב — חזית  1:${w.scale}`, h: 3, align: 'right', layer: 'TEXT', bold: true });
+      }
+      const tk = gutterTakeoff(b, runs);
+      sh.ents.push({ k: 'text', p: { x: area.x1 - 2, y: area.y0 + 4 }, s: `ירידות: ${tk.reduce((a1, x) => a1 + x.downpipes, 0)} · מרווח מרבי ${(b.cladding!.gutter.downpipeSpacing / 1000).toFixed(1)} מ' · מתלי פח בין המסגרות כל ${(gs.hangerSpacing / 1000).toFixed(1)} מ' (פחחות) · שיפוע אורכי במזחלה לפי הפחח`, h: 2.4, align: 'right', layer: 'TEXT' });
+      break;
+    }
     case 'cladding': {
       scaleLabel = 'ללא';
       const t = claddingTakeoff(p, d);
@@ -495,7 +577,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
         [['חיפוי גג', '', `${t.roofArea.toFixed(1)} מ"ר`], ['חיפוי קירות (נטו)', '', `${t.wallArea.toFixed(1)} מ"ר`], ['פתחים', '', `${t.openingArea.toFixed(1)} מ"ר`], ['ברגי חיפוי', '', String(t.screws)]]);
       const xL2 = area.x1 - half - 8;
       let yL = table(sh, xL2, area.y1 - 2, [half * 0.62, half * 0.18, half * 0.2], 'פחים', ['פריט', '', 'אורך (מ\')'], t.flashings.map((f) => [f.name, '', mm(f.length)]));
-      if (t.gutters.length) yL = table(sh, xL2, yL - 6, [half * 0.55, half * 0.2, half * 0.25], 'מזחלות ומרזבים', ['מזחלה', 'מרזבים', 'אורך (מ\')'], t.gutters.map((g) => [g.name, String(g.downpipes), mm(g.length)]));
+      if (t.gutters.length) yL = table(sh, xL2, yL - 6, [half * 0.4, half * 0.15, half * 0.15, half * 0.3], 'מזחלות וירידות מרזב (פרט K-02)', ['מזחלה', 'פריסה', 'אורך (מ\')', 'ירידות'], t.gutters.map((g) => [g.name, g.dev ? `${g.dev}×${g.sheetT}` : '', mm(g.length), `${g.downpipes}×Ø${g.pipeD ?? ''} · ${mm(g.pipeLen ?? 0)} מ' · ${g.clamps ?? 0} שלות`]));
       const ops = b.cladding?.openings ?? [];
       if (ops.length) table(sh, xL2, yL - 6, [half * 0.3, half * 0.3, half * 0.2, half * 0.2], 'פתחים', ['פתח', 'קיר', 'רוחב×גובה', 'אדן'], ops.map((o) => [o.label ?? o.id, WALL_HE[o.wall], `${mm(o.width)}×${mm(o.height)}`, mm(o.sill)]));
       sh.ents.push({ k: 'text', p: { x: area.x1 - 2, y: Math.min(yR, yL) - 8 }, s: 'כמויות נטו לפי הגיאומטריה — יש להוסיף פחת חיתוך וחפיפות לפי יצרן הפנלים. אורכי פנלים בקירות הקצה: עד קו הגג (הגבוה ברוחב הפנל).', h: 2.5, align: 'right', layer: 'TEXT' });

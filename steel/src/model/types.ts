@@ -263,6 +263,17 @@ export interface TransferDef {
 
 export type WallId = 'L' | 'R' | 'F' | 'B';
 export interface OpeningDef { id: string; wall: WallId; /** מרחק מתחילת הקיר (L/R: מהמסגרת הראשונה; F/B: מציר שמאל) */ pos: Mm; width: Mm; height: Mm; sill: Mm; label?: string }
+/** חתך המזחלה ותמיכותיה (פרטי לקוח) */
+export interface GutterSpec {
+  /** עובי פח, תחתית, דופן פנימית (עד מתחת לפח הגג), דופן חיצונית, כיפוף שפה */
+  t: Mm; bottom: Mm; inner: Mm; outer: Mm; lip: Mm;
+  /** זוויתן תומך בכל קצה קורה (מרותך במסגריה) */
+  bracket: string;
+  /** מתלי פח בין המסגרות (עבודת פחחות); 0 = ללא */
+  hangerSpacing: Mm;
+  /** קוטר ירידת מרזב ומרווח שלות */
+  pipeD: Mm; clampSpacing: Mm;
+}
 export interface CladdingParams {
   roof: { enabled: boolean; panel: string; cover: Mm; eaveExt: Mm };
   walls: { enabled: boolean; sides: Record<WallId, boolean>; panel: string; cover: Mm; bottom: Mm;
@@ -272,7 +283,7 @@ export interface CladdingParams {
   posts: { enabled: boolean; profile: string; maxSpacing: Mm };
   jambProfile: string;
   openings: OpeningDef[];
-  gutter: { enabled: boolean; downpipeSpacing: Mm };
+  gutter: { enabled: boolean; downpipeSpacing: Mm; spec?: Partial<GutterSpec> };
   roofScrewsPerM2: number; wallScrewsPerM2: number;
 }
 
@@ -340,7 +351,7 @@ export interface MemberOverride {
 
 export type MemberKind = 'column' | 'rafter' | 'beam' | 'brace' | 'purlin' | 'girt' | 'cleat' | 'plate' | 'bolt' | 'anchor';
 
-export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee' | 'ridge-tie' | 'beam-splice' | 'tb-support' | 'tb-seat' | 'truss' | 'truss-splice' | 'truss-end' | 'custom';
+export type ConnType = 'eave' | 'ridge' | 'base' | 'purlin-cleat' | 'brace' | 'brace-end' | 'brace-cross' | 'purlin-splice' | 'rafter-side' | 'knee' | 'ridge-tie' | 'beam-splice' | 'tb-support' | 'tb-seat' | 'truss' | 'truss-splice' | 'truss-end' | 'gutter' | 'custom';
 export type ApprovalStatus = 'not-verified' | 'for-review' | 'approved';
 
 /** חיבור מבוסס פלטה וקבוצת ברגים (קורה-עמוד, רכס, פלטת בסיס). */
@@ -401,6 +412,8 @@ export interface Project {
     spliceMode?: 'stock' | 'equal';
     /** פלטות חיזוק משולשות בחיבור המשך של קורת I */
     spliceStiffeners?: boolean;
+    /** סוג חיבור ההמשך: bolted = פלטות קצה מוברגות בשטח (ברירת מחדל); welded = פלטות כיסוי מרותכות במסגריה (האלמנט יוצא כמכלול אחד) */
+    spliceJoint?: { beams?: 'bolted' | 'welded'; columns?: 'bolted' | 'welded' };
     /** שרטוטים בצבע (מסך); ברירת מחדל: שחור-לבן להדפסה */
     drawingColor?: boolean;
     /** דרגת ביצוע לפי EN 1090-2 */
@@ -459,7 +472,7 @@ export interface MarkRegistry {
 export interface RevisionEntry { rev: string; date: string; note: string; status: 'approved' | 'draft'; snapshot?: string }
 export interface RevisionState { current: string; locked: boolean; log: RevisionEntry[] }
 
-export type DrawingType = 'cover' | 'plates' | 'cladding' | 'roof-plan' | 'anchor-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga';
+export type DrawingType = 'cover' | 'plates' | 'cladding' | 'gutter' | 'roof-plan' | 'anchor-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga';
 export interface DrawingRecord {
   id: string;
   number: string;

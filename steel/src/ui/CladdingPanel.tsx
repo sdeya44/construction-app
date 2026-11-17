@@ -1,3 +1,5 @@
+import { gutterDev, gutterSpec } from '../geometry/gutter';
+import type { GutterSpec } from '../model/types';
 import { OpeningsSchematic, WallCladSchematic } from './schematics';
 import { useState } from 'react';
 import { useMemo } from 'react';
@@ -45,6 +47,17 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
         <div className="field"><label>בליטה לתוך המזחלה</label><LenField mm={cl.roof.eaveExt} unit="mm" onCommit={(v) => set({ roof: { ...cl.roof, eaveExt: v } })} /></div>
         <label className="row"><input type="checkbox" checked={cl.gutter.enabled} data-testid="clad-gutter" onChange={(e) => set({ gutter: { ...cl.gutter, enabled: e.target.checked } })} />מזחלות ומרזבים</label>
         <div className="field"><label>מרזב כל</label><LenField mm={cl.gutter.downpipeSpacing} unit={unit} onCommit={(v) => set({ gutter: { ...cl.gutter, downpipeSpacing: v } })} /></div>
+        {cl.gutter.enabled && (() => {
+          const gs = gutterSpec(cl.gutter);
+          const setG = (patch: Partial<GutterSpec>) => set({ gutter: { ...cl.gutter, spec: { ...(cl.gutter.spec ?? {}), ...patch } } });
+          const n = (k: keyof GutterSpec, lbl: string) => <div className="field" key={k}><label>{lbl}</label><LenField testId={`gut-${k}`} mm={gs[k] as number} unit="mm" onCommit={(v) => setG({ [k]: v } as Partial<GutterSpec>)} /></div>;
+          return <Adv id="gutter" label="חתך המזחלה, תמיכות וירידות">
+            <div className="hint" style={{ marginTop: 0 }}>פריסת הפח: <b>{gutterDev(gs)} מ"מ</b> · תומך {gs.bracket.replace('x', '/')} ×2 בכל קצה קורה (מרותך במסגריה). פרט מלא בגיליון K-02.</div>
+            {n('t', 'עובי פח')}{n('bottom', 'רוחב תחתית')}{n('inner', 'דופן פנימית')}{n('outer', 'דופן חיצונית')}{n('lip', 'כיפוף שפה')}
+            <div className="field prof"><label>זוויתן תומך</label><ProfilePicker value={gs.bracket} families={['L']} onCommit={(v) => setG({ bracket: v })} /></div>
+            {n('hangerSpacing', 'מתלי פח כל (0=ללא)')}{n('pipeD', 'קוטר ירידת מרזב')}{n('clampSpacing', 'שלות כל')}
+          </Adv>;
+        })()}
         <div className="field"><label>ברגים לגג (למ"ר)</label><NumField value={cl.roofScrewsPerM2} onCommit={(v) => set({ roofScrewsPerM2: v })} /></div>
       </>}
       {show('walls') && <>

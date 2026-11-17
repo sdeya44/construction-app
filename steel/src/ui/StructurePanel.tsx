@@ -54,6 +54,13 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
           <select className="inp" data-testid="splice-mode" value={p.settings.spliceMode ?? 'stock'} onChange={(e) => store.exec(setSettings({ spliceMode: e.target.value as 'stock' | 'equal' }))}>
             <option value="stock">מוט מלא ({(p.settings.stockLength / 1000).toFixed(1)} מ') + השלמה</option><option value="equal">חלקים שווים</option>
           </select></div>
+        {(['beams', 'columns'] as const).map((k) => (
+          <div className="field" key={k}><label>{k === 'beams' ? 'חיבור המשך קורות' : 'חיבור המשך עמודים'}</label>
+            <select className="inp" data-testid={`splice-joint-${k}`} value={p.settings.spliceJoint?.[k] ?? 'bolted'} onChange={(e) => store.exec(setSettings({ spliceJoint: { ...p.settings.spliceJoint, [k]: e.target.value as 'bolted' | 'welded' } }))}>
+              <option value="bolted">מוברג בשטח — פלטות קצה</option>
+              <option value="welded">מרותך במסגריה — פלטות כיסוי (יוצא כחלק אחד)</option>
+            </select></div>
+        ))}
         <div className="field"><label>פלטות חיזוק בחיבור המשך קורה</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="splice-stiff" checked={!!p.settings.spliceStiffeners} onChange={(e) => store.exec(setSettings({ spliceStiffeners: e.target.checked }))} />{p.settings.spliceStiffeners ? 'כן — משולשים מעל ומתחת' : 'לא'}</label></div>
       </>}
       </>}

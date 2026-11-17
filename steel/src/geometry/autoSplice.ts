@@ -1,4 +1,4 @@
-import { add, dot, norm, scale, sub, v3 } from '../core/vec';
+import { add, dot, norm, scale, sub, v3, type Vec3 } from '../core/vec';
 import type { BoltInfo, Connection, Member, Project, SupportPoint, ValidationIssue, WeldInfo } from '../model/types';
 import { tryProfile } from '../profiles/library';
 import { axialExtent, BEAM_SPLICE_T } from './parts';
@@ -37,7 +37,9 @@ export function effectiveSplices(project: Project, members: Member[], supports: 
     } else {
       // אזורים אסורים: תומכי פטות על הקורה (הפלטה המוגבהת מעל האגף העליון)
       // אזורים אסורים: תומכי פטות (±160) ועמודים מתחת לקורה — פלטת ראש עמוד ואלכסון עמוד-קורה (±1300)
-      const zoneList: [number, number][] = supports.filter((s) => s.rafterId === m.id).map((s) => [dot(sub(s.p, m.start), f.ex), 160]);
+      // חיבור מרותך: פלטת כיסוי באורך 500 על האגף העליון — התומך לא יושב עליה
+      const weldedJ = (m.kind === 'column' ? project.settings.spliceJoint?.columns : project.settings.spliceJoint?.beams) === 'welded';
+      const zoneList: [number, number][] = supports.filter((s) => s.rafterId === m.id).map((s) => [dot(sub(s.p, m.start), f.ex), weldedJ ? 340 : 160]);
       if (m.kind === 'rafter') for (const c of members) if (c.kind === 'column' && c.frameId === m.frameId) {
         const t = dot(sub(c.end, m.start), f.ex);
         const perp = Math.hypot(c.end.x - (m.start.x + f.ex.x * t), c.end.z - (m.start.z + f.ex.z * t));
@@ -84,6 +86,8 @@ export function buildBeamSplices(project: Project, members: Member[], splices: R
     const ts = [...new Set(splices[m.id] ?? [])].sort((a, b) => a - b);
     if (!ts.length) continue;
     const pr = tryProfile(m.profile);
+    const welded = (m.kind === 'column' ? project.settings.spliceJoint?.columns : project.settings.spliceJoint?.beams) === 'welded';
+    if (welded && pr) { weldedSplice(m, pr, ts, auto, out); continue; }
     if (!pr || !['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(pr.family)) continue;
     const f = localFrame(m);
     const h = pr.props.h, b = pr.props.b, tf = pr.dims.tf ?? 10, tw = pr.dims.tw ?? 7;
@@ -141,4 +145,50 @@ export function buildBeamSplices(project: Project, members: Member[], splices: R
   }
   void v3; void project;
   return out;
+}
+
+/**
+ * חיבור המשך מרותך במסגריה (פרטי הלקוח "פרט הארכת אגדים / עמוד"): פלטות כיסוי t=12 על שני האגפים ושתי פלטות ווב,
+ * ב-RHS — פלטה בשני צדדים. כל פלטה מרותכת לשני החלקים ⇒ החלקים והפלטות הם מכלול אחד (יוצא מהמסגריה שלם).
+ */
+function weldedSplice(m: Member, pr: NonNullable<ReturnType<typeof tryProfile>>, ts: number[], auto: Set<string>, out: { members: Member[]; connections: Connection[]; issues: ValidationIssue[] }) {
+  const f = localFrame(m);
+  const h = pr.props.h, b = pr.props.b;
+  const isI = ['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(pr.family);
+  const isBox = ['RHS', 'SHS'].includes(pr.family);
+  if (!isI && !isBox) { out.issues.push({ code: 'SPLICE_WELD', severity: 'warning', elementId: m.id, message: `${m.label}: חיבור המשך מרותך לא מוגדר לחתך ${m.profile} — לתכנון` }); return; }
+  const vc = m.anchor === 'top' ? -h / 2 : 0;
+  const tf = pr.dims.tf ?? pr.dims.t ?? 10, tw = pr.dims.tw ?? pr.dims.t ?? 7, r = pr.dims.r ?? 0;
+  const T = 12, r10 = (x: number) => Math.max(40, Math.floor(x / 10) * 10);
+  const { tMin, tMax } = axialExtent(m);
+  ts.forEach((t, k) => {
+    if (!(t > tMin + 100 && t < tMax - 100)) return;
+    const id = `C.WS.${m.id}.${k + 1}`;
+    const at = (dt: number, dv: number, du = 0) => add(add(add(m.start, scale(f.ex, t + dt)), scale(f.v, vc + dv)), scale(f.u, du));
+    const plates: { id: string; L: number; w: number }[] = [];
+    const plate = (pid: string, L: number, w: number, t2: number, dv: number, du: number, up: Vec3, desc: string) => {
+      out.members.push({ id: pid, kind: 'plate', label: desc, start: at(-L / 2, dv, du), end: at(L / 2, dv, du), profile: `PL${w}x${t2}`, material: m.material, rollDeg: 0, mirror: false, anchor: 'center', refUp: up, source: 'generated', manualPlacement: false, connId: id, partDesc: `${desc} PL${t2}×${w}×${L}` });
+      plates.push({ id: pid, L, w });
+    };
+    if (isI) {
+      const wf = r10((b * 2) / 3), hw = r10(h - 2 * tf - 2 * r - 40), L = 500;
+      plate(`${id}.FT`, L, wf, T, h / 2 + T / 2, 0, f.v, 'פלטת כיסוי אגף עליון');
+      plate(`${id}.FB`, L, wf, T, -h / 2 - T / 2, 0, f.v, 'פלטת כיסוי אגף תחתון');
+      plate(`${id}.WL`, L, hw, T, 0, tw / 2 + T / 2, f.u, 'פלטת ווב');
+      plate(`${id}.WR`, L, hw, T, 0, -tw / 2 - T / 2, f.u, 'פלטת ווב');
+    } else {
+      const tb = 10, L = 600;
+      plate(`${id}.SL`, L, r10(b - 20), tb, 0, b / 2 + tb / 2, f.u, 'פלטת הארכה צד');
+      plate(`${id}.SR`, L, r10(b - 20), tb, 0, -b / 2 - tb / 2, f.u, 'פלטת הארכה צד');
+    }
+    // שני ריתוכים לכל פלטה — אחד לכל צד של התפר (שני החלקים מרותכים לאותה פלטה ⇒ מכלול אחד)
+    const welds: WeldInfo[] = plates.flatMap((pl, i) => [-1, 1].map((sg, j) => {
+      const c = at((sg * pl.L) / 4, 0);
+      return { id: `${id}.W${i + 1}${j ? 'B' : 'A'}`, connId: id, type: 'fillet' as const, a: 6, length: Math.round(pl.L + pl.w), location: 'shop' as const, between: [m.id, pl.id] as [string, string], from: c, to: c };
+    }));
+    out.connections.push({
+      id, type: 'beam-splice', label: `חיבור המשך מרותך ${m.label} (${(t / 1000).toFixed(2)} מ')${auto.has(m.id) ? ' — אוטומטי' : ''} — מסגריה`,
+      members: [m.id], parts: plates.map((x) => x.id), bolts: [], welds, status: 'not-verified', fixity: 'rigid', overridden: false,
+    });
+  });
 }

@@ -258,3 +258,51 @@ describe('חריגים ושילובים מסימולציית הממשק', () => 
     expect(c.end.z).toBeLessThan(c2.end.z - 50); // IPE400 עמוקה ב-100 מ"מ מ-IPE300
   });
 });
+
+describe('חיבור המשך מרותך במסגריה', () => {
+  it('WS-01: קורה 15 מ\' ועמוד גבוה — פלטות כיסוי/ווב מרותכות, ללא ברגים וללא התנגשויות, שני החלקים במכלול אחד', async () => {
+    const b = { ...defaultBuilding(), width: 30000, ridgeX: 15000, eaveLeft: 13000, eaveRight: 13000 };
+    const p = newProject('x', b);
+    p.settings.spliceJoint = { beams: 'welded', columns: 'welded' };
+    const d = generate(p);
+    expect(d.issues.filter((i) => i.severity === 'error').map((i) => i.message)).toEqual([]);
+    const ws = d.connections.filter((c) => c.id.startsWith('C.WS.'));
+    expect(ws.some((c) => c.members[0]!.includes('RAF'))).toBe(true);
+    expect(ws.some((c) => c.members[0]!.includes('COL'))).toBe(true);
+    expect(ws.every((c) => c.bolts.length === 0 && c.welds.length >= 4)).toBe(true);
+    const fab = computeFabrication(p, d);
+    const raf = d.parts.filter((x) => x.memberId === 'F2.RAF.L');
+    expect(raf.length).toBe(2);
+    expect(fab.byPart.get(raf[0]!.id)!.assembly).toBe(fab.byPart.get(raf[1]!.id)!.assembly);
+    // בורג: ברירת מחדל מוברגת — כל חלק מכלול נפרד
+    const p2 = newProject('y', b); const d2 = generate(p2); const f2 = computeFabrication(p2, d2);
+    const r2 = d2.parts.filter((x) => x.memberId === 'F2.RAF.L');
+    expect(f2.byPart.get(r2[0]!.id)!.assembly).not.toBe(f2.byPart.get(r2[1]!.id)!.assembly);
+  });
+});
+
+describe('מזחלה וירידות מרזב', () => {
+  it('GU-01: דו-שיפועי עם חיפוי — 2 תומכים מרותכים בכל קצה קורה, פריסה 1130, ירידות בעמודים, גיליון K-02', async () => {
+    const { defaultCladding, claddingTakeoff } = await import('../src/geometry/cladding');
+    const b = defaultBuilding(); b.cladding = defaultCladding();
+    const p = newProject('x', b); const d = generate(p);
+    expect(d.issues.filter((i) => i.severity === 'error').map((i) => i.message)).toEqual([]);
+    const gb = d.connections.filter((c) => c.type === 'gutter');
+    expect(gb.length).toBe(12); // 6 מסגרות × 2 קצוות
+    expect(gb.every((c) => c.parts.length === 2 && c.welds.every((w) => w.location === 'shop'))).toBe(true);
+    const t = claddingTakeoff(p, d)!;
+    expect(t.gutters.length).toBe(2);
+    expect(t.gutters[0]!.dev).toBe(1130);
+    expect(t.gutters[0]!.downpipes).toBeGreaterThanOrEqual(3);
+    expect(t.surfaces.some((s) => s.kind === 'gutter')).toBe(true);
+    // התומך במכלול של הקורה (מגולוון יחד)
+    const fab = computeFabrication(p, d);
+    const raf = fab.parts.find((x) => x.memberId === 'F1.RAF.L')!;
+    const br = fab.parts.find((x) => x.memberId === gb[0]!.parts[0])!;
+    expect(fab.assemblies.find((a) => a.id === raf.assembly)!.parts).toContain(br.id);
+    const def = drawingCatalog(p, d, fab).find((c) => c.type === 'gutter')!;
+    expect(def.number).toBe('K-02');
+    const sh = buildSheet(def, p, d, fab, computeBom(d, fab));
+    expect(sh.ents.some((e) => e.k === 'text' && e.s.includes('1130'))).toBe(true);
+  });
+});

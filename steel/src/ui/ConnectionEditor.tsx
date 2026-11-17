@@ -13,7 +13,7 @@ import { PlateWizard } from './PlateWizard';
 import { CleatTypePicker } from './ConnTypePicker';
 
 const STATUS: Record<ApprovalStatus, string> = { 'not-verified': 'לא מאומת', 'for-review': 'לבדיקה', approved: 'מאושר' };
-export const CONN_TYPE: Record<Connection['type'], string> = { eave: 'עמוד-קורה (שתי פלטות מוברגות)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה', 'rafter-side': 'קורה לצד עמוד (פלטת קצה)', knee: 'אלכסון עמוד-קורה', 'ridge-tie': 'פרופיל חיזוק אופקי ברכס', 'beam-splice': 'חיבור המשך קורה (פלטות קצה)', 'tb-support': 'קורה נושאת ↔ עמוד', 'tb-seat': 'קורת גג על קורה נושאת', truss: 'מסבך — צמתים מרותכים', 'truss-splice': 'חיבור המשך חגורת מסבך', 'truss-end': 'חגורה תחתונה ↔ עמוד', custom: 'פרט מותאם (מהספרייה)' };
+export const CONN_TYPE: Record<Connection['type'], string> = { eave: 'עמוד-קורה (שתי פלטות מוברגות)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה', 'rafter-side': 'קורה לצד עמוד (פלטת קצה)', knee: 'אלכסון עמוד-קורה', 'ridge-tie': 'פרופיל חיזוק אופקי ברכס', 'beam-splice': 'חיבור המשך קורה (פלטות קצה)', 'tb-support': 'קורה נושאת ↔ עמוד', 'tb-seat': 'קורת גג על קורה נושאת', truss: 'מסבך — צמתים מרותכים', 'truss-splice': 'חיבור המשך חגורת מסבך', 'truss-end': 'חגורה תחתונה ↔ עמוד', gutter: 'תומכי מזחלה', custom: 'פרט מותאם (מהספרייה)' };
 const BOLT_D = [10, 12, 16, 20, 24];
 
 /** רשימת החיבורים של אלמנט + כפתור פתיחת עורך. */

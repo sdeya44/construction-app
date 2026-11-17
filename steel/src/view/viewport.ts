@@ -389,7 +389,7 @@ export class Viewport {
         const pos: number[] = [];
         for (let i = 1; i < sf.pts.length - 1; i++) for (const q of [sf.pts[0], sf.pts[i], sf.pts[i + 1]]) pos.push(q.x, q.y, q.z);
         const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-        const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: sf.kind === 'roof' ? 0x6f8fa8 : 0x9aa8a0, transparent: true, opacity: sf.kind === 'roof' ? 0.16 : 0.12, side: THREE.DoubleSide, depthWrite: false }));
+        const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: sf.kind === 'roof' ? 0x6f8fa8 : sf.kind === 'gutter' ? 0x8c9aa6 : sf.kind === 'pipe' ? 0x7a8790 : 0x9aa8a0, transparent: true, opacity: sf.kind === 'roof' ? 0.16 : sf.kind === 'gutter' || sf.kind === 'pipe' ? 0.75 : 0.12, side: THREE.DoubleSide, depthWrite: false }));
         mesh.renderOrder = 2;
         this.helpers.add(mesh);
         const lp: number[] = []; for (let i = 0; i < sf.pts.length; i++) { const a = sf.pts[i], c = sf.pts[(i + 1) % sf.pts.length]; lp.push(a.x, a.y, a.z, c.x, c.y, c.z); }

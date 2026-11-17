@@ -25,6 +25,7 @@ export function defaultCladding(): CladdingParams {
 }
 export const WALL_HE: Record<WallId, string> = { L: 'קיר צד שמאל (ציר א)', R: 'קיר צד ימין', F: 'קיר קצה קדמי', B: 'קיר קצה אחורי' };
 
+import { gutterRuns, gutterSurfaces, gutterTakeoff } from './gutter';
 const Z = v3(0, 0, 1);
 
 /** גובה פני העליון של מישור הגג (קו הייחוס) ב-x, ומישור מתאים */
@@ -200,10 +201,10 @@ export interface CladdingTakeoff {
   roofArea: number; wallArea: number; openingArea: number;
   roofSheets: SheetRow[]; wallSheets: SheetRow[];
   flashings: { name: string; length: number }[];
-  gutters: { name: string; length: number; downpipes: number }[];
+  gutters: { name: string; length: number; downpipes: number; dev?: number; sheetT?: number; hangers?: number; pipeD?: number; pipeLen?: number; clamps?: number; elbows?: number }[];
   screws: number;
   /** משטחים להצגה בתלת־ממד (מצולעים במ"מ) */
-  surfaces: { kind: 'roof' | 'wall'; pts: Vec3[] }[];
+  surfaces: { kind: 'roof' | 'wall' | 'gutter' | 'pipe'; pts: Vec3[] }[];
 }
 
 export function claddingTakeoff(p: Project, d: DerivedModel): CladdingTakeoff | null {
@@ -237,14 +238,15 @@ export function claddingTakeoff(p: Project, d: DerivedModel): CladdingTakeoff | 
       const A = add(v3(pl.a.x, y0, pl.a.z), off), B = add(v3(pl.b.x, y0, pl.b.z), off);
       res.surfaces.push({ kind: 'roof', pts: [A, B, add(B, v3(0, Wy, 0)), add(A, v3(0, Wy, 0))] });
       // מזחלה בקצה נמוך חופשי; מזחלה פנימית בשקע בין שני מישורים
-      if (cl.gutter.enabled) {
-        const lowShared = (ends.get(key(low)) ?? 0) >= 2;
-        const highOther = sec.planes.some((q) => q !== pl && [q.a, q.b].some((e) => key(e) === key(low)) && Math.min(q.a.z, q.b.z) >= low.z - 1);
-        if (!lowShared) res.gutters.push({ name: `מזחלה — קצה תחתון ${pl.label}`, length: Wy, downpipes: Math.max(1, Math.ceil(Wy / cl.gutter.downpipeSpacing)) });
-        else if (highOther && !res.gutters.some((g) => g.name.includes(`${Math.round(low.x)}`))) res.gutters.push({ name: `מזחלה פנימית (שקע) x=${Math.round(low.x)}`, length: Wy, downpipes: Math.max(2, Math.ceil(Wy / cl.gutter.downpipeSpacing)) });
-      }
+
       // קצה עליון חופשי (חד־שיפועי) — פח קצה עליון
       if ((ends.get(key(high)) ?? 0) < 2) res.flashings.push({ name: `פח קצה עליון ${pl.label}`, length: Wy });
+    }
+    // מזחלות וירידות מרזב — לפי קצוות הקורות בפועל
+    if (cl.gutter.enabled) {
+      const runs = gutterRuns(b, sec, d.members);
+      res.gutters.push(...gutterTakeoff(b, runs));
+      res.surfaces.push(...gutterSurfaces(b, runs));
     }
     // רכסים: נקודה גבוהה משותפת לשני מישורים
     for (const [k, n] of ends) if (n >= 2) {
