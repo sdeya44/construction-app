@@ -294,7 +294,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
         v.poly([{ x: xs[0], y: m.start.y - hb }, { x: xs[1], y: m.start.y - hb }, { x: xs[1], y: m.start.y + hb }, { x: xs[0], y: m.start.y + hb }], true, 'OUTLINE');
         // סימון הרכבה על כל קורה
         const mk = asmOf(m.id);
-        if (mk) v.text({ x: xs[0] + (xs[1] - xs[0]) * 0.3, y: m.start.y + hb + 220 }, mk, 2.5, 'center', 'MARK', 0, true);
+        if (mk) v.text({ x: xs[0] + (xs[1] - xs[0]) * 0.22, y: m.start.y + hb + 2.2 * v.scale }, mk, 2.5, 'center', 'MARK', 0, true);
       }
       for (const m of d.members.filter((x) => x.kind === 'column')) {
         const c = getProfile(m.profile);

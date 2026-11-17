@@ -7,6 +7,7 @@ test('UX-01: סרגל הקשרי וכרטיס חיבור לאלמנט בודד; 
   await page.evaluate(() => (window as any).__ksp.store.select(['F3.RAF.L']));
   await expect(page.getByTestId('ctxbar')).toBeVisible();
   await expect(page.getByTestId('prop-profile-size')).toHaveValue('IPE300');
+  await page.getByTestId('conncard-tag').click();
   await expect(page.getByTestId('conncard')).toBeVisible();
   await expect(page.getByTestId('cc-title')).toContainText('שתי פלטות');
   await shot(page, 'UX-01_single');

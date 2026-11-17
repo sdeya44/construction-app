@@ -45,6 +45,8 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
   const mat = b.material;
   const raf = getProfile(b.rafterProfile), col = getProfile(b.columnProfile);
   const tw = raf.dims.tw ?? raf.dims.t ?? 6;
+  // עובי ווב לפי החתך בפועל של הקורה (כולל חריג לקורה אחת) — פח החיבור מרותך לפני הווב
+  const rtw = (id: string) => { const nm = profOf?.(id); const pr = nm ? tryProfile(nm) : null; return pr ? pr.dims.tw ?? pr.dims.t ?? tw : tw; };
   for (const [key, prof] of [['roof', br.roof.profile], ['walls', br.walls.profile], ['ties', br.purlinTies.profile]] as const) {
     if (!tryProfile(prof)) res.issues.push({ code: 'PROFILE', severity: 'error', message: `חתך קושרת לא מוכר (${key}): ${prof}` });
   }
@@ -70,7 +72,9 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
       const endX = (e: 'a' | 'b') => {
         const E = pl[e], toward = E.x < (lo + hi) / 2 ? 1 : -1;
         if (!isJoined(e) && inside.length) return toward > 0 ? inside[0] : inside[inside.length - 1];
-        return E.x + toward * ridgeGap;
+        // סבכת RHS בקצה שמחובר לצד עמוד שממשיך למעלה: צומת הסבכה (פח + לשוניות) רחב — מתרחקים גם בחצי עומק העמוד
+        const side = topo.junctions.some((j) => j.plane === pl && j.kind === 'side' && j.end === e);
+        return E.x + toward * (ridgeGap + (side && br.roof.type === 'rhs' ? col.props.h / 2 + 40 : 0));
       };
       let xa = endX('a'), xc = endX('b');
       // עמוד יחיד מתחת למישור (סככת T / קונזולה): הקושרות עד קצות המישור
@@ -79,7 +83,8 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         xa = g('a'); xc = g('b');
       }
       const x0 = Math.min(xa, xc), x1 = Math.max(xa, xc);
-      const st = [x0, ...inside.filter((x) => x > x0 + 500 && x < x1 - 500), x1];
+      // סבכת RHS: מישור שלם (המוטות מחברים קורות, לא עמודים) — פיצול בעמוד פנימי יוצר שתי סבכות עם צומת משותף מתנגש
+      const st = br.roof.type === 'rhs' ? [x0, x1] : [x0, ...inside.filter((x) => x > x0 + 500 && x < x1 - 500), x1];
       // סדר מנקודה a לנקודה c (תאימות למזהים בגג הקלאסי)
       const ordered = xa <= xc ? st : [...st].reverse();
       const nseg = ordered.length - 1;
@@ -97,8 +102,12 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         const o = add(v3(sl.a.x, 0, sl.a.z), scale(n, -raf.props.h / 2));
         const L = Math.hypot(sl.c.x - sl.a.x, sl.c.z - sl.a.z);
         const rid = sl.rid;
+        // מישור צר מדי לסבכה (זווית האלכסון למוט < ~30°): הלשוניות בצמתים חופפות — קושרות X במישור הזה
+        const narrow = br.roof.type === 'rhs' && L / Math.max(1, Math.abs(f1.y - f0.y)) < 0.58 && (br.roof.rhs?.panels ?? 0) <= 1;
+        if (narrow && !res.issues.some((i) => i.code === 'HB_NARROW' && i.elementId === sl.side)) res.issues.push({ code: 'HB_NARROW', severity: 'info', elementId: sl.side, message: `סבכה אופקית: מישור ${sl.side} צר (${(L / 1000).toFixed(2)} מ' לעומת מפתח ${(Math.abs(f1.y - f0.y) / 1000).toFixed(2)} מ') — ללא סבכה במישור זה (הצמתים היו מתנגשים); המישור נתמך דרך הסבכה במישור הסמוך` });
+        if (narrow) continue;
         if (br.roof.type === 'rhs') rhsTruss({ res, mat: b.material }, br.roof.rhs ?? defaultRhsTruss(), `R${bay + 1}.${sl.side}`, `סבכה אופקית מפתח ${bay + 1}`, o, n, dir, L,
-          f0.y, f1.y, f0.y + tw / 2, f1.y - tw / 2, rid(f0.id), rid(f1.id));
+          f0.y, f1.y, f0.y + rtw(rid(f0.id)) / 2, f1.y - rtw(rid(f1.id)) / 2, rid(f0.id), rid(f1.id));
         else {
           // שיפוע ארוך: חלוקה לכמה פנלי X לאורך השיפוע, כך שאלכסון לא יעלה על חומר הגלם (החלטת משתמש 15.11.2026)
           const bayW = Math.abs(f1.y - f0.y), stock = stockLen;
@@ -108,7 +117,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
           for (let j = 0; j < k; j++) {
             const w0 = (L * j) / k + (j > 0 ? gap : 0), w1 = (L * (j + 1)) / k - (j < k - 1 ? gap : 0);
             xbrace(`R${bay + 1}.${sl.side}${k > 1 ? `.${j + 1}` : ''}`, `קושרת גג מפתח ${bay + 1}${k > 1 ? ` פנל ${j + 1}` : ''}`, br.roof.profile, o, n, dir,
-              { y: f0.y, w: w0 }, { y: f1.y, w: w1 }, f0.y + tw / 2, f1.y - tw / 2, rid(f0.id), rid(f1.id));
+              { y: f0.y, w: w0 }, { y: f1.y, w: w1 }, f0.y + rtw(rid(f0.id)) / 2, f1.y - rtw(rid(f1.id)) / 2, rid(f0.id), rid(f1.id));
           }
         }
       }

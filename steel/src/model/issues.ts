@@ -13,5 +13,5 @@ export const ISSUE_LABEL: Record<string, string> = {
   KNEE_LOW: 'אלכסון נמוך', KNEE_SHORT: 'אלכסון קצר', FRAMES: 'מסגרות', LINE_FREE: 'ציר ללא גג', PLANE_FREE: 'מישור ללא תמיכה',
   PLANE_SHORT: 'מישור קצר', PLANE_THROUGH: 'מישור דרך עמוד', PLATE_SMALL: 'פלטה קטנה', PURLIN_REMAINDER: 'שארית בחלוקת פטות',
   PURLIN_RIDGE: 'פטה ליד הרכס', RIDGE_HAUNCH: 'חיזוק רכס', RIDGE_TIE: 'פרופיל חיזוק ברכס', SIDE_ABOVE: 'חיבור צד עמוד',
-  SPLICE_CLOSE: 'חיבורי המשך צפופים', SPLICE_RANGE: 'חיבור המשך מחוץ לאלמנט', BRACE_ANGLE: 'זווית אלכסון', ANCHOR_EDGE: 'מוט עיגון קרוב לשפה', BOLT_LONG: 'בורג ארוך',
+  SPLICE_CLOSE: 'חיבורי המשך צפופים', SPLICE_RANGE: 'חיבור המשך מחוץ לאלמנט', HB_NARROW: 'סבכה במישור צר', BRACE_ANGLE: 'זווית אלכסון', ANCHOR_EDGE: 'מוט עיגון קרוב לשפה', BOLT_LONG: 'בורג ארוך',
 };

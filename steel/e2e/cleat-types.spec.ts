@@ -54,6 +54,7 @@ test('ET-01: קצה אלמנט — בחירת פרט מוכן בכרטיס, וש
   await page.getByTestId('nav-b:knee').click();
   await page.getByTestId('kb-on').check();
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
+  await page.getByTestId('et-start-open').click();
   await page.getByTestId('et-start-all').check();
   await page.getByTestId('et-start-preset-preset-fin').click();
   const lib = () => page.evaluate(() => (window as any).__ksp.store.state.project.customDetails.map((x: any) => x.name));

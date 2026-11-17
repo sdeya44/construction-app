@@ -93,6 +93,9 @@ export function ConnCard({ onOpen }: { onOpen: (id: string) => void }) {
   const active = useStore((s) => s.activeConn);
   const [i, setI] = useState(0);
   useEffect(() => setI(0), [sel]);
+  // מקופל לתג קטן כברירת מחדל (לא מכסה את המודל); נשמר בין בחירות
+  const [expanded, setExpandedS] = useState(() => { try { return localStorage.getItem('ksp-cc-open') === '1'; } catch { return false; } });
+  const setExpanded = (v: boolean) => { setExpandedS(v); try { localStorage.setItem('ksp-cc-open', v ? '1' : '0'); } catch { /* */ } };
   const m = sel.length === 1 ? d.byId.get(sel[0]) : undefined;
   const conns = useMemo(() => (m ? connectionsOf(m, d.connections, d.connById).sort((a, b) => ORDER[a.type] - ORDER[b.type]) : []), [m, d]);
   if (!m || !conns.length || active) return null;
@@ -101,11 +104,17 @@ export function ConnCard({ onOpen }: { onOpen: (id: string) => void }) {
   const agg = new Map<string, number>();
   for (const b of c.bolts) { const k = `M${b.d} · ${b.grade} · ${b.location === 'site' ? 'שטח' : 'מסגריה'}`; agg.set(k, (agg.get(k) ?? 0) + 1); }
   const shop = c.welds.filter((w) => w.location === 'shop').length, site = c.welds.length - shop;
+  if (!expanded) return (
+    <button className="conncard-tag" onClick={() => setExpanded(true)} data-testid="conncard-tag" title="פרט החיבור של האלמנט — לחיצה לפתיחה">
+      🔩 {CONN_TYPE[c.type]}{conns.length > 1 ? ` (+${conns.length - 1})` : ''} ›
+    </button>
+  );
   return (
     <aside className="conncard" aria-label="פרט חיבור של האלמנט" data-testid="conncard">
       <div className="cc-body">
         <div className="cc-top">
           <span className="eyebrow">פרט חיבור {conns.length > 1 ? `· ${Math.min(i, conns.length - 1) + 1}/${conns.length}` : ''}</span>
+          <button className="cc-min" aria-label="כיווץ לתג" title="כיווץ לתג" onClick={() => setExpanded(false)} data-testid="cc-min">–</button>
           {conns.length > 1 && <span className="cc-nav">
             <button aria-label="הקודם" onClick={() => setI((i - 1 + conns.length) % conns.length)}>‹</button>
             <button aria-label="הבא" data-testid="cc-next" onClick={() => setI((i + 1) % conns.length)}>›</button>

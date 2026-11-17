@@ -107,13 +107,23 @@ export function EndTypePicker({ memberId, end }: { memberId: string; end: 'start
   const [all, setAll] = useState(false);
   const sim = all ? similarSites(d.members, key, true, d.connections) : [key];
   const regular = d.connections.find((c) => c.type !== 'custom' && (c.members.includes(memberId) || c.parts.includes(memberId)));
+  // מצב מקופל: שורה אחת עם הפרט הנוכחי; הכרטיסים נפתחים בלחיצה
+  const [open, setOpen] = useState(false);
+  const cur = assigned ? (p.customDetails ?? []).find((x) => x.id === assigned)?.name ?? 'פרט מותאם' : 'פרט רגיל';
+  if (!open) return (
+    <div className="type-pick compact" data-testid={`end-type-${end}`}>
+      <button className="btn small" onClick={() => setOpen(true)} data-testid={`et-${end}-open`} title="בחירת סוג חיבור אחר / פרט מהספרייה / סטודיו">{cur} · שינוי ▾</button>
+      <button className="btn small" onClick={() => store.set({ detailStudio: key })} data-testid={`studio-${end}`} title="בניית פרט חדש או עריכת הפרט בסטודיו">{assigned ? '✎ סטודיו' : '＋ סטודיו'}</button>
+    </div>
+  );
   return (
     <div className="type-pick" data-testid={`end-type-${end}`}>
+      <button className="btn small link-btn" onClick={() => setOpen(false)} style={{ marginBottom: 6 }}>▴ סגירה</button>
       <div className="type-grid">
         <TypeCard on={!assigned} title="פרט רגיל" sub={regular ? regular.label.split(' ').slice(0, 3).join(' ') : 'לפי הגדרות התוכנה'} onClick={() => store.exec(withDetailCleared(sim, null, 'חזרה לפרט הרגיל'))} testId={`et-${end}-regular`} />
         {lib.map((x) => <TypeCard key={x.id} on={assigned === x.id} title={x.name} sub="מהספרייה" onClick={() => store.exec(assignDetail(sim, x))} testId={`et-${end}-lib-${x.id}`} />)}
         {presets.filter((x) => !lib.some((l) => l.name === x.name)).map((x) => <TypeCard key={x.id} on={false} title={x.name} sub="פרט מוכן" onClick={() => store.exec(assignDetail(sim, { ...structuredClone(x), id: `cd-${Date.now().toString(36)}` }))} testId={`et-${end}-preset-${x.id}`} />)}
-        <TypeCard on={false} title={assigned ? '✎ עריכה בסטודיו' : '＋ פרט חדש בסטודיו…'} sub="בונים פרט מחלקים ושומרים לספרייה" onClick={() => store.set({ detailStudio: key })} testId={`studio-${end}`} />
+        <TypeCard on={false} title={assigned ? '✎ עריכה בסטודיו' : '＋ פרט חדש בסטודיו…'} sub="בונים פרט מחלקים ושומרים לספרייה" onClick={() => store.set({ detailStudio: key })} testId={`studio-${end}-card`} />
       </div>
       <label className="ss-radio"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} data-testid={`et-${end}-all`} /> להחיל גם על כל הקצוות הדומים{all ? ` (${sim.length})` : ''}</label>
     </div>

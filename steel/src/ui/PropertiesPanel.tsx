@@ -1,5 +1,5 @@
 import { settingsOf } from './navIndex';
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { resetOverrides, setBuilding, setKneeBraces, setMemberProps, type Command } from '../commands/commands';
 import { useFab } from '../fab/useFab';
 import { fromMm } from '../core/units';
@@ -231,23 +231,45 @@ function profileRoute(m: Member, p: Project): { all: (v: string) => Command; one
 function ProfileScope({ m }: { m: Member }) {
   const d = useStore((s) => s.derived);
   const p = useStore((s) => s.project);
-  const [scope, setScope] = useState<'one' | 'all'>('one');
+  // היקף שנבחר מראש (לחיצה על הכפתורים); null = לשאול אחרי בחירת החתך
+  const [scope, setScope] = useState<'one' | 'all' | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+  useEffect(() => { setPending(null); setScope(null); }, [m.id]);
   const sim = similarOf(m, d.members);
   const route = profileRoute(m, p);
-  const eff = route && !route.one ? 'all' : scope;
   const role = m.kind === 'column' || m.kind === 'rafter' || m.kind === 'purlin' ? m.kind : undefined;
-  const commit = (v: string) => {
+  const allCount = route ? d.members.filter((x) => x.id.split('.')[0] === m.id.split('.')[0] && x.kind === m.kind).length : sim.length;
+  const allLabel = route ? `כל ${route.what} (${allCount})` : `כל ${PLURAL[m.kind] ?? 'הדומים'} ב-${m.profile} (${sim.length})`;
+  const canChoose = sim.length > 1 && (!route || route.one);
+  const apply = (v: string, eff: 'one' | 'all') => {
+    setPending(null);
     if (eff === 'all' && route) { store.exec(route.all(v)); const pre = m.id.split('.')[0] + '.'; const ov = Object.keys(p.memberOverrides).filter((x) => x.startsWith(pre) && p.memberOverrides[x]?.profile); if (ov.length) store.exec(resetOverrides(ov)); return; }
     store.exec(setMemberProps(eff === 'all' ? sim.map((x) => x.id) : [m.id], { profile: v }));
   };
+  const commit = (v: string) => {
+    if (route && !route.one) return apply(v, 'all');
+    if (!canChoose) return apply(v, 'one');
+    if (scope) return apply(v, scope);
+    setPending(v);
+  };
   return (
     <>
-      <div className="field prof"><label>חתך</label><ProfilePicker testId="prop-profile" value={m.profile} families={FAMS[m.kind]} role={role} onCommit={commit} /></div>
+      <div className="field prof"><label>חתך</label><ProfilePicker testId="prop-profile" value={pending ?? m.profile} families={FAMS[m.kind]} role={role} onCommit={commit} /></div>
       {route && !route.one && <div className="hint" style={{ marginTop: 0 }}>החתך חל על כל {route.what} — פחי החיבור נקבעים לפיו.</div>}
-      {sim.length > 1 && (!route || route.one) && (
-        <div className="seg scope-seg" role="radiogroup" aria-label="היקף השינוי">
-          <button className={`tbtn${scope === 'one' ? ' on' : ''}`} data-testid="scope-one" onClick={() => setScope('one')}>רק האלמנט הזה</button>
-          <button className={`tbtn${scope === 'all' ? ' on' : ''}`} data-testid="scope-all" onClick={() => setScope('all')}>{route ? `כל ${route.what} (${d.members.filter((x) => x.id.split('.')[0] === m.id.split('.')[0] && x.kind === m.kind).length})` : `כל ${PLURAL[m.kind] ?? 'הדומים'} ב-${m.profile} (${sim.length})`}</button>
+      {pending && (
+        <div className="scope-ask" role="alertdialog" aria-label="היקף שינוי החתך" data-testid="scope-ask">
+          <div>להחיל <b className="mono">{pending}</b> על:</div>
+          <div className="ss-row">
+            <button className="btn primary" autoFocus onClick={() => apply(pending, 'all')} data-testid="scope-ask-all">{allLabel}</button>
+            <button className="btn" onClick={() => apply(pending, 'one')} data-testid="scope-ask-one">רק האלמנט הזה</button>
+            <button className="btn small" onClick={() => setPending(null)}>ביטול</button>
+          </div>
+        </div>
+      )}
+      {canChoose && !pending && (
+        <div className="seg scope-seg" role="radiogroup" aria-label="היקף השינוי (אפשר לקבוע מראש; אחרת התוכנה שואלת)">
+          <button className={`tbtn${scope === 'one' ? ' on' : ''}`} data-testid="scope-one" onClick={() => setScope(scope === 'one' ? null : 'one')}>רק האלמנט הזה</button>
+          <button className={`tbtn${scope === 'all' ? ' on' : ''}`} data-testid="scope-all" onClick={() => setScope(scope === 'all' ? null : 'all')}>{allLabel}</button>
         </div>
       )}
     </>

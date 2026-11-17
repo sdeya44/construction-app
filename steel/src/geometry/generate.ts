@@ -1,5 +1,5 @@
 import { add, dot, norm, scale, sub, v3, type Plane, type Vec3 } from '../core/vec';
-import { getProfile } from '../profiles/library';
+import { getProfile, tryProfile } from '../profiles/library';
 import type {
   DerivedModel, GridLine, Member, ModelNode, Project, RoofInfo, ValidationIssue,
 } from '../model/types';
@@ -88,9 +88,14 @@ export function generate(project: Project): DerivedModel {
       const y = f.y;
       grid.push({ id: `GY-${f.id}`, label: String(fi + 1), dir: 'Y', pos: y });
       const under = new Map<string, Plane>();
+      const dropAt = new Map<string, number>();
       for (const pl of sec!.planes) {
         const A = v3(pl.a.x, y, pl.a.z), B = v3(pl.b.x, y, pl.b.z);
-        const up = underPlane(A, B, underOffset);
+        // חריג חתך לקורה זו (memberOverrides): פני התחתון לפי החתך שלה — העמוד והפלטה יורדים בהתאם
+        const ovP = project.memberOverrides[pl.rafterId(f.id)]?.profile;
+        const ovR = ovP ? tryProfile(ovP) : undefined;
+        const up = underPlane(A, B, ovR ? (tos ? ovR.props.h : ovR.props.h / 2) : underOffset);
+        if (ovR) { const cosA = Math.abs(B.x - A.x) / (Math.hypot(B.x - A.x, B.z - A.z) || 1) || 1; dropAt.set(pl.id, ((tos ? ovR.props.h : ovR.props.h / 2) - underOffset) / cosA); }
         under.set(pl.id, up);
         // קצה חופשי (מרזב/קונזולה): חיתוך ניצב לציר הקורה (90°), התחתון בקו הקצה — החלטת משתמש 15.11.2026.
         // קצה ברכס או בצד עמוד — נחתך מחדש בבניית החיבור.
@@ -114,7 +119,7 @@ export function generate(project: Project): DerivedModel {
         // מפלס תחתית העמוד בציר הזה (חגורה/יסוד בגובה שונה) — העמוד מתקצר, הגג לא זז
         const base = b.lineBase?.[l.id] ?? b.baseElevation;
         if (fi === 0 && ct.z - base < 1000) issues.push({ code: 'COL_SHORT', severity: 'error', message: `עמוד בציר ${l.label}: מפלס התחתית ${(base / 1000).toFixed(2)} גבוה מדי ביחס לראש העמוד` });
-        const top = v3(l.x, y, ct.z);
+        const top = v3(l.x, y, ct.z - (ct.cap ? dropAt.get(ct.cap.id) ?? 0 : 0));
         const side = !sec!.custom ? (l.id as 'L' | 'R') : undefined;
         nodes.push({ id: `${f.id}.N.B${l.id}`, p: v3(l.x, y, base), frameId: f.id, role: `בסיס ציר ${l.label}` });
         nodes.push({ id: `${f.id}.N.E${l.id}`, p: top, frameId: f.id, role: `ראש עמוד ציר ${l.label}` });
