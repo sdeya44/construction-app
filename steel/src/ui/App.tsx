@@ -50,7 +50,8 @@ export function App() {
   const [lpFull, setLpFull] = useState(false);
   const selNow = useStore((x) => x.selection), connNow = useStore((x) => x.activeConn);
   // בחירה חדשה / חיבור פתוח ← הפאנל עובר למאפיינים; ניקוי הבחירה ← חזרה להגדרות
-  useEffect(() => { setLp(selNow.length || connNow ? 'sel' : 'nav'); }, [selNow, connNow]);
+  const selSig = `${selNow.join(',')}|${connNow ?? ''}`;
+  useEffect(() => { setLp(selNow.length || connNow ? 'sel' : 'nav'); }, [selSig]);
   const navShown = !wide || lp === 'nav';
   useEffect(() => { const k = navShown ? nav : undefined; if (store.state.navKey !== k) store.set({ navKey: k }); }, [nav, navShown]);
   const setTab = (t: SideTab) => setNav(t);
@@ -259,7 +260,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.24.1</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.25</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -305,7 +306,7 @@ export function App() {
                 <button key={n} className={`tbtn${n === 'left' || n === 'back' ? ' desk-only' : ''}`} onClick={() => setView(n)} data-testid={`view-${n}`}>{VIEW_LABEL[n]}</button>
               ))}
             </div>
-            <button className={`tbtn desk-only${treeHidden ? '' : ' on'}`} onClick={() => setTreeHidden(!treeHidden)} title={treeHidden ? 'הצגת עץ התפריטים (N)' : 'הסתרת עץ התפריטים — יותר מקום למודל (N)'} data-testid="tree-toggle" aria-pressed={!treeHidden}>☰ תפריט</button>
+            <button className={`tbtn desk-only${treeHidden ? '' : ' on'}`} onClick={() => setTreeHidden(!treeHidden)} title={treeHidden ? 'הצגת עץ התפריטים (N)' : 'הסתרת עץ התפריטים — יותר מקום למודל (N)'} data-testid="tree-toggle" aria-pressed={!treeHidden}>☰</button>
             <TB icon="fit" title="התאמה למסך (F)" onClick={() => vp.current?.fitAll()} testId="fit" />
             <TB icon="zoomSel" title="התמקדות בבחירה (Z)" disabled={!sel.length} onClick={() => vp.current?.fitSelection()} desk />
             <span className="vb-sep desk-only" />

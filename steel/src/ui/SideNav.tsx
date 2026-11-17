@@ -42,7 +42,7 @@ export function navGroupOf(nav: NavKey): string {
 export function SideNav({ nav, setNav, onOpenConn, treeOnly }: { nav: NavKey; setNav: (k: NavKey) => void; onOpenConn: (id: string) => void; treeOnly?: boolean }) {
   const d = useStore((s) => s.derived);
   const roofType = useStore((s) => (s.project.building.section ? 'modular' : s.project.building.roofType));
-  const [open, setOpen] = useState<Record<string, boolean>>({ structure: true, roof: true, brace: true });
+  const [open, setOpen] = useState<Record<string, boolean>>({ structure: true, roof: true, brace: true, special: true });
   const kindCount = useMemo(() => { const m = new Map<string, number>(); for (const x of d.members) m.set(x.kind, (m.get(x.kind) ?? 0) + 1); return m; }, [d]);
   const connCount = useMemo(() => { const m = new Map<string, number>(); for (const c of d.connections) m.set(c.type, (m.get(c.type) ?? 0) + 1); return m; }, [d]);
   const sevCount = useMemo(() => { const m = new Map<string, number>(); for (const i of d.issues) m.set(i.severity, (m.get(i.severity) ?? 0) + 1); return m; }, [d]);
