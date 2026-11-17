@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { appendValue, FormulaBuilder, readable, toTokens, varLabel, type FxTarget } from './FormulaBuilder';
 import * as THREE from 'three';
 import { add, dot, len, scale, sub, type Vec3 } from '../core/vec';
 import { generate } from '../geometry/generate';
@@ -43,6 +44,9 @@ const OPNAME: Record<DetailOp['k'], string> = { plate: 'פלטה', endplate: 'פ
 const PREFIX: Record<DetailOp['k'], string> = { plate: 'P', endplate: 'E', cut: 'C', slot: 'S', vent: 'V', holes: 'H', bolts: 'B', rod: 'R', weld: 'W' };
 const FACE_NAME: Record<string, string> = { end: 'קצה', 'a+': 'דופן במישור +', 'a-': 'דופן במישור −', 'w+': 'דופן צד +', 'w-': 'דופן צד −', hit: 'פני המגע', opp: 'פנים נגדיות', web: 'ווב', 'z+': 'פנים +', 'z-': 'פנים −' };
 const r5 = (x: number) => Math.round(x / 5) * 5;
+/** פתיחת בונה הנוסחאות משדה כלשהו */
+const FxCtx = createContext<{ open: (t: FxTarget) => void; det: CustomDetail | null }>({ open: () => {}, det: null });
+interface Tag { k: string; a: Vec3; b: Vec3 }
 const fmt = (x: number | undefined) => (x === undefined || !Number.isFinite(x) ? '—' : String(Math.round(x * 10) / 10));
 
 function Studio({ siteKey: key }: { siteKey: string }) {
@@ -61,6 +65,9 @@ function Studio({ siteKey: key }: { siteKey: string }) {
   const [scope, setScope] = useState<'one' | 'similar' | 'any'>('one');
   const [msg, setMsg] = useState<string>('');
   const [dragState, setDragState] = useState<{ x: number; y: number; lbl: string } | null>(null);
+  const [fx, setFx] = useState<FxTarget | null>(null);
+  const [fxTokens, setFxTokens] = useState<string[]>([]);
+  const [showDims, setShowDims] = useState(true);
   const pKey = parseSiteKey(preview);
   const pMain = base.byId.get(pKey.id);
   const site = useMemo(() => (pMain ? findSite(base.members, pMain, pKey.end) : null), [base, pMain, pKey.end]);
@@ -68,6 +75,35 @@ function Studio({ siteKey: key }: { siteKey: string }) {
     && Math.min(len(sub(x.start, site.P)), len(sub(x.end, site.P)), len(sub(scale(add(x.start, x.end), 0.5), site.P))) < 900); }, [base, site]);
   const res = useMemo(() => (site ? buildDetail(site, det, { others }) : null), [site, det, others]);
   const similar = useMemo(() => ({ similar: similarSites(base.members, key, true), any: similarSites(base.members, key, false) }), [base, key]);
+  const tags = useMemo<Tag[]>(() => {
+    if (!site || !res) return [];
+    const T: Tag[] = [], s = site;
+    const c0 = add(s.P, scale(s.u, res.sEnd + Math.max(140, s.mh * 1.4)));
+    T.push({ k: 'mh', a: add(c0, scale(s.a, -s.mh / 2)), b: add(c0, scale(s.a, s.mh / 2)) });
+    const c1 = add(c0, scale(s.u, 90));
+    T.push({ k: 'mb', a: add(c1, scale(s.w, -s.mb / 2)), b: add(c1, scale(s.w, s.mb / 2)) });
+    if (s.host) {
+      const fr = res.frame({ on: 'host', face: 'hit' });
+      const hb = res.values.hb ?? 0;
+      if (fr && hb > 0) { const b0 = add(fr.base, scale(fr.e1, -Math.max(180, s.mh * 2))); T.push({ k: 'hb', a: add(b0, scale(fr.e2, -hb / 2)), b: add(b0, scale(fr.e2, hb / 2)) }); }
+      if (fr && s.hd > 0) { const b1 = add(fr.base, scale(fr.e1, -Math.max(320, s.mh * 3))); T.push({ k: 'hd', a: b1, b: add(b1, scale(fr.n, -s.hd)) }); }
+    }
+    for (const [id, g] of res.plates) {
+      const top = add(g.center, scale(g.Z, g.t / 2));
+      T.push({ k: `${id}.w`, a: add(add(top, scale(g.X, -g.w / 2)), scale(g.Y, -g.h / 2 - 25)), b: add(add(top, scale(g.X, g.w / 2)), scale(g.Y, -g.h / 2 - 25)) });
+      T.push({ k: `${id}.h`, a: add(add(top, scale(g.Y, -g.h / 2)), scale(g.X, g.w / 2 + 25)), b: add(add(top, scale(g.Y, g.h / 2)), scale(g.X, g.w / 2 + 25)) });
+    }
+    return T;
+  }, [site, res]);
+  const fxGroups = useMemo(() => [
+    { title: 'האלמנט', items: ['mh', 'mb', 'mt', 'mtf'] },
+    { title: 'המארח', items: site?.host ? ['hb', 'hh', 'htf', 'htw', 'hd'] : [] },
+    { title: 'זווית ואורך', items: ['ang', 'send'] },
+    { title: 'פלטות', items: det.ops.filter((o) => o.k === 'plate' || o.k === 'endplate').flatMap((o) => [`${o.id}.w`, `${o.id}.h`, `${o.id}.t`]) },
+    { title: 'משתנים שלי', items: det.vars.map((v) => v.name) },
+  ], [det, site]);
+  const openFx = (t: FxTarget) => { setFx(t); setFxTokens(toTokens(t.value)); };
+  const onTag = (k: string) => { if (fx) setFxTokens((t) => appendValue(t, k)); else setMsg(`${varLabel(k, det)} — בשם "${k}". כדי להשתמש בו: לחצו ƒ ליד שדה ואז על המידה`); };
   curOps.current = det.ops;
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
@@ -159,6 +195,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
   const ends: [string, string][] = (['start', 'end'] as const).map((e) => { const s = findSite(base.members, main, e); return [siteKey(id, e), `${e === 'start' ? 'קצה התחלה' : 'קצה סוף'} — ${s?.host ? s.host.label : 'קצה חופשי'}`]; });
 
   return (
+    <FxCtx.Provider value={{ open: openFx, det }}>
     <div className="studio" role="dialog" aria-label="סטודיו פרטי חיבור" data-testid="detail-studio">
       <header className="studio-h">
         <div className="studio-title">
@@ -192,11 +229,14 @@ function Studio({ siteKey: key }: { siteKey: string }) {
           </div>}
         </aside>
         <section className="studio-stage">
-          <Viewer res={res} site={site} others={others} sel={sel} armed={armed} onSelect={setSel} onPlace={(h) => armed && place(armed, h)} onMove={moveSel} />
-          <div className="studio-status" data-testid="ds-status">{msg || (armed ? `כלי: ${TOOLS.flatMap((x) => x[1]).find((t) => t[0] === armed)?.[1]} — ${HINT[armed.split(':')[0]]} · Esc לביטול` : 'גררו כלי מהמחסן אל המודל, או לחצו על כלי ואז על המודל. גרירה על הרקע = סיבוב, גלגלת = זום')}</div>
+          <Viewer res={res} site={site} others={others} sel={sel} armed={armed} onSelect={setSel} onPlace={(h) => { if (armed && place(armed, h)) setArmed(null); }} onMove={moveSel}
+            tags={showDims || fx ? tags : []} tagLabel={(k) => `${varLabel(k, det)} = ${fmt(res.values[k])}`} onTag={onTag} pickMode={!!fx} />
+          <button className={`btn small studio-dims${showDims ? ' on' : ''}`} onClick={() => setShowDims(!showDims)} data-testid="ds-dims">שמות מידות</button>
+          <div className="studio-status" data-testid="ds-status">{msg || (fx ? 'בונה נוסחה: לחצו על תגית מידה בשרטוט כדי להוסיף אותה לנוסחה' : armed ? `כלי: ${TOOLS.flatMap((x) => x[1]).find((t) => t[0] === armed)?.[1]} — ${HINT[armed.split(':')[0]]} · לחיצה = הנחה, גרירה = סיבוב · Esc לביטול` : 'גררו כלי מהמחסן אל המודל, או לחצו על כלי ואז על המודל. גרירה על הרקע = סיבוב, גלגלת = זום')}</div>
           {preview !== key && <div className="studio-preview">תצוגה על קצה אחר: {base.byId.get(pKey.id)?.label} <button className="btn small" onClick={() => setPreview(key)}>חזרה</button></div>}
         </section>
         <aside className="studio-side">
+          {fx && <FormulaBuilder target={fx} tokens={fxTokens} setTokens={setFxTokens} vars={res.values} det={det} groups={fxGroups} onClose={() => setFx(null)} />}
           <section className="ss-card"><h4>פעולות הפרט</h4>
             <ol className="ss-ops" data-testid="ds-ops">
               {det.ops.map((o) => (
@@ -238,6 +278,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
       </div>
       {dragState && <div className="ghost-chip" style={{ left: dragState.x, top: dragState.y }}>{dragState.lbl}</div>}
     </div>
+    </FxCtx.Provider>
   );
 
   // ---- גרירה מהמחסן ----
@@ -290,12 +331,18 @@ function refFromHit(h: Hit, res: DetailResult, s: Site, tool: ToolId): DetailRef
 /** שדה נוסחה: טקסט חופשי + הערך המחושב + שגיאה */
 function EF({ label, value, onChange, vkey, res, hint, testId }: { label: string; value: string; onChange: (v: string) => void; vkey: string; res: DetailResult; hint?: string; testId?: string }) {
   const err = res.errors[vkey];
+  const fx = useContext(FxCtx);
+  const plain = /^-?[0-9.]+$/.test(value.trim());
   return (
-    <label className={`ef${err ? ' bad' : ''}`} title={hint}>
+    <div className={`ef${err ? ' bad' : ''}`} title={hint}>
       <span className="ef-l">{label}</span>
-      <input className="inp mono" value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId} spellCheck={false} />
+      <span className="ef-in">
+        <input className="inp mono" value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId} spellCheck={false} aria-label={label} />
+        <button className="fx-btn" title="בונה נוסחה בלחצנים" aria-label={`בונה נוסחה — ${label}`} data-testid={testId ? `${testId}-fx` : undefined} onClick={() => fx.open({ title: label, value, apply: onChange })}>ƒ</button>
+      </span>
       <span className="ef-v">{err ? err : `= ${fmt(res.values[vkey])}`}</span>
-    </label>
+      {!plain && !err && value.trim() && <span className="ef-read">{readable(value, fx.det ?? undefined)}</span>}
+    </div>
   );
 }
 
@@ -370,6 +417,8 @@ function OpProps({ op, det, res, patch }: { op: DetailOp; det: CustomDetail; res
   );
 }
 
+function FxBtn({ title, value, apply }: FxTarget) { const fx = useContext(FxCtx); return <button className="fx-btn" title="בונה נוסחה בלחצנים" onClick={() => fx.open({ title, value, apply })}>ƒ</button>; }
+
 function VarsCard({ det, res, setDet }: { det: CustomDetail; res: DetailResult; setDet: (fn: (d: CustomDetail) => CustomDetail) => void }) {
   const [open, setOpen] = useState(false);
   return (
@@ -379,7 +428,8 @@ function VarsCard({ det, res, setDet }: { det: CustomDetail; res: DetailResult; 
           <div className={`ss-var${res.errors[`var.${v.name}`] ? ' bad' : ''}`} key={i}>
             <input className="inp mono" value={v.name} aria-label="שם משתנה" onChange={(e) => { const x = e.target.value.replace(/[^A-Za-z0-9_]/g, ''); setDet((d) => { d.vars[i].name = x; return d; }); }} />
             <span>=</span>
-            <input className="inp mono" value={v.expr} aria-label="נוסחה" title={v.note} onChange={(e) => { const x = e.target.value; setDet((d) => { d.vars[i].expr = x; return d; }); }} />
+            <span className="ef-in"><input className="inp mono" value={v.expr} aria-label="נוסחה" title={v.note} onChange={(e) => { const x = e.target.value; setDet((d) => { d.vars[i].expr = x; return d; }); }} />
+              <FxBtn title={v.note || v.name} value={v.expr} apply={(x) => setDet((d) => { d.vars[i].expr = x; return d; })} /></span>
             <span className="ef-v">{res.errors[`var.${v.name}`] ?? fmt(res.values[v.name])}</span>
             <button className="icon-btn" onClick={() => setDet((d) => { d.vars.splice(i, 1); return d; })} aria-label="מחיקת משתנה">✕</button>
           </div>
@@ -398,7 +448,10 @@ function VarsCard({ det, res, setDet }: { det: CustomDetail; res: DetailResult; 
 }
 
 // ---------------------------------------------------------------
-function Viewer({ res, site, others, sel, armed, onSelect, onPlace, onMove }: { res: DetailResult; site: Site; others: Member[]; sel: string | null; armed: ToolId | null; onSelect: (id: string | null) => void; onPlace: (h: Hit) => void; onMove: (op: string, along: number, across: number) => void }) {
+function Viewer({ res, site, others, sel, armed, onSelect, onPlace, onMove, tags, tagLabel, onTag, pickMode }: { res: DetailResult; site: Site; others: Member[]; sel: string | null; armed: ToolId | null; onSelect: (id: string | null) => void; onPlace: (h: Hit) => void; onMove: (op: string, along: number, across: number) => void; tags: Tag[]; tagLabel: (k: string) => string; onTag: (k: string) => void; pickMode: boolean }) {
+  const tagBox = useRef<HTMLDivElement>(null);
+  const tagsRef = useRef<Tag[]>(tags);
+  tagsRef.current = tags;
   const cvRef = useRef<HTMLCanvasElement>(null);
   const ctx = useRef<{ R: THREE.WebGLRenderer; scene: THREE.Scene; cam: THREE.PerspectiveCamera; world: THREE.Group; marker: THREE.Mesh; orbit: { th: number; ph: number; r: number }; dirty: boolean; raf: number } | null>(null);
   const [, force] = useState(0);
@@ -433,6 +486,17 @@ function Viewer({ res, site, others, sel, armed, onSelect, onPlace, onMove }: { 
         cam.position.set(P.x + r * Math.cos(ph) * Math.sin(th), P.y - r * Math.cos(ph) * Math.cos(th), P.z + r * Math.sin(ph));
         cam.lookAt(P.x, P.y, P.z);
         R.render(scene, cam); c.dirty = false;
+        // תגיות מידות (HTML) מעל קווי המידה
+        const box = tagBox.current;
+        if (box) {
+          const W = cv.clientWidth, H = cv.clientHeight;
+          box.querySelectorAll<HTMLElement>('[data-k]').forEach((el, i) => {
+            const tg = tagsRef.current[i]; if (!tg) return;
+            const m = new THREE.Vector3((tg.a.x + tg.b.x) / 2, (tg.a.y + tg.b.y) / 2, (tg.a.z + tg.b.z) / 2).project(cam);
+            el.style.left = `${((m.x + 1) / 2) * W}px`; el.style.top = `${((1 - m.y) / 2) * H}px`;
+            el.style.display = m.z < 1 ? '' : 'none';
+          });
+        }
       }
       c.raf = requestAnimationFrame(loop);
     };
@@ -485,8 +549,13 @@ function Viewer({ res, site, others, sel, armed, onSelect, onPlace, onMove }: { 
       const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(wd.from.x, wd.from.y, wd.from.z), new THREE.Vector3(wd.to.x, wd.to.y, wd.to.z)]);
       world.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: wd.location === 'shop' ? 0xd7891c : 0xc0392b, linewidth: 3 })));
     }
+    for (const tg of tags) {
+      const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(tg.a.x, tg.a.y, tg.a.z), new THREE.Vector3(tg.b.x, tg.b.y, tg.b.z)]);
+      world.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0x1f8a4c, depthTest: false })));
+      for (const p of [tg.a, tg.b]) { const dot3 = new THREE.Mesh(new THREE.SphereGeometry(4, 8, 6), new THREE.MeshBasicMaterial({ color: 0x1f8a4c, depthTest: false })); dot3.position.set(p.x, p.y, p.z); world.add(dot3); }
+    }
     c.dirty = true;
-  }, [res, sel, site, others]);
+  }, [res, sel, site, others, tags]);
 
   const pick = (x: number, y: number): Hit | null => {
     const c = ctx.current, cv = cvRef.current; if (!c || !cv) return null;
@@ -505,19 +574,22 @@ function Viewer({ res, site, others, sel, armed, onSelect, onPlace, onMove }: { 
   (window as unknown as { __kspStudio?: unknown }).__kspStudio = {
     screenOf: (p: Vec3) => { const c = ctx.current, cv = cvRef.current; if (!c || !cv) return null; c.cam.updateMatrixWorld(); const v = new THREE.Vector3(p.x, p.y, p.z).project(c.cam); const r = cv.getBoundingClientRect(); return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height }; },
     plate: (id: string) => res.plates.get(id)?.center ?? null,
+    site: () => cbs.current.site.P,
   };
 
   // אינטראקציה: סיבוב, בחירה, הנחה, הזזה
   useEffect(() => {
     const cv = cvRef.current!;
     let orbit: { x: number; y: number } | null = null;
+    let pend: { x: number; y: number; h: Hit | null } | null = null;
     let mv: { op: string; plane: THREE.Plane; base: Vec3; e1: Vec3; e2: Vec3; on: boolean; sx: number; sy: number } | null = null;
     const down = (e: PointerEvent) => {
       if (suppressClick.current) return;
       cv.setPointerCapture(e.pointerId);
       const { armed: a, sel: s, res: rs } = cbs.current;
       const h = pick(e.clientX, e.clientY);
-      if (a) { if (h) cbs.current.onPlace(h); return; }
+      // כלי חמוש: לחיצה (בלי תזוזה) = הנחה; גרירה = סיבוב התצוגה
+      if (a) { pend = { x: e.clientX, y: e.clientY, h }; orbit = { x: e.clientX, y: e.clientY }; return; }
       const opId = h?.op && (h.role === 'plate') ? h.op : null;
       if (opId) {
         if (s !== opId) cbs.current.onSelect(opId);
@@ -544,18 +616,26 @@ function Viewer({ res, site, others, sel, armed, onSelect, onPlace, onMove }: { 
         cbs.current.onMove(mv.op, r5(dot(q, mv.e1)), ac);
         return;
       }
+      if (pend && Math.hypot(e.clientX - pend.x, e.clientY - pend.y) > 5) pend = null;
       if (orbit) { c.orbit.th -= (e.clientX - orbit.x) * 0.006; c.orbit.ph = Math.max(-1.45, Math.min(1.45, c.orbit.ph + (e.clientY - orbit.y) * 0.006)); orbit = { x: e.clientX, y: e.clientY }; c.dirty = true; return; }
       if (cbs.current.armed || dragTool.current?.hover) {
         const h = pick(e.clientX, e.clientY);
         c.marker.visible = !!h; if (h) c.marker.position.set(h.p.x, h.p.y, h.p.z); c.dirty = true;
       }
     };
-    const up = () => { orbit = null; mv = null; };
+    const up = () => { if (pend?.h) cbs.current.onPlace(pend.h); pend = null; orbit = null; mv = null; };
     const wheel = (e: WheelEvent) => { e.preventDefault(); const c = ctx.current; if (!c) return; c.orbit.r = Math.max(250, Math.min(8000, c.orbit.r * (1 + Math.sign(e.deltaY) * 0.1))); c.dirty = true; };
     cv.addEventListener('pointerdown', down); window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); cv.addEventListener('wheel', wheel, { passive: false });
     return () => { cv.removeEventListener('pointerdown', down); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); cv.removeEventListener('wheel', wheel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return <canvas ref={cvRef} className="studio-cv" data-testid="ds-canvas" />;
+  return (
+    <>
+      <canvas ref={cvRef} className="studio-cv" data-testid="ds-canvas" />
+      <div ref={tagBox} className={`dim-tags${pickMode ? ' pick' : ''}`}>
+        {tags.map((t) => <button key={t.k} data-k={t.k} className="dim-tag" onClick={() => onTag(t.k)} data-testid={`tag-${t.k}`} title={t.k}>{tagLabel(t.k)} <span className="mono">{t.k}</span></button>)}
+      </div>
+    </>
+  );
 }
 const curOps: { current: DetailOp[] } = { current: [] };

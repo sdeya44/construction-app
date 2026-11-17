@@ -118,12 +118,13 @@ export function App() {
       if (mod && k === 'k') { e.preventDefault(); setPalette((x) => !x); return; }
       const t = e.target as HTMLElement;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
-      if (dialog || palette || menu) return;
+      // סטודיו הפרטים פתוח — המקשים שייכים לו (Delete שם מוחק פעולה, לא אלמנט מהמודל)
+      if (dialog || palette || menu || store.state.detailStudio) return;
       if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); store.undo(); }
       else if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); store.redo(); }
       else if (mod && k === 's') { e.preventDefault(); void store.saveNow('שמירה ידנית').then((ok) => ok && store.toast('ok', 'נשמר')); }
       else if (mod && k === 'a') { e.preventDefault(); store.select(store.state.derived.members.map((m) => m.id)); }
-      else if (k === 'delete') { if (store.state.selection.length) store.exec(deleteMembers(store.state.selection)); }
+      else if (k === 'delete') { const n = store.state.selection.length; if (n && store.exec(deleteMembers(store.state.selection))) store.toast('info', `נמחקו ${n} אלמנטים — לשחזור: Ctrl+Z, או "שחזור" בסרגל הכלים`); }
       else if (k === 'escape') { store.select([]); store.set({ tool: 'select', measure: {} }); }
       else if (k === 'f') vp.current?.fitAll();
       else if (k === 'z' && !mod) vp.current?.fitSelection();
@@ -243,7 +244,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.21</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.22</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}

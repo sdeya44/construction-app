@@ -58,3 +58,44 @@ test('DS-02: גרירת פלטה מהמחסן, נוסחה ושגיאה, מישו
   await shot(page, 'DS_02_drag');
   expect(errors).toEqual([]);
 });
+
+test('DS-03: בונה נוסחה בלחצנים — "הגדול מבין" עם מידות מהשרטוט; אותיות גדולות; Delete לא מוחק מהמודל; כלי חמוש — גרירה מסובבת', async ({ page }) => {
+  const errors = await boot(page);
+  await openStudio(page);
+  const cv = (await page.getByTestId('ds-canvas').boundingBox())!;
+  // כלי חמוש: גרירה על הקנבס = סיבוב, לא מוסיף פלטה
+  await page.getByTestId('ds-tool-plate:rect').click();
+  await page.mouse.move(cv.x + cv.width / 2, cv.y + cv.height / 2); await page.mouse.down();
+  await page.mouse.move(cv.x + cv.width / 2 + 120, cv.y + cv.height / 2 + 40, { steps: 6 }); await page.mouse.up();
+  await expect(page.getByTestId('ds-op-P1')).toHaveCount(0);
+  // לחיצה = הנחה, והכלי משתחרר — לחיצה נוספת לא מוסיפה
+  const pt = await page.evaluate(() => { const S = (window as any).__kspStudio; return S.screenOf(S.site()); });
+  await page.mouse.click(pt.x, pt.y);
+  await expect(page.getByTestId('ds-op-P1')).toBeVisible();
+  await page.mouse.click(pt.x, pt.y);
+  await expect(page.getByTestId('ds-op-P2')).toHaveCount(0);
+  // אות גדולה = קטנה
+  await page.getByTestId('ds-op-P1').click();
+  await page.getByTestId('ds-P1-w').fill('MB + 70');
+  await expect(page.getByTestId('ds-props')).toContainText('= 150');
+  // בונה נוסחה: הגדול מבין (רוחב האלמנט + 40) ובין (רוחב המארח)
+  await page.getByTestId('ds-P1-w-fx').click();
+  await expect(page.getByTestId('fx-builder')).toBeVisible();
+  await page.getByTestId('fx-back').click(); await page.getByTestId('fx-back').click(); await page.getByTestId('fx-back').click();
+  await page.getByTestId('fx-max').click();
+  await page.getByTestId('tag-mb').click();
+  await page.getByTestId('fx-op-+').click();
+  await page.getByTestId('fx-num').fill('40'); await page.getByTestId('fx-num-add').click();
+  await page.getByTestId('tag-hb').click();
+  await expect(page.getByTestId('fx-res')).toContainText('= 200');
+  await shot(page, 'DS_03_builder');
+  await page.getByTestId('fx-ok').click();
+  await expect(page.getByTestId('ds-P1-w')).toHaveValue('max(mb + 40, hb)');
+  await expect(page.getByTestId('ds-props')).toContainText('הגדול מבין');
+  // Delete בסטודיו מוחק את הפעולה בלבד
+  await page.getByTestId('ds-op-P1').click();
+  await page.keyboard.press('Delete');
+  await expect(page.getByTestId('ds-op-P1')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.deleted.length)).toBe(0);
+  expect(errors).toEqual([]);
+});

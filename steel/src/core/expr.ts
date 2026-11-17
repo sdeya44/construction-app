@@ -13,9 +13,9 @@ const FN: Record<string, (...a: number[]) => number> = {
 };
 export const EXPR_FUNCS = Object.keys(FN);
 
-type Tok = { k: 'n'; v: number } | { k: 'id'; v: string } | { k: 'op'; v: string };
+export type Tok = { k: 'n'; v: number } | { k: 'id'; v: string } | { k: 'op'; v: string };
 
-function lex(s: string): Tok[] {
+export function lex(s: string): Tok[] {
   const out: Tok[] = [];
   let i = 0;
   while (i < s.length) {
@@ -62,9 +62,12 @@ export function evalExpr(src: string | number, vars: Vars): number {
         eat(')');
         return f(...args);
       }
-      if (x.v === 'pi') return Math.PI;
-      if (!(x.v in vars)) throw new Error(`משתנה לא מוכר "${x.v}"`);
-      return vars[x.v];
+      if (x.v.toLowerCase() === 'pi') return Math.PI;
+      if (x.v in vars) return vars[x.v];
+      // אות גדולה/קטנה אינה משנה: P1.W = p1.w
+      const lo = x.v.toLowerCase();
+      for (const k in vars) if (k.toLowerCase() === lo) return vars[k];
+      throw new Error(`משתנה לא מוכר "${x.v}"`);
     }
     throw new Error('נוסחה שגויה');
   };
