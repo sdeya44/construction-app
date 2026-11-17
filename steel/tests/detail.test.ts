@@ -226,3 +226,15 @@ describe('מפלס תחתית עמוד לכל ציר', () => {
     }
   });
 });
+
+describe('חיבורי המשך אוטומטיים בפטות', () => {
+  it('SP-36: מבנה 36 מ\' (מסגרות כל 6 מ\', מוט 12 מ\') — אין חלק ארוך מהמוט ואין חיבור מחוץ לפטה', async () => {
+    const { uniformFrames } = await import('../src/model/defaults');
+    for (const [L, bay] of [[36000, 6000], [24000, 6000], [48000, 6000], [30000, 5000], [36000, 4000]] as const) {
+      const b = { ...defaultBuilding(), frames: uniformFrames(L / bay + 1, L) };
+      const d = generate(newProject('t', b));
+      const bad = d.issues.filter((i) => (i.code === 'PART_STOCK' || i.code === 'SPLICE_RANGE') && i.elementId?.startsWith('PL.'));
+      expect(bad.map((i) => `${L}/${bay}: ${i.message}`)).toEqual([]);
+    }
+  });
+});

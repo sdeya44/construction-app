@@ -9,7 +9,7 @@ import { massPerMeter, tryProfile } from '../profiles/library';
 import { getMaterial, MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
 import { NumField, ProfilePicker } from './fields';
-import { KIND_LABEL } from './TreePanel';
+import { KIND_LABEL, kindLabelOf } from './TreePanel';
 import { SpliceEditor } from './SpliceEditor';
 import { ConnectionEditor, MemberConnections } from './ConnectionEditor';
 import { NavContent, type NavKey } from './SideNav';
@@ -100,7 +100,7 @@ function PropertiesInner() {
   return (
     <div className="panel-body" data-testid="props-single">
       <div className="el-head">
-        <div className="k">{KIND_LABEL[m.kind]}{frameNo > 0 ? ` · מסגרת ${frameNo}` : ''}{m.side ? ` · ${m.side === 'L' ? 'שמאל' : 'ימין'}` : ''} <span className={`badge ${m.source === 'manual' ? 'warn' : 'blue'}`}>{m.source === 'manual' ? 'ידני' : 'פרמטרי'}</span></div>
+        <div className="k">{kindLabelOf(m)}{frameNo > 0 ? ` · מסגרת ${frameNo}` : ''}{m.side ? ` · ${m.side === 'L' ? 'שמאל' : 'ימין'}` : ''} <span className={`badge ${m.source === 'manual' ? 'warn' : 'blue'}`}>{m.source === 'manual' ? 'ידני' : 'פרמטרי'}</span></div>
         <div className="t"><b>{mark ?? m.label}</b><span className="mono" data-testid="prop-id">{m.id}</span></div>
       </div>
       <div className="ptabs" role="tablist">

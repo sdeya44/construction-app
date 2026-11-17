@@ -59,7 +59,9 @@ describe('שרטוטים', () => {
     expect(ts).toContain('30000');
     expect(ts).toContain('18000');
     expect(ts.filter((x) => x === '300').length).toBe(2); // שתי פטות נפרדות ליד הרכס
-    expect(ts.filter((x) => x === '1500').length).toBeGreaterThanOrEqual(10);
+    // מרווחים צפופים בדף מאוחדים למידה אחת "n×1500"
+    const n1500 = ts.filter((x) => x === '1500').length + ts.filter((x) => /^\d+×1500$/.test(x)).reduce((s0, x) => s0 + Number(x.split('×')[0]), 0);
+    expect(n1500).toBeGreaterThanOrEqual(10);
     expect(ts.some((x) => /^\d+\*$/.test(x))).toBe(true); // שארית
     expect(sh.size).toBe('A4'); // ברירת מחדל: A4 כשהקנ"מ סביר
     expect(sh.title.scale).toMatch(/^1:\d+$/);

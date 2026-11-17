@@ -8,6 +8,17 @@ import { Icon } from './icons';
 export const KIND_LABEL: Record<MemberKind, string> = {
   column: 'עמוד', rafter: 'קורת גג', beam: 'קורה', brace: 'קושרת', purlin: 'פטה', girt: 'פטת קיר', cleat: 'זוויתן', plate: 'פלטה', bolt: 'בורג', anchor: 'מוט עיגון',
 };
+/** שם סוג לאלמנט מסוים: קושרות לפי תפקיד (אלכסון עמוד-קורה, שורת קשירה, קושרת גג/קיר) */
+export function kindLabelOf(m: { kind: MemberKind; id: string }): string {
+  if (m.kind === 'brace') {
+    if (m.id.startsWith('KB.')) return 'אלכסון עמוד-קורה';
+    if (m.id.startsWith('BR.T')) return 'שורת קשירה';
+    if (m.id.startsWith('BR.R')) return 'קושרת גג';
+    if (m.id.startsWith('BR.W') || m.id.startsWith('BB.')) return 'קושרת קיר';
+    if (m.id.startsWith('TR.')) return 'מוט מסבך';
+  }
+  return KIND_LABEL[m.kind];
+}
 
 export function TreePanel() {
   const d = useStore((s) => s.derived);

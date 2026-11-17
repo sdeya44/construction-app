@@ -342,15 +342,26 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
         const free = ls[0]?.purlin!.startFree ?? side === 'M';
         let prevX: number | null = free ? null : plS ? (plS.startAt === 'b' ? plS.b.x : plS.a.x) : b.ridgeX;
         let prevS = 0;
+        const segs: { x0: number; x1: number; t: string }[] = [];
         ls.forEach((m) => {
           const pi = m.purlin!;
           if (prevX !== null) {
             const span = pi.sSlope - prevS;
             const rem = pi.isLast && pi.index > 1 && Math.abs(span - purlinParams(b.purlins, pi.paramKey ?? (side === 'R' ? 'right' : 'left')).spacing) > 0.5;
-            v.dim({ x: prevX, y: ytop }, { x: m.start.x, y: ytop }, { x: 1, y: 0 }, 4, `${Math.round(span)}${rem ? '*' : ''}`);
+            segs.push({ x0: prevX, x1: m.start.x, t: `${Math.round(span)}${rem ? '*' : ''}` });
           }
           prevX = m.start.x; prevS = pi.sSlope;
         });
+        // מרווחים צפופים בדף (הטקסט רחב מהמרווח): רצף מרווחים זהים — מידה אחת "n×מרווח"
+        const paperLen = (q: { x0: number; x1: number }) => Math.hypot(v.p(q.x1, ytop).x - v.p(q.x0, ytop).x, v.p(q.x1, ytop).y - v.p(q.x0, ytop).y);
+        const tight = segs.some((q) => paperLen(q) < q.t.length * 2.5 * 0.62 + 1.5);
+        for (let i = 0; i < segs.length;) {
+          let j = i;
+          if (tight) while (j + 1 < segs.length && segs[j + 1]!.t === segs[i]!.t) j++;
+          const n = j - i + 1;
+          v.dim({ x: segs[i]!.x0, y: ytop }, { x: segs[j]!.x1, y: ytop }, { x: 1, y: 0 }, 4, n > 1 ? `${n}×${segs[i]!.t}` : segs[i]!.t);
+          i = j + 1;
+        }
       }
       { // הערה מתחת לתצוגה, בקואורדינטות דף (לא מסתובבת עם התצוגה)
         const cs = [v.p(bx.x0, bx.y0), v.p(bx.x1, bx.y1), v.p(bx.x0, bx.y1), v.p(bx.x1, bx.y0)];

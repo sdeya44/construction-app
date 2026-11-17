@@ -32,7 +32,8 @@ export function effectiveSplices(project: Project, members: Member[], supports: 
     if (m.purlin) {
       const sup = supports.filter((s) => s.purlinId === m.id).map((s) => dot(sub(s.p, m.start), f.ex)).sort((a, b) => a - b);
       const nb = project.building.purlins.pieceBays ?? 0;
-      ts = nb > 0 ? sup.filter((_, i) => i > 0 && i < sup.length - 1 && i % nb === 0) : proposeSplices(tMax, stock, sup);
+      // מדידה מקצה החלק בפועל (tMin — כולל הבליטה מעבר למסגרת הקיצונית), לא מנקודת ההתחלה של הקו
+      ts = nb > 0 ? sup.filter((_, i) => i > 0 && i < sup.length - 1 && i % nb === 0) : proposeSplices(tMax - tMin, stock, sup.map((t) => t - tMin)).map((t) => t + tMin);
     } else {
       // אזורים אסורים: תומכי פטות על הקורה (הפלטה המוגבהת מעל האגף העליון)
       // אזורים אסורים: תומכי פטות (±160) ועמודים מתחת לקורה — פלטת ראש עמוד ואלכסון עמוד-קורה (±1300)

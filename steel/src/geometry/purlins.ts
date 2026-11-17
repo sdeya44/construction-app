@@ -263,7 +263,9 @@ export function proposeSplices(L: number, stock: number, supportsT: number[]): n
     const near = ts.some((t) => t > end + TOL && t <= end + NEAR);
     const best = cand.length ? cand[cand.length - 1] : null;
     // תומך במרחק NEAR אחרי סוף המוט — עדיף מוט מלא עם תפר ליד התומך על פני חלק קצר בהרבה
-    const next = near || best === null || end - best > NEAR ? end : best;
+    // סוף המוט נופל ליד קצה הפטה (חלק אחרון קצר מ-500) — חוזרים לתומך האחרון שנכנס; אחרת השארית יוצאת ארוכה מהמוט
+    const tooCloseToEnd = end > L - 500;
+    const next = tooCloseToEnd ? (best ?? L - 500) : near || best === null || end - best > NEAR ? end : best;
     out.push(next);
     s = next;
   }

@@ -6,7 +6,7 @@ import { CONN_TYPE, SectionSvg } from './ConnectionEditor';
 import { Icon } from './icons';
 import { fabFor } from '../fab/useFab';
 import { OmitDialog } from './TransferPanel';
-import { KIND_LABEL } from './TreePanel';
+import { kindLabelOf } from './TreePanel';
 
 
 /** פקודה בלוח הפקודות / בתפריט. keys = קיצור מקלדת להצגה. */
@@ -62,7 +62,7 @@ export function ContextBar({ vp, onMore }: { vp: Viewport | null; onMore: (x: nu
   };
   return (
     <div className="ctxbar" ref={ref} role="toolbar" aria-label="סרגל הקשרי" data-testid="ctxbar" style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}>
-      <span className="ctx-title">{single ? <><b>{KIND_LABEL[single.kind]}</b> <span className="mono">{single.id}</span></> : <b data-testid="ctx-count">{ms.length} נבחרו</b>}</span>
+      <span className="ctx-title">{single ? <><b>{kindLabelOf(single)}</b> <span className="mono">{single.id}</span></> : <b data-testid="ctx-count">{ms.length} נבחרו</b>}</span>
       <span className="ctx-hint">עריכה בפאנל המאפיינים ←</span>
       <span className="ctx-sep" />
       {!single && <button className="ctx-btn" onClick={similar} data-testid="ctx-similar">בחר דומים</button>}
@@ -159,7 +159,17 @@ export function CommandPalette({ cmds, onClose, onPickElement }: { cmds: Cmd[]; 
   const listRef = useRef<HTMLDivElement>(null);
   const norm = (s: string) => s.toLowerCase().replace(/[\s'"׳״.\-_]/g, '');
   const nq = norm(q);
-  const cmdHits = cmds.filter((c) => !c.disabled && (!nq || norm(c.label).includes(nq) || norm(c.group).includes(nq) || (c.search ? nq.length >= 2 && norm(c.search).includes(nq) : false)));
+  // חיפוש לפי מילים (כל מילה צריכה להופיע), עם סובלנות לסיומות עבריות: "גבהים" ← "גבה", "תחתיות" ← "תחתי"
+  const stem = (w: string) => (w.length >= 4 ? w.replace(/(ים|ות|יות|ה|ת|י)$/, '') : w);
+  const toks = q.toLowerCase().split(/[\s,]+/).map((w) => w.replace(/['"׳״.\-_]/g, '')).filter(Boolean);
+  const hay = (c: Cmd) => norm(`${c.label} ${c.group} ${c.search ?? ''}`);
+  const cmdHits = cmds.filter((c) => {
+    if (c.disabled) return false;
+    if (!nq) return true;
+    if (norm(c.label).includes(nq) || norm(c.group).includes(nq) || (c.search && nq.length >= 2 && norm(c.search).includes(nq))) return true;
+    const h = hay(c);
+    return toks.length > 0 && toks.every((w) => h.includes(w) || (stem(w).length >= 3 && h.includes(stem(w))));
+  });
   const elHits = nq.length >= 2
     ? d.members.filter((m) => m.kind !== 'bolt' && (norm(m.id).includes(nq) || norm(m.label).includes(nq) || norm(m.profile).includes(nq))).slice(0, 8)
     : [];

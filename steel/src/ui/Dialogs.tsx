@@ -211,7 +211,7 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
               <span>{count} מסגרות · מרווח {(bay / 1000).toFixed(2)} מ'</span>
               {!tpl && <span>גובה {(b.eaveLeft / 1000).toFixed(2)}{b.eaveRight !== b.eaveLeft ? `/${(b.eaveRight / 1000).toFixed(2)}` : ''} מ'{b.roofType === 'gable' ? ` · ${b.slopeLeftPct}%` : ''}</span>}
               <span>{b.columnProfile} / {b.rafterProfile}{autoSize ? ' (יותאמו)' : ''}</span>
-              <span>פטות {b.purlins.left.profile} @ {(b.purlins.left.spacing / 1000).toFixed(2)} · {CLEATS.find(([k]) => k === style)?.[1]}</span>
+              <span>פטות {b.purlins.left.profile}{autoSize ? ' (יותאם)' : ''} @ {(b.purlins.left.spacing / 1000).toFixed(2)} · {CLEATS.find(([k]) => k === style)?.[1]}</span>
               <span>{[knee && 'אלכסונים', b.bracing.roof.enabled && 'קושרות גג', b.bracing.walls.enabled && 'קשיחות קירות'].filter(Boolean).join(' · ') || 'ללא חיזוקים'}</span>
               <span>{!clad ? 'ללא חיפוי' : cladWalls ? 'חיפוי גג וקירות' : 'חיפוי גג'}</span>
             </div>
