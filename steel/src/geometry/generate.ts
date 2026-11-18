@@ -320,6 +320,24 @@ export function generateBase(project: Project): DerivedModel {
         if (tr.drop.size) issues.push({ code: 'TB_DROP', severity: 'info', message: `דילול עמודים: הוסרו ${tr.drop.size} אלמנטים (אלכסונים/קושרות) שנשענו על עמודים שבוטלו או קוצרו` });
       }
     }
+    // אלמנט משני שנמחק (אלכסון עמוד-קורה, קושרת, אגד, נעילה...): נבנה יחד עם הפחים/הברגים שלו —
+    // החיבור שנשאר רק עם אלמנטים ראשיים (עמוד/קורה/פטה/קורה נושאת) הוא "יתום" ונמחק עם חלקיו
+    if (project.deleted.length) {
+      const hid = new Set(project.deleted);
+      const live = new Map(out.map((m) => [m.id, m]));
+      const isMain = (id: string) => { const m = live.get(id)!; return m.kind === 'column' || m.kind === 'rafter' || !!m.purlin || /^TB\./.test(id); };
+      // אלמנט "בעלים" = אלמנט במסגרת החיבור שאינו חלק שנוצר בו (פלטה/בורג מזהים מתחילים במזהה החיבור)
+      const own = (c: Connection) => [...new Set([...c.members, ...c.parts])].filter((id) => !id.startsWith(`${c.id}.`));
+      const orphan = connections.filter((c) => { const o = own(c); return o.some((id) => hid.has(id)) && (c.type === 'brace-cross' || o.filter((id) => !hid.has(id) && live.has(id)).every(isMain)); });
+      if (orphan.length) {
+        const oc = new Set(orphan);
+        const dropIds = new Set(orphan.flatMap((c) => c.parts.flatMap((pid) => [pid, `${pid}.H`, `${pid}.S`, `${pid}.N`])));
+        const keep = out.filter((m) => !dropIds.has(m.id)); out.length = 0; out.push(...keep);
+        connections = connections.filter((c) => !oc.has(c));
+        const ids = new Set(orphan.map((c) => c.id));
+        const keepIss = issues.filter((i) => !(i.elementId && ids.has(i.elementId))); issues.length = 0; issues.push(...keepIss);
+      }
+    }
     // פרטי חיבור מותאמים מהספרייה: מחליפים את החיבור שנבנה בקצה האלמנט
     if (project.detailAssign && Object.keys(project.detailAssign).length) issues.push(...applyCustomDetails(project, out, connections));
     byId = new Map(out.map((m) => [m.id, m]));
