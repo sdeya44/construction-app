@@ -7,14 +7,13 @@ import type { Vec3 } from '../core/vec';
 import type { ApprovalStatus, CleatParams, Connection, PlateConnParams, ValidationIssue } from '../model/types';
 import { store, useStore } from '../store';
 import { cachedSolid } from '../view/scene';
-import { LenField, NumField } from './fields';
+import { Adv, BoltSelect, LenField, NumField } from './fields';
 import { Icon } from './icons';
 import { PlateWizard } from './PlateWizard';
 import { CleatTypePicker } from './ConnTypePicker';
 
 const STATUS: Record<ApprovalStatus, string> = { 'not-verified': 'לא מאומת', 'for-review': 'לבדיקה', approved: 'מאושר' };
 export const CONN_TYPE: Record<Connection['type'], string> = { eave: 'עמוד-קורה (שתי פלטות מוברגות)', ridge: 'רכס (פלטות קצה)', base: 'פלטת בסיס', 'purlin-cleat': 'פטה-קורה (זוויתן L)', brace: 'קושרות', 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', 'purlin-splice': 'חיבור המשך פטה', 'rafter-side': 'קורה לצד עמוד (פלטת קצה)', knee: 'אלכסון עמוד-קורה', 'ridge-tie': 'פרופיל חיזוק אופקי ברכס', 'beam-splice': 'חיבור המשך קורה (פלטות קצה)', 'tb-support': 'קורה נושאת ↔ עמוד', 'tb-seat': 'קורת גג על קורה נושאת', truss: 'מסבך — צמתים מרותכים', 'truss-splice': 'חיבור המשך חגורת מסבך', 'truss-end': 'חגורה תחתונה ↔ עמוד', gutter: 'תומכי מזחלה', custom: 'פרט מותאם (מהספרייה)' };
-const BOLT_D = [10, 12, 16, 20, 24];
 
 /** רשימת החיבורים של אלמנט + כפתור פתיחת עורך. */
 export function MemberConnections({ memberId }: { memberId: string }) {
@@ -115,16 +114,15 @@ export function ConnectionEditor() {
           </select>
         </div>
       )}
-      {eff && <>
+      {eff && <Adv id="cp-one" label={`שינוי לחיבור הזה בלבד (${c.id.replace(/^C\./, '')}) — חריגה מהסטנדרט`}>
+        <div className="hint" style={{ marginTop: 0 }}>השרטוט למעלה משנה את כל החיבורים מהסוג הזה. כאן — רק את החיבור הזה.</div>
         <div className="panel-title">{c.type === 'eave' && eff.split !== false ? 'פלטות (עמוד וקורה — אותן מידות)' : 'פלטה'}</div>
         <div className="field"><label>עובי</label><LenField testId="cp-t" mm={eff.t} unit="mm" onCommit={(v) => setP({ t: v })} /></div>
         <div className="field"><label>רוחב</label><LenField testId="cp-w" mm={eff.w} unit="mm" onCommit={(v) => setP({ w: v })} /></div>
         <div className="field"><label>{c.type === 'ridge' ? 'הארכה מתחת לקורה' : 'אורך'}</label><LenField testId="cp-l" mm={eff.l} unit="mm" onCommit={(v) => setP({ l: v })} /></div>
         <div className="panel-title">{c.type === 'base' && (eff.mode ?? 'embedded') === 'embedded' ? 'מוטות עיגון (בהיקף הרשת)' : 'ברגים'}</div>
         <div className="field"><label>קוטר</label>
-          <select className="inp" data-testid="cp-d" value={eff.bolt.d} onChange={(e) => setP({ bolt: { ...eff.bolt, d: Number(e.target.value) } })}>
-            {BOLT_D.map((x) => <option key={x} value={x}>M{x}</option>)}
-          </select>
+          <BoltSelect testId="cp-d" d={eff.bolt.d} onChange={(x) => setP({ bolt: { ...eff.bolt, d: x } })} />
         </div>
         <div className="field"><label>דרגה</label>
           <select className="inp" value={eff.bolt.grade} onChange={(e) => setP({ bolt: { ...eff.bolt, grade: e.target.value } })}>
@@ -139,7 +137,7 @@ export function ConnectionEditor() {
         {c.type === 'base' && <div className="field"><label>עיגון מתחת לפלטה</label><LenField mm={eff.anchorLength ?? 500} unit="mm" onCommit={(v) => setP({ anchorLength: v })} /></div>}
         <div className="field"><label>חור (תוספת לקוטר)</label><LenField mm={eff.bolt.clearance} unit="mm" onCommit={(v) => setP({ bolt: { ...eff.bolt, clearance: v } })} /></div>
         <div className="field"><label>ריתוך פינתי a</label><LenField mm={eff.weldSize} unit="mm" onCommit={(v) => setP({ weldSize: v })} /></div>
-      </>}
+      </Adv>}
 
       {cl && <>
         <CleatTypePicker connId={c.id} />
@@ -156,9 +154,7 @@ export function ConnectionEditor() {
         <div className="field"><label>רוחב (לאורך הפטה)</label><LenField mm={cl.width} unit="mm" onCommit={(v) => setC({ width: v })} /></div>
         <div className="panel-title">ברגים</div>
         <div className="field"><label>קוטר</label>
-          <select className="inp" data-testid="cl-d" value={cl.bolt.d} onChange={(e) => setC({ bolt: { ...cl.bolt, d: Number(e.target.value) } })}>
-            {BOLT_D.map((x) => <option key={x} value={x}>M{x}</option>)}
-          </select>
+          <BoltSelect testId="cl-d" d={cl.bolt.d} onChange={(x) => setC({ bolt: { ...cl.bolt, d: x } })} />
         </div>
         <div className="field"><label>שורות × ברגים בשורה</label>
           <div className="row" style={{ flexWrap: 'nowrap' }}><NumField value={cl.rows} onCommit={(v) => setC({ rows: Math.round(v) })} /><NumField testId="cl-perRow" value={cl.perRow} onCommit={(v) => setC({ perRow: Math.round(v) })} /></div>

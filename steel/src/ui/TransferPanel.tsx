@@ -7,7 +7,8 @@ import { TrussWizard } from './TrussWizard';
 import type { RoofTrussParams, TransferDef, TbSeat, TbSupport } from '../model/types';
 import { store, useStore } from '../store';
 import { Dialog } from './Dialogs';
-import { ProfilePicker, useEdit } from './fields';
+import { ProfilePicker, useEdit, Help } from './fields';
+import { OffCard } from './pics';
 
 const SUPPORTS: TbSupport[] = ['A1', 'A2', 'A3', 'A4', 'A5'];
 const SEATS: TbSeat[] = ['B1', 'B2', 'B3', 'B4'];
@@ -139,7 +140,7 @@ export function TransferPanel() {
   return (
     <div className="panel-body" data-testid="tb-panel">
       <div className="panel-title">קורות נושאות (דילול עמודים)</div>
-      {!list.length && <div className="hint">אין עמודים מבוטלים. לביטול: בוחרים עמודים בתלת־ממד (Ctrl ללחיצה מרובה) ← "בטל עמודים" בסרגל ההקשר. התוכנה מציעה קורה נושאת בין העמודים שנותרו, עם בחירת תמיכה (A1–A5) וחיבור קורות הגג (B1–B4).</div>}
+      {!list.length && <Help>אין עמודים מבוטלים. לביטול: בוחרים עמודים בתלת־ממד (Ctrl ללחיצה מרובה) ← "בטל עמודים" בסרגל ההקשר. התוכנה מציעה קורה נושאת בין העמודים שנותרו, עם בחירת תמיכה (A1–A5) וחיבור קורות הגג (B1–B4).</Help>}
       {list.map((t, i) => <TransferRow key={t.id} t={t} onChange={(patch) => set(list.map((x, k) => (k === i ? { ...x, ...patch } : x)))} onRemove={() => set(list.filter((_, k) => k !== i))} />)}
     </div>
   );
@@ -172,7 +173,8 @@ export function RoofTrussPanel() {
       {ed.showTitle && <div className="panel-title">מסבכי גג
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="rt-on" checked={!!rt?.enabled} onChange={(e) => set({ enabled: e.target.checked })} />פעיל</label>
       </div>}
-      {ed.showTitle && <div className="hint">קורת הגג היא החגורה העליונה; חגורה תחתונה, אנכיים ואלכסונים מרותכים במסגריה; חיבורי המשך וחיבור החגורה לעמודים — ברגים בשטח. לחתך עם שני עמודים (מפתח אחד).</div>}
+      {ed.showTitle && <Help>קורת הגג היא החגורה העליונה; חגורה תחתונה, אנכיים ואלכסונים מרותכים במסגריה; חיבורי המשך וחיבור החגורה לעמודים — ברגים בשטח. לחתך עם שני עמודים (מפתח אחד).</Help>}
+      {!rt?.enabled && ed.showTitle && <OffCard pic="roofX" title="מסבכי גג" desc="קורת הגג הופכת לחגורה עליונה של מסבך — למפתחים גדולים" onAdd={() => set({ enabled: true })} testId="off-rt" />}
       {rt?.enabled && <>
         <div className="field"><label>מסגרות</label>
           <div className="bay-pick">{fr.map((f, i) => <button key={f.id} className={`tbtn${sel.includes(f.id) ? ' on' : ''}`} data-testid={`rt-f-${i + 1}`} onClick={() => toggleFrame(f.id)}>{i + 1}</button>)}</div></div>

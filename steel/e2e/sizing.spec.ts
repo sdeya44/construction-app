@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, pickProfile } from './helpers';
 
 test('SIZE-01: בדיקת גדלים — צביעה, מקרא, הסבר לאלמנט, בוחר פרופילים צבוע', async ({ page }) => {
   await boot(page);
@@ -19,7 +19,7 @@ test('SIZE-01: בדיקת גדלים — צביעה, מקרא, הסבר לאלמ
   await page.getByTestId('tool-sizing').click();
   await page.getByTestId('nav-s:profiles').click();
   await expect(page.getByTestId('rafterProfile-sz')).toContainText('קטן');
-  await page.getByTestId('rafterProfile-size').selectOption('IPE400');
+  await pickProfile(page, 'rafterProfile', 'IPE400');
   await expect(page.getByTestId('rafterProfile-sz')).toContainText('סביר');
   await shot(page, 'SIZE_02_picker');
 });

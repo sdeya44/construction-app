@@ -5,10 +5,11 @@ import { defaultHaunch } from '../geometry/haunch';
 import { gablePair, lineLabel, moveLines, planeDims, setAxisCount, setPlaneDims, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
 import { TriDims, type TriCalc } from './TriDims';
 import { store, useStore } from '../store';
-import { Adv, LenField, NumField, ProfilePicker, useEdit } from './fields';
+import { Adv, LenField, NumField, ProfilePicker, useEdit, Help } from './fields';
 import { Icon } from './icons';
 import type { KneeSideOverride } from '../model/types';
 import { KneeSchematic } from './schematics';
+import { OffCard } from './pics';
 
 /**
  * בונה החתך המודולרי (החלטת משתמש 15.11.2026): תבניות + טבלת צירי עמודים + טבלת מישורי גג, עם תצוגה מקדימה.
@@ -21,10 +22,15 @@ export function SectionEditor() {
   const sec = b.section;
   const u = p.displayUnit;
   const apply = (s2: CustomSection | undefined, label?: string) => store.exec(setSection(s2, label));
+  const [tplOpen, setTplOpen] = useState(false);
   return (
     <>
-      <div className="panel-title">צורת הסככה — בחר תבנית, ושנה כל מידה בשרטוט</div>
-      <div className="tpl-grid">
+      {/* גלריית התבניות מקופלת (1.34): פותחים רק כדי להחליף צורה */}
+      <div className="tpl-bar">
+        <span className="tpl-cur"><SectionPreview section={sec ?? toCustomSection(b, d.roof)} small /><span><small>צורת הסככה</small><b>{SECTION_TEMPLATES.find((t) => t.id === sec?.template)?.name ?? (sec ? 'מותאמת אישית' : b.roofType === 'gable' ? 'דו־שיפועי (2 צירים)' : 'חד־שיפועי (2 צירים)')}</b></span></span>
+        <button className={`btn small${tplOpen ? ' primary' : ''}`} data-testid="tpl-toggle" aria-expanded={tplOpen} onClick={() => setTplOpen(!tplOpen)}>{tplOpen ? 'סגירה' : 'החלפת תבנית'}</button>
+      </div>
+      {tplOpen && <div className="tpl-grid">
         {SECTION_TEMPLATES.map((t) => (
           <button key={t.id} className={`tpl${sec?.template === t.id ? ' on' : ''}`} data-testid={`tpl-${t.id}`} title={t.desc}
             onClick={() => {
@@ -32,11 +38,12 @@ export function SectionEditor() {
               // תבנית = סככה כמו בתוכניות: כולל אלכסוני עמוד-קורה (ניתן לבטל)
               const s2 = setSection(t.make(), `תבנית חתך: ${t.name}`), k2 = setKneeBraces({ enabled: true });
               store.exec({ label: `תבנית חתך: ${t.name}`, run: (pp) => k2.run(s2.run(pp)) });
+              setTplOpen(false);
             }}>
             <SectionPreview section={t.make()} small /><span>{t.name}</span>
           </button>
         ))}
-      </div>
+      </div>}
       {/* אין "קלאסי" נפרד: מבנה של 2 צירים מוצג ונערך באותו עורך (העריכה הראשונה שומרת אותו כחתך) */}
       <ModularTables sec={sec ?? toCustomSection(b, d.roof)} unit={u} apply={apply} />
       <button className="btn small link-nav" data-testid="goto-knee" onClick={() => window.dispatchEvent(new CustomEvent('ksp-nav', { detail: 'b:knee' }))}>אלכסוני עמוד-קורה, חיזוק רכס וקושרות ← חיזוקים וקשיחות</button>
@@ -134,7 +141,7 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
         </div>
         );
       })}
-      <div className="hint">גבהים = פני עליון של קורת הגג, בציר העמוד (לא בקצה הקונזולה). מזינים שניים מתוך גובה עמוד / גובה רכס / שיפוע — השלישי (מסומן "= מחושב") מתעדכן; "חשב" בשורה אחרת מעביר אליה את החישוב. מישור שעובר מעל עמוד יושב עליו; מישור שמסתיים בעמוד שממשיך למעלה מתחבר לצדו; שני קצוות באותה נקודה ללא עמוד = רכס. צד התחלת הפטות — בגג ופטות.</div>
+      <Help>גבהים = פני עליון של קורת הגג, בציר העמוד (לא בקצה הקונזולה). מזינים שניים מתוך גובה עמוד / גובה רכס / שיפוע — השלישי (מסומן "= מחושב") מתעדכן; "חשב" בשורה אחרת מעביר אליה את החישוב. מישור שעובר מעל עמוד יושב עליו; מישור שמסתיים בעמוד שממשיך למעלה מתחבר לצדו; שני קצוות באותה נקודה ללא עמוד = רכס. צד התחלת הפטות — בגג ופטות.</Help>
     </>
   );
 }
@@ -202,11 +209,12 @@ export function HaunchEditor() {
       {ed.showTitle && <div className="panel-title">מכפל בראש העמוד
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="hn-on" checked={hp.enabled} onChange={(e) => set({ enabled: e.target.checked })} />פעיל {hp.enabled ? `(${n})` : ''}</label>
       </div>}
+      {!hp.enabled && ed.showTitle && <OffCard pic="knee" title="מכפל בראש העמוד" desc="פח משולש מתחת לקורה ליד העמוד — מאפשר קורה קלה יותר במפתח גדול" onAdd={() => set({ enabled: true })} testId="off-hn" />}
       {hp.enabled && <>
         <div className="field"><label>אורך מפני העמוד</label><NumField testId="hn-length" value={hp.length} suffix='מ"מ' onCommit={(v) => set({ length: Math.max(300, v) })} /></div>
         <div className="field"><label>עומק בפני העמוד (0 = עומק הקורה)</label><NumField testId="hn-depth" value={hp.depth} suffix='מ"מ' onCommit={(v) => set({ depth: Math.max(0, v) })} /></div>
         <div className="field"><label>עובי גוף / אגף (0 = כמו הקורה)</label><span className="row"><NumField value={hp.webT} suffix='מ"מ' onCommit={(v) => set({ webT: Math.max(0, v) })} /><NumField value={hp.flangeT} suffix='מ"מ' onCommit={(v) => set({ flangeT: Math.max(0, v) })} /></span></div>
-        <div className="hint">פח גוף משולש + פח אגף משופע, מרותכים מתחת לקורת הגג במסגריה (מכלול אחד עם הקורה), בכל צד שבו הקורה ממשיכה מעבר לעמוד. מאפשר קורה קלה יותר במפתח גדול — ללא בדיקת חוזק בתוכנה.</div>
+        <Help>פח גוף משולש + פח אגף משופע, מרותכים מתחת לקורת הגג במסגריה (מכלול אחד עם הקורה), בכל צד שבו הקורה ממשיכה מעבר לעמוד. מאפשר קורה קלה יותר במפתח גדול — ללא בדיקת חוזק בתוכנה.</Help>
       </>}
     </>
   );
@@ -235,22 +243,19 @@ export function KneeEditor() {
       {ed.showTitle && <div className="panel-title">אלכסוני עמוד-קורה
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="kb-on" checked={kb.enabled} onChange={(e) => set({ enabled: e.target.checked })} />פעיל {kb.enabled ? `(${n})` : ''}</label>
       </div>}
+      {!kb.enabled && ed.showTitle && <OffCard pic="knee" title="אלכסוני עמוד-קורה" desc="אלכסון בכל מפגש עמוד-קורה (RHS80, 45°) — מחזק את המסגרת" onAdd={() => set({ enabled: true })} testId="off-kb" />}
       {kb.enabled && <>
         <KneeSchematic />
         {ed.showProfile && <div className="field prof"><label>חתך</label><ProfilePicker testId="kb-profile" value={kb.profile} families={['RHS', 'SHS', 'CHS', 'L', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>}
-        <div className="field"><label>ירידה על העמוד</label><NumField testId="kb-drop" value={kb.drop} suffix='מ"מ' onCommit={(v) => set({ drop: v })} /></div>
         <div className="field"><label>קביעת הנקודה על הקורה</label>
           <div className="seg">
             <button className={`tbtn${(kb.mode ?? 'angle') === 'angle' ? ' on' : ''}`} data-testid="kb-mode-angle" onClick={() => set({ mode: 'angle' })}>זווית</button>
             <button className={`tbtn${kb.mode === 'reach' ? ' on' : ''}`} data-testid="kb-mode-reach" onClick={() => set({ mode: 'reach' })}>מרחק אופקי</button>
           </div>
         </div>
-        {(kb.mode ?? 'angle') === 'angle'
-          ? <div className="field"><label>זווית מהאופק</label><NumField testId="kb-angle" value={kb.angle ?? 45} suffix="°" onCommit={(v) => set({ angle: Math.max(15, Math.min(75, v)) })} /></div>
-          : <div className="field"><label>מרחק על הקורה (אופקי)</label><NumField testId="kb-reach" value={kb.reach} suffix='מ"מ' onCommit={(v) => set({ reach: v })} /></div>}
         <KneeSides />
         {!ed.embed && <Adv id="kb" label="מתקדם — פרט חיבור, ברגים, עובי">{connFields}</Adv>}
-        {ed.showTitle && <div className="hint">בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. פרט הלקוח: פח מרותך לעמוד ולקורה (במישור המסגרת, מסגריה); בקצות ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. אין בדיקת חוזק.</div>}
+        {ed.showTitle && <Help>בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. פרט הלקוח: פח מרותך לעמוד ולקורה (במישור המסגרת, מסגריה); בקצות ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. אין בדיקת חוזק.</Help>}
       </>}
     </>
   );

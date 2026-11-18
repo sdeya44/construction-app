@@ -3,7 +3,7 @@ import { proposeSplicesFor, setSplices, setSplicesAuto } from '../commands/comma
 import { fromMm } from '../core/units';
 import type { Member } from '../model/types';
 import { store, useStore } from '../store';
-import { LenField } from './fields';
+import { LenField, Help } from './fields';
 import { Icon } from './icons';
 
 /** חלקי ייצור וחיבורי המשך של מכלול אחד: הוספה, הזזה ומחיקה של מיקומי חיבור. */
@@ -55,7 +55,7 @@ export function SpliceEditor({ m }: { m: Member }) {
         <button className="btn small" data-testid="splice-propose" onClick={() => store.exec(proposeSplicesFor([m.id]))}>הצעה אוטומטית</button>
         {manual && <button className="btn small" data-testid="splice-auto" title="ביטול המיקומים הידניים — חזרה לחלוקה האוטומטית" onClick={() => store.exec(setSplicesAuto(m.id))}>חזרה לאוטומטי</button>}
       </div>
-      <div className="hint">{isAuto ? `חלוקה אוטומטית: מוט מלא (${(stock / 1000).toFixed(1)} מ') מנקודת ההתחלה והשלמה בסוף, התפר מוזז כך שלא ייפול על תומך פטה. שינוי מיקום הופך את החלוקה לידנית. ` : ''}קורת I: שתי פלטות קצה PL12 מוגבהות, 8×M16. חיבור המשך אינו מאושר הנדסית — יש לתכנן ולאשר את מיקומו. אורך חומר הגלם וכיבוי החלוקה האוטומטית — מבנה ← פרטי פרויקט והגדרות.</div>
+      <Help>{isAuto ? `חלוקה אוטומטית: מוט מלא (${(stock / 1000).toFixed(1)} מ') מנקודת ההתחלה והשלמה בסוף, התפר מוזז כך שלא ייפול על תומך פטה. שינוי מיקום הופך את החלוקה לידנית. ` : ''}קורת I: שתי פלטות קצה PL12 מוגבהות, 8×M16. חיבור המשך אינו מאושר הנדסית — יש לתכנן ולאשר את מיקומו. אורך חומר הגלם וכיבוי החלוקה האוטומטית — מבנה ← פרטי פרויקט והגדרות.</Help>
     </>
   );
 }

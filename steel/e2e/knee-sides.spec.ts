@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, pickProfile } from './helpers';
 
 test('KB-02: אלכסוני עמוד-קורה — תוכנית איפה יש: תא, מסגרת, מפתח; מידות לכל מפתח (שורה אחת)', async ({ page }) => {
   const errors = await boot(page);
@@ -37,8 +37,7 @@ test('HUB-01: לחיצה על עמוד — חתך (סוג ← מידה) עם ה�
   await page.getByTestId('psec-general').click(); // הגדרות הגיאומטריה — סעיף מקופל באותו פאנל
   await expect(page.getByTestId('hub-settings')).toBeVisible();
   await page.getByTestId('scope-all').click();
-  await page.getByTestId('prop-profile-family').selectOption('HEB');
-  await page.getByTestId('prop-profile-size').selectOption('HEB200');
+  await pickProfile(page, 'prop-profile', 'HEB200', 'HEB');
   await shot(page, 'HUB_01_column');
   const p = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind === 'column').map((m: any) => m.profile))]);
   expect(p).toEqual(['HEB200']);
@@ -69,21 +68,18 @@ test('HUB-03: שינוי חתך מפאנל אלכסון — "רק האלמנט �
   const prof = (id: string) => page.evaluate((i) => (window as any).__ksp.store.state.derived.byId.get(i)?.profile, id);
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
   await page.getByTestId('scope-one').click();
-  await page.getByTestId('prop-profile-family').selectOption('SHS');
-  await page.getByTestId('prop-profile-size').selectOption('SHS100x5');
+  await pickProfile(page, 'prop-profile', 'SHS100x5', 'SHS');
   expect(await prof('KB.F2.L.L.R')).toBe('SHS100x5');
   expect(await prof('KB.F3.L.L.R')).toBe('RHS80x80x4');
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F3.L.L.R']));
   await page.getByTestId('scope-all').click();
-  await page.getByTestId('prop-profile-family').selectOption('SHS');
-  await page.getByTestId('prop-profile-size').selectOption('SHS90x4');
+  await pickProfile(page, 'prop-profile', 'SHS90x4', 'SHS');
   const all = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('KB.')).map((m: any) => m.profile))]);
   expect(all).toEqual(['SHS90x4']);
   // קושרת גג
   const br = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BR.R'))?.id);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), br);
-  await page.getByTestId('prop-profile-family').selectOption('L');
-  await page.getByTestId('prop-profile-size').selectOption('L60x6');
+  await pickProfile(page, 'prop-profile', 'L60x6', 'L');
   const roof = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('BR.R')).map((m: any) => m.profile))]);
   expect(roof).toEqual(['L60x6']);
   await shot(page, 'HUB_03_brace_profile');

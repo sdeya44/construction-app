@@ -2,7 +2,7 @@ import { setBuilding, setCleat, setKneeBraces, setPurlinSide } from '../commands
 import { purlinParams } from '../geometry/purlins';
 import { defaultKneeBraces } from '../geometry/knee';
 import { defaultPortal } from '../geometry/portal';
-import type { BraceConnParams, CleatParams, Member, OpeningDef, PortalBraceParams, PurlinSideParams, RidgeReinfParams } from '../model/types';
+import type { BraceConnParams, CleatParams, LockTrussParams, Member, OpeningDef, PortalBraceParams, PurlinSideParams, RidgeReinfParams } from '../model/types';
 import { tryProfile } from '../profiles/library';
 import { store, useStore } from '../store';
 import { S, Schematic, type SDim } from './Schematic';
@@ -10,12 +10,12 @@ import { S, Schematic, type SDim } from './Schematic';
 const rad = (a: number) => (a * Math.PI) / 180;
 
 /** אגד B: עמודים, קורה ראשית, קורת אגד ושני אלכסונים — מרווח, ירידה וזווית לעריכה על השרטוט */
-export function PortalSchematic({ invert }: { invert?: boolean } = {}) {
+export function PortalSchematic({ invert, params, onSet }: { invert?: boolean; params?: PortalBraceParams; onSet?: (patch: Partial<PortalBraceParams>) => void } = {}) {
   const br = useStore((s) => s.project.building.bracing);
   const frames = useStore((s) => s.project.building.frames);
-  const p = br.walls.portal ?? defaultPortal();
+  const p = params ?? br.walls.portal ?? defaultPortal();
   const inv = invert ?? !!p.invert;
-  const set = (patch: Partial<PortalBraceParams>) => store.exec(setBuilding({ bracing: { ...br, walls: { ...br.walls, portal: { ...p, ...patch } } } }));
+  const set = onSet ?? ((patch: Partial<PortalBraceParams>) => store.exec(setBuilding({ bracing: { ...br, walls: { ...br.walls, portal: { ...p, ...patch } } } })));
   const fr = [...frames].sort((a, b) => a.y - b.y);
   const bay = fr.length > 1 ? fr[1].y - fr[0].y : 6000;
   const hb = tryProfile(p.beam)?.props.h ?? 100;
@@ -34,7 +34,7 @@ export function PortalSchematic({ invert }: { invert?: boolean } = {}) {
     { a: [x0, 108], b: [x1, 108], off: 0, value: bay, derived: true, text: `${Math.round(bay)} (מפתח)` },
   ];
   return (
-    <Schematic w={200} h={118} dims={dims} testId="sch-portal" caption={`לחיצה על מידה מסומנת ✎ לשינוי · חל על כל אגדי B בפרויקט${inv ? ' · הפוך: אלכסונים עולים' : ''}`}>
+    <Schematic w={200} h={118} dims={dims} testId="sch-portal" caption={`לחיצה על מידה מסומנת ✎ לשינוי${params ? '' : ' · חל על כל אגדי B בפרויקט'}${inv ? ' · הפוך: אלכסונים עולים' : ''}`}>
       {S.bar([x0, yTop], [x0, 104])}{S.bar([x1, yTop], [x1, 104])}
       {S.bar([x0 - 6, yMain - 3], [x1 + 6, yMain - 3], 'sm-main', 5)}
       {S.text([100, yMain - 8], 'קורה ראשית / ראש עמוד', 'sm-lbl-s')}
@@ -42,6 +42,42 @@ export function PortalSchematic({ invert }: { invert?: boolean } = {}) {
       {S.text([100, yBt + (yBb - yBt) / 2], `קורת אגד ${p.beam}`, 'sm-lbl')}
       {S.bar([x0 + 1.5, yC], [x0 + 1.5 + dx, yR], 'sm-hi', 2.2)}{S.bar([x1 - 1.5, yC], [x1 - 1.5 - dx, yR], 'sm-hi', 2.2)}
       <g data-testid={inv ? 'sch-pb-up' : 'sch-pb-down'}>{S.text([x1 - dx - 10, inv ? yC + dropV * 0.6 : yC - dropV * 0.4], `אלכסון ${p.brace}`, 'sm-lbl-s', 'end')}</g>
+    </Schematic>
+  );
+}
+
+/** נעילה אופקית (מסבך RHS בין העמודים): מרווח, גובה, מרחק לצומת ראשון ומספר אלכסונים — עריכה על השרטוט */
+export function LockTrussSchematic({ p, set }: { p: LockTrussParams; set: (patch: Partial<LockTrussParams>) => void }) {
+  const frames = useStore((s) => s.project.building.frames);
+  const fr = [...frames].sort((a, b) => a.y - b.y);
+  const bay = fr.length > 1 ? fr[1].y - fr[0].y : 6000;
+  const H = Math.max(300, p.height);
+  const x0 = 24, x1 = 176, yMain = 20;
+  const gapV = 6 + Math.min(14, p.gap / 40), hV = Math.max(18, Math.min(46, H / 30));
+  const yTopC = yMain + gapV, yBotC = yTopC + hV;
+  const ySec = p.position === 'above' ? yTopC : yBotC, yCont = p.position === 'above' ? yBotC : yTopC;
+  const ec = p.endClear ?? 0;
+  const ecV = ec > 0 ? Math.min(40, ec / 25) : 10;
+  // אלכסונים W: מספר אוטומטי לזווית ~50°
+  const n = p.diags > 0 ? p.diags : Math.max(2, Math.round(((bay - 2 * (ec || 250)) / H) * Math.tan((40 * Math.PI) / 180)) * 2 / 2);
+  const a0 = x0 + ecV, a1 = x1 - ecV;
+  const nodes = Array.from({ length: n + 1 }, (_, i) => a0 + ((a1 - a0) * i) / n);
+  const dims: SDim[] = [
+    { a: [x1 + 2, yMain], b: [x1 + 2, yTopC], off: -8, value: p.gap, testId: 'sch-lt-gap', onCommit: (v) => set({ gap: Math.max(0, v) }) },
+    { a: [x0 - 2, yTopC], b: [x0 - 2, yBotC], off: 8, value: H, testId: 'sch-lt-height', min: 300, onCommit: (v) => set({ height: Math.max(300, v) }) },
+    { a: [x0, yBotC + 9], b: [a0, yBotC + 9], off: 0, value: ec, text: ec > 0 ? `${Math.round(ec)}` : 'אוטו׳', testId: 'sch-lt-end', min: 0, onCommit: (v) => set({ endClear: Math.max(0, v) }) },
+    { a: [0, 0], b: [0, 0], off: 0, value: p.diags, labelOnly: true, at: [100, yBotC + 22], text: p.diags > 0 ? `${p.diags} אלכסונים` : 'אלכסונים: אוטו׳', testId: 'sch-lt-diags', min: 0, onCommit: (v) => set({ diags: Math.max(0, Math.round(v)) }) },
+    { a: [x0, 108], b: [x1, 108], off: 0, value: bay, derived: true, text: `${Math.round(bay)} (מפתח)` },
+  ];
+  return (
+    <Schematic w={200} h={118} dims={dims} testId="sch-lock" caption="לחיצה על מידה ✎ — מרווח מתחת לקורה, גובה המסבך, מרחק מהעמוד לצומת הראשון, מספר אלכסונים (0 = אוטו׳)">
+      {S.bar([x0, 12], [x0, 104])}{S.bar([x1, 12], [x1, 104])}
+      {S.bar([x0 - 6, yMain - 3], [x1 + 6, yMain - 3], 'sm-main', 5)}
+      {S.text([100, yMain - 9], 'קורה ראשית / ראש עמוד', 'sm-lbl-s')}
+      {S.bar([x0 + 1.5, yCont], [x1 - 1.5, yCont], 'sm-plate', 4)}
+      {S.bar([x0 + 1.5, ySec], [x1 - 1.5, ySec], 'sm-plate', 4)}
+      {nodes.slice(0, -1).map((x, i) => S.bar([x, i % 2 ? yTopC : yBotC], [nodes[i + 1], i % 2 ? yBotC : yTopC], 'sm-hi', 1.8))}
+      {S.text([100, yCont + (p.position === 'above' ? 7 : -6)], `סיב רציף ${p.chord}`, 'sm-lbl-s')}
     </Schematic>
   );
 }
@@ -89,21 +125,38 @@ export function PurlinSlopeSchematic({ side, items, mono }: { side: string; item
   const ss = [...new Set(items.map((m) => Math.round(m.purlin!.sSlope)))].sort((a, b) => a - b);
   if (!ss.length) return null;
   const L = ss[ss.length - 1] + Math.max(prm.edgeOffset, 0) + 120;
-  const xA = 170, xB = 22, yA = 30, yB = 66; // התחלה (רכס/קצה) מימין למעלה ← סוף משמאל למטה
+  const W = 300, xA = 268, xB = 26, yA = 30, yB = 48; // התחלה (רכס/קצה) מימין למעלה ← סוף משמאל למטה
   const P = (s: number): [number, number] => [xA + ((xB - xA) * s) / L, yA + ((yB - yA) * s) / L];
   const even = (prm.layout ?? 'fixed') === 'even';
+  const manual = !!prm.manualPositions;
+  const n = ss.length;
+  const all = n <= 12;
+  // כל מרווח על השרטוט (1.34): לחיצה — מרווח רגיל (פריסה אוטומטית) או הזזת הפטה וכל מה שאחריה (פריסה ידנית)
+  const gapDim = (i: number): SDim => {
+    const v = ss[i + 1] - ss[i];
+    const rem = !even && !manual && i === n - 2 && Math.abs(v - prm.spacing) > 0.5;
+    return {
+      a: P(ss[i]), b: P(ss[i + 1]), off: i % 2 ? 9 : -24, value: manual ? v : even ? v : rem ? v : prm.spacing,
+      text: `${Math.round(v)}${rem ? ' שארית' : ''}`, testId: `sch-${side}-g${i}`,
+      onCommit: (nv: number) => {
+        if (manual) { const d0 = nv - v, arr = prm.manualPositions!.map((x, j) => (j > i ? x + d0 : x)); set({ manualPositions: arr }); }
+        else set({ spacing: nv });
+      },
+    };
+  };
   const dims: SDim[] = [
-    { a: P(0), b: P(ss[0]), off: -17, value: prm.first, testId: `sch-${side}-s0`, onCommit: (v) => set({ first: v }) },
-    ...(ss.length > 1 ? [{ a: P(ss[0]), b: P(ss[1]), off: -9, value: even ? prm.spacing : ss[1] - ss[0], text: `${Math.round(even ? prm.spacing : ss[1] - ss[0])}${even ? ' (מרבי)' : ''}`, testId: `sch-${side}-s1`, onCommit: (v: number) => set({ spacing: v }) } as SDim] : []),
-    { a: P(ss[ss.length - 1]), b: P(L - 120 + 120), off: -9, value: prm.edgeOffset, text: `${Math.round(prm.edgeOffset)} (שפה)`, testId: `sch-${side}-s2`, onCommit: (v) => set({ edgeOffset: v }) },
-    { a: [0, 0], b: [0, 0], off: 0, value: ss.length, labelOnly: true, derived: true, at: [100, 92], text: `${ss.length} פטות · ${prm.profile}` },
+    { a: P(0), b: P(ss[0]), off: 9, value: prm.first, testId: `sch-${side}-s0`, onCommit: (v) => (manual ? set({ manualPositions: prm.manualPositions!.map((x) => x + v - ss[0]) }) : set({ first: v })) },
+    ...(n > 1 && !all ? [{ a: P(ss[0]), b: P(ss[1]), off: -9, value: prm.spacing, text: `${Math.round(even ? prm.spacing : ss[1] - ss[0])}${even ? ' (מרבי)' : ''}`, testId: `sch-${side}-s1`, onCommit: (v: number) => set({ spacing: v }) } as SDim] : []),
+    ...(all ? ss.slice(0, -1).map((_, i) => gapDim(i)) : n > 2 ? [gapDim(n - 2)] : []),
+    { a: P(ss[n - 1]), b: P(L), off: (all ? n - 1 : 1) % 2 ? 9 : -24, value: prm.edgeOffset, text: `${Math.round(prm.edgeOffset)} (שפה)`, testId: `sch-${side}-s2`, onCommit: (v) => set({ edgeOffset: v }) },
+    { a: [0, 0], b: [0, 0], off: 0, value: n, labelOnly: true, derived: true, at: [150, 94], text: `${n} פטות · ${prm.profile}${manual ? ' · פריסה ידנית' : even ? ' · מרווחים שווים' : ''}` },
   ];
   return (
-    <Schematic w={200} h={100} dims={dims} testId={`sch-purlins-${side}`} caption={`${mono ? 'מקצה ההתחלה' : 'מהרכס'} לקצה הקורה · לחיצה על מידה ✎`}>
+    <Schematic w={W} h={100} dims={dims} testId={`sch-purlins-${side}`} caption={`${mono ? 'מקצה ההתחלה' : 'מהרכס'} לקצה הקורה, מ"מ ${prm.measure === 'horizontal' ? 'בהיטל אופקי' : 'לאורך השיפוע'} · לחיצה על מרווח ✎ — ${manual ? 'מזיזה את הפטה וכל מה שאחריה' : even ? 'מרווח מרבי' : 'מרווח רגיל לכל הפטות'}`}>
       <line x1={P(0)[0]} y1={P(0)[1] + 3} x2={P(L)[0]} y2={P(L)[1] + 3} className="sm-main" strokeWidth={5} />
-      {ss.map((s, i) => { const [x, y] = P(s); return <rect key={i} x={x - 2.2} y={y - 4} width={4.4} height={6} className="sm-plate" />; })}
-      {S.text([P(0)[0] + 2, P(0)[1] - 6], mono ? 'התחלה' : 'רכס', 'sm-lbl-s', 'end')}
-      {S.text([P(L)[0] - 1, P(L)[1] + 10], 'קצה הקורה', 'sm-lbl-s', 'start')}
+      {ss.map((s2, i) => { const [x, y] = P(s2); return <rect key={i} x={x - 2.2} y={y - 4} width={4.4} height={6} className="sm-plate" />; })}
+      {S.text([P(0)[0] + 2, P(0)[1] - 7], mono ? 'התחלה' : 'רכס', 'sm-lbl-s', 'end')}
+      {S.text([P(L)[0] - 1, P(L)[1] - 10], 'קצה הקורה', 'sm-lbl-s', 'start')}
     </Schematic>
   );
 }
@@ -318,3 +371,78 @@ export function OpeningsSchematic({ wall, len, eave, ticks, ops, sel, onSel, set
   );
 }
 const WALL_HE_S: Record<string, string> = { L: 'קיר שמאל', R: 'קיר ימין', F: 'קיר חזית', B: 'קיר אחורי' };
+
+/**
+ * תוכנית מסגרות לאורך המבנה (1.34): קו לכל מסגרת עם מספר, מידה לכל מפתח — לחיצה ✎ ושינוי (מזיז את כל המסגרות שאחריו),
+ * ואורך כולל. מחליף את טבלת המיקומים כעריכה הראשית; הטבלה נשארת מקופלת.
+ */
+export function FramesStrip({ frames, onBay, onTotal }: { frames: { id: string; y: number }[]; onBay: (i: number, v: number) => void; onTotal: (v: number) => void }) {
+  const fr = [...frames].sort((a, b) => a.y - b.y);
+  const n = fr.length;
+  const L = fr[n - 1].y - fr[0].y || 1;
+  const W = 300, x0 = 34, x1 = 286, yT = 26, yB = 54;
+  const X = (y: number) => x0 + ((y - fr[0].y) / L) * (x1 - x0);
+  const many = n > 13;
+  const dims: SDim[] = [
+    ...fr.slice(1).map((f, i) => ({ a: [X(fr[i].y), yB + 10], b: [X(f.y), yB + 10], off: 0, value: f.y - fr[i].y,
+      text: many ? `${((f.y - fr[i].y) / 1000).toFixed(1)}` : `${Math.round(f.y - fr[i].y)}`, unit: '', testId: `fs-bay-${i}`, min: 100,
+      onCommit: (v: number) => onBay(i, v) }) as SDim),
+    { a: [x0, yB + 24], b: [x1, yB + 24], off: 0, value: L, text: `${Math.round(L)} (אורך)`, testId: 'fs-total', min: 1000, onCommit: (v: number) => onTotal(v) },
+  ];
+  return (
+    <Schematic w={W} h={92} dims={dims} testId="frames-strip" caption={`תוכנית מסגרות (מ"מ${many ? ', מרווחים במטר' : ''}) — לחיצה על מרווח ✎ משנה אותו ומזיזה את כל מה שאחריו · לחיצה על האורך — חלוקה שווה מחדש`}>
+      <rect x={x0} y={yT} width={x1 - x0} height={yB - yT} className="sm-plate" opacity={0.35} />
+      {fr.map((f, i) => (
+        <g key={f.id}>
+          {S.bar([X(f.y), yT - 2], [X(f.y), yB + 2], 'sm-main', 2.2)}
+          {(!many || i % 2 === 0 || i === n - 1) && <><circle cx={X(f.y)} cy={yT - 9} r={5.5} className="sm-bub" />{S.text([X(f.y), yT - 8.6], String(i + 1), 'sm-lbl-s')}</>}
+        </g>
+      ))}
+    </Schematic>
+  );
+}
+
+/**
+ * קשיחות קירות — תוכנית אחת (1.34): שורה לכל ציר עמודים (מלמעלה ← למטה: הציר הראשון ← האחרון), עמודה לכל מפתח.
+ * לחיצה על תא מוסיפה/מסירה קשיחות בקיר הזה במפתח הזה; הסמל לפי הסוג (X / אגד B / נעילה אופקית).
+ */
+export function WallsPlan({ lines, nb, bays, kind, onToggle }: {
+  lines: { id: string; label: string }[]; nb: number; bays: Map<string, number[]>; kind: 'x' | 'portal' | 'truss';
+  onToggle: (lineId: string, bay: number) => void;
+}) {
+  const W = 300, X0 = 70, X1 = 294, Y0 = 18, rowH = Math.max(22, Math.min(30, 150 / Math.max(lines.length, 1)));
+  const bw = (X1 - X0) / Math.max(nb, 1);
+  const H = Y0 + rowH * lines.length + 14;
+  const sym = (a: number, y: number) => {
+    const b = a + bw, t = y + 3, u = y + rowH - 3;
+    if (kind === 'x') return <><line x1={a + 1.5} y1={t} x2={b - 1.5} y2={u} className="sm-hi" strokeWidth={1.3} /><line x1={a + 1.5} y1={u} x2={b - 1.5} y2={t} className="sm-hi" strokeWidth={1.3} /></>;
+    if (kind === 'portal') { const yb = t + (u - t) * 0.35; return <><line x1={a + 1} y1={yb} x2={b - 1} y2={yb} className="sm-hi" strokeWidth={1.6} /><line x1={a + 1} y1={u} x2={a + bw * 0.28} y2={yb} className="sm-hi" strokeWidth={1.2} /><line x1={b - 1} y1={u} x2={b - bw * 0.28} y2={yb} className="sm-hi" strokeWidth={1.2} /></>; }
+    const n = 4, xs = Array.from({ length: n + 1 }, (_, i) => a + 2 + ((bw - 4) * i) / n);
+    return <><line x1={a + 1} y1={t + 1} x2={b - 1} y2={t + 1} className="sm-hi" strokeWidth={1.4} /><line x1={a + 1} y1={u - 3} x2={b - 1} y2={u - 3} className="sm-hi" strokeWidth={1.4} />
+      {xs.slice(0, -1).map((x, i) => <line key={i} x1={x} y1={i % 2 ? t + 1 : u - 3} x2={xs[i + 1]} y2={i % 2 ? u - 3 : t + 1} className="sm-hi" strokeWidth={1} />)}</>;
+  };
+  return (
+    <div className="schem" data-testid="walls-plan">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="קשיחות קירות — תוכנית">
+        <text x={W / 2} y={9} className="sm-lbl-s" textAnchor="middle">חזיתות הקירות לפי ציר — לחיצה על מפתח מוסיפה/מסירה</text>
+        {lines.map((l, r) => {
+          const y = Y0 + r * rowH, sel = new Set(bays.get(l.id) ?? []);
+          const side = r === 0 ? ' (שמאל)' : r === lines.length - 1 ? ' (ימין)' : '';
+          return <g key={l.id}>
+            <text x={X0 - 3} y={y + rowH / 2 + 2} className="sm-lbl" textAnchor="end" direction="ltr" style={{ unicodeBidi: 'plaintext' }}>{`ציר ${l.label}${side}`}</text>
+            {Array.from({ length: nb }, (_, i) => {
+              const a = X0 + i * bw, on = sel.has(i);
+              return <g key={i} className="bay-cell" data-testid={`sch-wall-${l.id}-${i}`} onClick={() => onToggle(l.id, i)}>
+                <rect x={a} y={y} width={bw} height={rowH} className={on ? 'bay on' : 'bay'} />
+                {on && sym(a, y)}
+              </g>;
+            })}
+            <line x1={X0} y1={y + rowH} x2={X1} y2={y + rowH} className="sm-main" strokeWidth={1.2} />
+          </g>;
+        })}
+        {Array.from({ length: nb + 1 }, (_, i) => <g key={i}><line x1={X0 + i * bw} y1={Y0} x2={X0 + i * bw} y2={Y0 + rowH * lines.length} className="sm-main" strokeWidth={1.2} />
+          {(nb <= 24 || i % 2 === 0) && <text x={X0 + i * bw} y={H - 3} className="sm-lbl-s" textAnchor="middle">{i + 1}</text>}</g>)}
+      </svg>
+    </div>
+  );
+}

@@ -1,6 +1,6 @@
 import { CleatTypePicker } from './ConnTypePicker';
 import { proposeSplicesFor, setCleat, setPurlinSide, setPurlinSystem, setSection, type Command } from '../commands/commands';
-import { Adv, NumField } from './fields';
+import { Adv, BoltSelect, NumField, Help } from './fields';
 import { fromMm } from '../core/units';
 import type { Member, PurlinSideParams } from '../model/types';
 import { MATERIALS } from '../profiles/materials';
@@ -36,14 +36,11 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
           </select>
         </div>
         <SideIssues pkey={side} />
-        <Adv id="pside" label="מתקדם — מידות בשדות, אופן מדידה, פתיחת החתך">
-        <div className="field"><label>{mono ? 'מרחק ראשון מקצה ההתחלה' : 'מרחק ראשון מהרכס'}</label><LenField testId={tid('first')} mm={prm.first} unit={u} onCommit={(v) => set({ first: v })} /></div>
+        <Adv id="pside" label="מתקדם — אופן מדידה, פתיחת החתך">
         {!mono && <label className="ss-radio" title="ללא תיקון: מרחק 0 = הפטה בקו הרכס בדיוק. אחרת התוכנה מזיזה את הפטה כך שהפטה והתושבת לא יחצו את קו הרכס">
           <input type="checkbox" checked={!!prm.firstExact} data-testid={tid('first-exact')} onChange={(e) => set({ firstExact: e.target.checked })} />
           מרחק מדויק — בלי תיקון אוטומטי למרחק המזערי מהרכס
         </label>}
-        <div className="field"><label>{(prm.layout ?? 'fixed') === 'even' ? 'מרווח מרבי' : 'מרווח רגיל'}</label><LenField testId={tid('spacing')} mm={prm.spacing} unit={u} onCommit={(v) => set({ spacing: v })} /></div>
-        <div className="field"><label title="מקצה קורת הגג עד הפנים החיצוניות של הפטה או התומך — הפטה יושבת כולה על הקורה">פטה אחרונה – מרווח מקצה הקורה</label><LenField testId={tid('edge')} mm={prm.edgeOffset} unit={u} onCommit={(v) => set({ edgeOffset: v })} /></div>
         <div className="field"><label>אופן מדידה</label>
           <select className="inp" value={prm.measure} data-testid={tid('measure')} onChange={(e) => set({ measure: e.target.value as PurlinSideParams['measure'] })}>
             <option value="slope">לאורך השיפוע</option><option value="horizontal">בהיטל אופקי (מסומן)</option>
@@ -56,6 +53,7 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
         </div>
         </Adv>
         {prm.measure === 'horizontal' && <div className="issue warning"><span className="ic">!</span>המרחקים נמדדים בהיטל אופקי ולא לאורך השיפוע.</div>}
+        <Adv id="ptbl" label={`טבלת מיקומי הפטות (${items.length})`}>
         <table className="tbl" data-testid={tid('layout')}>
           <thead><tr><th>#</th><th>לאורך שיפוע</th><th>אופקי</th><th>מרווח</th></tr></thead>
           <tbody>
@@ -71,6 +69,7 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
             })}
           </tbody>
         </table>
+        </Adv>
         <div className="row" style={{ marginTop: 6 }}>
           {prm.manualPositions
             ? <><span className="badge warn">פריסה ידנית</span><button className="btn small" onClick={() => set({ manualPositions: null })}>חזרה לאוטומטי</button></>
@@ -83,7 +82,10 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
         {prm.cleat.enabled && <>
           <CleatTypePicker side={side} />
           {(prm.cleat.style ?? 'run') === 'run' && <CleatSchematic side={side} />}
-          <Adv id="cleat" label="מתקדם — מידות התומך בשדות">
+          {(prm.cleat.style ?? 'run') === 'run' && <div className="field"><label>קוטר בורג</label>
+            <BoltSelect d={prm.cleat.bolt.d} onChange={(n) => store.exec(setCleat(side, { bolt: { ...prm.cleat.bolt, d: n } }))} />
+          </div>}
+          {(prm.cleat.style ?? 'run') !== 'run' && <Adv id="cleat" label="מידות התומך">
           <div className="field"><label>גובה</label>
             <div className="row" style={{ flexWrap: 'nowrap' }}>
               {prm.cleat.height === null
@@ -105,11 +107,9 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
             </div>
           </div>
           <div className="field"><label>קוטר בורג</label>
-            <select className="inp" value={prm.cleat.bolt.d} onChange={(e) => store.exec(setCleat(side, { bolt: { ...prm.cleat.bolt, d: Number(e.target.value) } }))}>
-              {[10, 12, 16, 20].map((x) => <option key={x} value={x}>M{x}</option>)}
-            </select>
+            <BoltSelect d={prm.cleat.bolt.d} onChange={(n) => store.exec(setCleat(side, { bolt: { ...prm.cleat.bolt, d: n } }))} />
           </div>
-          </Adv>
+          </Adv>}
           <div className="hint">מרותך לקורה במסגריה, מוברג לווב הפטה בשטח. הרגל הניצבת צמודה לווב (0 מ"מ), רגל הבסיס פונה הרחק מהאגף התחתון.</div>
         </>}
         </>}
@@ -172,8 +172,8 @@ export function RoofPanel({ section }: { section?: RoofSection } = {}) {
   const exec = (c: Command) => store.exec(c);
   return (
     <div className="panel-body" data-testid="roof-panel">
-      {show('system') && <>
-      <div className="panel-title">מערכת פטות</div>
+      {(show('system') || show('left')) && <>
+      <div className="panel-title">מערכת פטות — חומר ופריסה</div>
       <div className="field"><label>חומר</label>
         <select className="inp" value={pu.material} onChange={(e) => exec(setPurlinSystem({ material: e.target.value }))}>
           {MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -186,7 +186,7 @@ export function RoofPanel({ section }: { section?: RoofSection } = {}) {
           </select>
         </div>
       )}
-      <div className="hint">הפריסה מתחילה {p.building.roofType === 'gable' ? 'ברכס, לכל צד בנפרד,' : 'בקצה שנבחר'} ומתקדמת עד הקצה החיצוני של קורת הגג כולל הקונזולה. הפטה האחרונה בקצה, והשארית נשארת במפתח האחרון בלבד.</div>
+      <Help>הפריסה מתחילה {p.building.roofType === 'gable' ? 'ברכס, לכל צד בנפרד,' : 'בקצה שנבחר'} ומתקדמת עד הקצה החיצוני של קורת הגג כולל הקונזולה. הפטה האחרונה בקצה, והשארית נשארת במפתח האחרון בלבד.</Help>
       </>}
       {p.building.section
         ? (show('left') || show('right')) && planes.map((pl) => <div key={pl.id}><PlaneStart planeId={pl.id} /><SideEditor side={pl.params} title={`פטות ${pl.label}`} freeStart={pl.startFree} items={purlins.filter((m) => m.purlin!.side === pl.id)} /></div>)
@@ -195,7 +195,7 @@ export function RoofPanel({ section }: { section?: RoofSection } = {}) {
         : (show('left') || show('right')) && <SideEditor side="left" title="שיפוע הגג" items={M} />}
       {show('splices') && <>
       <div className="panel-title">חלוקה לחלקי ייצור</div>
-      <div className="hint">אורך חומר גלם: {(p.settings.stockLength / 1000).toFixed(2)} מ'. ההצעה ממקמת חיבורי המשך מעל מסגרות, רק במקום הנדרש — לא בכל מסגרת. חיבור המשך בפטת C/Z: פלטה בצד הפנימי של הווב ו-4 ברגים, 2 בכל פטה.</div>
+      <Help>אורך חומר גלם: {(p.settings.stockLength / 1000).toFixed(2)} מ'. ההצעה ממקמת חיבורי המשך מעל מסגרות, רק במקום הנדרש — לא בכל מסגרת. חיבור המשך בפטת C/Z: פלטה בצד הפנימי של הווב ו-4 ברגים, 2 בכל פטה.</Help>
       <div className="field"><label>עובי פלטת המשך</label><NumField testId="ps-t" value={pu.splice.plateT} suffix='מ"מ' onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, plateT: v } }))} /></div>
       <div className="field"><label>קוטר בורג</label><NumField testId="ps-d" value={pu.splice.bolt.d} suffix="M" onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, bolt: { ...pu.splice.bolt, d: Math.round(v) } } }))} /></div>
       <div className="field"><label>מרחק ברגים מהתפר</label><NumField value={pu.splice.jointOffset} suffix='מ"מ' onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, jointOffset: v } }))} /></div>

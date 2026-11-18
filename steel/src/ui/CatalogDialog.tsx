@@ -1,3 +1,4 @@
+import { Help } from './fields';
 import { useState } from 'react';
 import { buildRows, detectMapping, FIELDS, readCsv, readXlsx, type Cell, type Field } from '../profiles/importTable';
 import { clearProfileCache, getProfile, profileWithoutCatalog } from '../profiles/library';
@@ -71,7 +72,7 @@ export function CatalogDialog({ onClose }: { onClose: () => void }) {
         {cur && <button className="btn danger" onClick={async () => { if (confirm('להסיר את הקטלוג? החתכים יחזרו לחישוב גיאומטרי "לא מאומת".')) { await saveCatalog(null); apply(null); onClose(); } }}>הסרת קטלוג</button>}
         <button className="btn" onClick={onClose}>סגירה</button>
       </>}>
-      <div className="hint">קטלוג נוכחי: {cur ? <b>{cur.source} · {cur.rows.length} חתכים · {new Date(cur.importedAt).toLocaleDateString('he-IL')}</b> : 'אין — כל החתכים מחושבים גיאומטרית ומסומנים "לא מאומת"'}</div>
+      <Help>קטלוג נוכחי: {cur ? <b>{cur.source} · {cur.rows.length} חתכים · {new Date(cur.importedAt).toLocaleDateString('he-IL')}</b> : 'אין — כל החתכים מחושבים גיאומטרית ומסומנים "לא מאומת"'}</Help>
       {table && <>
         <div className="panel-title">מיפוי עמודות — {table.name}</div>
         <div className="field"><label>שורת כותרות</label>

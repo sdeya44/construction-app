@@ -3,7 +3,7 @@ import { DetailLibrary } from './DetailLibrary';
 import { ParamSheet } from './ParamSheet';
 import { WingPanel } from './WingPanel';
 import { useMemo, useState, type ReactNode } from 'react';
-import type { Connection, MemberKind, Severity } from '../model/types';
+import type { Connection, Member, MemberKind, Severity } from '../model/types';
 import { cutLength } from '../geometry/solid';
 import { massPerMeter, tryProfile } from '../profiles/library';
 import { getMaterial } from '../profiles/materials';
@@ -16,6 +16,8 @@ import { MenuPic } from './pics';
 import { CladdingPanel, type CladSection } from './CladdingPanel';
 import { RoofTrussPanel, TransferPanel } from './TransferPanel';
 import { IssuesPanel, KIND_LABEL, TreePanel } from './TreePanel';
+import { Adv } from './fields';
+import { connPlace } from './connPlace';
 
 /**
  * עץ תפריטים (החלטת משתמש 15.11.2026): בוחרים צומת בעץ ומקבלים מתחתיו את הטופס/הטבלה הרלוונטיים.
@@ -85,7 +87,6 @@ export function SideNav({ nav, setNav, onOpenConn, treeOnly }: { nav: NavKey; se
           { key: 's:profiles', label: 'חתכים וחומר', pic: 'profiles' },
         ])}
         {group('roof', '2 · גג ופטות', 'tab-roof', 'slope', [
-          { key: 'r:system', label: 'מערכת פטות', pic: 'purlins' },
           ...(roofType === 'gable' ? [{ key: 'r:left' as NavKey, label: 'שיפוע שמאל — פטות ותושבות', pic: 'slopeL' }, { key: 'r:right' as NavKey, label: 'שיפוע ימין — פטות ותושבות', pic: 'slopeR' }] : [{ key: 'r:left' as NavKey, label: roofType === 'modular' ? 'שיפועי הגג — פטות ותושבות' : 'שיפוע הגג — פטות ותושבות', pic: 'slope' }]),
           { key: 'r:splices', label: 'חיבורי המשך פטות', n: d.splices.filter((x) => x.memberId.startsWith('PL.')).length, pic: 'splice' },
         ])}
@@ -192,6 +193,7 @@ function ElementsTable({ kind }: { kind: MemberKind }) {
     return v * sort.dir;
   });
   const selSet = new Set(sel);
+  const frames = [...store.state.project.building.frames].sort((a, b) => a.y - b.y);
   const th = (k: typeof sort.k, label: string) => <th className="sortable" onClick={() => setSort({ k, dir: sort.k === k ? (-sort.dir as 1 | -1) : 1 })}>{label}{sort.k === k ? (sort.dir > 0 ? ' ▴' : ' ▾') : ''}</th>;
   const total = rows.reduce((s, r) => s + r.kg, 0);
   return (
@@ -202,12 +204,12 @@ function ElementsTable({ kind }: { kind: MemberKind }) {
         <button className="btn small" onClick={() => store.set({ isolated: rows.map((r) => r.m.id) })}>בודד</button>
       </div>
       <table className="tbl nav-tbl">
-        <thead><tr>{th('id', 'מזהה')}{th('profile', 'חתך')}{th('len', 'אורך')}{th('kg', 'ק"ג')}</tr></thead>
+        <thead><tr>{th('id', 'מיקום')}{th('profile', 'חתך')}{th('len', 'אורך')}{th('kg', 'ק"ג')}</tr></thead>
         <tbody>
           {sorted.slice(0, 400).map((r) => (
             <tr key={r.m.id} className={selSet.has(r.m.id) ? 'sel' : ''} title={r.m.label}
               onClick={(e) => { store.select([r.m.id], e.ctrlKey || e.metaKey ? 'toggle' : 'replace'); setTimeout(() => window.__ksp?.viewport?.fitSelection(), 0); }}>
-              <td className="n">{r.m.id}</td><td className="n">{r.m.profile}</td><td className="n">{Math.round(r.len)}</td><td className="n">{f1(r.kg)}</td>
+              <td><div>{memberPlace(r.m, d.section?.lines, frames)}</div><div className="n muted">{r.m.id}</div></td><td className="n">{r.m.profile}</td><td className="n">{Math.round(r.len)}</td><td className="n">{f1(r.kg)}</td>
             </tr>
           ))}
         </tbody>
@@ -220,8 +222,19 @@ function ElementsTable({ kind }: { kind: MemberKind }) {
 
 const STATUS: Record<string, string> = { approved: 'מאושר', 'for-review': 'לבדיקה', 'not-verified': 'לא מאומת' };
 
+/** מיקום קריא של אלמנט: "מסגרת 3 · ציר א" */
+function memberPlace(m: Member, lines: { id: string; label: string }[] | undefined, fr: { id: string; y: number }[]): string {
+  const out: string[] = [];
+  if (m.frameId) { const i = fr.findIndex((f) => f.id === m.frameId); if (i >= 0) out.push(`מסגרת ${i + 1}`); }
+  const lid = m.lineId ?? m.id.match(/\.COL\.([^.]+)$/)?.[1];
+  if (lid) out.push(`ציר ${lines?.find((q) => q.id === lid)?.label ?? lid}`);
+  if (m.purlin) out.push(`פטה ${m.purlin.index}`);
+  return out.join(' · ') || m.label;
+}
+
 function ConnTable({ type, onOpen }: { type: Connection['type']; onOpen: (id: string) => void }) {
   const d = useStore((s) => s.derived);
+  const frames = useStore((s) => s.project.building.frames);
   const cs = d.connections.filter((c) => c.type === type);
   const desc = (c: Connection) => d.byId.get(c.parts.find((x) => ['plate', 'cleat'].includes(d.byId.get(x)?.kind ?? '')) ?? '')?.partDesc ?? '—';
   const bolts = (c: Connection) => {
@@ -229,21 +242,47 @@ function ConnTable({ type, onOpen }: { type: Connection['type']; onOpen: (id: st
     for (const b of c.bolts) { const k = `M${b.d}×${b.length}`; m.set(k, (m.get(k) ?? 0) + 1); }
     return [...m].map(([k, n]) => `${n}×${k}`).join(', ') || '—';
   };
+  // קיבוץ לפי סוג החלק והברגים (1.34): כרטיס לכל וריאנט — במקום מאות שורות זהות
+  const groups = new Map<string, Connection[]>();
+  for (const c of cs) { const k = `${desc(c)}|${bolts(c)}`; groups.set(k, [...(groups.get(k) ?? []), c]); }
+  const variants = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
+  const st = { approved: 0, 'for-review': 0, 'not-verified': 0 } as Record<string, number>;
+  for (const c of cs) st[c.status]++;
+  const mark = (list: Connection[]) => { store.select(list.flatMap((c) => c.parts.filter((x) => d.byId.has(x)))); setTimeout(() => window.__ksp?.viewport?.fitSelection(), 0); };
   return (
     <div className="panel-body" data-testid={`ctable-${type}`}>
       <div className="panel-title">{CONN_TYPE[type]} <span className="badge">{cs.length}</span></div>
-      <table className="tbl nav-tbl">
-        <thead><tr><th>מזהה</th><th>חלק עיקרי</th><th>ברגים</th><th>סטטוס</th></tr></thead>
-        <tbody>
-          {cs.slice(0, 400).map((c) => (
-            <tr key={c.id} onClick={() => onOpen(c.id)} title={c.label}>
-              <td className="n">{c.id.replace(/^C\./, '')}</td><td>{desc(c)}</td><td className="n">{bolts(c)}</td>
-              <td><span className={`st ${c.status === 'approved' ? 'ok' : c.status === 'for-review' ? 'warn' : 'muted'}`}>{STATUS[c.status]}</span></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="hint">לחיצה פותחת בעורך החיבורים ומסמנת במודל.</div>
+      <div className="conn-status-sum">
+        {st.approved > 0 && <span className="st ok">{st.approved} מאושר</span>}
+        {st['for-review'] > 0 && <span className="st warn">{st['for-review']} לבדיקה</span>}
+        {st['not-verified'] > 0 && <span className="st muted">{st['not-verified'] === cs.length ? 'כולם' : st['not-verified']} לא מאומת</span>}
+      </div>
+      <div className="conn-variants" data-testid={`cvariants-${type}`}>
+        {variants.map(([k, list], i) => (
+          <div className="conn-var" key={k} data-testid={`cvar-${type}-${i}`}>
+            <div className="conn-var-h"><b>{list.length}×</b><span>{desc(list[0])}</span></div>
+            <div className="conn-var-b">ברגים: <span className="n">{bolts(list[0])}</span></div>
+            <div className="row" style={{ gap: 4 }}>
+              <button className="btn small primary" data-testid={`cvar-open-${type}-${i}`} onClick={() => onOpen(list[0].id)}>עריכה</button>
+              <button className="btn small" onClick={() => mark(list)}>סמן במודל ({list.length})</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <Adv id={`ctbl-${type}`} label={`רשימה מלאה (${cs.length})`}>
+        <table className="tbl nav-tbl">
+          <thead><tr><th>מיקום</th><th>חלק / ברגים</th><th>סטטוס</th></tr></thead>
+          <tbody>
+            {cs.slice(0, 400).map((c) => (
+              <tr key={c.id} onClick={() => onOpen(c.id)} title={c.id}>
+                <td>{connPlace(c, d, frames)}</td><td><div>{desc(c)}</div><div className="n muted">{bolts(c)}</div></td>
+                <td><span className={`st ${c.status === 'approved' ? 'ok' : c.status === 'for-review' ? 'warn' : 'muted'}`}>{STATUS[c.status]}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Adv>
+      <div className="hint">"עריכה" פותחת דוגמה בעורך — שינוי בשרטוט שם חל על כל החיבורים מהסוג. "סמן במודל" מסמן את כל החיבורים בקבוצה.</div>
     </div>
   );
 }

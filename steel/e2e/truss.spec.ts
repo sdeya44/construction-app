@@ -57,7 +57,6 @@ test('TR-03: מסבך נושא — חגורות RHS ושינוי אורך שדה
   });
   // חגורות RHS
   for (const g of ['top', 'bottom']) {
-    await page.getByTestId(`tw-${id}-p-${g}-family`).selectOption('RHS');
     await page.getByTestId(`tw-${id}-p-${g}`).fill('RHS200x100x8'); await page.getByTestId(`tw-${id}-p-${g}`).press('Enter');
     await page.waitForTimeout(200);
   }

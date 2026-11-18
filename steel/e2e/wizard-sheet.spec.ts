@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot } from './helpers';
+import { boot, pickProfile } from './helpers';
 
 const st = (page: import('@playwright/test').Page) => page.evaluate(() => {
   const s = (window as any).__ksp.store.state; const b = s.project.building;
@@ -67,8 +67,7 @@ test('SC-01: שינוי חתך לאלמנט אחד — התוכנה שואלת "
   // אלכסון: רק אחד
   await page.getByTestId('nav-b:knee').click(); await page.getByTestId('kb-on').check();
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
-  await page.getByTestId('prop-profile-family').selectOption('SHS');
-  await page.getByTestId('prop-profile-size').selectOption('SHS100x5');
+  await pickProfile(page, 'prop-profile', 'SHS100x5', 'SHS');
   await page.getByTestId('scope-ask-one').click();
   expect(await prof('KB.F2.L.L.R')).toBe('SHS100x5');
   expect(await prof('KB.F3.L.L.R')).toBe('RHS80x80x4');

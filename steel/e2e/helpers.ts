@@ -46,3 +46,20 @@ export async function expectInside(page: Page, pts: { x: number; y: number }[]) 
     expect(p.y).toBeGreaterThan(r.top); expect(p.y).toBeLessThan(r.bottom);
   }
 }
+
+/** בחירת חתך בחלונית בורר הפרופיל (1.34): פתיחה ← סוג ← גודל */
+export async function pickProfile(page: Page, testId: string, name: string, family?: string) {
+  await page.getByTestId(`${testId}-open`).click();
+  const fam = family ?? name.match(/^[A-Z]+/)![0];
+  await page.getByTestId(`${testId}-fam-${fam}`).click();
+  await page.getByTestId(`${testId}-opt-${name}`).click();
+  await page.waitForTimeout(150);
+}
+
+/** רשימת הגדלים במשפחה הנוכחית של בורר הפרופיל */
+export async function profileSizes(page: Page, testId: string): Promise<string[]> {
+  await page.getByTestId(`${testId}-open`).click();
+  const ids = await page.getByTestId(`${testId}-pop`).locator('.pp-opt').evaluateAll((os) => os.map((o) => (o as HTMLElement).dataset.testid ?? ''));
+  await page.getByTestId(`${testId}-open`).click();
+  return ids.map((x) => x.replace(/^.*-opt-/, ''));
+}

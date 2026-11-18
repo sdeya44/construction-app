@@ -23,7 +23,7 @@ const st = (page: Page) => page.evaluate(() => { const d = (window as any).__ksp
 test('SIM-01/02: בניית סככה מאפס ושינויים — מספר פעולות לכל משימה', async ({ page }) => {
   page.on('dialog', (d) => d.accept());
   await boot(page);
-  const { click, fill, select, task } = journey(page);
+  const { click, fill, task } = journey(page);
 
   // ---------- SIM-01: בנייה ----------
   await task('פרויקט חדש: חד-שיפועי רב-מפתחי עם אלכסונים', 'קובץ חדש ← תבנית ← יצירה', async () => {
@@ -31,17 +31,22 @@ test('SIM-01/02: בניית סככה מאפס ושינויים — מספר פע
   });
   expect((await st(page)).knee).toBeGreaterThan(0);
   await task('עמודים RHS120/120/5', 'מבנה ← חתכים וחומר ← סוג ← גודל', async () => {
-    await click('nav-s:profiles'); await select('columnProfile-family', 'RHS'); await select('columnProfile-size', 'RHS120x120x5');
+    await click('nav-s:profiles'); await click('columnProfile-open'); await click('columnProfile-fam-RHS'); await click('columnProfile-opt-RHS120x120x5');
   });
   await task('מרווח פטות 1.2 מ\'', 'גג ופטות ← שיפועים ← מרווח מרבי', async () => {
-    await click('nav-r:left'); await fill('[data-testid$="-spacing"]', '1.2');
+    await click('nav-r:left');
+    // מרווח על שרטוט השיפוע (1.34): לחיצה על המרווח ← הקלדה
+    const g = page.locator('[data-testid^="sch-"][data-testid$="-g0"], [data-testid^="sch-"][data-testid$="-s1"]').first();
+    const gid = await g.getAttribute('data-testid');
+    await click(gid!);
+    await fill(`${gid}-inp`, '1200');
   });
   await task('אגד B בקירות', 'חיזוקים וקשיחות ← קשיחות קירות ← סוג', async () => {
     await click('nav-b:walls'); await click('br-walls-portal');
   });
   expect((await st(page)).bb).toBeGreaterThan(0);
   await task('אלכסוני עמוד-קורה: ירידה 700', 'חיזוקים וקשיחות ← אלכסוני עמוד-קורה', async () => {
-    await click('nav-b:knee'); await fill('kb-drop', '700');
+    await click('nav-b:knee'); await click('sch-kb-drop'); await fill('sch-kb-drop-inp', '700');
   });
   await task('בדיקות: תיקון כל ההצעות', 'בדיקות ← תקן הכל', async () => {
     await click('rail-issues');

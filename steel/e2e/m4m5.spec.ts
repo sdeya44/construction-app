@@ -47,7 +47,8 @@ test.describe('M4/M5 – שרטוטים, ייצור, מהדורות', () => {
     await expect(page.getByTestId('dwg-changed')).toHaveCount(0);
     await page.getByTestId('mode-model').click();
     await page.getByTestId('tab-roof').click();
-    await page.getByTestId('left-spacing').fill('1.4'); await page.getByTestId('left-spacing').press('Enter');
+    await page.getByTestId('sch-left-g0').first().dispatchEvent('click');
+    await page.getByTestId('sch-left-g0-inp').fill('1400'); await page.getByTestId('sch-left-g0-inp').press('Enter');
     await page.getByTestId('mode-drawings').click();
     await page.getByTestId('dwg-D-ROOF').click();
     await expect(page.getByTestId('dwg-changed')).toBeVisible();

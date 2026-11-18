@@ -42,8 +42,8 @@ const ROWS: Row[] = [
   { g: 'מבנה', label: 'מפלס תחתית עמודים', kind: 'len', nav: 's:geometry', get: (p) => p.building.baseElevation, mut: (b, v: number) => { b.baseElevation = v; } },
   { g: 'מבנה', label: 'קונזולת קורה — שמאל', kind: 'len', nav: 's:geometry', show: classic, get: (p) => p.building.rafterOverhangLeft, mut: (b, v: number) => { b.rafterOverhangLeft = v; } },
   { g: 'מבנה', label: 'קונזולת קורה — ימין', kind: 'len', nav: 's:geometry', show: classic, get: (p) => p.building.rafterOverhangRight, mut: (b, v: number) => { b.rafterOverhangRight = v; } },
-  { g: 'מבנה', label: 'קונזולת פטות — התחלה', kind: 'len', nav: 'r:system', get: (p) => p.building.purlinOverhangStart, mut: (b, v: number) => { b.purlinOverhangStart = v; } },
-  { g: 'מבנה', label: 'קונזולת פטות — סוף', kind: 'len', nav: 'r:system', get: (p) => p.building.purlinOverhangEnd, mut: (b, v: number) => { b.purlinOverhangEnd = v; } },
+  { g: 'מבנה', label: 'קונזולת פטות — התחלה', kind: 'len', nav: 'r:left', get: (p) => p.building.purlinOverhangStart, mut: (b, v: number) => { b.purlinOverhangStart = v; } },
+  { g: 'מבנה', label: 'קונזולת פטות — סוף', kind: 'len', nav: 'r:left', get: (p) => p.building.purlinOverhangEnd, mut: (b, v: number) => { b.purlinOverhangEnd = v; } },
 
   { g: 'חתכים וחומר', label: 'עמודים', kind: 'profile', fam: ['HEA', 'HEB', 'HEM', 'IPE', 'RHS', 'SHS'], ovKind: 'column', nav: 's:profiles', get: (p) => p.building.columnProfile, mut: (b, v: string) => { b.columnProfile = v; } },
   { g: 'חתכים וחומר', label: 'קורות גג', kind: 'profile', fam: ['IPE', 'HEA', 'HEB', 'RHS'], ovKind: 'rafter', nav: 's:profiles', get: (p) => p.building.rafterProfile, mut: (b, v: string) => { b.rafterProfile = v; } },
@@ -54,7 +54,7 @@ const ROWS: Row[] = [
   { g: 'גג ופטות', label: 'פטות — מרחק ראשון', kind: 'len', nav: 'r:left', get: (p) => p.building.purlins.left.first, mut: (b, v: number) => { b.purlins.left.first = v; if (b.roofType === 'gable') b.purlins.right.first = v; } },
   { g: 'גג ופטות', label: 'פטות — חלוקה', kind: { opts: LAYOUT_OPTS }, nav: 'r:left', get: (p) => p.building.purlins.left.layout ?? 'fixed', mut: (b, v: 'fixed' | 'even') => { b.purlins.left.layout = v; if (b.roofType === 'gable') b.purlins.right.layout = v; } },
   { g: 'גג ופטות', label: 'תושבת פטה', kind: { opts: CLEAT_OPTS }, nav: 'r:left', get: (p) => p.building.purlins.left.cleat.style ?? 'run', mut: (b, v: 'run' | 'stand' | 'plate') => { b.purlins.left.cleat.style = v; if (b.roofType === 'gable') b.purlins.right.cleat.style = v; } },
-  { g: 'גג ופטות', label: 'חומר פטות', kind: 'text', nav: 'r:system', get: (p) => p.building.purlins.material, mut: (b, v: string) => { b.purlins.material = v; } },
+  { g: 'גג ופטות', label: 'חומר פטות', kind: 'text', nav: 'r:left', get: (p) => p.building.purlins.material, mut: (b, v: string) => { b.purlins.material = v; } },
 
   { g: 'חיזוקים', label: 'אלכסוני עמוד-קורה', kind: 'bool', nav: 'b:knee', get: (p) => !!p.building.kneeBraces?.enabled, mut: (b, v: boolean) => { if (b.kneeBraces) b.kneeBraces.enabled = v; else if (v) throw new CommandError('יש להפעיל אלכסונים בפעם הראשונה מהמסך "אלכסוני עמוד-קורה"'); } },
   { g: 'חיזוקים', label: 'אלכסונים — חתך', kind: 'profile', fam: ['RHS', 'SHS', 'L', 'CHS'], nav: 'b:knee', show: (p) => !!p.building.kneeBraces?.enabled, get: (p) => p.building.kneeBraces?.profile ?? '', mut: (b, v: string) => { if (b.kneeBraces) b.kneeBraces.profile = v; } },

@@ -57,3 +57,14 @@ export function MenuPic({ name, size = 28 }: { name: string; size?: number }) {
   const g = PICS[name] ?? PICS.elements;
   return <svg className="mpic" viewBox="0 0 32 24" width={size} height={(size * 24) / 32} aria-hidden="true">{g}</svg>;
 }
+
+/** אפשרות כבויה (1.34): ציור של מה שהיא מוסיפה וכפתור "הוספה" — במקום פאנל ריק */
+export function OffCard({ pic, title, desc, onAdd, testId }: { pic: string; title: string; desc: string; onAdd: () => void; testId?: string }) {
+  return (
+    <div className="off-card" data-testid={testId}>
+      <MenuPic name={pic} size={56} />
+      <div className="off-txt"><b>{title}</b><span>{desc}</span></div>
+      <button className="btn primary small" data-testid={testId ? `${testId}-add` : undefined} onClick={onAdd}>+ הוספה</button>
+    </div>
+  );
+}

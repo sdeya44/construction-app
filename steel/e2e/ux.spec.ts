@@ -1,18 +1,18 @@
 import { expect, test } from '@playwright/test';
-import { boot, selection, setView, shot } from './helpers';
+import { boot, selection, setView, shot, pickProfile } from './helpers';
 
 /** חוויה ה׳: סרגל הקשרי, כרטיס פרט חיבור, בחירה מרובה עם "משתנה", תפריט מעגלי, לוח פקודות. */
 test('UX-01: סרגל הקשרי וכרטיס חיבור לאלמנט בודד; פתיחת עורך מהכרטיס', async ({ page }) => {
   const errors = await boot(page);
   await page.evaluate(() => (window as any).__ksp.store.select(['F3.RAF.L']));
   await expect(page.getByTestId('ctxbar')).toBeVisible();
-  await expect(page.getByTestId('prop-profile-size')).toHaveValue('IPE300');
+  await expect(page.getByTestId('prop-profile')).toHaveValue('IPE300');
   await page.getByTestId('conncard-tag').click();
   await expect(page.getByTestId('conncard')).toBeVisible();
   await expect(page.getByTestId('cc-title')).toContainText('שתי פלטות');
   await shot(page, 'UX-01_single');
   // שינוי חתך מפאנל המאפיינים (מקום אחד לכל ההגדרות)
-  await page.getByTestId('prop-profile-size').selectOption('IPE330');
+  await pickProfile(page, 'prop-profile', 'IPE330');
   // התוכנה שואלת על היקף השינוי — כאן: רק האלמנט הזה
   await expect(page.getByTestId('scope-ask')).toBeVisible();
   await page.getByTestId('scope-ask-one').click();
@@ -94,7 +94,7 @@ test('UX-04: לשונית חיבורים — חיבורי המשך ופחי קו
   await expect(page.getByTestId('conns-brace-end')).toContainText('32');
   await expect(page.getByTestId('conns-brace-cross')).toContainText('8');
   await page.getByTestId('conns-brace-cross').click();
-  await page.getByText('C.BR.R1.L.X', { exact: true }).click();
+  await page.getByTestId('conns-panel').locator('.tree-item[title="C.BR.R1.L.X"]').click();
   await expect(page.getByTestId('conn-id')).toHaveText('C.BR.R1.L.X');
   await shot(page, 'UX-04_brace_cross');
 });
@@ -108,7 +108,10 @@ test('UX-05: עץ תפריטים — בחירת צומת מציגה טבלה; ש
   expect(await selection(page)).toEqual(['F3.COL.R']);
   await page.getByTestId('tab-conns').click();
   await page.getByTestId('nav-c:eave').click();
-  await page.getByTestId('ctable-eave').getByText('EAVE.F2.L', { exact: true }).click();
+  // כרטיס קבוצה (1.34): כל 12 החיבורים זהים — כרטיס אחד; ברשימה המלאה — שמות "מסגרת · ציר"
+  await expect(page.getByTestId('cvariants-eave').locator('.conn-var')).toHaveCount(1);
+  await expect(page.getByTestId('ctable-eave')).toContainText('מסגרת 2 · ציר א');
+  await page.getByTestId('ctable-eave').locator('tr[title="C.EAVE.F2.L"]').click();
   await expect(page.getByTestId('conn-id')).toHaveText('C.EAVE.F2.L');
   await expect(page.getByTestId('cp-split')).toHaveValue('1');
   await page.getByTestId('nav-s:geometry').click();
@@ -137,6 +140,7 @@ test('SEC-01: חתך מודולרי — תבנית גג מדורג, הוספת �
   await boot(page);
   page.on('dialog', (d) => d.accept());
   await page.getByTestId('nav-s:geometry').click();
+  await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-stepped').click();
   const n = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { cols: d.members.filter((m: any) => m.kind === 'column').length, side: d.connections.filter((c: any) => c.type === 'rafter-side').length, err: d.issues.filter((i: any) => i.severity === 'error').length, knee: d.connections.filter((c: any) => c.type === 'knee').length }; });
   expect(await n()).toEqual({ cols: 18, side: 6, err: 0, knee: 24 }); // תבנית מדליקה אלכסוני עמוד-קורה
@@ -189,7 +193,8 @@ test('VIS-01: שכבות תצוגה — הסתרת תומכים מוסיפה ח�
 test('PURL-FIX: מרחק ראשון 0 — תיקון אוטומטי, הצעה בלחיצה; שינוי ערכים אינו נחסם', async ({ page }) => {
   await boot(page);
   await page.getByTestId('nav-r:left').click();
-  await page.getByTestId('left-first').fill('0'); await page.getByTestId('left-first').press('Enter');
+  await page.getByTestId('sch-left-s0').first().dispatchEvent('click');
+  await page.getByTestId('sch-left-s0-inp').fill('0'); await page.getByTestId('sch-left-s0-inp').press('Enter');
   const issues = () => page.evaluate(() => (window as any).__ksp.store.state.derived.issues.map((i: any) => i.code));
   expect(await issues()).toContain('PURLIN_FIRST_AUTO');
   expect(await issues()).not.toContain('PURLIN_RIDGE');
@@ -197,5 +202,5 @@ test('PURL-FIX: מרחק ראשון 0 — תיקון אוטומטי, הצעה ב
   expect(cleats).toBeGreaterThan(80); // המודל לא נפגע — כל התומכים נבנים
   await page.getByTestId('side-fix-PURLIN_FIRST_AUTO').click();
   expect(await issues()).not.toContain('PURLIN_FIRST_AUTO');
-  await expect(page.getByTestId('left-first')).toHaveValue('0.095');
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.purlins.left.first)).toBe(95);
 });

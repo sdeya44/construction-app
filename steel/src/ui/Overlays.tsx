@@ -7,6 +7,7 @@ import { Icon } from './icons';
 import { fabFor } from '../fab/useFab';
 import { OmitDialog } from './TransferPanel';
 import { kindLabelOf } from './TreePanel';
+import { connPlace } from './connPlace';
 
 
 /** פקודה בלוח הפקודות / בתפריט. keys = קיצור מקלדת להצגה. */
@@ -230,6 +231,7 @@ export function CommandPalette({ cmds, onClose, onPickElement }: { cmds: Cmd[]; 
 // ---------------------------------------------------------------- רשימת חיבורים (לשונית)
 export function ConnectionsPanel({ onOpen }: { onOpen: (id: string) => void }) {
   const d = useStore((s) => s.derived);
+  const frames = useStore((s) => s.project.building.frames);
   const [open, setOpen] = useState<string | null>(null);
   const groups = new Map<string, Connection[]>();
   for (const c of d.connections) groups.set(c.type, [...(groups.get(c.type) ?? []), c]);
@@ -249,8 +251,8 @@ export function ConnectionsPanel({ onOpen }: { onOpen: (id: string) => void }) {
               {st.approved > 0 && <span className="badge ok">{st.approved} ✓</span>}
             </div>
             {open === t && cs.slice(0, 200).map((c) => (
-              <div key={c.id} className="tree-item" onClick={() => onOpen(c.id)} title={c.label}>
-                <span className="id">{c.id}</span>
+              <div key={c.id} className="tree-item" onClick={() => onOpen(c.id)} title={c.id}>
+                <span>{connPlace(c, d, frames)}</span>
                 <span className={`st ${statusCls(c.status)}`} style={{ marginInlineStart: 'auto' }}>{STATUS[c.status]}</span>
               </div>
             ))}

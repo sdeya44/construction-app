@@ -11,10 +11,11 @@ import { tryProfile } from '../profiles/library';
 import { store, useStore } from '../store';
 import { cachedSolid } from '../view/scene';
 import { Schematic, type SDim } from './Schematic';
+import { BoltSelect } from './fields';
 
 type Pt = { x: number; y: number };
 const r1 = (v: number) => Math.round(v * 10) / 10;
-const BOLTS = [10, 12, 16, 18, 20, 22, 24];
+
 
 function hull(pts: Pt[]): Pt[] {
   const p = [...pts].sort((a, b) => a.x - b.x || a.y - b.y);
@@ -135,7 +136,7 @@ export function PlateWizard({ c, plateId }: { c: Connection; plateId?: string })
       {v && (
         <div className="pw-fields">
           <label>עובי<input className="inp num" data-testid="pw-t" type="number" defaultValue={v.t} key={`t${v.t}`} onBlur={(e) => Number(e.target.value) > 0 && Number(e.target.value) !== v.t && setPlate({ t: Number(e.target.value) })} /></label>
-          <label>בורג<select className="inp" data-testid="pw-bolt" value={v.bolt.d} onChange={(e) => setPlate({ bolt: { ...v.bolt, d: Number(e.target.value) } })}>{BOLTS.map((b) => <option key={b} value={b}>M{b}</option>)}</select></label>
+          <label>בורג<BoltSelect testId="pw-bolt" d={v.bolt.d} onChange={(n) => setPlate({ bolt: { ...v.bolt, d: n } })} /></label>
           <label>עמודות<span className="pm"><button className="btn small" data-testid="pw-cols-" onClick={() => v.cols > 1 && setPlate({ cols: v.cols - 1, w: Math.round(v.w - v.gauge) })}>−</button><b>{v.cols}</b><button className="btn small" data-testid="pw-cols+" onClick={() => setPlate({ cols: v.cols + 1, w: Math.round(v.w + v.gauge) })}>+</button></span></label>
           <label>שורות<span className="pm"><button className="btn small" data-testid="pw-rows-" onClick={() => v.rows > 1 && setPlate({ rows: v.rows - 1, ...(v.l > 0 && v.pitch > 0 ? { l: Math.round(v.l - v.pitch) } : {}) })}>−</button><b>{v.rows}</b><button className="btn small" data-testid="pw-rows+" onClick={() => setPlate({ rows: v.rows + 1, ...(v.l > 0 && v.pitch > 0 ? { l: Math.round(v.l + v.pitch) } : {}) })}>+</button></span></label>
         </div>
@@ -162,7 +163,7 @@ function OtherPlateFields({ c }: { c: Connection }) {
       <div className="pw-fields">
         {num('עובי פח', kb.plateT, (v) => store.exec(setKneeBraces({ plateT: v })), 'pw-kb-t')}
         <label>ברגים בקצה<select className="inp" data-testid="pw-kb-n" value={kb.boltsPerEnd ?? 2} onChange={(e) => store.exec(setKneeBraces({ boltsPerEnd: Number(e.target.value) }))}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
-        <label>בורג<select className="inp" value={kb.bolt.d} onChange={(e) => store.exec(setKneeBraces({ bolt: { ...kb.bolt, d: Number(e.target.value) } }))}>{BOLTS.map((x) => <option key={x} value={x}>M{x}</option>)}</select></label>
+        <label>בורג<BoltSelect d={kb.bolt.d} onChange={(n) => store.exec(setKneeBraces({ bolt: { ...kb.bolt, d: n } }))} /></label>
       </div>
     );
   }
@@ -187,7 +188,7 @@ function OtherPlateFields({ c }: { c: Connection }) {
         {num('מרווח ברגים', bc.pitch, (v) => set({ pitch: v }), 'pw-br-p')}
         {num('מרחק קצה', bc.endDist, (v) => set({ endDist: v }), 'pw-br-e')}
         {num('שפת פח', bc.gussetEdge, (v) => set({ gussetEdge: v }), 'pw-br-g')}
-        <label>בורג<select className="inp" value={bc.bolt.d} onChange={(e) => set({ bolt: { ...bc.bolt, d: Number(e.target.value) } })}>{BOLTS.map((x) => <option key={x} value={x}>M{x}</option>)}</select></label>
+        <label>בורג<BoltSelect d={bc.bolt.d} onChange={(n) => set({ bolt: { ...bc.bolt, d: n } })} /></label>
       </div>
     );
   }
@@ -199,7 +200,7 @@ function OtherPlateFields({ c }: { c: Connection }) {
         {num('עובי פלטה', sp.plateT, (v) => set({ plateT: v }), 'pw-ps-t')}
         {num('מרחק מהתפר', sp.jointOffset, (v) => set({ jointOffset: v }), 'pw-ps-o')}
         {num('שפה', sp.edge, (v) => set({ edge: v }), 'pw-ps-e')}
-        <label>בורג<select className="inp" value={sp.bolt.d} onChange={(e) => set({ bolt: { ...sp.bolt, d: Number(e.target.value) } })}>{BOLTS.map((x) => <option key={x} value={x}>M{x}</option>)}</select></label>
+        <label>בורג<BoltSelect d={sp.bolt.d} onChange={(n) => set({ bolt: { ...sp.bolt, d: n } })} /></label>
       </div>
     );
   }

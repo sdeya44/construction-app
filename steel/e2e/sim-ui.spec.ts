@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { boot, screenOf, selection, setView } from './helpers';
+import { boot, screenOf, selection, setView, pickProfile, profileSizes } from './helpers';
 
 /**
  * סימולציית משתמש בממשק — כל תבנית: אשף ← לחיצה על עמוד במודל ← שינוי חתך לכולם ← קורה אחת בחתך אחר ←
@@ -30,8 +30,8 @@ async function clickMember(page: Page, pick: (m: any) => boolean): Promise<strin
   return null;
 }
 async function nextSize(page: Page) {
-  const opts = await page.getByTestId('prop-profile-size').locator('option').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value).filter(Boolean));
-  const cur = await page.getByTestId('prop-profile-size').inputValue();
+  const opts = await profileSizes(page, 'prop-profile');
+  const cur = await page.getByTestId('prop-profile').inputValue();
   const i = opts.indexOf(cur);
   return opts[Math.min(opts.length - 1, i + 1)] === cur ? opts[Math.max(0, i - 1)]! : opts[Math.min(opts.length - 1, i + 1)]!;
 }
@@ -64,7 +64,7 @@ for (const t of TEMPLATES) {
     await setView(page, 'front');
     const col = await clickMember(page, (m) => m.kind === 'column');
     expect(col, 'נבחר עמוד').toBeTruthy();
-    await page.getByTestId('prop-profile-size').selectOption(await nextSize(page));
+    await pickProfile(page, 'prop-profile', await nextSize(page));
     if (await page.getByTestId('scope-ask').count()) await page.getByTestId('scope-ask-all').click();
     await acceptEave(page);
     await check('חתך עמודים');
@@ -72,7 +72,7 @@ for (const t of TEMPLATES) {
     // קורה אחת בחתך אחר (חריג)
     const raf = await clickMember(page, (m) => m.kind === 'rafter');
     expect(raf, 'נבחרה קורה').toBeTruthy();
-    await page.getByTestId('prop-profile-size').selectOption(await nextSize(page));
+    await pickProfile(page, 'prop-profile', await nextSize(page));
     if (await page.getByTestId('scope-ask').count()) await page.getByTestId('scope-ask-one').click();
     await acceptEave(page);
     await check('חריג לקורה');

@@ -1,3 +1,4 @@
+import { Help } from './fields';
 import { setConnection, setConnectionDefault } from '../commands/commands';
 import { checkEavePlate, suggestEavePlate, type EaveCheck } from '../geometry/eavePlate';
 import type { PlateConnParams } from '../model/types';
@@ -41,7 +42,7 @@ export function EaveCheckDialog() {
           {cur.messages.length > 0
             ? <div className="issue error">{cur.messages.map((m, i) => <div key={i}>• {m}</div>)}</div>
             : <div className="issue"><span className="ic">✓</span>הפלטה הנוכחית תקינה גיאומטרית. ההצעה היא המידה המזערית.</div>}
-          <div className="hint">ההצעה: אום מחוץ לרוחב אגף הקורה, ראש בורג מחוץ להיטל העמוד, כיסוי חתך העמוד + 5 מ"מ לכל צד לריתוך, מרחק שפה ≥ 1.5·d0. גיאומטריה בלבד — אינה בדיקת חוזק.</div>
+          <Help>ההצעה: אום מחוץ לרוחב אגף הקורה, ראש בורג מחוץ להיטל העמוד, כיסוי חתך העמוד + 5 מ"מ לכל צד לריתוך, מרחק שפה ≥ 1.5·d0. גיאומטריה בלבד — אינה בדיקת חוזק.</Help>
         </div>
         <footer>
           <button className="btn primary" data-testid="eave-apply-default" onClick={() => { store.exec(setConnectionDefault('eave', patch)); close(); }}>החל הצעה על כל חיבורי ראש העמוד</button>

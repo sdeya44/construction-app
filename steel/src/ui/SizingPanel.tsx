@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { applySizingSuggestion, setSettings } from '../commands/commands';
 import { DEFAULT_SIZING, SIZE_COLOR, SIZE_LABEL, sizingAll, sizingCfg, type SizeStatus, type SizingCfg } from '../model/sizing';
 import { store, useStore } from '../store';
-import { NumField } from './fields';
+import { NumField, Help } from './fields';
 import { Icon } from './icons';
 
 const KIND_HE: Record<string, string> = { column: 'עמודים', rafter: 'קורות גג', purlin: 'פטות', brace: 'אלכסונים/קושרות', beam: 'קורות', girt: 'מסגור קירות' };
@@ -53,7 +53,7 @@ export function SizingPanel() {
           </tr>))}</tbody>
       </table>
       {selR && selM && <div className={`sz-note sz-${selR.status}`} data-testid="sz-note"><b>{selM.label} · {selM.profile}</b><br />{SIZE_LABEL[selR.status]} — {selR.text}</div>}
-      <div className="hint">הערכה בכללי אצבע: גג {cfg.dead}+max({cfg.live}, שלג {cfg.snow}) kN/m² ×{cfg.gamma}; רוח qp={cfg.wind} kN/m² (יניקה בפטות, לחץ על העמודים). ללא עגורן, ללא בדיקת יציבות כוללת. אינה תכן סטטי — לעדכן רוח ושלג לפי האתר.</div>
+      <Help>הערכה בכללי אצבע: גג {cfg.dead}+max({cfg.live}, שלג {cfg.snow}) kN/m² ×{cfg.gamma}; רוח qp={cfg.wind} kN/m² (יניקה בפטות, לחץ על העמודים). ללא עגורן, ללא בדיקת יציבות כוללת. אינה תכן סטטי — לעדכן רוח ושלג לפי האתר.</Help>
       <button className="btn small primary" data-testid="sz-apply" title="עמודים, קורות, פטות וקושרות — הגודל הקטן ביותר שמסומן 'סביר' באותה משפחה; פלטות ראש עמוד ובסיס מותאמות" onClick={() => { if (store.exec(applySizingSuggestion())) store.toast('ok', 'החתכים הותאמו לפי כללי האצבע — יש לבדוק את רשימת הבדיקות'); }}>התאם חתכים</button>{' '}
       <button className="btn small" data-testid="sz-settings" onClick={() => setOpen(!open)}>{open ? 'הסתר ספים' : 'ספים ועומסים…'}</button>
       {open && <div className="sz-cfg">

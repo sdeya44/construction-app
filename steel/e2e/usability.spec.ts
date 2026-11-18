@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, setView, shot } from './helpers';
+import { boot, setView, shot, pickProfile } from './helpers';
 
 const st = (page: any) => page.evaluate(() => (window as any).__ksp.store.state);
 
@@ -16,8 +16,7 @@ test('USE-01: פרויקט חדש מתבנית מודולרית עם אלכסו�
   expect(b.err).toBe(0);
   // בחירת פרופיל: סוג ואז גודל
   await page.getByTestId('nav-s:profiles').click();
-  await page.getByTestId('columnProfile-family').selectOption('HEA');
-  await page.getByTestId('columnProfile-size').selectOption('HEA300');
+  await pickProfile(page, 'columnProfile', 'HEA300', 'HEA');
   expect((await st(page)).project.building.columnProfile).toBe('HEA300');
   expect(errors).toEqual([]);
 });
@@ -31,7 +30,7 @@ test('USE-02: אגד B בקירות דרך הממשק — קורה + 2 אלכס�
   await page.getByTestId('pb-cont').uncheck();
   expect(await q()).toEqual({ beams: 4, k: 8, x: 0, clash: 0 });
   await page.getByTestId('pb-cont').check();
-  await page.getByTestId('pb-drop').fill('800'); await page.getByTestId('pb-drop').press('Enter');
+  await page.getByTestId('sch-pb-drop').click(); await page.getByTestId('sch-pb-drop-inp').fill('800'); await page.getByTestId('sch-pb-drop-inp').press('Enter');
   expect((await st(page)).project.building.bracing.walls.portal.drop).toBe(800);
   await setView(page, 'left');
   await shot(page, 'USE-02_portal');
@@ -48,6 +47,7 @@ test('USE-03: מידות בתלת-ממד — לחיצה על מרווח מסגר
   expect(fr[1] - fr[0]).toBe(5500);
   // חתך מודולרי: לחיצה על מידת מפתח ושינוי
   await page.getByTestId('nav-s:geometry').click();
+  await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-gable-inner').click();
   await page.getByTestId('isec-span-1').click();
   await page.getByTestId('isec-input').fill('8'); await page.getByTestId('isec-input').press('Enter');
@@ -96,6 +96,7 @@ test('USE-06: חתך אינטראקטיבי — מספר צירים, בחירת 
   await boot(page);
   page.on('dialog', (d) => d.accept());
   await page.getByTestId('nav-s:geometry').click();
+  await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-mono-multi').click();
   await page.getByTestId('axis-n').fill('4'); await page.getByTestId('axis-n').press('Enter');
   const sec = () => page.evaluate(() => (window as any).__ksp.store.state.project.building.section);
@@ -136,6 +137,7 @@ test('USE-06b: דו-שיפועי סימטרי — גובה עמודים וגוב
   await boot(page);
   page.on('dialog', (d) => d.accept());
   await page.getByTestId('nav-s:geometry').click();
+  await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-gable-2').click();
   await expect(page.getByTestId('sec-plane-gable')).toBeVisible();
   await page.getByTestId('tri-gable-calc-slope').click();

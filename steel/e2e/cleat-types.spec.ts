@@ -73,6 +73,7 @@ test('STEP-01: גג מדורג — זיז לקורה העליונה מעבר ל�
   const errors = await boot(page);
   page.on('dialog', (d) => d.accept());
   await page.getByTestId('nav-s:geometry').click();
+  await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-stepped').click();
   const inp = page.getByTestId('ovh-step-1');
   await expect(inp).toBeVisible();

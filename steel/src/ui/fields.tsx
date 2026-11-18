@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { assessCandidate, SIZE_LABEL, type SizeStatus } from '../model/sizing';
 import { useStore } from '../store';
 import { fromMm, toMm } from '../core/units';
-import { catalogNames, tryProfile } from '../profiles/library';
+import { catalogNames, massPerMeter, tryProfile } from '../profiles/library';
 import { getUserCatalog } from '../profiles/userCatalog';
 
 /**
@@ -78,12 +78,35 @@ const FAMILY_LABEL: Record<string, string> = {
  * בחירת חתך בשני שלבים (החלטת משתמש 15.11.2026): סוג פרופיל ← גודל. משלב חתכים מקטלוג המשתמש.
  * families מגביל את הסוגים (למשל פטות: C/Z). שדה הקלדה חופשית נשאר לבעלי ניסיון (testId).
  */
-const SZ_CSS: Record<SizeStatus, string> = { small: '#c4600a', ok: '#21844a', big: '#7a3fc4', na: '' };
-const SZ_MARK: Record<SizeStatus, string> = { small: '  ▼ קטן', ok: '  ● מתאים', big: '  ▲ גדול', na: '' };
 
+/** ציור חתך קטן לפי משפחה (בכפתור ובחלונית) */
+export function SectionIcon({ family, size = 20 }: { family: string; size?: number }) {
+  const st = { fill: 'none', stroke: 'currentColor', strokeWidth: 2.2, strokeLinejoin: 'round' as const };
+  const body = (() => {
+    switch (family) {
+      case 'IPE': case 'INP': return <path d="M5 4h14M5 20h14M12 4v16" {...st} />;
+      case 'HEA': case 'HEB': case 'HEM': return <path d="M4 4h16M4 20h16M12 4v16" {...st} strokeWidth={2.8} />;
+      case 'UPN': case 'UPE': case 'C': return <path d="M18 4H7v16h11" {...st} />;
+      case 'Z': return <path d="M5 4h7v16h7" {...st} />;
+      case 'L': return <path d="M7 4v15h12" {...st} />;
+      case 'CHS': return <circle cx="12" cy="12" r="8" {...st} />;
+      case 'SHS': return <rect x="4.5" y="4.5" width="15" height="15" rx="1.5" {...st} />;
+      case 'RHS': return <rect x="6" y="3.5" width="12" height="17" rx="1.5" {...st} />;
+      default: return <rect x="3" y="9" width="18" height="6" {...st} />;
+    }
+  })();
+  return <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" className="sec-ico">{body}</svg>;
+}
+
+const kgm = (n: string) => { const pr = tryProfile(n); return pr ? massPerMeter(pr, 7850) : null; };
+
+/**
+ * בחירת חתך (1.34, בקשת משתמש: "כפתור אחד + חלונית"): שדה אחד עם ציור החתך, השם (ניתן להקלדה) ומשקל למטר;
+ * לחיצה על ▾ פותחת חלונית: סוגי פרופיל כלשוניות וגדלים כרשת עם משקל, צבע לפי הערכת הגודל.
+ * families מגביל את הסוגים (למשל פטות: C/Z). role — צביעת הגדלים לפי כללי האצבע.
+ */
 export function ProfilePicker({ value, onCommit, families, testId, placeholder, varies, role }: {
   value: string; onCommit: (v: string) => void; families?: string[]; testId?: string; placeholder?: string; varies?: boolean;
-  /** תפקיד האלמנט — צביעת הגדלים לפי הערכת כללי האצבע (כתום/ירוק/סגול) */
   role?: 'column' | 'rafter' | 'purlin';
 }) {
   const project = useStore((s) => s.project), derived = useStore((s) => s.derived);
@@ -91,31 +114,62 @@ export function ProfilePicker({ value, onCommit, families, testId, placeholder, 
   const user = getUserCatalog()?.rows.map((r) => r.name) ?? [];
   const fam = (n: string) => tryProfile(n)?.family ?? groups.find((g) => n.startsWith(g.family))?.family ?? '';
   const cur = value ? fam(value) : '';
-  const [f, setF] = useState<string>(cur || groups[0]?.family || "");
+  const [f, setF] = useState<string>(cur || groups[0]?.family || '');
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
   useEffect(() => { if (cur) setF(cur); }, [cur]);
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const key = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', down); document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key); };
+  }, [open]);
   const g = groups.find((x) => x.family === f);
   const sizes = [...new Set([...(g?.names ?? []), ...user.filter((n) => fam(n) === f), ...(value && fam(value) === f ? [value] : [])])];
   const num = (n: string) => n.replace(/^[A-Z]+/, '').split(/x/i).map(Number);
   sizes.sort((a, b) => { const A = num(a), B = num(b); for (let i = 0; i < Math.max(A.length, B.length); i++) { const d = (A[i] ?? 0) - (B[i] ?? 0); if (d) return d; } return 0; });
   const sz = useMemo(() => {
     const m = new Map<string, SizeStatus>();
-    if (role) for (const n of sizes) { try { m.set(n, assessCandidate(project, derived, role, n).status); } catch { /* פרופיל לא מוכר */ } }
+    if (role && open) for (const n of sizes) { try { m.set(n, assessCandidate(project, derived, role, n).status); } catch { /* פרופיל לא מוכר */ } }
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, f, project, derived, sizes.join(',')]);
-  const curSz = role && value ? (sz.get(value) ?? (() => { try { return assessCandidate(project, derived, role, value).status; } catch { return 'na' as SizeStatus; } })()) : 'na';
+  }, [role, f, open, project, derived, sizes.join(',')]);
+  const curSz = role && value ? (() => { try { return assessCandidate(project, derived, role, value).status; } catch { return 'na' as SizeStatus; } })() : 'na';
+  const w = value ? kgm(value) : null;
+  const pick = (n: string) => { setOpen(false); if (n && n !== value) onCommit(n); };
   return (
-    <div className="prof-pick">
-      <select className="inp" value={f} aria-label="סוג פרופיל" data-testid={testId ? `${testId}-family` : undefined} onChange={(e) => setF(e.target.value)}>
-        {groups.map((x) => <option key={x.family} value={x.family}>{FAMILY_LABEL[x.family] ?? x.family}</option>)}
-      </select>
-      <select className={`inp num${varies ? ' varies' : ''}`} value={value && fam(value) === f ? value : ''} aria-label="גודל" data-testid={testId ? `${testId}-size` : undefined}
-        onChange={(e) => e.target.value && e.target.value !== value && onCommit(e.target.value)}>
-        <option value="">{varies ? 'משתנה' : 'בחר גודל…'}</option>
-        {sizes.map((n) => { const st = sz.get(n) ?? 'na'; return <option key={n} value={n} style={st !== 'na' ? { color: SZ_CSS[st], fontWeight: st === 'ok' ? 700 : 400 } : undefined}>{n.replace(/^[A-Z]+/, '').replace(/x/g, '×')}{user.includes(n) ? ' ✓' : ''}{SZ_MARK[st]}</option>; })}
-      </select>
+    <div className={`prof-pick${open ? ' open' : ''}`} ref={ref} data-testid={testId ? `${testId}-pick` : undefined}>
+      <div className="pp-main">
+        <span className="pp-ico" title={FAMILY_LABEL[cur] ?? cur}><SectionIcon family={cur} /></span>
+        <TextField ltr list="profiles" testId={testId} value={value} placeholder={placeholder ?? (varies ? 'משתנה' : 'הקלדה')} varies={varies} onCommit={(v) => { const n = v.toUpperCase().replace(/\s/g, ''); if (n && n !== value) onCommit(n); }} />
+        {w !== null && <span className="pp-kg" title="משקל למטר">{w.toFixed(1)} ק"ג/מ'</span>}
+        <button type="button" className="pp-open" aria-label="בחירה מהרשימה" aria-expanded={open} data-testid={testId ? `${testId}-open` : undefined} onClick={() => setOpen(!open)}>▾</button>
+      </div>
       {role && curSz !== 'na' && <span className={`sz-badge sz-${curSz}`} data-testid={testId ? `${testId}-sz` : undefined} title="הערכת כללי אצבע — לא תכן סטטי">{SIZE_LABEL[curSz]}</span>}
-      <TextField ltr list="profiles" testId={testId} value={value} placeholder={placeholder ?? 'הקלדה'} varies={varies} onCommit={(v) => { const n = v.toUpperCase().replace(/\s/g, ''); if (n && n !== value) onCommit(n); }} />
+      {open && (
+        <div className="pp-pop" role="dialog" aria-label="בחירת חתך" data-testid={testId ? `${testId}-pop` : undefined}>
+          <div className="pp-fams" role="tablist">
+            {groups.map((x) => (
+              <button key={x.family} type="button" role="tab" aria-selected={x.family === f} className={`pp-fam${x.family === f ? ' on' : ''}`} data-testid={testId ? `${testId}-fam-${x.family}` : undefined} onClick={() => setF(x.family)} title={FAMILY_LABEL[x.family] ?? x.family}>
+                <SectionIcon family={x.family} size={18} /><span>{x.family}</span>
+              </button>
+            ))}
+          </div>
+          {role && <div className="pp-legend"><span className="sz-small">▼ קטן</span><span className="sz-ok">● מתאים</span><span className="sz-big">▲ גדול</span> — הערכת כללי אצבע</div>}
+          <div className="pp-grid">
+            {sizes.map((n) => {
+              const st = sz.get(n) ?? 'na', kg = kgm(n);
+              return (
+                <button key={n} type="button" className={`pp-opt${n === value ? ' on' : ''}${st !== 'na' ? ` sz-${st}` : ''}`} data-testid={testId ? `${testId}-opt-${n}` : undefined} onClick={() => pick(n)} title={n}>
+                  <b>{n.replace(/^[A-Z]+/, '').replace(/x/g, '×')}{user.includes(n) ? ' ✓' : ''}</b>
+                  {kg !== null && <small>{kg.toFixed(1)} ק"ג/מ'</small>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -141,4 +195,27 @@ export const EditCtx = React.createContext<{ embed: boolean; part?: 'shape' | 'c
 export function useEdit() {
   const c = React.useContext(EditCtx);
   return { embed: c.embed, showTitle: !c.embed, showProfile: !c.embed, showShape: !c.embed || c.part === 'shape', showConn: !c.embed || c.part === 'conn' };
+}
+
+/** קטרי ברגים סטנדרטיים — מקור אחד לכל הממשק (תיקון 1.34: רשימות שונות הציגו M10 לבורג M18) */
+export const BOLT_SIZES = [10, 12, 14, 16, 18, 20, 22, 24, 27, 30];
+
+/** בחירת קוטר בורג; ערך שאינו ברשימה מוצג כפי שהוא (לא "קופץ" לערך הראשון) */
+export function BoltSelect({ d, onChange, testId, sizes = BOLT_SIZES }: { d: number; onChange: (d: number) => void; testId?: string; sizes?: number[] }) {
+  const list = sizes.includes(d) ? sizes : [...sizes, d].sort((a, b) => a - b);
+  return (
+    <select className="inp" data-testid={testId} value={d} onChange={(e) => onChange(Number(e.target.value))}>
+      {list.map((x) => <option key={x} value={x}>M{x}</option>)}
+    </select>
+  );
+}
+
+/** הסבר ארוך מאחורי "?" (1.34): מקופל כברירת מחדל, כדי שהתוכן לא יידחף למטה */
+export function Help({ children, testId }: { children: React.ReactNode; testId?: string }) {
+  return (
+    <details className="help" data-testid={testId}>
+      <summary aria-label="הסבר"><span className="help-q">?</span>הסבר</summary>
+      <div className="hint">{children}</div>
+    </details>
+  );
 }

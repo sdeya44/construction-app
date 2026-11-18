@@ -1,3 +1,4 @@
+import { Help } from './fields';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { appendValue, FormulaBuilder, readable, toTokens, varLabel, type FxTarget } from './FormulaBuilder';
 import * as THREE from 'three';
@@ -445,7 +446,7 @@ function OpProps({ op, det, res, patch }: { op: DetailOp; det: CustomDetail; res
         <EF label="קוטר בורג" value={op.d} onChange={(v) => patch({ d: v })} vkey={k('d')} res={res} />
         <label className="ef"><span className="ef-l">דרגה</span><select className="inp" value={op.grade} onChange={(e) => patch({ grade: e.target.value })}><option>8.8</option><option>10.9</option><option>5.6</option></select></label>
         <div className="ss-row"><button className={`btn small${op.site ? ' on' : ''}`} onClick={() => patch({ site: true })}>הרכבה בשטח</button><button className={`btn small${!op.site ? ' on' : ''}`} onClick={() => patch({ site: false })}>מסגריה</button></div>
-        <div className="hint">אורך הבורג והחורים בכל החלקים שהוא עובר בהם — אוטומטי. {res.conn.bolts.filter((b) => b.id.includes(`.${op.id}.`)).slice(0, 1).map((b) => `M${b.d}×${b.length}, אחיזה ${b.grip}`).join('')}</div>
+        <Help>אורך הבורג והחורים בכל החלקים שהוא עובר בהם — אוטומטי. {res.conn.bolts.filter((b) => b.id.includes(`.${op.id}.`)).slice(0, 1).map((b) => `M${b.d}×${b.length}, אחיזה ${b.grip}`).join('')}</Help>
       </>}
       {op.k === 'rod' && <><EF label="קוטר" value={op.d} onChange={(v) => patch({ d: v })} vkey={k('d')} res={res} /><EF label="אורך" value={op.L} onChange={(v) => patch({ L: v })} vkey={k('L')} res={res} />{refEditor(op.ref)}</>}
       {op.k === 'weld' && <>
