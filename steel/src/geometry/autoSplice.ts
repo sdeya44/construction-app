@@ -45,6 +45,13 @@ export function effectiveSplices(project: Project, members: Member[], supports: 
         const perp = Math.hypot(c.end.x - (m.start.x + f.ex.x * t), c.end.z - (m.start.z + f.ex.z * t));
         if (t > tMin && t < tMax && perp < 1500) zoneList.push([t, 1300]);
       }
+      // רכס עם פלטות חיזוק משולשות: התפר לא נכנס לאזור המשולש (פלטות ההמשך היו חודרות לפלטת החיזוק)
+      const rr = project.building.ridgeReinf;
+      if (m.kind === 'rafter' && rr?.type === 'plate') {
+        const hiStart = m.start.z > m.end.z;
+        const tR = hiStart ? tMin : tMax, Lz = rr.length + 300;
+        zoneList.push([hiStart ? tR + Lz / 2 : tR - Lz / 2, Lz / 2]);
+      }
       const zones = zoneList.map((z) => z[0]);
       const halfOf = (z: number) => zoneList.find((q) => q[0] === z)?.[1] ?? 160;
       const HALF = 160; void HALF;
@@ -61,6 +68,8 @@ export function effectiveSplices(project: Project, members: Member[], supports: 
           t = hit - halfOf(hit);
         }
         if (t - s < 1000) { t = s + step; } // לא נמצא מקום — נשאר במוט מלא (אזהרה בבדיקת ההתנגשות)
+        // שארית קצרה בסוף (פחות מ-500): התפר זז אחורה — אין חלק קצר מדי ואין תפר בקצה האלמנט
+        if (tMax - t < 500 && t - 500 - s >= 1000) t = tMax - 500;
         ts.push(Math.round(t));
         s = t;
       }

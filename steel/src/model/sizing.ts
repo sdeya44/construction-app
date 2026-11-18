@@ -217,7 +217,8 @@ export function suggestSize(p: Project, d: DerivedModel, role: 'column' | 'rafte
     if (st === 'ok') return n;
     if (st === 'big' && !firstNotSmall) firstNotSmall = n;
   }
-  return firstNotSmall;
+  // אף גודל במשפחה לא מספיק (מפתח גדול): הגדול ביותר — ובבדיקת הגדלים הוא יסומן "קטן" (נדרש מכפל/מסבך/תכן)
+  return firstNotSmall ?? sorted[sorted.length - 1] ?? null;
 }
 
 /**

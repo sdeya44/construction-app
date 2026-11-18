@@ -57,9 +57,10 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
     pA: { y: number; w: number }, pC: { y: number; w: number }, yFace0: number, yFace1: number, host0: string, host1: string) =>
     xBrace(res, b, bc, key, label, profile, plane0, n, wDir, pA, pC, yFace0, yFace1, host0, host1);
 
+  const skipTie = new Set<string>();
   // ---- קושרות גג: במישור אמצע גובה קורת הגג, פח חיבור מרותך לווב הקורה בכל קצה
   if (br.roof.enabled) {
-    const slopes: { side: string; a: { x: number; z: number }; c: { x: number; z: number }; rid: (f: string) => string }[] = [];
+    const slopes: { side: string; pid: string; a: { x: number; z: number }; c: { x: number; z: number }; rid: (f: string) => string }[] = [];
     const ridgeGap = 150 + bc.gussetEdge;
     // לכל מישור: מהעמוד הקיצוני בכל צד (או מהקצה פחות מרווח, אם אין עמוד באותו חצי — רכס/חיבור צד/קונזולה)
     // קושרות לכל אורך המישור, מחולקות לקטעים בכל עמוד פנימי (החלטת משתמש 15.11.2026: "אלכסונים בגג" עד הרכס)
@@ -90,7 +91,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
       const nseg = ordered.length - 1;
       for (let k = 0; k < nseg; k++) {
         const s0 = ordered[k], s1 = ordered[k + 1];
-        slopes.push({ side: nseg > 1 ? `${pl.id}${k + 1}` : pl.id, a: { x: s0, z: zAt(pl, s0) }, c: { x: s1, z: zAt(pl, s1) }, rid: pl.rafterId });
+        slopes.push({ side: nseg > 1 ? `${pl.id}${k + 1}` : pl.id, pid: pl.id, a: { x: s0, z: zAt(pl, s0) }, c: { x: s1, z: zAt(pl, s1) }, rid: pl.rafterId });
       }
     }
     for (const bay of resolveBays(br.roof.bays, nb)) {
@@ -98,8 +99,16 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
       for (const sl of slopes) {
         const dir = norm(v3(sl.c.x - sl.a.x, 0, sl.c.z - sl.a.z));
         const n = norm(v3(-dir.z * Math.sign(dir.x), 0, Math.abs(dir.x)));
-        // מישור הקושרות: אמצע גובה הקורה (קו הייחוס הוא פני עליון)
-        const o = add(v3(sl.a.x, 0, sl.a.z), scale(n, -raf.props.h / 2));
+        // מישור הקושרות: אמצע גובה הקורה (קו הייחוס הוא פני עליון). קורה רדודה: יורדים כך שהקושרת עוברת מתחת
+        // לשורות הקשירה (זוויתן שתלוי מתחת לפטות) — אבל נשארים בתחום הווב לריתוך הפח
+        const tieDrop = br.purlinTies.enabled ? (tryProfile(br.purlinTies.profile)?.props.h ?? 40) : 0;
+        const brLeg = br.roof.type === 'rhs' ? (tryProfile(br.roof.rhs?.strut ?? '')?.props.h ?? 100) : (tryProfile(br.roof.profile)?.props.b ?? 50);
+        const tfR = raf.dims.tf ?? 8;
+        const need = tieDrop + 15 + brLeg, maxD = raf.props.h - tfR - brLeg / 2 - bc.gussetEdge - 3;
+        // אין מקום לשניהם בקורה רדודה: הקושרת באמצע הגובה, ושורת הקשירה לא נבנית במפתח הזה (הקושרת מייצבת את הפטות)
+        if (tieDrop && need > Math.max(raf.props.h / 2, maxD)) skipTie.add(`${bay}|${sl.pid}`);
+        const depth = need > Math.max(raf.props.h / 2, maxD) ? raf.props.h / 2 : Math.max(raf.props.h / 2, Math.min(need, maxD));
+        const o = add(v3(sl.a.x, 0, sl.a.z), scale(n, -depth));
         const L = Math.hypot(sl.c.x - sl.a.x, sl.c.z - sl.a.z);
         const rid = sl.rid;
         // מישור צר מדי לסבכה (זווית האלכסון למוט < ~30°): הלשוניות בצמתים חופפות — קושרות X במישור הזה
@@ -150,8 +159,16 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         const f0 = frames[bay], f1 = frames[bay + 1];
         const z0 = (b.lineBase?.[l.id] ?? b.baseElevation) + 300, z1 = eave - rafV - 60 - 150;
         if (z1 - z0 < 1000) { res.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `קושרת קיר ציר ${l.label} מפתח ${bay + 1}: גובה קטן מדי` }); continue; }
-        xbrace(`W${bay + 1}.${side}`, `קושרת קיר ציר ${l.label} מפתח ${bay + 1}`, br.walls.profile, v3(x, 0, z0), v3(1, 0, 0), v3(0, 0, 1),
-          { y: f0.y, w: 0 }, { y: f1.y, w: z1 - z0 }, f0.y + twOf(`${f0.id}.COL.${l.id}`) / 2, f1.y - twOf(`${f1.id}.COL.${l.id}`) / 2, `${f0.id}.COL.${l.id}`, `${f1.id}.COL.${l.id}`);
+        // עמוד גבוה: האלכסון ארוך מחומר הגלם — חלוקה לכמה פנלי X לגובה (כמו בגג)
+        const H = z1 - z0, bayW = Math.abs(f1.y - f0.y);
+        let k = 1;
+        while (k < 6 && Math.hypot(H / k, bayW) > stockLen - 100) k++;
+        const gap = k > 1 ? bc.gussetEdge + 120 : 0;
+        for (let j = 0; j < k; j++) {
+          const w0 = (H * j) / k + (j > 0 ? gap : 0), w1 = (H * (j + 1)) / k - (j < k - 1 ? gap : 0);
+          xbrace(`W${bay + 1}.${side}${k > 1 ? `.${j + 1}` : ''}`, `קושרת קיר ציר ${l.label} מפתח ${bay + 1}${k > 1 ? ` פנל ${j + 1}` : ''}`, br.walls.profile, v3(x, 0, z0), v3(1, 0, 0), v3(0, 0, 1),
+            { y: f0.y, w: w0 }, { y: f1.y, w: w1 }, f0.y + twOf(`${f0.id}.COL.${l.id}`) / 2, f1.y - twOf(`${f1.id}.COL.${l.id}`) / 2, `${f0.id}.COL.${l.id}`, `${f1.id}.COL.${l.id}`);
+        }
       }
     }
   }
@@ -169,6 +186,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
       const tieProf = getProfile(br.purlinTies.profile);
       const tieT = tieProf.dims.t ?? 4;
       for (let bay = 0; bay < nb; bay++) {
+        if (skipTie.has(`${bay}|${side}`)) { if (!res.issues.some((i) => i.code === 'TIE_SKIP')) res.issues.push({ code: 'TIE_SKIP', severity: 'info', message: 'שורות קשירה לפטות: במפתחים עם קושרות גג ובקורה רדודה אין מקום לשניהם — שורת הקשירה לא נבנתה במפתחים האלה (הקושרת מייצבת את הפטות)' }); continue; }
         const ym = (frames[bay].y + frames[bay + 1].y) / 2;
         const id = `BR.T${bay + 1}.${side}`;
         // זוויתן מסובב 180°: הרגל האופקית למעלה, צמודה מתחת לאגף התחתון של הפטות (מגע 0 מ"מ)
