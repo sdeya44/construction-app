@@ -81,3 +81,48 @@ test('TR-03: מסבך נושא — חגורות RHS ושינוי אורך שדה
   s = await st();
   expect(s.spec.panelLens).toBeUndefined();
 });
+
+test('TR-04: מסבך נושא — שדות קבועים (שדה שנקבע נשמר, השאר מתחלקים שווה) ומסבך בין העמודים', async ({ page }) => {
+  await boot(page);
+  await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L', 'F3.COL.L']));
+  await page.getByTestId('ctx-omit').click();
+  await page.getByTestId('omit-apply').click();
+  await page.getByTestId('nav-b:tb').click();
+  const id = await page.evaluate(() => (window as any).__ksp.store.state.project.building.transfers[0].id);
+  await page.getByTestId(`tb-kind-truss-${id}`).click();
+  const st = () => page.evaluate(() => {
+    const k = (window as any).__ksp.store.state;
+    return { spec: k.project.building.transfers[0].truss, err: k.derived.issues.filter((i: any) => i.severity === 'error').map((i: any) => i.message), d: k.derived };
+  });
+  // ביטול סימטריה, קביעת שדה 0 ושדה 2
+  await page.getByTestId(`tw-${id}-sym`).click();
+  const setPl = async (i: number, v: string) => {
+    await page.getByTestId(`tw-${id}-sch`).getByTestId(`tw-${id}-pl-${i}`).click();
+    await page.getByTestId(`tw-${id}-pl-${i}-inp`).fill(v); await page.getByTestId(`tw-${id}-pl-${i}-inp`).press('Enter');
+  };
+  await setPl(0, '1500');
+  await setPl(2, '3500');
+  let s = await st();
+  expect(s.spec.panelLens[0]).toBe(1500);
+  expect(s.spec.panelLens[2]).toBe(3500);
+  const free = s.spec.panelLens.filter((_: number, j: number) => j !== 0 && j !== 2);
+  expect(Math.max(...free) - Math.min(...free)).toBeLessThanOrEqual(1);
+  await expect(page.getByTestId(`tw-${id}-lock-0`)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId(`tw-${id}-lock-1`)).toHaveAttribute('aria-pressed', 'false');
+  // שינוי חוזר של שדה 0 — שדה 2 לא זז
+  await setPl(0, '2000');
+  s = await st();
+  expect(s.spec.panelLens[2]).toBe(3500);
+  // שחרור שדה 2
+  await page.getByTestId(`tw-${id}-lock-2`).click();
+  await expect(page.getByTestId(`tw-${id}-lock-2`)).toHaveAttribute('aria-pressed', 'false');
+  // מסבך בין העמודים: העמודים התומכים לא מתקצרים
+  const colTop = () => page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('F1.COL.L').end.z);
+  const zShort = await colTop();
+  await page.getByTestId(`tb-fit-between-${id}`).click();
+  s = await st();
+  expect(s.err).toEqual([]);
+  expect(await colTop()).toBeGreaterThan(zShort + 500);
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'CLASH').length)).toBe(0);
+  await shot(page, 'TR_04_between');
+});

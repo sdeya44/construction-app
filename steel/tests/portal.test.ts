@@ -55,4 +55,21 @@ describe('אגד B — קשיחות לאורך בקיר', () => {
     expect(beams(d).every((m: any) => m.id.endsWith(`.${mid}`))).toBe(true);
     expect(d.issues.filter((i) => i.severity === 'error')).toEqual([]);
   });
+  it('אגד B הפוך: האלכסונים עולים מראש קורת האגד אל העמוד; הקורה יורדת ב-drop; ללא התנגשויות', () => {
+    const d = mk(), di = mk({ portal: { ...defaultPortal(), invert: true } });
+    const pp = defaultPortal();
+    const b0 = beams(d)[0], b1 = beams(di)[0];
+    expect(b0.start.z - b1.start.z).toBeCloseTo(pp.drop, 3);
+    expect(diags(di).length).toBe(diags(d).length);
+    for (const k of diags(di)) {
+      // קצה העמוד (start) גבוה מקצה הקורה (end); קצה הקורה מעל פני העליון של הקורה
+      expect(k.start.z).toBeGreaterThan(k.end.z + 200);
+      expect(k.end.z).toBeGreaterThan(b1.start.z);
+      const a = Math.atan2(Math.abs(k.end.z - k.start.z), Math.abs(k.end.y - k.start.y)) * 180 / Math.PI;
+      expect(a).toBeGreaterThan(40); expect(a).toBeLessThan(50);
+    }
+    for (const k of diags(d)) expect(k.start.z).toBeLessThan(k.end.z - 200);
+    expect(di.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
+    expect(di.issues.filter((i) => i.severity === 'error')).toEqual([]);
+  });
 });

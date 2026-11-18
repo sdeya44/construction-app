@@ -20,7 +20,7 @@ export interface RoofPlaneDef {
   start: 'x0' | 'x1';
   /** סט פרמטרי הפטות: 'left' / 'right' (משותפים) או מזהה מישור עם פרמטרים משלו */
   purlins?: string;
-  /** הקצה שגובהו נשמר כששינוי שיפוע (ברירת מחדל: קצה ההתחלה של הפטות) */
+  /** ישן (עד 1.32): הקצה שגובהו נשמר בשינוי שיפוע — לא בשימוש; שינוי שיפוע שומר את גובה העמוד הנמוך */
   fixed?: 'x0' | 'x1';
 }
 export interface CustomSection { lines: SectionLineDef[]; planes: RoofPlaneDef[]; template?: string }
@@ -364,13 +364,15 @@ export function setPlaneEndZ(sec: CustomSection, planeId: string, end: 'x0' | 'x
   };
 }
 
-/** שינוי שיפוע מישור (%) — הקצה הנעול (fixed / start) נשאר במקומו; הקצה השני ומישורים שמחוברים אליו מתעדכנים */
+/**
+ * שינוי שיפוע מישור (%): גובה העמוד בציר הנמוך נשמר, הרכס / העמוד הגבוה מתעדכן (ומישורים מחוברים אליו).
+ * (בקשת משתמש 18.11.2026 — במקום מנגנון "גובה נעול"; השדה fixed הישן אינו בשימוש)
+ */
 export function setPlaneSlope(sec: CustomSection, planeId: string, pct: number): CustomSection {
-  const pl = sec.planes.find((p) => p.id === planeId);
-  if (!pl) return sec;
-  const fixed = pl.fixed ?? pl.start ?? 'x0';
-  const sl = pct / 100, dx = pl.x1 - pl.x0;
-  return fixed === 'x0' ? setPlaneEndZ(sec, planeId, 'x1', Math.round(pl.z0 + sl * dx)) : setPlaneEndZ(sec, planeId, 'x0', Math.round(pl.z1 - sl * dx));
+  const pd = planeDims(sec, planeId);
+  if (!pd) return sec;
+  // הכיוון נשמר (הערך המוחלט — מהנמוך לגבוה); היפוך כיוון — בשדות הגובה
+  return setPlaneDims(sec, planeId, pd.zLow, pd.zLow + (Math.abs(pct) / 100) * pd.run);
 }
 
 /** הזזת כל הגג אנכית (גובה עמודים) */
@@ -388,4 +390,62 @@ export function lineBaseAt(b: { baseElevation: number; lineBase?: Record<string,
   if (x >= ls[ls.length - 1].x) return z(ls[ls.length - 1]);
   for (let i = 1; i < ls.length; i++) if (x <= ls[i].x) { const t = (x - ls[i - 1].x) / (ls[i].x - ls[i - 1].x); return z(ls[i - 1]) + t * (z(ls[i]) - z(ls[i - 1])); }
   return b.baseElevation;
+}
+
+/**
+ * מידות פשוטות של מישור גג (בקשת משתמש 18.11.2026): גובה עמוד (בציר הנמוך), גובה רכס / עמוד גבוה, שיפוע.
+ * הגבהים נמדדים בצירי העמודים (לא בקצה הקונזולה): הנמוך — הציר הקרוב לקצה הנמוך; הגבוה — הרכס (מפגש מישורים)
+ * או הציר הקרוב לקצה הגבוה. מזינים שניים — השלישי מחושב (setPlaneDims).
+ */
+export interface PlaneDims {
+  xLow: number; xHigh: number; zLow: number; zHigh: number;
+  /** שיפוע (%) — חיובי, מהנמוך לגבוה */
+  slopePct: number;
+  /** מרחק אופקי בין נקודות הייחוס */
+  run: number;
+  /** הקצה הגבוה הוא רכס (מפגש עם מישור אחר) */
+  highIsRidge: boolean;
+  /** אינדקס הציר בנקודת הייחוס (לתווית), אם יש */
+  lowLine?: number; highLine?: number;
+}
+
+export function planeDims(sec: CustomSection, planeId: string): PlaneDims | null {
+  const pl = sec.planes.find((p) => p.id === planeId);
+  if (!pl || Math.abs(pl.x1 - pl.x0) < 1) return null;
+  const lowEnd: 'x0' | 'x1' = pl.z0 <= pl.z1 ? 'x0' : 'x1', highEnd = lowEnd === 'x0' ? 'x1' : 'x0';
+  const zOf = (x: number) => pl.z0 + ((pl.z1 - pl.z0) * (x - pl.x0)) / (pl.x1 - pl.x0);
+  const lines = [...sec.lines].sort((a, b) => a.x - b.x);
+  const inRange = lines.map((l, i) => ({ x: l.x, i })).filter((l) => l.x >= Math.min(pl.x0, pl.x1) - 1 && l.x <= Math.max(pl.x0, pl.x1) + 1);
+  const nearest = (x: number, not?: number) => inRange.filter((l) => l.i !== not).sort((a, b) => Math.abs(a.x - x) - Math.abs(b.x - x))[0];
+  const hx = pl[highEnd], hz = highEnd === 'x0' ? pl.z0 : pl.z1;
+  const highIsRidge = sec.planes.some((q) => q.id !== pl.id && ((Math.abs(q.x0 - hx) < 1 && Math.abs(q.z0 - hz) < 1) || (Math.abs(q.x1 - hx) < 1 && Math.abs(q.z1 - hz) < 1)));
+  const lo = nearest(pl[lowEnd]);
+  let hi = highIsRidge ? inRange.find((l) => Math.abs(l.x - hx) < 1) : nearest(hx, lo?.i);
+  let xLow = lo ? lo.x : pl[lowEnd], xHigh = highIsRidge ? hx : hi ? hi.x : hx;
+  if (Math.abs(xHigh - xLow) < 1) { xLow = pl[lowEnd]; xHigh = hx; hi = undefined; }
+  const zLow = zOf(xLow), zHigh = zOf(xHigh), run = Math.abs(xHigh - xLow);
+  return { xLow, xHigh, zLow, zHigh, run, slopePct: ((zHigh - zLow) / run) * 100, highIsRidge, lowLine: lo && Math.abs(lo.x - xLow) < 1 ? lo.i : undefined, highLine: hi?.i };
+}
+
+/** קביעת גובה בנקודות הייחוס (zLow, zHigh): המישור מוגדר מחדש דרכן; קצוות מישורים מחוברים (רכס) זזים יחד */
+export function setPlaneDims(sec: CustomSection, planeId: string, zLow: number, zHigh: number): CustomSection {
+  const pd = planeDims(sec, planeId);
+  const pl = sec.planes.find((p) => p.id === planeId);
+  if (!pd || !pl) return sec;
+  const s = (zHigh - zLow) / (pd.xHigh - pd.xLow);
+  const z = (x: number) => zLow + s * (x - pd.xLow);
+  const out = setPlaneEndZ(sec, planeId, 'x0', z(pl.x0));
+  return setPlaneEndZ(out, planeId, 'x1', z(pl.x1));
+}
+
+/** זוג מישורים דו-שיפועי סימטרי סביב רכס (לעריכה משותפת): אותו שיפוע, אותו גובה עמוד, רכס באמצע בין צירי הייחוס */
+export function gablePair(sec: CustomSection): { a: string; b: string; symmetric: boolean } | null {
+  if (sec.planes.length !== 2) return null;
+  const [p, q] = [...sec.planes].sort((u, v) => u.x0 - v.x0);
+  const dp = planeDims(sec, p.id), dq = planeDims(sec, q.id);
+  if (!dp || !dq || !dp.highIsRidge || !dq.highIsRidge || Math.abs(dp.xHigh - dq.xHigh) > 1) return null;
+  if (!(dp.xLow < dp.xHigh && dq.xLow > dq.xHigh)) return null;
+  const centered = Math.abs(dp.run - dq.run) < 1;
+  if (!centered) return null;
+  return { a: p.id, b: q.id, symmetric: Math.abs(dp.zLow - dq.zLow) < 1 && Math.abs(dp.slopePct - dq.slopePct) < 0.01 };
 }

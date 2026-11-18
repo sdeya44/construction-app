@@ -170,6 +170,8 @@ export interface PortalBraceParams {
   continuous?: boolean;
   /** חיבור קורת האגד לעמוד: horizontal = פח ולשונית שוכבים (ברירת מחדל), vertical = במישור הקיר */
   finOrient?: 'horizontal' | 'vertical';
+  /** אגד B הפוך: האלכסונים עולים מראש קורת האגד אל העמוד (drop = עלייה על העמוד מעל הקורה) */
+  invert?: boolean;
 }
 
 /**
@@ -340,6 +342,8 @@ export interface TrussSpec {
   symmetric?: boolean;
   /** אורכי שדות (מ"מ) — חלוקה לא אחידה; מותאמים יחסית למפתח בפועל. חסר/לא תואם למספר השדות ⇒ שדות שווים */
   panelLens?: Mm[];
+  /** שדות שאורכם נקבע ידנית (נשמר בשינוי שדה אחר); השדות החופשיים מתחלקים שווה ביתרה */
+  lockedLens?: boolean[];
 }
 export interface RoofTrussParams {
   enabled: boolean;
@@ -369,6 +373,8 @@ export interface TransferDef {
   /** beam (ברירת מחדל) או מסבך נושא */
   kind?: 'beam' | 'truss';
   truss?: TrussSpec;
+  /** מסבך: top = על ראשי העמודים (העמודים מתקצרים, ברירת מחדל); between = העמודים ממשיכים עד קורת הגג והמסבך ביניהם (כמו אגד B) */
+  trussFit?: 'top' | 'between';
   /** קורה ארוכה מחומר הגלם: auto (ברירת מחדל) — חיבורי המשך מוברגים מחוץ לאזורי המושבים; none — מוט אחד (הזמנה מיוחדת) */
   splice?: 'auto' | 'none';
 }

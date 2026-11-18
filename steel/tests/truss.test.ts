@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { defaultBuilding, newProject } from '../src/model/defaults';
 import { generate } from '../src/geometry/generate';
-import { defaultTrussSpec, panelsOnFrames, patternCells, resizeSpec, trussNodes, trussUtil } from '../src/geometry/truss';
+import { defaultTrussSpec, panelLocks, setPanelLen, unlockPanel, panelsOnFrames, patternCells, resizeSpec, trussNodes, trussUtil } from '../src/geometry/truss';
 import { SECTION_TEMPLATES } from '../src/model/section';
+import type { TrussSpec } from '../src/model/types';
 import { computeFabrication } from '../src/fab/marks';
 
 const errs = (d: ReturnType<typeof generate>) => d.issues.filter((i) => i.severity === 'error').map((i) => i.message);
@@ -83,5 +84,68 @@ describe('מסבכים', () => {
     const s1 = defaultTrussSpec(8, 1000), s2 = { ...s1, depth: 2000 };
     const u1 = trussUtil(s1, 24000, { q: 10 }), u2 = trussUtil(s2, 24000, { q: 10 });
     expect(u2[1].force).toBeCloseTo(u1[1].force / 2, 3);
+  });
+  it('TR-U7: שדות קבועים — שדה שנקבע נשמר, החופשיים מתחלקים שווה, הסכום = מפתח', () => {
+    const span = 12000;
+    let s: TrussSpec = { ...defaultTrussSpec(6, 1000), symmetric: false };
+    s = setPanelLen(s, span, 0, 1500);
+    expect(s.panelLens).toEqual([1500, 2100, 2100, 2100, 2100, 2100]);
+    s = setPanelLen(s, span, 2, 3000);
+    // שדה 0 שנקבע קודם — לא זז; החופשיים שווים
+    expect(s.panelLens![0]).toBe(1500); expect(s.panelLens![2]).toBe(3000);
+    expect(s.panelLens!.filter((_, j) => j !== 0 && j !== 2).every((L) => L === 1875)).toBe(true);
+    expect(s.panelLens!.reduce((a, b) => a + b, 0)).toBe(span);
+    expect(panelLocks(s)).toEqual([true, false, true, false, false, false]);
+    // שינוי חוזר של שדה 0 — שדה 2 נשאר
+    s = setPanelLen(s, span, 0, 1000);
+    expect(s.panelLens![2]).toBe(3000); expect(s.panelLens![0]).toBe(1000);
+    expect(s.panelLens!.reduce((a, b) => a + b, 0)).toBe(span);
+    // שחרור
+    s = unlockPanel(s, span, 2);
+    expect(panelLocks(s)).toEqual([true, false, false, false, false, false]);
+    expect(s.panelLens!.slice(1).every((L) => L === 2200)).toBe(true);
+    s = unlockPanel(s, span, 0);
+    expect(s.panelLens).toBeUndefined();
+    // סימטרי: השדה והמראה שלו
+    let t = defaultTrussSpec(6, 1000);
+    t = setPanelLen(t, span, 0, 1500);
+    expect(t.panelLens).toEqual([1500, 2250, 2250, 2250, 2250, 1500]);
+    expect(panelLocks(t)).toEqual([true, false, false, false, false, true]);
+    // כל השדות נעולים ⇒ השאר משתחררים
+    let u: TrussSpec = { ...defaultTrussSpec(3, 1000), symmetric: false };
+    u = setPanelLen(u, 9000, 0, 2000); u = setPanelLen(u, 9000, 1, 3000); u = setPanelLen(u, 9000, 2, 2000);
+    expect(u.panelLens!.reduce((a, b) => a + b, 0)).toBe(9000);
+    expect(u.panelLens![2]).toBe(2000);
+    // שינוי מספר שדות / צמתים על המסגרות — מבטל קביעות
+    expect(resizeSpec(t, 4).lockedLens).toBeUndefined();
+    expect(panelsOnFrames(t, span, [6000]).lockedLens).toBeUndefined();
+  });
+  it('TR-U8: מסבך נושא בין העמודים — העמודים לא מתקצרים, החגורות בין פלטות הקצה, ללא שגיאות והתנגשויות', () => {
+    for (const prof of [['HEA160', 'HEA160'], ['RHS200x100x8', 'RHS200x100x8']]) {
+      const b = defaultBuilding(); const f = [...b.frames].sort((x, y) => x.y - y.y);
+      const spec = { ...defaultTrussSpec(6, 1000), profiles: { ...defaultTrussSpec(6, 1000).profiles, top: prof[0], bottom: prof[1] } };
+      const mk = (fit?: 'top' | 'between') => { const bb = structuredClone(b); bb.transfers = [{ id: 'T1', lineId: 'L', from: f[0].id, to: f[3].id, removed: [f[1].id, f[2].id], profile: 'HEA160', support: 'A1', seat: 'B1', kind: 'truss', truss: spec, trussFit: fit }]; return generate(newProject('x', bb)); };
+      const dTop = mk(), dBw = mk('between');
+      expect(errs(dBw)).toEqual([]);
+      expect(dBw.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
+      expect(dBw.issues.some((i) => i.message.includes('אינה על צומת'))).toBe(false);
+      const col = (d: any) => d.members.find((m: any) => m.id === `${f[0].id}.COL.L`);
+      // על ראשי העמודים — העמוד מקוצר; בין העמודים — העמוד בגובה המלא (כמו עמוד רגיל)
+      const full = generate(newProject('x', structuredClone(b))).members.find((m: any) => m.id === `${f[0].id}.COL.L`)!;
+      expect(col(dTop).end.z).toBeLessThan(full.end.z - 500);
+      expect(col(dBw).end.z).toBeCloseTo(full.end.z, 3);
+      const tb = dBw.members.find((m: any) => m.id === 'TB.T1')!, bc = dBw.members.find((m: any) => m.id === 'TB.T1.BC')!;
+      // החגורות מתחילות אחרי פני העמוד (לא מעל הציר)
+      expect(Math.min(tb.start.y, tb.end.y)).toBeGreaterThan(f[0].y + 100);
+      expect(Math.max(bc.start.y, bc.end.y)).toBeLessThan(f[3].y - 100);
+      // ראש החגורה העליונה מתחת לראש העמוד
+      expect(tb.start.z).toBeLessThan(full.end.z);
+      const sup = dBw.connections.filter((c) => c.id.startsWith('C.TBS.T1.'));
+      expect(sup.length).toBe(2);
+      for (const c of sup) {
+        expect(c.welds.some((w) => w.between.includes('TB.T1')) && c.welds.some((w) => w.between.includes('TB.T1.BC'))).toBe(true);
+        expect(c.bolts.length).toBeGreaterThanOrEqual(4);
+      }
+    }
   });
 });

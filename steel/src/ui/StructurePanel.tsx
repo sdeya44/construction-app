@@ -12,6 +12,7 @@ import { store, useStore } from '../store';
 import { Adv, LenField, NumField, ProfilePicker, TextField, useEdit } from './fields';
 import { Icon } from './icons';
 import { HaunchEditor, KneeEditor, SectionEditor } from './SectionEditor';
+import { ClassicRoofDims } from './TriDims';
 import { BaysSchematic, GussetSchematic, PortalSchematic, RidgeSchematic } from './schematics';
 import { MenuPic } from './pics';
 
@@ -80,16 +81,11 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
         </select>
       </div>
       <div className="field"><label>רוחב (מפתח צירים)</label><LenField testId="width" mm={b.width} unit={u} onCommit={(v) => set(b.roofType === 'gable' && Math.abs(b.ridgeX - b.width / 2) < 1 ? { width: v, ridgeX: v / 2 } : { width: v })} /></div>
-      <div className="field"><label>גובה ציר א (שמאל)</label><LenField testId="eaveLeft" mm={b.eaveLeft} unit={u} onCommit={(v) => set({ eaveLeft: v })} /></div>
-      <div className="field"><label>גובה ציר ב (ימין)</label><LenField testId="eaveRight" mm={b.eaveRight} unit={u} onCommit={(v) => set({ eaveRight: v })} /></div>
-      {b.roofType === 'gable' && <>
-        <div className="field"><label>מיקום רכס מציר א</label><LenField testId="ridgeX" mm={b.ridgeX} unit={u} onCommit={(v) => set({ ridgeX: v })} /></div>
-        <div className="field"><label>שיפוע שמאל</label><NumField testId="slopeLeft" value={b.slopeLeftPct} suffix="%" onCommit={(v) => set({ slopeLeftPct: v })} /></div>
-      </>}
-      <dl className="kv">
-        {roof.ridgeZ !== undefined && <><dt>גובה רכס (נגזר)</dt><dd>{(roof.ridgeZ / (u === 'm' ? 1000 : 1)).toFixed(u === 'm' ? 3 : 0)}</dd></>}
-        <dt>{b.roofType === 'gable' ? 'שיפוע ימין (נגזר)' : 'שיפוע (נגזר)'}</dt><dd>{(roof.slopeRight * 100).toFixed(2)}%</dd>
-      </dl>
+      {b.roofType === 'gable' && <div className="field"><label>מיקום רכס מציר א</label><LenField testId="ridgeX" mm={b.ridgeX} unit={u} onCommit={(v) => set({ ridgeX: v })} /></div>}
+      <ClassicRoofDims b={b} unit={u} set={set} testId="cl" />
+      {b.roofType === 'gable' && Math.abs(b.eaveRight - b.eaveLeft) > 0.5 && <dl className="kv">
+        <dt>שיפוע ימין (נגזר)</dt><dd>{(roof.slopeRight * 100).toFixed(2)}%</dd>
+      </dl>}
       </>}
       <div className="field"><label>ייחוס גבהים</label>
         <select className="inp" value={b.heightRef} onChange={(e) => set({ heightRef: e.target.value as BuildingParams['heightRef'] })}>
@@ -298,13 +294,18 @@ export function PortalFields({ lineId }: { lineId?: string } = {}) {
     ? { ...br.walls, linePortal: { ...(br.walls.linePortal ?? {}), [lineId]: { ...(br.walls.linePortal?.[lineId] ?? {}), ...patch } } }
     : { ...br.walls, portal: { ...g, ...patch } } } }));
   const shape = <>
-    <PortalSchematic />
+    <PortalSchematic invert={!!p.invert} />
     {ed.showProfile && <>
       <div className="field prof"><label>קורת אגד</label><ProfilePicker testId="pb-beam" value={p.beam} families={['RHS', 'SHS']} onCommit={(v) => set({ beam: v })} /></div>
       <div className="field prof"><label>אלכסונים</label><ProfilePicker testId="pb-brace" value={p.brace} families={['RHS', 'SHS', 'CHS']} onCommit={(v) => set({ brace: v })} /></div>
     </>}
-    <div className="field"><label>מרווח מתחת לקורה הראשית</label><NumField testId="pb-gap" value={p.gap} suffix='מ"מ' onCommit={(v) => set({ gap: Math.max(0, v) })} /></div>
-    <div className="field"><label>ירידה על העמוד</label><NumField testId="pb-drop" value={p.drop} suffix='מ"מ' onCommit={(v) => set({ drop: Math.max(200, v) })} /></div>
+    <div className="field"><label>כיוון האלכסונים</label>
+      <div className="seg" role="radiogroup" aria-label="כיוון האלכסונים">
+        <button className={`tbtn${!p.invert ? ' on' : ''}`} role="radio" aria-checked={!p.invert} data-testid="pb-dir-down" onClick={() => set({ invert: false })}>למטה (רגיל)</button>
+        <button className={`tbtn${p.invert ? ' on' : ''}`} role="radio" aria-checked={!!p.invert} data-testid="pb-dir-up" onClick={() => set({ invert: true })}>למעלה (הפוך)</button>
+      </div></div>
+    <div className="field"><label>{p.invert ? 'מרווח מתחת לקורה הראשית (עד ראש האלכסון)' : 'מרווח מתחת לקורה הראשית'}</label><NumField testId="pb-gap" value={p.gap} suffix='מ"מ' onCommit={(v) => set({ gap: Math.max(0, v) })} /></div>
+    <div className="field"><label>{p.invert ? 'עלייה על העמוד (מעל קורת האגד)' : 'ירידה על העמוד'}</label><NumField testId="pb-drop" value={p.drop} suffix='מ"מ' onCommit={(v) => set({ drop: Math.max(200, v) })} /></div>
     <div className="field"><label>זווית אלכסון</label><NumField testId="pb-angle" value={p.angle} suffix="°" onCommit={(v) => set({ angle: Math.max(20, Math.min(70, v)) })} /></div>
     <div className="field"><label>קורת אגד בשאר המפתחים</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="pb-cont" checked={p.continuous ?? true} onChange={(e) => set({ continuous: e.target.checked })} />{(p.continuous ?? true) ? 'כן — ללא אלכסונים' : 'לא'}</label></div>
   </>;

@@ -70,10 +70,20 @@ function TransferRow({ t, onChange, onRemove, embed }: { t: TransferDef; onChang
         <button className={`tbtn${(t.kind ?? 'beam') === 'beam' ? ' on' : ''}`} data-testid={`tb-kind-beam-${t.id}`} onClick={() => onChange({ kind: 'beam' })}>קורה</button>
         <button className={`tbtn${t.kind === 'truss' ? ' on' : ''}`} data-testid={`tb-kind-truss-${t.id}`} onClick={() => onChange({ kind: 'truss', support: 'A1', seat: t.seat === 'B4' ? 'B1' : t.seat, truss: t.truss ?? defaultTrussSpec((fr.findIndex((f) => f.id === t.to) - fr.findIndex((f) => f.id === t.from)) * 2, Math.max(1000, Math.round(span * 1000 / 12 / 100) * 100)) })}>מסבך</button>
       </div>
+      {t.kind === 'truss' && <>
+        <div className="tb-lbl">מיקום המסבך</div>
+        <div className="seg scope-seg" role="radiogroup" aria-label="מיקום המסבך">
+          <button role="radio" aria-checked={(t.trussFit ?? 'top') === 'top'} className={`tbtn${(t.trussFit ?? 'top') === 'top' ? ' on' : ''}`} data-testid={`tb-fit-top-${t.id}`} onClick={() => onChange({ trussFit: 'top' })}>על ראשי העמודים</button>
+          <button role="radio" aria-checked={t.trussFit === 'between'} className={`tbtn${t.trussFit === 'between' ? ' on' : ''}`} data-testid={`tb-fit-between-${t.id}`} onClick={() => onChange({ trussFit: 'between' })}>העמודים עד הקורה — המסבך ביניהם</button>
+        </div>
+        <div className="hint">{t.trussFit === 'between'
+          ? 'העמודים התומכים ממשיכים עד קורת הגג (כמו במסגרת רגילה); המסבך בין העמודים, מתחת לראשיהם — כמו קורת אגד B. כל קצה: פלטת קצה גבוהה מרותכת לשתי החגורות, מוברגת לפלטת סגירה בין אגפי העמוד. חלוקת השדות לפי צירי העמודים; השדות הקיצוניים מתקצרים עד פלטת הקצה.'
+          : 'העמודים התומכים מתקצרים; המסבך יושב על ראשיהם (A1) וקורות הגג על הצמתים העליונים.'}</div>
+      </>}
       {t.kind === 'truss' && t.truss
         ? <TrussWizard spec={t.truss} span={span * 1000} chordFamilies={['HEA', 'HEB', 'IPE', 'RHS', 'SHS']} loads={tl} testId={`tw-${t.id}`} readOnlyProfiles={embed} onChange={(sp) => onChange({ truss: sp })}
             frames={t.removed.map((fid) => (fr.find((f) => f.id === fid)?.y ?? 0) - fr.find((f) => f.id === t.from)!.y)}
-            note="נתמך על ראש העמוד (A1); קורות הגג על הצמתים העליונים. חגורה חלולה (RHS/SHS): פלטת תמיכה מרותכת וברגים מחוץ לצינור, חיבור המשך בפלנץ." />
+            note={t.trussFit === 'between' ? 'בין העמודים; קורות הגג על הצמתים העליונים. חיבור המשך בחגורה חלולה — בפלנץ.' : 'נתמך על ראש העמוד (A1); קורות הגג על הצמתים העליונים. חגורה חלולה (RHS/SHS): פלטת תמיכה מרותכת וברגים מחוץ לצינור, חיבור המשך בפלנץ.'} />
         : <>
           {!embed && <div className="field prof"><label>קורה נושאת</label><ProfilePicker testId={`tb-prof-${t.id}`} value={t.profile} families={['IPE', 'HEA', 'HEB']} onCommit={(v) => onChange({ profile: v })} /></div>}
           {u && <div className={`sz-note sz-${st}`} style={{ margin: '2px 0 6px' }}>{SIZE_LABEL[st]} — {u.text}</div>}

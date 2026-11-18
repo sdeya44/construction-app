@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { setBuilding, setKneeBraces, setSection } from '../commands/commands';
 import { defaultKneeBraces } from '../geometry/knee';
 import { defaultHaunch } from '../geometry/haunch';
-import { lineLabel, moveLines, setAxisCount, setPlaneEndZ, setPlaneSlope, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
+import { gablePair, lineLabel, moveLines, planeDims, setAxisCount, setPlaneDims, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
+import { TriDims, type TriCalc } from './TriDims';
 import { store, useStore } from '../store';
 import { Adv, LenField, NumField, ProfilePicker, useEdit } from './fields';
 import { Icon } from './icons';
@@ -51,6 +52,12 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
   const setPlane = (id: string, patch: Partial<RoofPlaneDef>) => apply({ ...sec, template: undefined, planes: sec.planes.map((pl) => (pl.id === id ? { ...pl, ...patch } : pl)) });
   const newId = (pre: string, used: string[]) => { let i = 1; while (used.includes(`${pre}${i}`)) i++; return `${pre}${i}`; };
   const slope = (pl: RoofPlaneDef) => ((pl.z1 - pl.z0) / (pl.x1 - pl.x0)) * 100;
+  // מה מחושב בכל מישור (ברירת מחדל: גובה הרכס / העמוד הגבוה)
+  const [calc, setCalc] = useState<Record<string, TriCalc>>({});
+  const calcOf = (id: string): TriCalc => calc[id] ?? 'top';
+  const pair = gablePair(sec);
+  const [joint, setJoint] = useState<boolean | null>(null);
+  const together = !!pair && (joint ?? pair.symmetric);
   return (
     <>
       <div className="axis-count" data-testid="axis-count">
@@ -58,7 +65,7 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
         <div className="field"><label>רוחב בין הצירים הקיצוניים</label><LenField testId="axis-w" mm={Math.max(...sec.lines.map((l) => l.x)) - Math.min(...sec.lines.map((l) => l.x))} unit={u} onCommit={(v) => apply(setAxisCount(sec, sec.lines.length, v), 'רוחב כולל')} /></div>
         <div className="hint" style={{ margin: 0 }}>הצירים מחולקים שווה; אחר כך אפשר לשנות כל מפתח בשרטוט (לחיצה על המידה) או לגרור ציר.</div>
       </div>
-      <div className="sec-prev"><InteractiveSection sec={sec} apply={apply} /></div>
+      <div className="sec-prev"><InteractiveSection sec={sec} apply={apply} calcOf={(id) => calcOf(together ? 'gable' : id)} setCalc={(id, c) => setCalc({ ...calc, [together ? 'gable' : id]: c })} together={together} /></div>
       <div className="panel-title">צירי עמודים ({lines.length})
         <button className="btn small" data-testid="sec-add-line" onClick={() => {
           const last = lines[lines.length - 1];
@@ -92,33 +99,52 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
           apply({ ...sec, planes: [...sec.planes, { id: newId('P', sec.planes.map((q) => q.id)), x0, z0: 6000, x1, z1: 6000 + 0.1 * (x1 - x0), start: 'x1' }] }, 'הוספת מישור');
         }}><Icon name="plus" />מישור</button>
       </div>
-      {sec.planes.map((pl, i) => (
+      {pair && (
+        <label className="row" style={{ margin: '2px 0' }}><input type="checkbox" data-testid="sec-gable-joint" checked={together} onChange={(e) => setJoint(e.target.checked)} />
+          גג דו-שיפועי סימטרי — שני הצדדים זהים (גובה עמוד ושיפוע)</label>
+      )}
+      {pair && together && (() => {
+        const pd = planeDims(sec, pair.a)!;
+        return (
+          <div className="plane-card" data-testid="sec-plane-gable">
+            <b>גג דו-שיפועי</b>
+            <TriDims testId="tri-gable" unit={u} col={pd.zLow} top={pd.zHigh} run={pd.run} calc={calcOf('gable')} onCalc={(c) => setCalc({ ...calc, gable: c })}
+              labels={{ col: 'גובה עמודים (צירים קיצוניים)', top: 'גובה רכס' }}
+              onCommit={(v) => apply(setPlaneDims(setPlaneDims(sec, pair.a, v.col, v.top), pair.b, v.col, v.top), 'מידות גג')} />
+          </div>
+        );
+      })()}
+      {!together && sec.planes.map((pl, i) => {
+        const pd = planeDims(sec, pl.id);
+        return (
         <div className="plane-card" key={pl.id} data-testid={`sec-plane-${i}`}>
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <b>שיפוע {i + 1} <span className="mono muted">{pl.id}</span></b>
             <span className="badge">{slope(pl).toFixed(1)}%</span>
             {sec.planes.length > 1 && <button className="icon-btn" title="מחיקת מישור" onClick={() => apply({ ...sec, planes: sec.planes.filter((q) => q.id !== pl.id) }, 'מחיקת מישור')}><Icon name="x" /></button>}
           </div>
-          <div className="grid-4">
-            <label>X שמאל<LenField mm={pl.x0} unit={u} testId={`pl-x0-${i}`} onCommit={(v) => setPlane(pl.id, { x0: v })} /></label>
-            <label>גובה שמאל<LenField mm={pl.z0} unit={u} testId={`pl-z0-${i}`} onCommit={(v) => setPlane(pl.id, { z0: v })} /></label>
-            <label>X ימין<LenField mm={pl.x1} unit={u} testId={`pl-x1-${i}`} onCommit={(v) => setPlane(pl.id, { x1: v })} /></label>
-            <label>גובה ימין<LenField mm={pl.z1} unit={u} testId={`pl-z1-${i}`} onCommit={(v) => setPlane(pl.id, { z1: v })} /></label>
-          </div>
-          <div className="row">
-            <span className="hint" style={{ margin: 0 }}>שיפוע</span>
-            <div style={{ width: 90 }}><NumField testId={`pl-slope-${i}`} value={+slope(pl).toFixed(3)} suffix="%" onCommit={(v) => setPlane(pl.id, (pl.fixed ?? pl.start) === 'x1' ? { z0: pl.z1 - (v / 100) * (pl.x1 - pl.x0) } : { z1: pl.z0 + (v / 100) * (pl.x1 - pl.x0) })} /></div>
-            <span className="hint" style={{ margin: 0 }}>גובה קבוע</span>
-            <div className="seg">
-              <button className={`tbtn${(pl.fixed ?? pl.start) === 'x0' ? ' on' : ''}`} data-testid={`pl-fix0-${i}`} onClick={() => setPlane(pl.id, { fixed: 'x0' })}>שמאל</button>
-              <button className={`tbtn${(pl.fixed ?? pl.start) === 'x1' ? ' on' : ''}`} data-testid={`pl-fix1-${i}`} onClick={() => setPlane(pl.id, { fixed: 'x1' })}>ימין</button>
+          {pd && <TriDims testId={`tri-${i}`} unit={u} col={pd.zLow} top={pd.zHigh} run={pd.run} calc={calcOf(pl.id)} onCalc={(c) => setCalc({ ...calc, [pl.id]: c })}
+            labels={planeLabels(pd)} onCommit={(v) => apply(setPlaneDims(sec, pl.id, v.col, v.top), 'מידות גג')} />}
+          <Adv id={`pl-x-${pl.id}`} label="קצוות המישור (X) — מתקדם">
+            <div className="grid-4">
+              <label>X שמאל<LenField mm={pl.x0} unit={u} testId={`pl-x0-${i}`} onCommit={(v) => setPlane(pl.id, { x0: v })} /></label>
+              <label>X ימין<LenField mm={pl.x1} unit={u} testId={`pl-x1-${i}`} onCommit={(v) => setPlane(pl.id, { x1: v })} /></label>
             </div>
-          </div>
+          </Adv>
         </div>
-      ))}
-      <div className="hint">גבהים = פני עליון של קורת הגג. מישור שעובר מעל עמוד יושב עליו (ראש עמוד); מישור שמסתיים בעמוד שממשיך למעלה מתחבר לצדו; שני קצוות באותה נקודה ללא עמוד = רכס. שינוי שיפוע שומר על הגובה בצד הקבוע. צד התחלת הפטות — בגג ופטות.</div>
+        );
+      })}
+      <div className="hint">גבהים = פני עליון של קורת הגג, בציר העמוד (לא בקצה הקונזולה). מזינים שניים מתוך גובה עמוד / גובה רכס / שיפוע — השלישי (מסומן "= מחושב") מתעדכן; "חשב" בשורה אחרת מעביר אליה את החישוב. מישור שעובר מעל עמוד יושב עליו; מישור שמסתיים בעמוד שממשיך למעלה מתחבר לצדו; שני קצוות באותה נקודה ללא עמוד = רכס. צד התחלת הפטות — בגג ופטות.</div>
     </>
   );
+}
+
+/** תוויות השדות לפי נקודות הייחוס של המישור */
+function planeLabels(pd: NonNullable<ReturnType<typeof planeDims>>) {
+  return {
+    col: pd.lowLine !== undefined ? `גובה עמוד (ציר ${lineLabel(pd.lowLine)})` : 'גובה בקצה הנמוך',
+    top: pd.highIsRidge ? 'גובה רכס' : pd.highLine !== undefined ? `גובה עמוד גבוה (ציר ${lineLabel(pd.highLine)})` : 'גובה בקצה הגבוה',
+  };
 }
 
 /** קונזולות שמאל/ימין: מעבר קורות הגג מעבר לציר העמודים הקיצוני (שינוי מזיז את קצה המישור לאורך השיפוע) */
@@ -363,7 +389,10 @@ export function SectionPreview({ section, small }: { section: CustomSection; sma
  * עורך חתך אינטראקטיבי: גרירת צירים (הצמדה ל-100 מ"מ, Shift = 10 מ"מ), מידות בין צירים, קונזולות וגבהים —
  * לחיצה על מידה פותחת שדה להקלדה. שינוי נשמר כפקודה אחת (ביטול אחד).
  */
-export function InteractiveSection({ sec, apply }: { sec: CustomSection; apply: (s: CustomSection, label?: string) => void }) {
+export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc = () => undefined, together }: {
+  sec: CustomSection; apply: (s: CustomSection, label?: string) => void;
+  calcOf?: (planeId: string) => TriCalc; setCalc?: (planeId: string, c: TriCalc) => void; together?: boolean;
+}) {
   const W = 300, H = 170, padX = 18, padTop = 26, padBot = 40;
   const [drag, setDrag] = useState<{ id: string; x: number } | null>(null);
   const [selPl, setSelPl] = useState<string | null>(null);
@@ -424,8 +453,6 @@ export function InteractiveSection({ sec, apply }: { sec: CustomSection; apply: 
           <g key={p.id} className={`isec-pl${selPl === p.id ? ' on' : ''}`} onClick={() => setSelPl(selPl === p.id ? null : p.id)} data-testid={`isec-pl-${p.id}`}>
             <line x1={X(p.x0)} y1={Y(p.z0)} x2={X(p.x1)} y2={Y(p.z1)} className="r" />
             <line x1={X(p.x0)} y1={Y(p.z0)} x2={X(p.x1)} y2={Y(p.z1)} className="hit" />
-            {/* מנעול ליד הקצה שגובהו נשמר בשינוי שיפוע */}
-            <text x={X((p.fixed ?? p.start ?? 'x0') === 'x0' ? p.x0 : p.x1)} y={Y((p.fixed ?? p.start ?? 'x0') === 'x0' ? p.z0 : p.z1) + 11} className="t lock">🔒</text>
           </g>
         ))}
         {lines.map((l, i) => (
@@ -468,26 +495,20 @@ export function InteractiveSection({ sec, apply }: { sec: CustomSection; apply: 
       )}
       {selPl && (() => {
         const pl = sec.planes.find((q) => q.id === selPl);
-        if (!pl) return null;
+        const pd = pl && planeDims(sec, pl.id);
+        if (!pl || !pd) return null;
         const i = sec.planes.indexOf(pl);
-        const fixed = pl.fixed ?? pl.start ?? 'x0';
-        const slope = ((pl.z1 - pl.z0) / (pl.x1 - pl.x0)) * 100;
-        const setP = (patch: Partial<RoofPlaneDef>, label: string) => apply({ ...sec, template: undefined, planes: sec.planes.map((q) => (q.id === pl.id ? { ...q, ...patch } : q)) }, label);
-        const setSlope = (pct: number) => apply(setPlaneSlope(sec, pl.id, pct), 'שינוי שיפוע');
-        const lockBtn = (e: 'x0' | 'x1') => (
-          <button className={`lock-btn${fixed === e ? ' on' : ''}`} data-testid={`pl-lock-${e}`} title={fixed === e ? 'גובה זה נשמר כשמשנים שיפוע' : 'נעילת גובה זה'} onClick={() => setP({ fixed: e }, 'נעילת גובה')}>{fixed === e ? '🔒' : '🔓'}</button>
-        );
+        const pair = together ? gablePair(sec) : null;
         return (
           <div className="pl-card" data-testid="pl-card">
-            <div className="pl-card-h"><b>מישור גג {i + 1}</b><button className="icon-btn" onClick={() => setSelPl(null)}>✕</button></div>
-            <div className="pl-row"><label>שיפוע</label><NumField testId="plc-slope" value={Math.round(slope * 100) / 100} suffix="%" onCommit={setSlope} /></div>
-            <div className="pl-row"><label>גובה בצד שמאל</label><LenField testId="plc-z0" mm={pl.z0} unit="m" onCommit={(v) => apply(setPlaneEndZ(sec, pl.id, 'x0', v), 'שינוי גובה')} />{lockBtn('x0')}</div>
-            <div className="pl-row"><label>גובה בצד ימין</label><LenField testId="plc-z1" mm={pl.z1} unit="m" onCommit={(v) => apply(setPlaneEndZ(sec, pl.id, 'x1', v), 'שינוי גובה')} />{lockBtn('x1')}</div>
-            <div className="hint" style={{ margin: 0 }}>🔒 = הגובה שנשאר קבוע כשמשנים את השיפוע. שינוי גובה ישירות משנה את השיפוע.</div>
+            <div className="pl-card-h"><b>{pair ? 'גג דו-שיפועי (שני הצדדים)' : `מישור גג ${i + 1}`}</b><button className="icon-btn" onClick={() => setSelPl(null)}>✕</button></div>
+            <TriDims testId="plc" unit="m" col={pd.zLow} top={pd.zHigh} run={pd.run} calc={calcOf(pl.id)} onCalc={(c) => setCalc(pl.id, c)}
+              labels={pair ? { col: 'גובה עמודים (צירים קיצוניים)', top: 'גובה רכס' } : planeLabels(pd)}
+              onCommit={(v) => apply(pair ? setPlaneDims(setPlaneDims(sec, pair.a, v.col, v.top), pair.b, v.col, v.top) : setPlaneDims(sec, pl.id, v.col, v.top), 'מידות גג')} />
           </div>
         );
       })()}
-      <div className="hint" style={{ margin: '2px 4px' }}>לחץ על קו גג לשינוי שיפוע וגבהים (עם מנעול) · גרור ציר להזזה (Shift = דיוק 10 מ"מ) · לחץ על מידה כדי להקליד ערך (מטר)</div>
+      <div className="hint" style={{ margin: '2px 4px' }}>לחץ על קו גג לשינוי גובה עמוד / רכס / שיפוע · גרור ציר להזזה (Shift = דיוק 10 מ"מ) · לחץ על מידה כדי להקליד ערך (מטר)</div>
     </div>
   );
 }

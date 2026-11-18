@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultBuilding, newProject } from '../src/model/defaults';
 import { generate } from '../src/geometry/generate';
-import { SECTION_TEMPLATES, toCustomSection } from '../src/model/section';
+import { gablePair, planeDims, SECTION_TEMPLATES, setPlaneDims, setPlaneSlope, toCustomSection } from '../src/model/section';
 import { defaultKneeBraces } from '../src/geometry/knee';
 import { setSection } from '../src/commands/commands';
 
@@ -132,5 +132,50 @@ describe('מספר צירים', () => {
     const s2 = setAxisCount(sec, 2, 20000);
     const x2 = [...s2.lines].sort((a, b) => a.x - b.x).map((l) => l.x);
     expect(x2[1] - x2[0]).toBe(20000);
+  });
+});
+
+describe('מידות גג: גובה עמוד / גובה רכס / שיפוע (שניים מוזנים, השלישי מחושב)', () => {
+  const tpl = (id: string) => SECTION_TEMPLATES.find((t) => t.id === id)!.make();
+  it('דו-שיפועי: נקודות הייחוס = ציר העמוד והרכס (לא קצה הקונזולה); שינוי שיפוע שומר את גובה העמוד', () => {
+    const sec = tpl('gable-2');
+    const [p1] = [...sec.planes].sort((a, b) => a.x0 - b.x0);
+    const pd = planeDims(sec, p1.id)!;
+    expect(pd.highIsRidge).toBe(true);
+    expect(pd.lowLine).toBe(0);
+    expect(pd.xLow).toBe(Math.min(...sec.lines.map((l) => l.x)));
+    const s2 = setPlaneSlope(sec, p1.id, 15);
+    const pd2 = planeDims(s2, p1.id)!;
+    expect(pd2.zLow).toBeCloseTo(pd.zLow, 3);
+    expect(pd2.slopePct).toBeCloseTo(15, 3);
+    // הרכס נשאר מחובר: קצה המישור השני זז יחד
+    const q = s2.planes.find((x) => x.id !== p1.id)!, p = s2.planes.find((x) => x.id === p1.id)!;
+    expect(Math.abs(p.z1 - q.z0)).toBeLessThan(0.5);
+  });
+  it('קביעת גובה עמוד וגובה רכס ⇒ שיפוע; זוג סימטרי נערך יחד', () => {
+    const sec = tpl('gable-2');
+    const pair = gablePair(sec)!;
+    expect(pair).not.toBeNull();
+    expect(pair.symmetric).toBe(true);
+    let s = setPlaneDims(sec, pair.a, 5000, 6500);
+    s = setPlaneDims(s, pair.b, 5000, 6500);
+    const a = planeDims(s, pair.a)!, b = planeDims(s, pair.b)!;
+    expect(a.zLow).toBeCloseTo(5000, 3); expect(a.zHigh).toBeCloseTo(6500, 3);
+    expect(b.zLow).toBeCloseTo(5000, 3); expect(b.zHigh).toBeCloseTo(6500, 3);
+    expect(a.slopePct).toBeCloseTo((1500 / a.run) * 100, 3);
+    expect(gablePair(s)!.symmetric).toBe(true);
+    const p = newProject('t', defaultBuilding()); p.building.section = s;
+    const d = generate(p);
+    expect(d.issues.filter((i) => i.severity === 'error')).toEqual([]);
+  });
+  it('חד-שיפועי רב-צירי: עמוד נמוך ועמוד גבוה בצירים הקיצוניים', () => {
+    const sec = tpl('mono-multi');
+    const pd = planeDims(sec, sec.planes[0].id)!;
+    expect(pd.highIsRidge).toBe(false);
+    expect(pd.lowLine).toBe(0); expect(pd.highLine).toBe(sec.lines.length - 1);
+    const s = setPlaneDims(sec, sec.planes[0].id, 4000, 5600);
+    const pd2 = planeDims(s, sec.planes[0].id)!;
+    expect(pd2.zLow).toBeCloseTo(4000, 3); expect(pd2.zHigh).toBeCloseTo(5600, 3);
+    expect(pd2.slopePct).toBeCloseTo((1600 / 16000) * 100, 3);
   });
 });

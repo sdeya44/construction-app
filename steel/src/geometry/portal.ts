@@ -45,7 +45,9 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
   const X = v3(1, 0, 0), Z = v3(0, 0, 1);
   void Z;
   const hb = bp.props.h;
-  const zc = L.zTop - pp.gap - hb / 2, zBot = zc - hb / 2;
+  // הפוך (בקשת משתמש 18.11.2026): האלכסונים עולים מראש קורת האגד אל העמוד — הקורה יורדת ב-drop; gap = מתחת לקורה הראשית עד ראש האלכסון בעמוד
+  const inv = !!pp.invert;
+  const zc = L.zTop - pp.gap - (inv ? pp.drop : 0) - hb / 2, zBot = zc - hb / 2, zTopB = zc + hb / 2;
   const x = L.x;
   const nb = L.frames.length - 1;
   const portal = new Set(L.portalBays);
@@ -61,7 +63,7 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
     const key = `${bay + 1}.${L.side}`;
     const lab = portal.has(bay) ? `אגד B ציר ${L.label} מפתח ${bay + 1}` : `קורת אגד ציר ${L.label} מפתח ${bay + 1}`;
     const withDiag = portal.has(bay);
-    if (withDiag && zBot - pp.drop < L.zBase + 500) { out.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `${lab}: גובה לא מספיק לאגד B` }); continue; }
+    if (withDiag && (inv ? zBot : zBot - pp.drop) < L.zBase + 500) { out.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `${lab}: גובה לא מספיק לאגד B` }); continue; }
     const ya = Math.min(f0.y, f1.y) + tw / 2, yb = Math.max(f0.y, f1.y) - tw / 2; // פני הווב
     const c0 = `${f0.id}.COL.${L.side}`, c1 = `${f1.id}.COL.${L.side}`;
     const colA = f0.y < f1.y ? c0 : c1, colB = f0.y < f1.y ? c1 : c0;
@@ -79,16 +81,16 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
       out.connections.push({ id: e.cid, type: 'knee', label: e.label, members: [e.col, bid], parts: e.j.parts, bolts: e.j.bolts, welds: e.j.welds, status: 'not-verified', fixity: 'pinned', overridden: false });
     }
     if (!withDiag) continue;
-    // שני אלכסונים: מווב העמוד בגובה zBot−drop אל תחתית הקורה, בזווית מהאופק
+    // שני אלכסונים: מווב העמוד בגובה zBot−drop אל תחתית הקורה, בזווית מהאופק; הפוך — מראש הקורה עד zTop+drop בעמוד
     for (const [k, yF, sg, col] of [['1', ya, 1, colA], ['2', yb, -1, colB]] as const) {
       const kid = `${bid}.K${k}`;
       // הפחים לאלכסון: על ציר קורת האגד (x+T); הלשונית בצד השני — ציר האלכסון על ציר העמודים
-      const C0 = v3(x + T, yF, zBot - pp.drop), R0 = v3(x + T, yF + sg * reach, zBot);
+      const C0 = inv ? v3(x + T, yF, zTopB + pp.drop) : v3(x + T, yF, zBot - pp.drop), R0 = v3(x + T, yF + sg * reach, inv ? zTopB : zBot);
       const dir = norm(sub(R0, C0));
       const common = { ...base, desc: 'אלכסון אגד', memberId: kid, prof: kp, profile: pp.brace, bolts: pp.boltsPerEnd ?? 2, pn: X, side: -1 as const };
       const cidC = `C.BB.${key}.K${k}C`, cidB = `C.BB.${key}.K${k}B`;
       const jc = finJoint({ ...common, cid: cidC, hostId: col, P: C0, n: v3(0, sg, 0), d: dir });
-      const jb = finJoint({ ...common, cid: cidB, hostId: bid, P: R0, n: v3(0, 0, -1), d: v3(-dir.x, -dir.y, -dir.z) });
+      const jb = finJoint({ ...common, cid: cidB, hostId: bid, P: R0, n: v3(0, 0, inv ? 1 : -1), d: v3(-dir.x, -dir.y, -dir.z) });
       out.members.push({ id: kid, kind: 'brace', label: `${lab} — אלכסון`, start: jc.start, end: jb.start, profile: pp.brace, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: X, source: 'generated', manualPlacement: false, partDesc: `אלכסון אגד B ${pp.brace}` });
       for (const [cid, j, hostId, t] of [[cidC, jc, col, 'אלכסון לעמוד'], [cidB, jb, bid, 'אלכסון לקורה']] as const) {
         out.members.push(...j.members); out.issues.push(...j.issues);

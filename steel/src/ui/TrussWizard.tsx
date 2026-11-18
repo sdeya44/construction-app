@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { hasPanelLens, panelsOnFrames, patternCells, resizeSpec, TRUSS_GROUP_HE, TRUSS_PATTERNS, trussFractions, trussPanelLens, trussUtil } from '../geometry/truss';
+import { hasPanelLens, panelLocks, panelsOnFrames, patternCells, resizeSpec, setPanelLen, unlockPanel, TRUSS_GROUP_HE, TRUSS_PATTERNS, trussFractions, trussPanelLens, trussUtil } from '../geometry/truss';
 import type { TrussCell, TrussSpec } from '../model/types';
 import { massPerMeter, tryProfile } from '../profiles/library';
 import { ProfilePicker } from './fields';
@@ -50,14 +50,10 @@ export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId
     const cur = new Set(splices); if (cur.has(i)) cur.delete(i); else cur.add(i);
     set({ splice: [...cur].sort((a, b) => a - b) });
   };
-  /** שינוי אורך שדה i: השדות האחרים (שאינם נעולים) מתכווננים יחסית — סכום = מפתח */
-  const setLen = (i: number, v: number) => {
-    const lock = new Set([i, ...(sym ? [n - 1 - i] : [])]);
-    const val = Math.max(200, Math.min(v, (span - 200 * (n - lock.size)) / lock.size));
-    const rest = lens.reduce((a, L, j) => a + (lock.has(j) ? 0 : L), 0);
-    const k = rest > 0 ? (span - val * lock.size) / rest : 1;
-    set({ panelLens: lens.map((L, j) => Math.round(lock.has(j) ? val : L * k)) });
-  };
+  /** שינוי אורך שדה i: השדה ננעל באורך שהוזן; שדות שנקבעו ידנית נשארים; החופשיים מתחלקים שווה ביתרה */
+  const setLen = (i: number, v: number) => onChange(setPanelLen(spec, span, i, v));
+  const locks = panelLocks(spec);
+  const toggleLock = (i: number) => onChange(locks[i] ? unlockPanel(spec, span, i) : setPanelLen(spec, span, i, lens[i]));
   const util = useMemo(() => trussUtil(spec, span, loads), [spec, span, loads]);
   const uOf = (g: keyof TrussSpec['profiles']) => util.find((u) => u.group === g);
   // משקל משוער
@@ -73,13 +69,13 @@ export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId
     { a: [x1 + 3, yTop(n)], b: [x1 + 3, yBot(n)], off: -6, value: spec.depth, testId: `${testId}-depth`, min: 300, onCommit: (v) => set({ depth: Math.round(v) }) },
     ...(roof?.shape === 'scissor' && roof.ridge ? [{ a: [px(n / 2) + 4, yB], b: [px(n / 2) + 4, yBot(n / 2)], off: -6, value: roof.rise, text: `${Math.round(roof.rise)} (הגבהה)`, testId: `${testId}-rise`, min: 0, onCommit: (v: number) => roof.onRise(Math.round(v)) } as SDim] : []),
     // אורך כל שדה — לחיצה לעריכה (השאר מתאימים את עצמם כך שסכום = מפתח); ברכס — בחלוקה סימטרית בלבד
-    ...(n <= 16 ? lens.map((L, i) => ({ a: [px(i), yB + 14], b: [px(i + 1), yB + 14], off: 0, value: L, text: n > 10 ? `${(L / 1000).toFixed(1)}` : `${Math.round(L)}`, testId: `${testId}-pl-${i}`, min: 200, max: span - 200 * (n - 1), onCommit: (v: number) => setLen(i, v) } as SDim))
+    ...(n <= 16 ? lens.map((L, i) => ({ a: [px(i), yB + 14], b: [px(i + 1), yB + 14], off: 0, value: L, text: (n > 10 ? `${(L / 1000).toFixed(1)}` : `${Math.round(L)}`) + (locks[i] ? '*' : ''), testId: `${testId}-pl-${i}`, min: 200, max: span - 200 * (n - 1), onCommit: (v: number) => setLen(i, v) } as SDim))
       : [{ a: [px(0), yB + 14], b: [px(1), yB + 14], off: 0, value: lens[0], derived: true, text: `${Math.round(lens[0])} (שדה)` } as SDim]),
     { a: [px(0), yB + 26], b: [px(n), yB + 26], off: 0, value: span, derived: true, text: `${Math.round(span)} (מפתח)` },
   ];
   return (
     <div className="truss-wiz" data-testid={testId}>
-      <Schematic w={W} h={H} dims={dims} testId={`${testId}-sch`} caption="לחיצה על שדה: ╱ ╲ X ריק · על צומת תחתון: אנך · על ✂ בחגורה: חיבור המשך · על הגובה / אורך שדה ✎">
+      <Schematic w={W} h={H} dims={dims} testId={`${testId}-sch`} caption="לחיצה על שדה: ╱ ╲ X ריק · על צומת תחתון: אנך · על ✂ בחגורה: חיבור המשך · על הגובה / אורך שדה ✎ (* = שדה קבוע)">
         {/* שדות לחיצה */}
         {Array.from({ length: n }, (_, i) => (
           <polygon key={`c${i}`} points={`${px(i) + 1},${yTop(i) + 1} ${px(i + 1) - 1},${yTop(i + 1) + 1} ${px(i + 1) - 1},${yBot(i + 1) - 1} ${px(i) + 1},${yBot(i) - 1}`} className="tw-cell" data-testid={`${testId}-cell-${i}`} onClick={() => setCell(i)} />
@@ -125,9 +121,14 @@ export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId
         <span className="tw-lbl">שדות:</span>
         <button className="btn small" data-testid={`${testId}-n-`} onClick={() => n > 2 && onChange(resizeSpec(spec, n - 1))}>−</button><b data-testid={`${testId}-n`}>{n}</b>
         <button className="btn small" data-testid={`${testId}-n+`} onClick={() => onChange(resizeSpec(spec, n + 1))}>+</button>
-        <button className={`tbtn${!hasPanelLens(spec) ? ' on' : ''}`} data-testid={`${testId}-eq`} title="כל השדות באורך שווה" onClick={() => set({ panelLens: undefined })}>שדות שווים</button>
+        <button className={`tbtn${!hasPanelLens(spec) ? ' on' : ''}`} data-testid={`${testId}-eq`} title="כל השדות באורך שווה" onClick={() => set({ panelLens: undefined, lockedLens: undefined })}>שדות שווים</button>
         {frames && frames.length > 0 && <button className="tbtn" data-testid={`${testId}-onframes`} title="חלוקה כך שכל קורת גג יושבת על צומת" onClick={() => onChange(panelsOnFrames(spec, span, frames))}>צמתים על המסגרות</button>}
       </div>
+      <div className="tw-row" data-testid={`${testId}-locks`}>
+        <span className="tw-lbl">שדות קבועים:</span>
+        {lens.map((L, i) => <button key={i} className={`tbtn tw-lock${locks[i] ? ' on' : ''}`} data-testid={`${testId}-lock-${i}`} aria-pressed={locks[i]} title={locks[i] ? `שדה ${i + 1} קבוע (${Math.round(L)}) — לחיצה לשחרור` : `שדה ${i + 1} מתחלק אוטומטית — לחיצה לקיבוע באורך הנוכחי`} onClick={() => toggleLock(i)}>{i + 1}</button>)}
+      </div>
+      <div className="hint" style={{ margin: '0 0 4px' }}>אורך שדה שמוזן נקבע (מסומן); השדות שלא נקבעו מתחלקים שווה במה שנשאר. "שדות שווים" — מבטל את כל הקביעות.</div>
       <div className="tw-row">
         <span className="tw-lbl">חלוקה להובלה:</span>
         <select className="inp" data-testid={`${testId}-splice`} value={Array.isArray(spec.splice) ? 'manual' : spec.splice} onChange={(e) => set({ splice: e.target.value === 'manual' ? [] : (e.target.value as 'auto' | 'none') })}>

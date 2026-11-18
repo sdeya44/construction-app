@@ -44,7 +44,54 @@ export function defaultTrussSpec(panels: number, depth: number, profiles?: Parti
 export function resizeSpec(spec: TrussSpec, n: number): TrussSpec {
   const pat = spec.pattern && spec.pattern !== 'custom' ? spec.pattern : 'warren-v';
   const base = patternCells(pat, n);
-  return { ...spec, panels: n, cells: base.cells, verts: base.verts, splice: Array.isArray(spec.splice) ? spec.splice.filter((i) => i < n) : spec.splice, panelLens: undefined };
+  return { ...spec, panels: n, cells: base.cells, verts: base.verts, splice: Array.isArray(spec.splice) ? spec.splice.filter((i) => i < n) : spec.splice, panelLens: undefined, lockedLens: undefined };
+}
+
+/** שדות נעולים (נקבעו ידנית) — מערך באורך מספר השדות */
+export function panelLocks(spec: TrussSpec): boolean[] {
+  const n = Math.max(2, Math.round(spec.panels));
+  const L = spec.lockedLens;
+  return hasPanelLens(spec) && L && L.length === n ? L.map(Boolean) : Array(n).fill(false);
+}
+
+/**
+ * שינוי אורך שדה (בקשת משתמש 18.11.2026): השדה (ובסימטריה — גם המראה שלו) ננעל באורך שהוזן;
+ * שדות שנקבעו ידנית קודם נשארים; השדות החופשיים מתחלקים שווה ביתרה. אם לא נשאר שדה חופשי — שאר השדות משתחררים.
+ */
+export function setPanelLen(spec: TrussSpec, span: number, i: number, v: number): TrussSpec {
+  const n = Math.max(2, Math.round(spec.panels)), MIN = 200;
+  const sym = spec.symmetric ?? true;
+  const edit = new Set([i, ...(sym ? [n - 1 - i] : [])]);
+  const lens = trussPanelLens(spec, span);
+  let locks = panelLocks(spec).map((l, j) => l && !edit.has(j));
+  let free = lens.map((_, j) => j).filter((j) => !edit.has(j) && !locks[j]);
+  if (!free.length) { locks = locks.map(() => false); free = lens.map((_, j) => j).filter((j) => !edit.has(j)); }
+  const lockedSum = lens.reduce((a, L, j) => a + (locks[j] ? L : 0), 0);
+  const maxV = (span - lockedSum - MIN * free.length) / edit.size;
+  const val = Math.max(MIN, Math.min(v, maxV));
+  const rest = span - lockedSum - val * edit.size;
+  const each = free.length ? rest / free.length : 0;
+  const out = lens.map((L, j) => (edit.has(j) ? val : locks[j] ? L : each));
+  // עיגול למ"מ: השארית לשדה החופשי האחרון (הסכום = מפתח)
+  const r = out.map((x) => Math.round(x));
+  const diff = Math.round(span) - r.reduce((a, b) => a + b, 0);
+  if (diff && free.length) r[free[free.length - 1]] += diff;
+  return { ...spec, panelLens: r, lockedLens: lens.map((_, j) => edit.has(j) || locks[j]) };
+}
+
+/** שחרור שדה נעול (ובסימטריה — גם המראה): הוא והשדות החופשיים מתחלקים שווה ביתרה */
+export function unlockPanel(spec: TrussSpec, span: number, i: number): TrussSpec {
+  const n = Math.max(2, Math.round(spec.panels));
+  const sym = spec.symmetric ?? true;
+  const locks = panelLocks(spec).map((l, j) => l && j !== i && !(sym && j === n - 1 - i));
+  if (!locks.some(Boolean)) return { ...spec, panelLens: undefined, lockedLens: undefined };
+  const lens = trussPanelLens(spec, span);
+  const free = lens.map((_, j) => j).filter((j) => !locks[j]);
+  const rest = span - lens.reduce((a, L, j) => a + (locks[j] ? L : 0), 0);
+  const r = lens.map((L, j) => Math.round(locks[j] ? L : rest / free.length));
+  const diff = Math.round(span) - r.reduce((a, b) => a + b, 0);
+  if (diff) r[free[free.length - 1]] += diff;
+  return { ...spec, panelLens: r, lockedLens: locks };
 }
 
 /** האם יש חלוקת שדות לא אחידה תקפה */
@@ -83,7 +130,7 @@ export function panelsOnFrames(spec: TrussSpec, span: number, frameOffsets: numb
   const n = Math.max(2, lens.length);
   const base = lens.length === n ? lens : [lens[0] / 2, lens[0] / 2];
   const rs = n === Math.round(spec.panels) ? spec : resizeSpec(spec, n);
-  return { ...rs, panelLens: base };
+  return { ...rs, panelLens: base, lockedLens: undefined };
 }
 
 // ------------------------------------------------------------------ בונה כללי במישור המסבך

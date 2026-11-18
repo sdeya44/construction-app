@@ -10,35 +10,38 @@ import { S, Schematic, type SDim } from './Schematic';
 const rad = (a: number) => (a * Math.PI) / 180;
 
 /** אגד B: עמודים, קורה ראשית, קורת אגד ושני אלכסונים — מרווח, ירידה וזווית לעריכה על השרטוט */
-export function PortalSchematic() {
+export function PortalSchematic({ invert }: { invert?: boolean } = {}) {
   const br = useStore((s) => s.project.building.bracing);
   const frames = useStore((s) => s.project.building.frames);
   const p = br.walls.portal ?? defaultPortal();
+  const inv = invert ?? !!p.invert;
   const set = (patch: Partial<PortalBraceParams>) => store.exec(setBuilding({ bracing: { ...br, walls: { ...br.walls, portal: { ...p, ...patch } } } }));
   const fr = [...frames].sort((a, b) => a.y - b.y);
   const bay = fr.length > 1 ? fr[1].y - fr[0].y : 6000;
   const hb = tryProfile(p.beam)?.props.h ?? 100;
   const x0 = 24, x1 = 176, yTop = 16, yMain = 22;
   const gapV = 6 + Math.min(14, p.gap / 40), hbV = Math.max(3, Math.min(8, hb / 25));
-  const yBt = yMain + gapV, yBb = yBt + hbV;
   const dropV = Math.max(14, Math.min(40, p.drop / 25));
   const dx = dropV / Math.tan(rad(p.angle));
-  const yC = yBb + dropV;
+  // רגיל: קורה מתחת לקורה הראשית, אלכסונים יורדים לעמוד · הפוך: ראש האלכסון בעמוד מתחת לקורה הראשית, הקורה נמוכה ממנו ב-drop
+  const yBt = yMain + gapV + (inv ? dropV : 0), yBb = yBt + hbV;
+  const yC = inv ? yBt - dropV : yBb + dropV;
+  const yR = inv ? yBt : yBb;
   const dims: SDim[] = [
-    { a: [x1 + 2, yMain], b: [x1 + 2, yBt], off: -8, value: p.gap, unit: '', testId: 'sch-pb-gap', onCommit: (v) => set({ gap: Math.max(0, v) }) },
-    { a: [x0 - 2, yBb], b: [x0 - 2, yC], off: 8, value: p.drop, testId: 'sch-pb-drop', min: 200, onCommit: (v) => set({ drop: Math.max(200, v) }) },
-    { a: [0, 0], b: [0, 0], off: 0, value: p.angle, unit: '°', labelOnly: true, at: [x0 + dx * 0.55 + 9, yC - dropV * 0.45], testId: 'sch-pb-angle', min: 20, max: 70, onCommit: (v) => set({ angle: v }) },
+    { a: [x1 + 2, yMain], b: [x1 + 2, inv ? yC : yBt], off: -8, value: p.gap, unit: '', testId: 'sch-pb-gap', onCommit: (v) => set({ gap: Math.max(0, v) }) },
+    { a: [x0 - 2, yR], b: [x0 - 2, yC], off: 8, value: p.drop, testId: 'sch-pb-drop', min: 200, onCommit: (v) => set({ drop: Math.max(200, v) }) },
+    { a: [0, 0], b: [0, 0], off: 0, value: p.angle, unit: '°', labelOnly: true, at: [x0 + dx * 0.55 + 9, inv ? yC + dropV * 0.45 + 4 : yC - dropV * 0.45], testId: 'sch-pb-angle', min: 20, max: 70, onCommit: (v) => set({ angle: v }) },
     { a: [x0, 108], b: [x1, 108], off: 0, value: bay, derived: true, text: `${Math.round(bay)} (מפתח)` },
   ];
   return (
-    <Schematic w={200} h={118} dims={dims} testId="sch-portal" caption="לחיצה על מידה מסומנת ✎ לשינוי · חל על כל אגדי B בפרויקט">
+    <Schematic w={200} h={118} dims={dims} testId="sch-portal" caption={`לחיצה על מידה מסומנת ✎ לשינוי · חל על כל אגדי B בפרויקט${inv ? ' · הפוך: אלכסונים עולים' : ''}`}>
       {S.bar([x0, yTop], [x0, 104])}{S.bar([x1, yTop], [x1, 104])}
       {S.bar([x0 - 6, yMain - 3], [x1 + 6, yMain - 3], 'sm-main', 5)}
       {S.text([100, yMain - 8], 'קורה ראשית / ראש עמוד', 'sm-lbl-s')}
       <rect x={x0 + 1.5} y={yBt} width={x1 - x0 - 3} height={yBb - yBt} className="sm-plate" />
       {S.text([100, yBt + (yBb - yBt) / 2], `קורת אגד ${p.beam}`, 'sm-lbl')}
-      {S.bar([x0 + 1.5, yC], [x0 + 1.5 + dx, yBb], 'sm-hi', 2.2)}{S.bar([x1 - 1.5, yC], [x1 - 1.5 - dx, yBb], 'sm-hi', 2.2)}
-      {S.text([x1 - dx - 10, yC - dropV * 0.4], `אלכסון ${p.brace}`, 'sm-lbl-s', 'end')}
+      {S.bar([x0 + 1.5, yC], [x0 + 1.5 + dx, yR], 'sm-hi', 2.2)}{S.bar([x1 - 1.5, yC], [x1 - 1.5 - dx, yR], 'sm-hi', 2.2)}
+      <g data-testid={inv ? 'sch-pb-up' : 'sch-pb-down'}>{S.text([x1 - dx - 10, inv ? yC + dropV * 0.6 : yC - dropV * 0.4], `אלכסון ${p.brace}`, 'sm-lbl-s', 'end')}</g>
     </Schematic>
   );
 }

@@ -15,6 +15,7 @@ import { generate } from '../geometry/generate';
 import { massPerMeter, tryProfile } from '../profiles/library';
 import { getMaterial } from '../profiles/materials';
 import { SectionPreview } from './SectionEditor';
+import { ClassicRoofDims } from './TriDims';
 import { defaultKneeBraces } from '../geometry/knee';
 import { applySizingSuggestion } from '../commands/commands';
 import { backupDownload } from '../persist/fileLink';
@@ -171,12 +172,8 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
             <div className="field"><label>מרווח מסגרות</label><LenField testId="np-bay" mm={bay} unit={u} onCommit={(v) => { if (v > 0) setCount(Math.max(2, Math.round(length / v) + 1)); }} /></div>
             {tpl ? <div className="hint">{tpl.desc}. צירים, גבהים, קונזולות ושיפועים של תבנית — נערכים אחרי היצירה במבנה ← צירים, מסגרות וגבהים (כולל גרירה בתצוגה), או בגיליון הפרמטרים.</div> : <>
               <div className="field"><label>רוחב</label><LenField testId="np-width" mm={b.width} unit={u} onCommit={(v) => set(b.roofType === 'gable' ? { width: v, ridgeX: v / 2 } : { width: v })} /></div>
-              <div className="field"><label>גובה ציר א (שמאל)</label><LenField testId="np-eaveL" mm={b.eaveLeft} unit={u} onCommit={(v) => set(b.roofType === 'gable' && b.eaveLeft === b.eaveRight ? { eaveLeft: v, eaveRight: v } : { eaveLeft: v })} /></div>
-              <div className="field"><label>גובה ציר ב (ימין)</label><LenField testId="np-eaveR" mm={b.eaveRight} unit={u} onCommit={(v) => set({ eaveRight: v })} /></div>
-              {b.roofType === 'gable' && <>
-                <div className="field"><label>מיקום רכס</label><LenField mm={b.ridgeX} unit={u} onCommit={(v) => set({ ridgeX: v })} /></div>
-                <div className="field"><label>שיפוע שמאל</label><NumField testId="np-slope" value={b.slopeLeftPct} suffix="%" onCommit={(v) => set({ slopeLeftPct: v })} /></div>
-              </>}
+              {b.roofType === 'gable' && <div className="field"><label>מיקום רכס מציר א</label><LenField testId="np-ridgeX" mm={b.ridgeX} unit={u} onCommit={(v) => set({ ridgeX: v })} /></div>}
+              <ClassicRoofDims b={b} unit={u} set={set} testId="np-tri" ids={{ col: 'np-eaveL', top: b.roofType === 'gable' ? 'np-ridge' : 'np-eaveR', slope: 'np-slope', right: 'np-eaveR' }} />
             </>}
             <div className="hint">מרווחים לא אחידים ומפלס תחתית שונה לכל ציר — אחרי היצירה, בטבלת הצירים והמסגרות.</div>
           </>}

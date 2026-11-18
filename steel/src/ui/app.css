@@ -485,13 +485,17 @@ select.inp { padding: 0 6px; }
 .isec-pl .hit { stroke: transparent; stroke-width: 9; }
 .isec-pl.on .r { stroke: var(--brand); stroke-width: 3.2; }
 .isec-pl:hover .r { stroke: var(--brand); }
-.isec .t.lock { font-size: 8px; text-anchor: middle; }
 .pl-card { border: 1px solid var(--brand); border-radius: 8px; padding: 8px; margin: 6px 0; background: var(--brand-soft); }
 .pl-card-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .pl-row { display: grid; grid-template-columns: 1fr 120px 30px; gap: 6px; align-items: center; margin: 3px 0; font-size: 12.5px; }
 .pl-row:first-of-type { grid-template-columns: 1fr 120px 30px; }
-.lock-btn { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; cursor: pointer; height: 26px; }
-.lock-btn.on { border-color: var(--brand); background: #fff; }
+.tri { display: flex; flex-direction: column; gap: 4px; }
+.tri-row { display: grid; grid-template-columns: minmax(0, 1fr) 112px 76px; gap: 6px; align-items: center; font-size: 12.5px; }
+.tri-row.calc label { font-weight: 600; }
+.tri-out { background: var(--panel-2); border: 1px dashed var(--line-strong); border-radius: 6px; padding: 5px 8px; direction: ltr; text-align: right; font-family: var(--mono); }
+.tri-calc { height: 28px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+.tri-calc:hover { border-color: var(--brand); color: var(--brand); }
+.tri-calc.on { background: var(--brand-soft); color: var(--brand); border-color: var(--brand); font-weight: 600; }
 
 .choice2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 10px; }
 .choice-tile { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 6px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); cursor: pointer; text-align: center; }
@@ -619,6 +623,8 @@ select.inp { padding: 0 6px; }
 .truss-wiz .tw-spl.on text { fill: #b00020; }
 .truss-wiz .tw-spl-line { stroke: #b00020; stroke-width: 0.7; stroke-dasharray: 1.5 1; }
 .tw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0; font-size: 12px; }
+.tw-lock { height: 26px; min-width: 26px; padding: 0 6px; border-color: var(--line); font-variant-numeric: tabular-nums; }
+.tw-lock.on { border-color: var(--brand); font-weight: 700; }
 .tw-lbl { color: #555; margin-inline-start: 4px; }
 .tw-sw { display: inline-block; width: 10px; height: 3px; margin-inline-end: 4px; vertical-align: middle; }
 .tw-prof .prof-pick { min-width: 0; }

@@ -92,7 +92,7 @@ test('USE-05: הודעות מקובצות — הסתרת סוג, תקן הכל, 
   await expect(page.getByTestId('igroup-RAFTER_EXT')).toBeVisible();
 });
 
-test('USE-06: חתך אינטראקטיבי — מספר צירים, בחירת מישור, שיפוע עם מנעול גובה', async ({ page }) => {
+test('USE-06: חתך אינטראקטיבי — מספר צירים, בחירת מישור; גובה עמוד / רכס / שיפוע — שניים מוזנים, השלישי מחושב', async ({ page }) => {
   await boot(page);
   page.on('dialog', (d) => d.accept());
   await page.getByTestId('nav-s:geometry').click();
@@ -101,16 +101,56 @@ test('USE-06: חתך אינטראקטיבי — מספר צירים, בחירת 
   const sec = () => page.evaluate(() => (window as any).__ksp.store.state.project.building.section);
   expect((await sec()).lines.length).toBe(4);
   const pid = (await sec()).planes[0].id;
+  // גובה ב-x (פני עליון) של המישור
+  const zAt = (pl: any, x: number) => pl.z0 + ((pl.z1 - pl.z0) * (x - pl.x0)) / (pl.x1 - pl.x0);
+  const xs = async () => (await sec()).lines.map((l: any) => l.x).sort((a: number, b: number) => a - b);
   await page.getByTestId(`isec-pl-${pid}`).click();
   await expect(page.getByTestId('pl-card')).toBeVisible();
-  // נעילת הגובה הימני, ושינוי שיפוע — הגובה הימני לא משתנה
-  const z1 = (await sec()).planes[0].z1;
-  await page.getByTestId('pl-lock-x1').click();
+  await expect(page.locator('[data-testid="pl-card"] .lock-btn')).toHaveCount(0);
+  // ברירת מחדל: הגובה הגבוה מחושב — שינוי שיפוע שומר את גובה העמוד הנמוך
+  await expect(page.getByTestId('plc-calc-top')).toHaveAttribute('aria-checked', 'true');
+  const [xa] = await xs(); const xd = (await xs())[3];
+  const zA = zAt((await sec()).planes[0], xa);
   await page.getByTestId('plc-slope').fill('8'); await page.getByTestId('plc-slope').press('Enter');
-  const p0 = (await sec()).planes[0];
-  expect(p0.z1).toBe(z1);
-  expect(Math.abs(((p0.z1 - p0.z0) / (p0.x1 - p0.x0)) * 100 - 8)).toBeLessThan(0.05);
-  await shot(page, 'USE-06_plane_lock');
+  let p0 = (await sec()).planes[0];
+  expect(Math.abs(zAt(p0, xa) - zA)).toBeLessThan(0.5);
+  expect(Math.abs(((p0.z1 - p0.z0) / (p0.x1 - p0.x0)) * 100 - 8)).toBeLessThan(0.01);
+  // גובה עמוד + גובה עמוד גבוה ⇒ שיפוע מחושב
+  await page.getByTestId('plc-calc-slope').click();
+  await page.getByTestId('plc-col').fill('5'); await page.getByTestId('plc-col').press('Enter');
+  await page.getByTestId('plc-top').fill('6.6'); await page.getByTestId('plc-top').press('Enter');
+  p0 = (await sec()).planes[0];
+  expect(Math.abs(zAt(p0, xa) - 5000)).toBeLessThan(0.5);
+  expect(Math.abs(zAt(p0, xd) - 6600)).toBeLessThan(0.5);
+  await expect(page.getByTestId('plc-slope-out')).toContainText(((1600 / (xd - xa)) * 100).toFixed(2));
+  // גובה עמוד מחושב: שיפוע + גובה גבוה
+  await page.getByTestId('plc-calc-col').click();
+  await page.getByTestId('plc-slope').fill('5'); await page.getByTestId('plc-slope').press('Enter');
+  p0 = (await sec()).planes[0];
+  expect(Math.abs(zAt(p0, xd) - 6600)).toBeLessThan(0.5);
+  expect(Math.abs(zAt(p0, xa) - (6600 - 0.05 * (xd - xa)))).toBeLessThan(0.5);
+  await shot(page, 'USE-06_roof_dims');
+});
+
+test('USE-06b: דו-שיפועי סימטרי — גובה עמודים וגובה רכס בכרטיס אחד, שני הצדדים זהים', async ({ page }) => {
+  await boot(page);
+  page.on('dialog', (d) => d.accept());
+  await page.getByTestId('nav-s:geometry').click();
+  await page.getByTestId('tpl-gable-2').click();
+  await expect(page.getByTestId('sec-plane-gable')).toBeVisible();
+  await page.getByTestId('tri-gable-calc-slope').click();
+  await page.getByTestId('tri-gable-col').fill('5.5'); await page.getByTestId('tri-gable-col').press('Enter');
+  await page.getByTestId('tri-gable-top').fill('7'); await page.getByTestId('tri-gable-top').press('Enter');
+  const s = await page.evaluate(() => (window as any).__ksp.store.state.project.building.section);
+  const xs = s.lines.map((l: any) => l.x).sort((a: number, b: number) => a - b);
+  const zAt = (pl: any, x: number) => pl.z0 + ((pl.z1 - pl.z0) * (x - pl.x0)) / (pl.x1 - pl.x0);
+  const [L, R] = [...s.planes].sort((a: any, b: any) => a.x0 - b.x0);
+  expect(Math.abs(zAt(L, xs[0]) - 5500)).toBeLessThan(0.5);
+  expect(Math.abs(zAt(R, xs[xs.length - 1]) - 5500)).toBeLessThan(0.5);
+  expect(Math.abs(L.z1 - 7000)).toBeLessThan(0.5); expect(Math.abs(R.z0 - 7000)).toBeLessThan(0.5);
+  const err = await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.severity === 'error').length);
+  expect(err).toBe(0);
+  await shot(page, 'USE-06b_gable_dims');
 });
 
 test('USE-07: עריכה על המודל — שיפוע, גובה עמודים ומרווח פטות בלחיצה על המידה; חלונית הגדרות מאלמנט', async ({ page }) => {
@@ -140,4 +180,22 @@ test('USE-07: עריכה על המודל — שיפוע, גובה עמודים �
   await page.evaluate(() => { const k = (window as any).__ksp; const c = k.store.state.derived.members.find((m: any) => m.kind === 'cleat'); k.store.select([c.id]); });
   await expect(page.getByTestId('hub-settings')).toBeVisible();
   await shot(page, 'USE-07_quick');
+});
+
+test('USE-19: אגד B הפוך — האלכסונים עולים מקורת האגד אל העמוד', async ({ page }) => {
+  await boot(page);
+  await page.getByTestId('nav-b:walls').click();
+  await page.getByTestId('br-walls-portal').click();
+  await page.getByTestId('pb-dir-up').click();
+  const r = await page.evaluate(() => {
+    const k = (window as any).__ksp.store.state;
+    const ks = k.derived.members.filter((m: any) => /^BB\..*\.K[12]$/.test(m.id));
+    return { inv: k.project.building.bracing.walls.portal.invert, n: ks.length, up: ks.every((m: any) => m.start.z > m.end.z), err: k.derived.issues.filter((i: any) => i.severity === 'error').length };
+  });
+  expect(r.inv).toBe(true);
+  expect(r.n).toBeGreaterThan(0);
+  expect(r.up).toBe(true);
+  expect(r.err).toBe(0);
+  await expect(page.getByTestId('sch-pb-up')).toBeVisible();
+  await shot(page, 'USE-19_portal_up');
 });
