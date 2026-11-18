@@ -808,3 +808,12 @@ details.adv .adv-body { padding-bottom: 6px; }
 .asm-pic .asm-thin { stroke: #6b7c74; stroke-width: 0.8; fill: rgba(120, 130, 125, 0.18); }
 .asm-pic .asm-hi { stroke: #e0662c; stroke-width: 2; fill: rgba(224, 102, 44, 0.25); }
 .dialog.wide { width: min(980px, 96vw); }
+
+/* פאנל האלמנט — סעיפים מתקפלים */
+.psec { border-top: 1px solid var(--line); margin-top: 8px; }
+.psec > summary { cursor: pointer; font-weight: 600; font-size: 13.5px; padding: 8px 2px; list-style: none; display: flex; align-items: center; gap: 6px; }
+.psec > summary::-webkit-details-marker { display: none; }
+.psec > summary::before { content: '◂'; color: var(--muted, #7a8a83); font-size: 11px; transition: transform .15s; }
+.psec[open] > summary::before { transform: rotate(-90deg); }
+.psec-b { padding: 0 2px 6px; }
+.psec .hub-set { margin-top: 6px; }

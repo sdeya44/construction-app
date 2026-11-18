@@ -22,6 +22,7 @@ test('KB-02: אלכסוני עמוד-קורה — הגדרה לכל צד: ביט
 test('HUB-01: לחיצה על עמוד — חתך (סוג ← מידה) עם היקף "כל העמודים" + הגדרות הגיאומטריה באותו פאנל', async ({ page }) => {
   await boot(page);
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
+  await page.getByTestId('psec-general').click(); // הגדרות הגיאומטריה — סעיף מקופל באותו פאנל
   await expect(page.getByTestId('hub-settings')).toBeVisible();
   await page.getByTestId('scope-all').click();
   await page.getByTestId('prop-profile-family').selectOption('HEB');

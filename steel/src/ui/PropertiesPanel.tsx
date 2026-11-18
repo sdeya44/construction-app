@@ -1,5 +1,5 @@
 import { settingsOf } from './navIndex';
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { resetOverrides, setBuilding, setKneeBraces, setMemberProps, type Command } from '../commands/commands';
 import { useFab } from '../fab/useFab';
 import { fromMm } from '../core/units';
@@ -13,7 +13,7 @@ import { KIND_LABEL, kindLabelOf } from './TreePanel';
 import { SpliceEditor } from './SpliceEditor';
 import { ConnectionEditor, MemberConnections } from './ConnectionEditor';
 import { NavContent, type NavKey } from './SideNav';
-import { AssemblyCard, assemblyOf } from './AssemblyCard';
+import { AssemblyCard, AssemblyConn, AssemblyShape, assemblyOf, type AsmScope } from './AssemblyCard';
 import { GutterWizard } from './CladdingPanel';
 import { trussFrames } from '../geometry/truss';
 import { CleatHubCtx, CleatTypePicker, EndTypePicker } from './ConnTypePicker';
@@ -29,10 +29,8 @@ export function PropertiesPanel() {
   return <PropertiesInner />;
 }
 
-let lastTab: 'basic' | 'conns' | 'adv' = 'basic';
 function PropertiesInner() {
-  const [ptab, setPtabS] = useState(lastTab);
-  const setPtab = (t: typeof lastTab) => { lastTab = t; setPtabS(t); };
+  const [scope, setScope] = useState<AsmScope>('line');
   const fab = useFab().fab;
   const sel = useStore((s) => s.selection);
   const d = useStore((s) => s.derived);
@@ -100,25 +98,26 @@ function PropertiesInner() {
   const conns = d.connections.filter((c) => c.members.includes(m.id) || c.parts.includes(m.id)).length;
   const mark = fab.parts.find((x) => x.memberId === m.id)?.mark;
   const plateLike = m.kind === 'plate' || m.kind === 'cleat' || m.kind === 'bolt' || m.kind === 'anchor';
+  const asm = assemblyOf(m, d);
+  const fam = asm && asm.family !== 'frame' ? asm : null;
+  const custom = plateLike && m.connId?.startsWith('C.CD.') ? d.connById.get(m.connId)?.custom : undefined;
   return (
     <div className="panel-body" data-testid="props-single">
       <div className="el-head">
         <div className="k">{kindLabelOf(m)}{frameNo > 0 ? ` · מסגרת ${frameNo}` : ''}{m.side ? ` · ${m.side === 'L' ? 'שמאל' : 'ימין'}` : ''} <span className={`badge ${m.source === 'manual' ? 'warn' : 'blue'}`}>{m.source === 'manual' ? 'ידני' : 'פרמטרי'}</span></div>
         <div className="t"><b>{mark ?? m.label}</b><span className="mono" data-testid="prop-id">{m.id}</span></div>
       </div>
-      <div className="ptabs" role="tablist">
-        <button role="tab" className={ptab === 'basic' ? 'on' : ''} onClick={() => setPtab('basic')} data-testid="ptab-basic">בסיסי</button>
-        <button role="tab" className={ptab === 'conns' ? 'on' : ''} onClick={() => setPtab('conns')} data-testid="ptab-conns">חיבורים{conns ? ` ${conns}` : ''}</button>
-        <button role="tab" className={ptab === 'adv' ? 'on' : ''} onClick={() => setPtab('adv')} data-testid="ptab-adv">מתקדם</button>
-      </div>
-      {ptab === 'basic' && <>
-        <AssemblyCard m={m} />
-        {plateLike && m.kind !== 'cleat' && m.connId && (d.connById.get(m.connId)?.type === 'purlin-cleat' || d.connById.get(m.connId)?.custom?.site.includes('|x:')) && <div className="hub-set"><CleatTypePicker connId={m.connId} /></div>}
-        {plateLike && m.connId?.startsWith('C.CD.') && d.connById.get(m.connId)?.custom && (
-          <div className="hub-set"><div className="hub-set-h">פרט מותאם: {p.customDetails?.find((x) => x.id === d.connById.get(m.connId!)!.custom!.detailId)?.name}</div>
-            <button className="btn primary" data-testid="open-studio-part" onClick={() => store.set({ detailStudio: d.connById.get(m.connId!)!.custom!.site })}>פתח בסטודיו פרטים</button></div>
-        )}
-        {plateLike && !m.connId?.startsWith('C.CD.') && <HubSettings m={m} />}
+      {/* 1 — המכלול: שם ותמונה */}
+      <AssemblyCard m={m} />
+      {m.manualPlacement && m.source === 'generated' && (
+        <div className={`issue ${stale ? 'warning' : ''}`} style={{ marginTop: 6 }}>
+          <span className="ic">!</span>
+          <div>{stale ? 'מיקום ידני שאינו תקף עוד לאחר שינוי פרמטרי.' : 'האלמנט הוזז ידנית ואינו עוקב אחר הפרמטרים.'}
+            <div><button className="btn small" style={{ marginTop: 4 }} onClick={() => store.exec(resetOverrides([m.id]))}>החזר לפרמטרי</button></div></div>
+        </div>
+      )}
+      {/* 2 — חתך וחומר: בוחר חתך אחד בלבד, עם היקף */}
+      <PSec id="prof" title={plateLike ? 'חלק וחומר' : 'חתך וחומר'} testId="psec-prof">
         {pr && !plateLike && (
           <div className="sec-card">
             <SectionShape outline={pr.outline.outer} />
@@ -130,13 +129,6 @@ function PropertiesInner() {
           </div>
         )}
         {m.partDesc && <div className="hint" style={{ marginTop: 0 }}>{m.partDesc}</div>}
-        {m.manualPlacement && m.source === 'generated' && (
-          <div className={`issue ${stale ? 'warning' : ''}`} style={{ marginTop: 6 }}>
-            <span className="ic">!</span>
-            <div>{stale ? 'מיקום ידני שאינו תקף עוד לאחר שינוי פרמטרי.' : 'האלמנט הוזז ידנית ואינו עוקב אחר הפרמטרים.'}
-              <div><button className="btn small" style={{ marginTop: 4 }} onClick={() => store.exec(resetOverrides([m.id]))}>החזר לפרמטרי</button></div></div>
-          </div>
-        )}
         {!plateLike && <ProfileScope m={m} />}
         <div className="field"><label>חומר</label>
           <select className="inp" value={m.material} onChange={(e) => store.exec(setMemberProps([m.id], { material: e.target.value }))}>
@@ -149,7 +141,7 @@ function PropertiesInner() {
               <option value="0">לפי הגדרת הצד</option><option value="1">הפוך מהגדרת הצד</option>
             </select>
           </div>
-        ) : (
+        ) : !plateLike && (
           <div className="field"><label>היפוך חתך</label>
             <select className="inp" value={m.mirror ? '1' : '0'} onChange={(e) => store.exec(setMemberProps([m.id], { mirror: e.target.value === '1' }))}>
               <option value="0">רגיל</option><option value="1">הפוך</option>
@@ -166,18 +158,28 @@ function PropertiesInner() {
           <dt>סימון חלק</dt><dd>{mark ?? '—'}</dd>
         </dl>
         {m.purlin && <PurlinInfoBlock id={m.id} />}
+      </PSec>
+      {/* 3 — צורה ומידות של המכלול */}
+      {fam && <PSec id="shape" title={`צורה ומידות — ${fam.title.split(' — ')[0]}`} testId="psec-shape"><div data-testid="hub-settings"><AssemblyShape asm={fam} scope={scope} setScope={setScope} /></div></PSec>}
+      {/* 4 — חיבורים: סוג חיבור בכל קצה + פרטי החיבור + רשימה */}
+      <PSec id="conns" title={`חיבורים${conns ? ` (${conns})` : ''}`} testId="ptab-conns">
+        {!plateLike && <DetailEnds m={m} />}
+        {fam && <AssemblyConn asm={fam} scope={scope} />}
+        {plateLike && m.kind !== 'cleat' && m.connId && (d.connById.get(m.connId)?.type === 'purlin-cleat' || d.connById.get(m.connId)?.custom?.site.includes('|x:')) && <div className="hub-set"><CleatTypePicker connId={m.connId} /></div>}
         {m.purlin && <div className="hub-set"><CleatTypePicker side={m.purlin.paramKey ?? (m.purlin.side === 'R' ? 'right' : 'left')} /></div>}
-        <div className="hint">שינוי חל מיד · Ctrl+Z לביטול</div>
-        {!plateLike && <DetailEnds m={m} />}
-        {!plateLike && !['lock', 'portal', 'wallx', 'roofx', 'knee', 'gutter', 'haunch'].includes(assemblyOf(m, d)?.family ?? '') && <HubSettings m={m} />}
-      </>}
-      {ptab === 'conns' && <>
-        {!plateLike && <DetailEnds m={m} />}
+        {custom && (
+          <div className="hub-set"><div className="hub-set-h">פרט מותאם: {p.customDetails?.find((x) => x.id === custom.detailId)?.name}</div>
+            <button className="btn primary" data-testid="open-studio-part" onClick={() => store.set({ detailStudio: custom.site })}>פתח בסטודיו פרטים</button></div>
+        )}
+        {plateLike && !custom && <HubSettings m={m} />}
         <MemberConnections memberId={m.id} />
         {!conns && <div className="hint">אין חיבורים לאלמנט זה.</div>}
         {m.kind !== 'bolt' && <SpliceEditor m={m} />}
-      </>}
-      {ptab === 'adv' && <>
+      </PSec>
+      {/* 5 — הגדרות כלליות של המבנה (עמוד/קורה/פטה): מקופל */}
+      {!plateLike && !fam && <PSec id="general" title="הגדרות כלליות (לכל המבנה)" testId="psec-general" closed><HubSettings m={m} /></PSec>}
+      {/* 6 — מתקדם */}
+      <PSec id="adv" title="מתקדם — סיבוב, קואורדינטות, תכונות חתך" testId="ptab-adv" closed>
         <div className="field"><label>סיבוב סביב הציר</label><NumField value={m.rollDeg} suffix="°" onCommit={(v) => store.exec(setMemberProps([m.id], { rollDeg: v }))} /></div>
         <div className="panel-title">גיאומטריה</div>
         <dl className="kv">
@@ -189,7 +191,7 @@ function PropertiesInner() {
           <dt>חיתוך סוף</dt><dd>{m.endCut ? 'מישורי' : 'ניצב'}</dd>
         </dl>
         {pr && <>
-          <div className="panel-title">תכונות חתך {pr.verified ? <span className="badge ok" title={pr.source} data-testid="prof-verified">מאומת</span> : <span className="badge warn" title={pr.source}>לא מאומת</span>}</div>
+          <div className="panel-title">תכונות חתך {pr.verified ? <span className="badge ok" title={pr.source} data-testid="prof-verified-adv">מאומת</span> : <span className="badge warn" title={pr.source}>לא מאומת</span>}</div>
           <dl className="kv">
             <dt>h × b</dt><dd>{f1(pr.props.h)} × {f1(pr.props.b)} מ"מ</dd>
             <dt>A</dt><dd>{f1(pr.props.area / 100, 2)} ס"מ²</dd>
@@ -201,8 +203,22 @@ function PropertiesInner() {
           </dl>
           <div className="hint">{pr.verified ? `מקור: ${pr.source}.` : `מחושב מגיאומטריית החתך. ${pr.note ?? ''} אסור לשימוש בחישובי חוזק עד ייבוא קטלוג מאומת.`}</div>
         </>}
-      </>}
+      </PSec>
+      <div className="hint">שינוי חל מיד · Ctrl+Z לביטול</div>
     </div>
+  );
+}
+
+/** סעיף מתקפל בפאנל האלמנט; המצב (פתוח/סגור) נשמר */
+function PSec({ id, title, testId, closed, children }: { id: string; title: string; testId?: string; closed?: boolean; children: ReactNode }) {
+  const key = `ksp-psec-${id}`;
+  let open = !closed;
+  try { const v = localStorage.getItem(key); if (v !== null) open = v === '1'; } catch { /* */ }
+  return (
+    <details className="psec" open={open || undefined} onToggle={(e) => { try { localStorage.setItem(key, (e.currentTarget as HTMLDetailsElement).open ? '1' : '0'); } catch { /* */ } }}>
+      <summary data-testid={testId}>{title}</summary>
+      <div className="psec-b">{children}</div>
+    </details>
   );
 }
 

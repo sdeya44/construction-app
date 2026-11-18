@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { setBuilding } from '../commands/commands';
 import type { DerivedModel, Member } from '../model/types';
 import { store, useStore } from '../store';
 import { cachedSolid } from '../view/scene';
 import { HaunchEditor } from './SectionEditor';
 import { GutterSchematic } from './CladdingPanel';
-import { BracePanel, LockTrussFields, PortalFields } from './StructurePanel';
+import { LockTrussFields, PortalFields, RoofXConn, RoofXShape, WallXShape, XConnFields } from './StructurePanel';
+import { KneeEditor } from './SectionEditor';
+import { EditCtx } from './fields';
 import { defaultPortal } from '../geometry/portal';
 import { defaultLockTruss } from '../geometry/lockTruss';
 
@@ -129,16 +131,13 @@ function WallTypeSwitch({ asm, scope }: { asm: Asm; scope: 'line' | 'all' }) {
   );
 }
 
-let lastScope: 'line' | 'all' = 'line';
+export type AsmScope = 'line' | 'all';
+
+/** ראש המכלול: שם, תמונה, בחירה/בידוד */
 export function AssemblyCard({ m }: { m: Member }) {
   const d = useStore((s) => s.derived);
   const asm = useMemo(() => assemblyOf(m, d), [m, d]);
-  const br = useStore((s) => s.project.building.bracing);
-  const [scope, setScopeS] = useState(lastScope);
   if (!asm) return null;
-  const setScope = (v: 'line' | 'all') => { lastScope = v; setScopeS(v); };
-  const wallFam = asm.family === 'lock' || asm.family === 'portal' || asm.family === 'wallx';
-  const lineType = (asm.lineId && br.walls.lineType?.[asm.lineId]) ?? br.walls.type ?? 'x';
   return (
     <div className="asm-card" data-testid="asm-card">
       <div className="asm-h"><b>מכלול:</b> <span data-testid="asm-title">{asm.title}</span></div>
@@ -147,27 +146,58 @@ export function AssemblyCard({ m }: { m: Member }) {
         <button className="btn small" data-testid="asm-select" onClick={() => store.select(asm.ids.filter((x) => d.byId.has(x)))}>בחר את כל המכלול</button>
         <button className="btn small" data-testid="asm-isolate" onClick={() => store.set({ isolated: asm.ids.filter((x) => d.byId.has(x)) })}>בודד בתצוגה</button>
       </div>
-      {asm.family !== 'frame' && <div className="hub-set" data-testid="hub-settings">
-      <div className="hub-set-h">⚙ {asm.family === 'knee' ? 'אלכסוני עמוד-קורה' : FAM_NAME[asm.family]}</div>
+    </div>
+  );
+}
+
+/** בחירת היקף לקשיחות קירות: ציר זה בלבד / כל הצירים */
+export function ScopeSwitch({ scope, setScope }: { scope: AsmScope; setScope: (v: AsmScope) => void }) {
+  return <div className="field"><label>חל על</label>
+    <div className="ss-row">
+      <label className="ss-radio"><input type="radio" checked={scope === 'line'} onChange={() => setScope('line')} data-testid="asm-scope-line" /> ציר זה בלבד</label>
+      <label className="ss-radio"><input type="radio" checked={scope === 'all'} onChange={() => setScope('all')} data-testid="asm-scope-all" /> כל הצירים</label>
+    </div></div>;
+}
+
+/** צורה ומידות של המכלול (בלי חתך — החתך נבחר רק ב"חתך וחומר") */
+export function AssemblyShape({ asm, scope, setScope }: { asm: Asm; scope: AsmScope; setScope: (v: AsmScope) => void }) {
+  const br = useStore((s) => s.project.building.bracing);
+  const wallFam = asm.family === 'lock' || asm.family === 'portal' || asm.family === 'wallx';
+  const lineType = (asm.lineId && br.walls.lineType?.[asm.lineId]) ?? br.walls.type ?? 'x';
+  const lid = scope === 'line' ? asm.lineId : undefined;
+  return (
+    <EditCtx.Provider value={{ embed: true, part: 'shape' }}>
       {wallFam && <>
-        <div className="field"><label>חל על</label>
-          <div className="ss-row">
-            <label className="ss-radio"><input type="radio" checked={scope === 'line'} onChange={() => setScope('line')} data-testid="asm-scope-line" /> ציר זה בלבד</label>
-            <label className="ss-radio"><input type="radio" checked={scope === 'all'} onChange={() => setScope('all')} data-testid="asm-scope-all" /> כל הצירים</label>
-          </div></div>
+        <ScopeSwitch scope={scope} setScope={setScope} />
         <div className="field"><label>צורה</label><WallTypeSwitch asm={asm} scope={scope} /></div>
-        {lineType === 'truss' && <LockTrussFields lineId={scope === 'line' ? asm.lineId : undefined} />}
-        {lineType === 'portal' && <PortalFields lineId={scope === 'line' ? asm.lineId : undefined} />}
-        {lineType === 'x' && <BracePanel part="walls" />}
+        {lineType === 'truss' && <LockTrussFields lineId={lid} />}
+        {lineType === 'portal' && <PortalFields lineId={lid} />}
+        {lineType === 'x' && <WallXShape />}
       </>}
-      {asm.family === 'roofx' && <BracePanel part="roof" />}
-      {asm.family === 'knee' && <BracePanel part="knee" />}
+      {asm.family === 'roofx' && <RoofXShape />}
+      {asm.family === 'knee' && <KneeEditor />}
       {asm.family === 'haunch' && <HaunchEditor />}
       {asm.family === 'gutter' && <>
         <GutterSchematic />
-        <button className="btn primary" data-testid="open-gutter-wizard" onClick={() => { const c = d.connections.find((x) => x.id === m.connId || x.parts.includes(m.id)); const pid = c?.id.split('.')[2]; store.select([]); store.set({ activeGutter: pid ?? null }); }}>אשף המזחלה המלא</button>
+        <button className="btn" data-testid="open-gutter-wizard" onClick={() => { const pid = asm.ids.find((x) => x.startsWith('C.GB.'))?.split('.')[2]; store.select([]); store.set({ activeGutter: pid ?? null }); }}>אשף המזחלה המלא</button>
       </>}
-      </div>}
-    </div>
+    </EditCtx.Provider>
+  );
+}
+
+/** חיבורי המכלול (פלטות, ברגים, סוג חיבור בכל צד) */
+export function AssemblyConn({ asm, scope }: { asm: Asm; scope: AsmScope }) {
+  const br = useStore((s) => s.project.building.bracing);
+  const lineType = (asm.lineId && br.walls.lineType?.[asm.lineId]) ?? br.walls.type ?? 'x';
+  const lid = scope === 'line' ? asm.lineId : undefined;
+  const wallFam = asm.family === 'lock' || asm.family === 'portal' || asm.family === 'wallx';
+  return (
+    <EditCtx.Provider value={{ embed: true, part: 'conn' }}>
+      {wallFam && lineType === 'truss' && <LockTrussFields lineId={lid} />}
+      {wallFam && lineType === 'portal' && <PortalFields lineId={lid} />}
+      {wallFam && lineType === 'x' && <XConnFields />}
+      {asm.family === 'roofx' && <RoofXConn />}
+      {asm.family === 'knee' && <KneeEditor />}
+    </EditCtx.Provider>
   );
 }

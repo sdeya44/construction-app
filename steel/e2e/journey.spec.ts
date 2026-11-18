@@ -71,7 +71,7 @@ test('SIM-01/02: בניית סככה מאפס ושינויים — מספר פע
   });
   await task('אלכסון נבחר ← הגדרות לכל האלכסונים', 'בחירת אלכסון ← קישור', async () => {
     await page.evaluate(() => { const k = (window as any).__ksp; k.store.select(['KB.F2.B.P1.L']); });
-    await expect(page.getByTestId('hub-settings')).toContainText('אלכסוני עמוד-קורה');
+    await expect(page.getByTestId('psec-shape')).toContainText('אלכסון עמוד-קורה'); // סעיף "צורה ומידות" של המכלול
   });
   await task('הסתרת הודעות "לידיעה"', 'בדיקות ← הסתר סוג', async () => {
     await click('rail-issues');

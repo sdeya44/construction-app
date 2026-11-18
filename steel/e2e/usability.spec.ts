@@ -60,7 +60,6 @@ test('USE-04: שינוי מידות כל תומכי הפטות בבת אחת מ�
   await boot(page);
   page.on('dialog', (d) => d.accept());
   await page.evaluate(() => (window as any).__ksp.store.select(['CL.PL.L.02.F2']));
-  await page.getByTestId('ptab-conns').click();
   await page.getByTestId('open-conn-C.PC.PL.L.02.F2').click();
   const n = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.filter((c: any) => c.type === 'purlin-cleat').length);
   await expect(page.getByTestId('cl-apply-all')).toContainText(String(n));
@@ -75,7 +74,6 @@ test('USE-05: הודעות מקובצות — הסתרת סוג, תקן הכל, 
   page.on('dialog', (d) => d.accept());
   // רוחב זוויתן 80 ⇒ מרחק קצה 15 < 16.8 בכל תומכי השיפוע השמאלי
   await page.evaluate(() => (window as any).__ksp.store.select(['CL.PL.L.02.F2']));
-  await page.getByTestId('ptab-conns').click();
   await page.getByTestId('open-conn-C.PC.PL.L.02.F2').click();
   await expect(page.getByTestId('cleat-face')).toBeVisible();
   await shot(page, 'USE-05_cleat_face');

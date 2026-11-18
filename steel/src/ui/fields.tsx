@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import React, { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { assessCandidate, SIZE_LABEL, type SizeStatus } from '../model/sizing';
 import { useStore } from '../store';
 import { fromMm, toMm } from '../core/units';
@@ -131,4 +131,14 @@ export function Adv({ id, children, label = 'מתקדם' }: { id: string; childr
       <div className="adv-body">{children}</div>
     </details>
   );
+}
+
+/**
+ * עורך שמוטמע בחלון האלמנט (בקשת משתמש 18.11.2026 — "התפריטים לא מסודרים"): בלי כותרת/מתג הפעלה, בלי בוחר חתך
+ * (החתך נבחר במקום אחד — "חתך וחומר"), ורק החלק המבוקש: shape = צורה ומידות, conn = חיבורים.
+ */
+export const EditCtx = React.createContext<{ embed: boolean; part?: 'shape' | 'conn' }>({ embed: false });
+export function useEdit() {
+  const c = React.useContext(EditCtx);
+  return { embed: c.embed, showTitle: !c.embed, showProfile: !c.embed, showShape: !c.embed || c.part === 'shape', showConn: !c.embed || c.part === 'conn' };
 }

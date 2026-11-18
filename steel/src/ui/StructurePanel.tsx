@@ -9,7 +9,7 @@ import { defaultRodEnd, resolveBays, wallBays } from '../geometry/bracing';
 import { catalogNames } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
-import { Adv, LenField, NumField, ProfilePicker, TextField } from './fields';
+import { Adv, LenField, NumField, ProfilePicker, TextField, useEdit } from './fields';
 import { Icon } from './icons';
 import { HaunchEditor, KneeEditor, SectionEditor } from './SectionEditor';
 import { BaysSchematic, GussetSchematic, PortalSchematic, RidgeSchematic } from './schematics';
@@ -241,41 +241,49 @@ function PlanShapeFields() {
 /** שדות נעילה אופקית. lineId — עריכה לציר אחד בלבד (חריגה); בלי — לכל הצירים */
 export function LockTrussFields({ lineId }: { lineId?: string } = {}) {
   const br = useStore((s) => s.project.building.bracing);
+  const ed = useEdit();
   const g = br.walls.truss ?? defaultLockTruss();
   const p: LockTrussParams = { ...g, ...(lineId ? br.walls.lineTruss?.[lineId] ?? {} : {}) };
   const set = (patch: Partial<LockTrussParams>) => store.exec(setBuilding({ bracing: { ...br, walls: lineId
     ? { ...br.walls, lineTruss: { ...(br.walls.lineTruss ?? {}), [lineId]: { ...(br.walls.lineTruss?.[lineId] ?? {}), ...patch } } }
     : { ...br.walls, truss: { ...g, ...patch } } } }));
-  return (
-    <>
+  const shape = <>
+    {ed.showProfile && <>
       <div className="field prof"><label>סיב וחגורה</label><ProfilePicker testId="lt-chord" value={p.chord} families={['RHS', 'SHS']} onCommit={(v) => set({ chord: v })} /></div>
       <div className="field prof"><label>אלכסונים</label><ProfilePicker testId="lt-diag" value={p.diag} families={['RHS', 'SHS', 'CHS']} onCommit={(v) => set({ diag: v })} /></div>
-      <div className="field"><label>גובה המסבך (צירים)</label><NumField testId="lt-height" value={p.height} suffix='מ"מ' onCommit={(v) => set({ height: Math.max(300, v) })} /></div>
-      <div className="field"><label>מיקום המסבך</label>
-        <select className="inp" data-testid="lt-pos" value={p.position} onChange={(e) => set({ position: e.target.value as 'above' | 'below' })}>
-          <option value="above">מעל הסיב הרציף</option><option value="below">מתחת לסיב הרציף</option>
-        </select></div>
-      <div className="field"><label>חיבור לעמוד</label>
-        <select className="inp" data-testid="lt-conn" value={p.conn} onChange={(e) => set({ conn: e.target.value as 'plate' | 'tongue', connA: undefined, connB: undefined })}>
-          <option value="plate">פלטת קצה + 4 ברגים דרך העמוד</option><option value="tongue">פח + לשונית (כמו אלכסון עמוד-קורה)</option>
-        </select></div>
-      {lineId && (['A', 'B'] as const).map((k) => <div className="field" key={k}><label>חיבור בצד {k === 'A' ? 'העמוד הראשון במפתח' : 'העמוד השני במפתח'}</label>
-        <select className="inp" data-testid={`lt-conn-${k}`} value={(k === 'A' ? p.connA : p.connB) ?? p.conn} onChange={(e) => set({ [k === 'A' ? 'connA' : 'connB']: e.target.value as 'plate' | 'tongue' })}>
-          <option value="plate">פלטת קצה + ברגים דרך העמוד</option><option value="tongue">פח + לשונית</option>
-        </select></div>)}
-      <Adv id="lt" label="מתקדם — מרווחים, פלטות וברגים">
-        <div className="field"><label>מרווח מתחת לקורה הראשית</label><NumField testId="lt-gap" value={p.gap} suffix='מ"מ' onCommit={(v) => set({ gap: Math.max(0, v) })} /></div>
-        <div className="field"><label>אלכסונים במפתח (0 = אוטומטי)</label><NumField testId="lt-diags" value={p.diags} onCommit={(v) => set({ diags: Math.max(0, Math.round(v)) })} /></div>
-        <div className="field"><label>מפני העמוד לצומת הראשון (0 = אוטומטי)</label><NumField testId="lt-endclear" value={p.endClear ?? 0} suffix='מ"מ' onCommit={(v) => set({ endClear: Math.max(0, v) })} /></div>
-        <div className="field"><label>מרווח בין אלכסונים בצומת</label><NumField testId="lt-nodegap" value={p.nodeGap ?? 20} suffix='מ"מ' onCommit={(v) => set({ nodeGap: Math.max(0, v) })} /></div>
-        {p.conn === 'tongue' && <div className="field"><label>כיוון הפח והלשונית</label>
-          <select className="inp" data-testid="lt-orient" value={p.finOrient ?? 'horizontal'} onChange={(e) => set({ finOrient: e.target.value as 'horizontal' | 'vertical' })}>
-            <option value="horizontal">שוכבים (חריץ אופקי בסיב)</option><option value="vertical">במישור המסבך</option>
-          </select></div>}
-        <div className="field"><label>עובי פלטות</label><NumField value={p.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: v })} /></div>
-        <div className="field"><label>קוטר בורג</label><NumField value={p.bolt.d} suffix="M" onCommit={(v) => set({ bolt: { ...p.bolt, d: Math.round(v) } })} /></div>
-        <div className="field"><label>סיב בשאר המפתחים</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="lt-cont" checked={p.continuous} onChange={(e) => set({ continuous: e.target.checked })} />{p.continuous ? 'כן' : 'לא'}</label></div>
-      </Adv>
+    </>}
+    <div className="field"><label>גובה המסבך (צירים)</label><NumField testId="lt-height" value={p.height} suffix='מ"מ' onCommit={(v) => set({ height: Math.max(300, v) })} /></div>
+    <div className="field"><label>מיקום המסבך</label>
+      <select className="inp" data-testid="lt-pos" value={p.position} onChange={(e) => set({ position: e.target.value as 'above' | 'below' })}>
+        <option value="above">מעל הסיב הרציף</option><option value="below">מתחת לסיב הרציף</option>
+      </select></div>
+    <div className="field"><label>מרווח מתחת לקורה הראשית</label><NumField testId="lt-gap" value={p.gap} suffix='מ"מ' onCommit={(v) => set({ gap: Math.max(0, v) })} /></div>
+    <div className="field"><label>אלכסונים במפתח (0 = אוטומטי)</label><NumField testId="lt-diags" value={p.diags} onCommit={(v) => set({ diags: Math.max(0, Math.round(v)) })} /></div>
+    <div className="field"><label>מפני העמוד לצומת הראשון (0 = אוטומטי)</label><NumField testId="lt-endclear" value={p.endClear ?? 0} suffix='מ"מ' onCommit={(v) => set({ endClear: Math.max(0, v) })} /></div>
+    <div className="field"><label>מרווח בין אלכסונים בצומת</label><NumField testId="lt-nodegap" value={p.nodeGap ?? 20} suffix='מ"מ' onCommit={(v) => set({ nodeGap: Math.max(0, v) })} /></div>
+    <div className="field"><label>סיב בשאר המפתחים</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="lt-cont" checked={p.continuous} onChange={(e) => set({ continuous: e.target.checked })} />{p.continuous ? 'כן' : 'לא'}</label></div>
+  </>;
+  const conn = <>
+    <div className="field"><label>חיבור לעמוד</label>
+      <select className="inp" data-testid="lt-conn" value={p.conn} onChange={(e) => set({ conn: e.target.value as 'plate' | 'tongue', connA: undefined, connB: undefined })}>
+        <option value="plate">פלטת קצה + 4 ברגים דרך העמוד</option><option value="tongue">פח + לשונית (כמו אלכסון עמוד-קורה)</option>
+      </select></div>
+    {lineId && (['A', 'B'] as const).map((k) => <div className="field" key={k}><label>חיבור בצד {k === 'A' ? 'העמוד הראשון במפתח' : 'העמוד השני במפתח'}</label>
+      <select className="inp" data-testid={`lt-conn-${k}`} value={(k === 'A' ? p.connA : p.connB) ?? p.conn} onChange={(e) => set({ [k === 'A' ? 'connA' : 'connB']: e.target.value as 'plate' | 'tongue' })}>
+        <option value="plate">פלטת קצה + ברגים דרך העמוד</option><option value="tongue">פח + לשונית</option>
+      </select></div>)}
+    {[p.conn, p.connA, p.connB].includes('tongue') && <div className="field"><label>כיוון הפח והלשונית</label>
+      <select className="inp" data-testid="lt-orient" value={p.finOrient ?? 'horizontal'} onChange={(e) => set({ finOrient: e.target.value as 'horizontal' | 'vertical' })}>
+        <option value="horizontal">שוכבים (חריץ אופקי בסיב)</option><option value="vertical">במישור המסבך</option>
+      </select></div>}
+    <div className="field"><label>עובי פלטות</label><NumField value={p.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: v })} /></div>
+    <div className="field"><label>קוטר בורג</label><NumField value={p.bolt.d} suffix="M" onCommit={(v) => set({ bolt: { ...p.bolt, d: Math.round(v) } })} /></div>
+  </>;
+  if (ed.embed) return ed.showShape ? shape : conn;
+  return (
+    <>
+      {shape}
+      <Adv id="lt" label="חיבור לעמוד — פלטות וברגים">{conn}</Adv>
       <div className="hint">לפי תוכנית 130 "פרט נעילה אופקית": סיב RHS רציף בכל המפתחים של הציר; במפתחים הנעולים מסבך — חגורה שנייה ואלכסונים מרותכים במסגריה (מכלול אחד). פלטה: פלטת קצה מרותכת לכל סיב, 4 ברגים ארוכים דרך העמוד שמחברים את שני המפתחים. לשונית: כמו פרט האלכסון עמוד-קורה.</div>
     </>
   );
@@ -283,33 +291,41 @@ export function LockTrussFields({ lineId }: { lineId?: string } = {}) {
 
 export function PortalFields({ lineId }: { lineId?: string } = {}) {
   const br = useStore((s) => s.project.building.bracing);
+  const ed = useEdit();
   const g = br.walls.portal ?? defaultPortal();
   const p: PortalBraceParams = { ...g, ...(lineId ? br.walls.linePortal?.[lineId] ?? {} : {}) };
   const set = (patch: Partial<PortalBraceParams>) => store.exec(setBuilding({ bracing: { ...br, walls: lineId
     ? { ...br.walls, linePortal: { ...(br.walls.linePortal ?? {}), [lineId]: { ...(br.walls.linePortal?.[lineId] ?? {}), ...patch } } }
     : { ...br.walls, portal: { ...g, ...patch } } } }));
-  return (
-    <>
-      <PortalSchematic />
+  const shape = <>
+    <PortalSchematic />
+    {ed.showProfile && <>
       <div className="field prof"><label>קורת אגד</label><ProfilePicker testId="pb-beam" value={p.beam} families={['RHS', 'SHS']} onCommit={(v) => set({ beam: v })} /></div>
       <div className="field prof"><label>אלכסונים</label><ProfilePicker testId="pb-brace" value={p.brace} families={['RHS', 'SHS', 'CHS']} onCommit={(v) => set({ brace: v })} /></div>
-      <Adv id="pb" label="מתקדם — מידות בשדות, פלטות וברגים">
-      <div className="field"><label>מרווח מתחת לקורה הראשית</label><NumField testId="pb-gap" value={p.gap} suffix='מ"מ' onCommit={(v) => set({ gap: Math.max(0, v) })} /></div>
-      <div className="field"><label>ירידה על העמוד</label><NumField testId="pb-drop" value={p.drop} suffix='מ"מ' onCommit={(v) => set({ drop: Math.max(200, v) })} /></div>
-      <div className="field"><label>זווית אלכסון</label><NumField testId="pb-angle" value={p.angle} suffix="°" onCommit={(v) => set({ angle: Math.max(20, Math.min(70, v)) })} /></div>
-      <div className="field"><label>עובי פלטות</label><NumField value={p.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: v })} /></div>
-      <div className="field"><label>ברגים בקצה אלכסון</label>
-        <select className="inp" data-testid="pb-bolts" value={p.boltsPerEnd ?? 2} onChange={(e) => set({ boltsPerEnd: Number(e.target.value) })}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}×M{p.bolt.d} — {n / 2} {n === 2 ? 'שורה' : 'שורות'} של 2 לרוחב</option>)}</select></div>
-      <div className="field"><label>ברגים בקצה קורת האגד</label>
-        <select className="inp" data-testid="pb-beam-bolts" value={p.beamBolts ?? 2} onChange={(e) => set({ beamBolts: Number(e.target.value) })}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}×M{p.bolt.d} — {n / 2} {n === 2 ? 'שורה' : 'שורות'} של 2 לרוחב</option>)}</select></div>
-      <div className="field"><label>חיבור קורת האגד לעמוד</label>
-        <select className="inp" data-testid="pb-orient" value={p.finOrient ?? 'horizontal'} onChange={(e) => set({ finOrient: e.target.value as 'horizontal' | 'vertical' })}>
-          <option value="horizontal">פח ולשונית שוכבים — הקורה על ציר העמודים</option><option value="vertical">פח ולשונית במישור הקיר — הקורה מוסטת בעובי פח</option>
-        </select></div>
-      <div className="field"><label>קורת אגד בשאר המפתחים</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="pb-cont" checked={p.continuous ?? true} onChange={(e) => set({ continuous: e.target.checked })} />{(p.continuous ?? true) ? 'כן — ללא אלכסונים' : 'לא'}</label></div>
-      <div className="field"><label>קוטר בורג</label><NumField value={p.bolt.d} suffix="M" onCommit={(v) => set({ bolt: { ...p.bolt, d: Math.round(v) } })} /></div>
-      </Adv>
-      <div className="hint">פרט חיבור (לכל הקצוות, פרט הלקוח): פח מרותך לעמוד/לקורה במסגריה; בקצה ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. קורת האגד מוסטת בעובי פח מציר העמודים; האלכסונים על ציר העמודים. בשאר המפתחים של הציר — קורת אגד בלבד, להעברת הכוחות האופקיים לאגד.</div>
+    </>}
+    <div className="field"><label>מרווח מתחת לקורה הראשית</label><NumField testId="pb-gap" value={p.gap} suffix='מ"מ' onCommit={(v) => set({ gap: Math.max(0, v) })} /></div>
+    <div className="field"><label>ירידה על העמוד</label><NumField testId="pb-drop" value={p.drop} suffix='מ"מ' onCommit={(v) => set({ drop: Math.max(200, v) })} /></div>
+    <div className="field"><label>זווית אלכסון</label><NumField testId="pb-angle" value={p.angle} suffix="°" onCommit={(v) => set({ angle: Math.max(20, Math.min(70, v)) })} /></div>
+    <div className="field"><label>קורת אגד בשאר המפתחים</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="pb-cont" checked={p.continuous ?? true} onChange={(e) => set({ continuous: e.target.checked })} />{(p.continuous ?? true) ? 'כן — ללא אלכסונים' : 'לא'}</label></div>
+  </>;
+  const conn = <>
+    <div className="field"><label>חיבור קורת האגד לעמוד</label>
+      <select className="inp" data-testid="pb-orient" value={p.finOrient ?? 'horizontal'} onChange={(e) => set({ finOrient: e.target.value as 'horizontal' | 'vertical' })}>
+        <option value="horizontal">פח ולשונית שוכבים — הקורה על ציר העמודים</option><option value="vertical">פח ולשונית במישור הקיר — הקורה מוסטת בעובי פח</option>
+      </select></div>
+    <div className="field"><label>ברגים בקצה אלכסון</label>
+      <select className="inp" data-testid="pb-bolts" value={p.boltsPerEnd ?? 2} onChange={(e) => set({ boltsPerEnd: Number(e.target.value) })}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}×M{p.bolt.d} — {n / 2} {n === 2 ? 'שורה' : 'שורות'} של 2 לרוחב</option>)}</select></div>
+    <div className="field"><label>ברגים בקצה קורת האגד</label>
+      <select className="inp" data-testid="pb-beam-bolts" value={p.beamBolts ?? 2} onChange={(e) => set({ beamBolts: Number(e.target.value) })}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}×M{p.bolt.d} — {n / 2} {n === 2 ? 'שורה' : 'שורות'} של 2 לרוחב</option>)}</select></div>
+    <div className="field"><label>עובי פלטות</label><NumField value={p.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: v })} /></div>
+    <div className="field"><label>קוטר בורג</label><NumField value={p.bolt.d} suffix="M" onCommit={(v) => set({ bolt: { ...p.bolt, d: Math.round(v) } })} /></div>
+  </>;
+  if (ed.embed) return ed.showShape ? shape : conn;
+  return (
+    <>
+      {shape}
+      <Adv id="pb" label="חיבורים — פלטות וברגים">{conn}</Adv>
+      <div className="hint">פרט חיבור (לכל הקצוות, פרט הלקוח): פח מרותך לעמוד/לקורה במסגריה; בקצה ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. בשאר המפתחים של הציר — קורת אגד בלבד, להעברת הכוחות האופקיים לאגד.</div>
     </>
   );
 }
@@ -411,6 +427,78 @@ function RoofXGrid() {
   );
 }
 
+/** פרט קצה לקושרות X בגג (פח חיבור / מוט הברגה) ושדות המוט */
+export function RoofEndFields() {
+  const br = useStore((s) => s.project.building.bracing);
+  const set = (patch: Partial<BuildingParams['bracing']>) => store.exec(setBuilding({ bracing: { ...br, ...patch } }));
+  return <>
+          <div className="field"><label>פרט קצה</label>
+            <select className="inp" data-testid="br-roof-end" value={br.roof.endDetail ?? 'gusset'} onChange={(e) => set({ roof: { ...br.roof, endDetail: e.target.value as 'gusset' | 'rod', rod: br.roof.rod ?? defaultRodEnd(), ...(e.target.value === 'rod' && !br.roof.profile.startsWith('L') ? { profile: 'L50x50x4' } : {}) } })}>
+              <option value="gusset">פח חיבור מרותך לווב + ברגים</option><option value="rod">מוט הברגה מרותך לזוויתן, דרך חור אובלי בקורה</option>
+            </select></div>
+          {br.roof.endDetail === 'rod' && (() => { const rp = br.roof.rod ?? defaultRodEnd(); const sr = (q: Partial<typeof rp>) => set({ roof: { ...br.roof, rod: { ...rp, ...q } } }); return <>
+            <div className="field"><label>קוטר מוט</label><NumField testId="rod-d" value={rp.d} suffix="M" onCommit={(v) => sr({ d: Math.round(v) })} /></div>
+            <div className="field"><label>אורך מוט</label><NumField testId="rod-l" value={rp.length} suffix='מ"מ' onCommit={(v) => sr({ length: v })} /></div>
+            <div className="field"><label>חפיפת ריתוך</label><NumField testId="rod-ov" value={rp.overlap} suffix='מ"מ' onCommit={(v) => sr({ overlap: v })} /></div>
+            <div className="field prof"><label>זוויתן דסקית</label><ProfilePicker value={rp.washer} families={['L']} onCommit={(v) => sr({ washer: v })} /></div>
+            <div className="field"><label>אורך זוויתן דסקית</label><NumField value={rp.washerL} suffix='מ"מ' onCommit={(v) => sr({ washerL: v })} /></div>
+            <div className="field"><label>תוספת לחור האובלי</label><NumField value={rp.slotExtra} suffix='מ"מ' onCommit={(v) => sr({ slotExtra: v })} /></div>
+            <div className="field"><label>בורג הצטלבות</label><NumField value={rp.crossD} suffix="M" onCommit={(v) => sr({ crossD: Math.round(v) })} /></div>
+            <div className="hint">הזוויתן מקוצר כך שהמוט ({rp.length}) מרותך בחפיפה {rp.overlap} ועובר דרך חור אובלי בווב הקורה; בצד השני זוויתן קצר עם חור ואום. אורך החור האובלי מחושב לפי זווית האלכסון.</div>
+          </>; })()}
+  </>;
+}
+
+/** חיבור קושרות X (פח חיבור מרותך + ברגים, בורג בהצטלבות) */
+export function XConnFields() {
+  const ed = useEdit();
+  const br = useStore((s) => s.project.building.bracing);
+  const set = (patch: Partial<BuildingParams['bracing']>) => store.exec(setBuilding({ bracing: { ...br, ...patch } }));
+  return <>
+    {ed.showTitle && <div className="panel-title">חיבור קושרות X</div>}
+        <GussetSchematic />
+        <Adv id="brc" label="מתקדם — מידות בשדות">
+        <div className="field"><label>קוטר בורג</label><NumField testId="brc-d" value={br.conn.bolt.d} suffix="M" onCommit={(v) => set({ conn: { ...br.conn, bolt: { ...br.conn.bolt, d: Math.round(v) } } })} /></div>
+        <div className="field"><label>ברגים בכל קצה</label><NumField testId="brc-n" value={br.conn.boltsPerEnd} onCommit={(v) => set({ conn: { ...br.conn, boltsPerEnd: Math.max(1, Math.round(v)) } })} /></div>
+        <div className="field"><label>מרווח ברגים</label><NumField value={br.conn.pitch} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, pitch: v } })} /></div>
+        <div className="field"><label>מרחק קצה</label><NumField value={br.conn.endDist} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, endDist: v } })} /></div>
+        <div className="field"><label>עובי פח חיבור</label><NumField value={br.conn.gussetT} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, gussetT: v } })} /></div>
+        </Adv>
+        <div className="field"><label>בורג בהצטלבות</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="brc-cross" checked={br.conn.crossBolt} onChange={(e) => set({ conn: { ...br.conn, crossBolt: e.target.checked } })} />{br.conn.crossBolt ? 'כן' : 'לא'}</label></div>
+  </>;
+}
+
+/** קושרות גג בחלון האלמנט: צורה (סוג, תוכנית, מרווחים) */
+export function RoofXShape() {
+  const br = useStore((s) => s.project.building.bracing);
+  const set = (patch: Partial<BuildingParams['bracing']>) => store.exec(setBuilding({ bracing: { ...br, ...patch } }));
+  return <>
+    <div className="field"><label>סוג</label>
+      <select className="inp" data-testid="br-roof-type" value={br.roof.type ?? 'x'} onChange={(e) => set({ roof: { ...br.roof, type: e.target.value as 'x' | 'rhs', rhs: br.roof.rhs ?? defaultRhsTruss() } })}>
+        <option value="x">X מזוויתנים (מתיחה)</option><option value="rhs">סבכה אופקית RHS (מוטות + אלכסונים)</option>
+      </select></div>
+    <RoofXGrid />
+    <Adv id="roofgaps-e" label="מרווחים בקצוות הקושרות">
+      <div className="field"><label>שני קצוות באותה נקודה, אותו מפתח</label><NumField value={br.roof.sameGap ?? 200} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, sameGap: Math.max(0, v) } })} /></div>
+      {br.roof.endDetail === 'rod' && <div className="field"><label>מפתחים סמוכים — מוטות זה מעל זה</label><NumField value={br.roof.adjGap ?? 40} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, adjGap: Math.max(0, v) } })} /></div>}
+      <div className="field"><label>מרחק מפני עמוד שממשיך מעל הגג</label><NumField value={br.roof.colClear ?? 150} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, colClear: Math.max(0, v) } })} /></div>
+    </Adv>
+  </>;
+}
+
+/** קושרות גג בחלון האלמנט: חיבורים */
+export function RoofXConn() {
+  const br = useStore((s) => s.project.building.bracing);
+  if ((br.roof.type ?? 'x') === 'rhs') return <RhsFields />;
+  return <><RoofEndFields />{(br.roof.endDetail ?? 'gusset') === 'gusset' && <XConnFields />}</>;
+}
+
+/** קושרות X בקיר בחלון האלמנט: מפתחים לכל ציר */
+export function WallXShape() {
+  const nb = useStore((s) => s.project.building.frames.length - 1);
+  return <WallLines nb={nb} />;
+}
+
 function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) {
   const on = (k: Exclude<BraceSection, 'knee'>) => !part || part === k;
   const b = useStore((s) => s.project.building);
@@ -434,20 +522,7 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
           : <RhsFields />}
         <RoofXGrid />
         {(br.roof.type ?? 'x') === 'x' && <>
-          <div className="field"><label>פרט קצה</label>
-            <select className="inp" data-testid="br-roof-end" value={br.roof.endDetail ?? 'gusset'} onChange={(e) => set({ roof: { ...br.roof, endDetail: e.target.value as 'gusset' | 'rod', rod: br.roof.rod ?? defaultRodEnd(), ...(e.target.value === 'rod' && !br.roof.profile.startsWith('L') ? { profile: 'L50x50x4' } : {}) } })}>
-              <option value="gusset">פח חיבור מרותך לווב + ברגים</option><option value="rod">מוט הברגה מרותך לזוויתן, דרך חור אובלי בקורה</option>
-            </select></div>
-          {br.roof.endDetail === 'rod' && (() => { const rp = br.roof.rod ?? defaultRodEnd(); const sr = (q: Partial<typeof rp>) => set({ roof: { ...br.roof, rod: { ...rp, ...q } } }); return <>
-            <div className="field"><label>קוטר מוט</label><NumField testId="rod-d" value={rp.d} suffix="M" onCommit={(v) => sr({ d: Math.round(v) })} /></div>
-            <div className="field"><label>אורך מוט</label><NumField testId="rod-l" value={rp.length} suffix='מ"מ' onCommit={(v) => sr({ length: v })} /></div>
-            <div className="field"><label>חפיפת ריתוך</label><NumField testId="rod-ov" value={rp.overlap} suffix='מ"מ' onCommit={(v) => sr({ overlap: v })} /></div>
-            <div className="field prof"><label>זוויתן דסקית</label><ProfilePicker value={rp.washer} families={['L']} onCommit={(v) => sr({ washer: v })} /></div>
-            <div className="field"><label>אורך זוויתן דסקית</label><NumField value={rp.washerL} suffix='מ"מ' onCommit={(v) => sr({ washerL: v })} /></div>
-            <div className="field"><label>תוספת לחור האובלי</label><NumField value={rp.slotExtra} suffix='מ"מ' onCommit={(v) => sr({ slotExtra: v })} /></div>
-            <div className="field"><label>בורג הצטלבות</label><NumField value={rp.crossD} suffix="M" onCommit={(v) => sr({ crossD: Math.round(v) })} /></div>
-            <div className="hint">הזוויתן מקוצר כך שהמוט ({rp.length}) מרותך בחפיפה {rp.overlap} ועובר דרך חור אובלי בווב הקורה; בצד השני זוויתן קצר עם חור ואום. אורך החור האובלי מחושב לפי זווית האלכסון.</div>
-          </>; })()}
+          <RoofEndFields />
         </>}
         <Adv id="roofgaps" label="מתקדם — מרווחים בקצוות הקושרות">
           <div className="field"><label>שני קצוות באותה נקודה, אותו מפתח (זה ליד זה)</label><NumField testId="br-samegap" value={br.roof.sameGap ?? 200} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, sameGap: Math.max(0, v) } })} /></div>
@@ -484,16 +559,7 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
       </>}
       {on('ridge') && <RidgeReinfEditor />}
       {(on('roof') || on('walls')) && (br.roof.enabled && (br.roof.type ?? 'x') === 'x' || br.walls.enabled && (br.walls.type ?? 'x') === 'x') && <>
-        <div className="panel-title">חיבור קושרות X</div>
-        <GussetSchematic />
-        <Adv id="brc" label="מתקדם — מידות בשדות">
-        <div className="field"><label>קוטר בורג</label><NumField testId="brc-d" value={br.conn.bolt.d} suffix="M" onCommit={(v) => set({ conn: { ...br.conn, bolt: { ...br.conn.bolt, d: Math.round(v) } } })} /></div>
-        <div className="field"><label>ברגים בכל קצה</label><NumField testId="brc-n" value={br.conn.boltsPerEnd} onCommit={(v) => set({ conn: { ...br.conn, boltsPerEnd: Math.max(1, Math.round(v)) } })} /></div>
-        <div className="field"><label>מרווח ברגים</label><NumField value={br.conn.pitch} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, pitch: v } })} /></div>
-        <div className="field"><label>מרחק קצה</label><NumField value={br.conn.endDist} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, endDist: v } })} /></div>
-        <div className="field"><label>עובי פח חיבור</label><NumField value={br.conn.gussetT} suffix='מ"מ' onCommit={(v) => set({ conn: { ...br.conn, gussetT: v } })} /></div>
-        </Adv>
-        <div className="field"><label>בורג בהצטלבות</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="brc-cross" checked={br.conn.crossBolt} onChange={(e) => set({ conn: { ...br.conn, crossBolt: e.target.checked } })} />{br.conn.crossBolt ? 'כן' : 'לא'}</label></div>
+        <XConnFields />
       </>}
       {(on('roof') || on('walls') || on('ties')) && <div className="hint">קושרות X עובדות במתיחה בלבד. פח החיבור מרותך לווב הקורה/העמוד במסגריה, הזוויתן מוברג בשטח; בהצטלבות פח מילוי ובורג. שורת קשירה באמצע כל מפתח, צמודה לאגף התחתון של הפטות. בדיקת חוזק — אינה מבוצעת.</div>}
     </>

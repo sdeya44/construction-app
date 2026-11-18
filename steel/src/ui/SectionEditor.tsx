@@ -4,7 +4,7 @@ import { defaultKneeBraces } from '../geometry/knee';
 import { defaultHaunch } from '../geometry/haunch';
 import { lineLabel, moveLines, setAxisCount, setPlaneEndZ, setPlaneSlope, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
 import { store, useStore } from '../store';
-import { Adv, LenField, NumField, ProfilePicker } from './fields';
+import { Adv, LenField, NumField, ProfilePicker, useEdit } from './fields';
 import { Icon } from './icons';
 import type { KneeSideOverride } from '../model/types';
 import { KneeSchematic } from './schematics';
@@ -166,15 +166,16 @@ function Overhangs({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' | 'm
 }
 
 export function HaunchEditor() {
+  const ed = useEdit();
   const b = useStore((s) => s.project.building);
   const hp = b.haunch ?? { ...defaultHaunch(), enabled: false };
   const n = useStore((s) => s.derived.connections.filter((c) => c.id.startsWith('C.HN.')).length);
   const set = (patch: Partial<typeof hp>) => store.exec(setBuilding({ haunch: { ...hp, ...patch } }));
   return (
     <>
-      <div className="panel-title">מכפל בראש העמוד
+      {ed.showTitle && <div className="panel-title">מכפל בראש העמוד
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="hn-on" checked={hp.enabled} onChange={(e) => set({ enabled: e.target.checked })} />פעיל {hp.enabled ? `(${n})` : ''}</label>
-      </div>
+      </div>}
       {hp.enabled && <>
         <div className="field"><label>אורך מפני העמוד</label><NumField testId="hn-length" value={hp.length} suffix='מ"מ' onCommit={(v) => set({ length: Math.max(300, v) })} /></div>
         <div className="field"><label>עומק בפני העמוד (0 = עומק הקורה)</label><NumField testId="hn-depth" value={hp.depth} suffix='מ"מ' onCommit={(v) => set({ depth: Math.max(0, v) })} /></div>
@@ -189,14 +190,28 @@ export function KneeEditor() {
   const kb = useStore((s) => s.project.building.kneeBraces) ?? defaultKneeBraces();
   const n = useStore((s) => s.derived.connections.filter((c) => c.type === 'knee').length);
   const set = (patch: Parameters<typeof setKneeBraces>[0]) => store.exec(setKneeBraces(patch));
+  const ed = useEdit();
+  // פרט החיבור — שדות החיבור (בחלון האלמנט: בסעיף "חיבורים"; בתפריט הצד: ב"מתקדם")
+  const connFields = <>
+    <div className="field"><label>פרט חיבור</label>
+      <select className="inp" data-testid="kb-detail" value={kb.detail === 'flange' ? 'flange' : 'fin'} onChange={(e) => set({ detail: e.target.value as 'fin' | 'flange' })}>
+        <option value="fin">פח מרותך + לשונית בחריץ ה-RHS (פרט הלקוח)</option><option value="flange">פלטת קצה מוברגת לאגף המארח</option>
+      </select></div>
+    {kb.detail !== 'flange'
+      ? <div className="field"><label>ברגים בכל קצה</label>
+          <select className="inp" data-testid="kb-bolts" value={kb.boltsPerEnd ?? 2} onChange={(e) => set({ boltsPerEnd: Number(e.target.value) })}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}×M{kb.bolt.d} — {n / 2} {n === 2 ? 'שורה' : 'שורות'} של 2 לרוחב</option>)}</select></div>
+      : <div className="field"><label>פלטת קצה / ברגים</label><span className="readonly">{kb.plateT}×{kb.plateW}×{kb.plateL} · 4×M{kb.bolt.d}</span></div>}
+    <div className="field"><label>עובי פלטות</label><NumField testId="kb-t" value={kb.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: Math.max(6, v) })} /></div>
+  </>;
+  if (ed.embed && ed.showConn) return connFields;
   return (
     <>
-      <div className="panel-title">אלכסוני עמוד-קורה
+      {ed.showTitle && <div className="panel-title">אלכסוני עמוד-קורה
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="kb-on" checked={kb.enabled} onChange={(e) => set({ enabled: e.target.checked })} />פעיל {kb.enabled ? `(${n})` : ''}</label>
-      </div>
+      </div>}
       {kb.enabled && <>
         <KneeSchematic />
-        <div className="field prof"><label>חתך</label><ProfilePicker testId="kb-profile" value={kb.profile} families={['RHS', 'SHS', 'CHS', 'L', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>
+        {ed.showProfile && <div className="field prof"><label>חתך</label><ProfilePicker testId="kb-profile" value={kb.profile} families={['RHS', 'SHS', 'CHS', 'L', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>}
         <div className="field"><label>ירידה על העמוד</label><NumField testId="kb-drop" value={kb.drop} suffix='מ"מ' onCommit={(v) => set({ drop: v })} /></div>
         <div className="field"><label>קביעת הנקודה על הקורה</label>
           <div className="seg">
@@ -207,19 +222,10 @@ export function KneeEditor() {
         {(kb.mode ?? 'angle') === 'angle'
           ? <div className="field"><label>זווית מהאופק</label><NumField testId="kb-angle" value={kb.angle ?? 45} suffix="°" onCommit={(v) => set({ angle: Math.max(15, Math.min(75, v)) })} /></div>
           : <div className="field"><label>מרחק על הקורה (אופקי)</label><NumField testId="kb-reach" value={kb.reach} suffix='מ"מ' onCommit={(v) => set({ reach: v })} /></div>}
-        <Adv id="kb" label="מתקדם — פרט חיבור, ברגים, עובי, הגדרה לכל צד">
-        <div className="field"><label>פרט חיבור</label>
-          <select className="inp" data-testid="kb-detail" value={kb.detail === 'flange' ? 'flange' : 'fin'} onChange={(e) => set({ detail: e.target.value as 'fin' | 'flange' })}>
-            <option value="fin">פח מרותך + לשונית בחריץ ה-RHS (פרט הלקוח)</option><option value="flange">פלטת קצה מוברגת לאגף המארח</option>
-          </select></div>
-        {kb.detail !== 'flange'
-          ? <div className="field"><label>ברגים בכל קצה</label>
-              <select className="inp" data-testid="kb-bolts" value={kb.boltsPerEnd ?? 2} onChange={(e) => set({ boltsPerEnd: Number(e.target.value) })}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}×M{kb.bolt.d} — {n / 2} {n === 2 ? 'שורה' : 'שורות'} של 2 לרוחב</option>)}</select></div>
-          : <div className="field"><label>פלטת קצה / ברגים</label><span className="readonly">{kb.plateT}×{kb.plateW}×{kb.plateL} · 4×M{kb.bolt.d}</span></div>}
-        <div className="field"><label>עובי פלטות</label><NumField testId="kb-t" value={kb.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: Math.max(6, v) })} /></div>
-        <KneeSides />
-        </Adv>
-        <div className="hint">בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. פרט הלקוח: פח מרותך לעמוד ולקורה (במישור המסגרת, מסגריה); בקצות ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. אין בדיקת חוזק.</div>
+        {ed.embed
+          ? <Adv id="kb-sides" label="הגדרה לכל צד (ביטול צד, ירידה וזווית שונות)"><KneeSides /></Adv>
+          : <Adv id="kb" label="מתקדם — פרט חיבור, ברגים, עובי, הגדרה לכל צד">{connFields}<KneeSides /></Adv>}
+        {ed.showTitle && <div className="hint">בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. פרט הלקוח: פח מרותך לעמוד ולקורה (במישור המסגרת, מסגריה); בקצות ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. אין בדיקת חוזק.</div>}
       </>}
     </>
   );
