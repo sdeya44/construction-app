@@ -140,7 +140,12 @@ export function App() {
       else if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); store.redo(); }
       else if (mod && k === 's') { e.preventDefault(); void store.saveNow('שמירה ידנית').then((ok) => ok && store.toast('ok', 'נשמר')); }
       else if (mod && k === 'a') { e.preventDefault(); store.select(store.state.derived.members.map((m) => m.id)); }
-      else if (k === 'delete') { const n = store.state.selection.length; if (n && store.exec(deleteMembers(store.state.selection))) store.toast('info', `נמחקו ${n} אלמנטים — לשחזור: Ctrl+Z, או "שחזור" בסרגל הכלים`); }
+      else if (k === 'delete') {
+        const sel0 = store.state.selection, n = sel0.length, by = store.state.derived.byId;
+        const cols = sel0.filter((x) => by.get(x)?.kind === 'column').length, rafs = sel0.filter((x) => by.get(x)?.kind === 'rafter').length;
+        const main = cols || rafs ? ` (כולל ${[cols ? `${cols} עמודים` : '', rafs ? `${rafs} קורות גג` : ''].filter(Boolean).join(' ו-')})` : '';
+        if (n && store.exec(deleteMembers(sel0))) store.toast(main ? 'error' : 'info', `נמחקו ${n} אלמנטים${main} — לשחזור: Ctrl+Z, או "שחזור" בסרגל הכלים`);
+      }
       else if (k === 'escape') { if (lpFullRef.current) { setLpFull(false); return; } store.select([]); store.set({ tool: 'select', measure: {}, activeConn: null }); }
       else if (k === 'f') vp.current?.fitAll();
       else if (k === 'z' && !mod) vp.current?.fitSelection();

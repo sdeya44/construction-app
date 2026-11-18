@@ -143,7 +143,8 @@ export function AssemblyCard({ m }: { m: Member }) {
       <div className="asm-h"><b>מכלול:</b> <span data-testid="asm-title">{asm.title}</span></div>
       <AsmPicture asm={asm} sel={m.id} />
       <div className="ss-row">
-        <button className="btn small" data-testid="asm-select" onClick={() => store.select(asm.ids.filter((x) => d.byId.has(x)))}>בחר את כל המכלול</button>
+        <button className="btn small" data-testid="asm-select" title="בוחר את חלקי המכלול בלבד — העמוד/הקורה שהוא מחובר אליהם אינם נבחרים (כדי שמחיקה לא תמחק אותם)"
+          onClick={() => store.select(asm.ids.filter((x) => { const mm = d.byId.get(x); return !!mm && (asm.family === 'frame' || !(mm.kind === 'column' || mm.kind === 'rafter' || mm.purlin || /^TB\.[^.]+$/.test(x))); }))}>בחר את כל המכלול</button>
         <button className="btn small" data-testid="asm-isolate" onClick={() => store.set({ isolated: asm.ids.filter((x) => d.byId.has(x)) })}>בודד בתצוגה</button>
       </div>
     </div>
