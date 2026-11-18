@@ -55,9 +55,19 @@ const E = 210000; // MPa
 const fyOf = (m: Member) => { try { return getMaterial(m.material).fy ?? 235; } catch { return 235; } };
 const f1 = (n: number) => n.toFixed(1), f2 = (n: number) => n.toFixed(2);
 
-interface Ctx { p: Project; transfers: NonNullable<Project['building']['transfers']>; cl?: Project['building']['cladding']; cfg: SizingCfg; trib: Map<string, number>; rafterSpan: Map<string, number>; bay: number; purlinS: Map<string, number>; crossed: Set<string> }
+interface Ctx { p: Project; transfers: NonNullable<Project['building']['transfers']>; cl?: Project['building']['cladding']; cfg: SizingCfg; trib: Map<string, number>; rafterSpan: Map<string, number>; bay: number; purlinS: Map<string, number>; crossed: Set<string>; frameSpan: Map<string, number>; frameRafH: Map<string, number> }
 
+// הקשר מחושב פעם אחת לכל מודל (בבוחר הפרופילים הוא נדרש לכל פרופיל מועמד — במודל גדול זה היה צוואר בקבוק)
+const ctxCache = new WeakMap<DerivedModel, { key: string; c: Ctx }>();
 function context(p: Project, d: DerivedModel): Ctx {
+  const key = JSON.stringify([p.settings.sizing ?? {}, p.building.transfers ?? [], p.building.frames, p.building.purlins, p.building.cladding?.roof ?? null]);
+  const hit = ctxCache.get(d);
+  if (hit && hit.key === key && hit.c.p.building === p.building) return hit.c;
+  const c = buildContext(p, d);
+  ctxCache.set(d, { key, c });
+  return c;
+}
+function buildContext(p: Project, d: DerivedModel): Ctx {
   const cfg = sizingCfg(p);
   const fr = [...p.building.frames].sort((a, b) => a.y - b.y);
   const trib = new Map<string, number>();
@@ -68,8 +78,10 @@ function context(p: Project, d: DerivedModel): Ctx {
   const bay = fr.length > 1 ? Math.max(...fr.slice(1).map((f, i) => f.y - fr[i].y)) : 6000;
   // מפתח קורה: בין העמודים שתומכים בה (זיז — כפליים מאורך הזיז)
   const rafterSpan = new Map<string, number>();
+  const colX = new Map<string, number[]>();
+  for (const c of d.members) if (c.kind === 'column' && c.frameId) { const a = colX.get(c.frameId); if (a) a.push(c.start.x); else colX.set(c.frameId, [c.start.x]); }
   for (const m of d.members.filter((x) => x.kind === 'rafter')) {
-    const xs = [...d.members.filter((c) => c.kind === 'column' && c.frameId === m.frameId).map((c) => c.start.x),
+    const xs = [...(colX.get(m.frameId ?? '') ?? []),
       ...(p.building.transfers ?? []).filter((t) => t.removed.includes(m.frameId ?? '')).map((t) => d.section?.lines.find((l) => l.id === t.lineId)?.x).filter((x): x is number => x !== undefined)].sort((a, b) => a - b);
     const x0 = Math.min(m.start.x, m.end.x), x1 = Math.max(m.start.x, m.end.x), xm = (x0 + x1) / 2;
     let L = x1 - x0;
@@ -84,7 +96,14 @@ function context(p: Project, d: DerivedModel): Ctx {
     purlinS.set(m.id, purlinParams(p.building.purlins, k).spacing);
   }
   const crossed = new Set(d.connections.filter((c) => c.type === 'brace-cross').flatMap((c) => c.members));
-  return { p, transfers: p.building.transfers ?? [], cl: p.building.cladding, cfg, trib, rafterSpan, bay, purlinS, crossed };
+  // מפתח הקורה הגדול במסגרת (לעמודים)
+  const frameSpan = new Map<string, number>();
+  const frameRafH = new Map<string, number>();
+  for (const m of d.members) if (m.kind === 'rafter' && m.frameId) {
+    frameSpan.set(m.frameId, Math.max(frameSpan.get(m.frameId) ?? 6000, rafterSpan.get(m.id) ?? 0));
+    frameRafH.set(m.frameId, Math.max(frameRafH.get(m.frameId) ?? 0, tryProfile(m.profile)?.props.h ?? 0));
+  }
+  return { p, transfers: p.building.transfers ?? [], cl: p.building.cladding, cfg, trib, rafterSpan, bay, purlinS, crossed, frameSpan, frameRafH };
 }
 
 /** הערכת אלמנט אחד; profName — לבדיקת מועמד בבוחר הפרופילים */
@@ -105,8 +124,7 @@ function assess(m: Member, c: Ctx, d: DerivedModel, profName?: string): SizeResu
   }
   if (m.kind === 'column') {
     const H = Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y, m.end.z - m.start.z);
-    const rafts = d.members.filter((x) => x.kind === 'rafter' && x.frameId === m.frameId);
-    const L = Math.max(6000, ...rafts.map((x) => c.rafterSpan.get(x.id) ?? 0));
+    const L = c.frameSpan.get(m.frameId ?? '') ?? 6000;
     const b = c.trib.get(m.frameId ?? '') ?? c.bay;
     const q = (w * b) / 1000;
     const M = (q * (L / 1000) ** 2) / 12, N = (q * L) / 2000; // kNm, kN
@@ -120,7 +138,7 @@ function assess(m: Member, c: Ctx, d: DerivedModel, profName?: string): SizeResu
     const uW = (0.7 * N * 1000) / (chi * P.area * fy) + ((0.7 * M + Mw) * 1e6) / ((P.Wy ?? 1) * fy);
     const util = Math.max(uG, uW);
     const hMin = H / cfg.columnMinDepth;
-    const rh = Math.max(...rafts.map((x) => tryProfile(x.profile)?.props.h ?? 0), 0);
+    const rh = c.frameRafH.get(m.frameId ?? '') ?? 0;
     const small = h < hMin || lamZ > cfg.slenderComp || h < 0.6 * rh;
     return { status: status(util, small, util < cfg.lowUtil && h > 2 * hMin && h > rh * 1.6), util, text: `גובה ${f1(H / 1000)} מ' · N≈${f1(N)} kN · M≈${f1(M)} kNm · רוח M≈${f1(Mw)} kNm · ניצולת ${f2(util)} · λz=${Math.round(lamZ)} · עומק ${Math.round(h)} (מינ' ${Math.round(hMin)})` };
   }
@@ -193,9 +211,22 @@ export function assessBraceCandidate(p: Project, d: DerivedModel, prefix: 'BR.R'
 }
 
 /** הערכת פרופיל מועמד לתפקיד: הגרוע מבין כל האלמנטים בתפקיד (קטן > מתאים > גדול) */
+const roleCache = new WeakMap<DerivedModel, Map<string, Member[]>>();
+const candCache = new WeakMap<Ctx, Map<string, SizeResult>>();
 export function assessCandidate(p: Project, d: DerivedModel, role: 'column' | 'rafter' | 'purlin', profName: string): SizeResult {
   const c = context(p, d);
-  const ms = d.members.filter((m) => (role === 'purlin' ? !!m.purlin : m.kind === role));
+  let cc = candCache.get(c); if (!cc) { cc = new Map(); candCache.set(c, cc); }
+  const ck = `${role}|${profName}`;
+  const hit = cc.get(ck); if (hit) return hit;
+  const r = assessCandidateRaw(p, d, c, role, profName);
+  cc.set(ck, r);
+  return r;
+}
+function assessCandidateRaw(p: Project, d: DerivedModel, c: Ctx, role: 'column' | 'rafter' | 'purlin', profName: string): SizeResult {
+  void p;
+  let rm = roleCache.get(d); if (!rm) { rm = new Map(); roleCache.set(d, rm); }
+  let ms = rm.get(role);
+  if (!ms) { ms = d.members.filter((m) => (role === 'purlin' ? !!m.purlin : m.kind === role)); rm.set(role, ms); }
   if (!ms.length) return { status: 'na', text: '' };
   const rs = ms.map((m) => assess(m, c, d, profName));
   const worst = rs.find((r) => r.status === 'small') ?? rs.reduce((a, r) => ((r.util ?? 0) > (a.util ?? 0) ? r : a), rs[0]);

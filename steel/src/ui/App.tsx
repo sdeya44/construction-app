@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { deleteMembers, restoreDeleted, setBuilding, setPurlinSide, setSection } from '../commands/commands';
 import { fromMm } from '../core/units';
 import { store, useStore, type ViewName } from '../store';
-import { VIEW_LABEL, Viewport } from '../view/viewport';
+import { VIEW_LABEL, Viewport, largeModel } from '../view/viewport';
 import { duplicateProject, exportProject, NewProjectDialog, OpenDialog, TransformDialog } from './Dialogs';
 import { Icon } from './icons';
 import { SizingPanel } from './SizingPanel';
@@ -99,6 +99,7 @@ export function App() {
   const sel = s.selection;
   const v = s.view;
   const errs = s.derived.issues.filter((i) => i.severity === 'error').length;
+  const bigModel = useMemo(() => largeModel(s.derived), [s.derived]);
   const warns = s.derived.issues.filter((i) => i.severity === 'warning').length;
 
   useEffect(() => {
@@ -260,7 +261,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.29</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.29.1</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -399,6 +400,7 @@ export function App() {
         <span>נבחרו: <b data-testid="status-sel">{sel.length}</b>{ms.length === 1 && <> · <b>{ms[0]!.label}</b></>}</span>
         <span>אלמנטים: <b>{s.derived.members.length}</b></span>
         {s.hidden.length > 0 && <span>מוסתרים: <b>{s.hidden.length}</b></span>}
+        {!s.isolated && bigModel && <span title="במודל גדול הברגים מוצגים רק בבידוד ובאלמנט הנבחר — כדי שהתצוגה תישאר מהירה" data-testid="status-bolts-hidden">ברגים מוסתרים בסקירה (מודל גדול)</span>}
         <span>שגיאות: <b style={{ color: errs ? 'var(--err)' : undefined }}>{errs}</b> · אזהרות: <b>{warns}</b></span>
         <span className="sp" />
         <span>יחידות: <b>{u === 'm' ? 'מטר' : 'מ"מ'}</b> · מודל פנימי מ"מ</span>

@@ -632,6 +632,24 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
 export function checkClashes(conns: Connection[], byId: Map<string, Member>): ValidationIssue[] {
   const out: ValidationIssue[] = [];
   const seen = new Set<string>();
+  // תיבות חוסמות — מחושבות פעם אחת לכל אלמנט (חישוב מוצק יקר), ורשת מרחבית לחיפוש שכנים (מודלים של עשרות אלפי אלמנטים)
+  const boxCache = new Map<string, ReturnType<typeof aabb>>();
+  const box = (m: Member) => { let b = boxCache.get(m.id); if (!b) { b = aabb(m); boxCache.set(m.id, b); } return b; };
+  const CELL = 1500;
+  const gridOf = (list: Member[]) => {
+    const g = new Map<string, Member[]>();
+    for (const m of list) {
+      const b = box(m);
+      for (let i = Math.floor(b.min.x / CELL); i <= Math.floor(b.max.x / CELL); i++) for (let j = Math.floor(b.min.y / CELL); j <= Math.floor(b.max.y / CELL); j++) for (let k = Math.floor(b.min.z / CELL); k <= Math.floor(b.max.z / CELL); k++) {
+        const key = `${i}|${j}|${k}`; const a = g.get(key); if (a) a.push(m); else g.set(key, [m]);
+      }
+    }
+    return (q: ReturnType<typeof aabb>): Member[] => {
+      const res = new Set<Member>();
+      for (let i = Math.floor(q.min.x / CELL); i <= Math.floor(q.max.x / CELL); i++) for (let j = Math.floor(q.min.y / CELL); j <= Math.floor(q.max.y / CELL); j++) for (let k = Math.floor(q.min.z / CELL); k <= Math.floor(q.max.z / CELL); k++) for (const m of g.get(`${i}|${j}|${k}`) ?? []) res.add(m);
+      return [...res];
+    };
+  };
   const test = (a?: Member, b?: Member, note = '') => {
     if (!a || !b) return;
     const key = [a.id, b.id].sort().join('|');
@@ -641,6 +659,7 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
     if (c) out.push({ code: 'CLASH', severity: 'error', elementId: a.id, message: `התנגשות ${a.id} ↔ ${b.id}: חדירה ${c.depth.toFixed(1)} מ"מ${note}` });
   };
   const ridgeGroup: Member[] = [];
+  const spliceChecks: Connection[] = [];
   for (const c of conns) {
     if (c.type === 'custom') continue; // נבדק בבניית הפרט המותאם
     if (c.type === 'purlin-cleat') {
@@ -653,7 +672,7 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
       for (const bo of c.bolts) { test(byId.get(`${bo.id}.H`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(pid), ' (אום מול חתך הפטה)'); }
     } else if (c.type === 'beam-splice') {
       // פלטות ההמשך יושבות בתפר של האלמנט (שאינו מפוצל במודל) — נבדקות מול שאר האלמנטים בלבד
-      for (const part of c.parts.filter((x) => byId.get(x)?.kind === 'plate')) for (const o of byId.values()) if (['purlin', 'cleat', 'brace', 'plate'].includes(o.kind) && !c.parts.includes(o.id) && aabbOverlap(aabb(byId.get(part)!), aabb(o))) test(byId.get(part), o, ' (חיבור המשך)');
+      spliceChecks.push(c);
     } else {
       // לשונית (".T") בחריץ ה-RHS של האלמנט המחובר — מותר; מול המארח — נבדקת
       for (const part of c.parts.filter((x) => ['plate', 'beam'].includes(byId.get(x)?.kind ?? ''))) for (const mid of c.members) {
@@ -665,14 +684,22 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
   }
   // קושרות ושורות קשירה מול עמודים, קורות, פטות, תומכים וקושרות אחרות (סינון לפי תיבה חוסמת)
   // חלקי פרט מותאם נבדקים בבניית הפרט עצמו
+  if (spliceChecks.length) {
+    const near = gridOf([...byId.values()].filter((o) => ['purlin', 'cleat', 'brace', 'plate'].includes(o.kind)));
+    for (const c of spliceChecks) for (const part of c.parts.filter((x) => byId.get(x)?.kind === 'plate')) {
+      const a = byId.get(part)!, ba = box(a);
+      for (const o of near(ba)) if (!c.parts.includes(o.id) && aabbOverlap(ba, box(o))) test(a, o, ' (חיבור המשך)');
+    }
+  }
   const others = [...byId.values()].filter((m) => ['column', 'rafter', 'purlin', 'cleat', 'plate', 'brace'].includes(m.kind) && !m.connId?.startsWith('C.CD.'));
-  const boxes = new Map(others.map((m) => [m.id, aabb(m)]));
+  const nearO = gridOf(others);
+  const boxes = { get: (id: string) => { const m = byId.get(id); return m ? box(m) : undefined; } };
   for (const c of conns.filter((x) => x.type === 'brace' || x.type === 'knee')) {
     for (const pid of c.parts) {
       const a = byId.get(pid);
       if (!a) continue;
-      const ba = boxes.get(pid) ?? aabb(a);
-      for (const o of others) {
+      const ba = box(a);
+      for (const o of nearO(ba)) {
         if (o.id === pid || (o.kind === 'brace' && c.parts.includes(o.id))) continue;
         // לשונית בחריץ ה-RHS של אותו חיבור — מותר (החריץ חותך את דפנות הפרופיל)
         const own = (id: string) => c.parts.includes(id) || c.members.includes(id);
@@ -688,8 +715,8 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
     for (const pid of [...c.parts, ...c.members.filter((m) => byId.get(m)?.kind === 'brace')]) {
       const a = byId.get(pid);
       if (!a || a.kind === 'bolt') continue;
-      const ba = boxes.get(pid) ?? aabb(a);
-      for (const o of others) {
+      const ba = box(a);
+      for (const o of nearO(ba)) {
         if (o.id === pid) continue;
         const ownPair = own.has(o.id) && (a.kind === 'plate' || o.kind === 'plate');
         const tongueOfOther = (a.kind === 'brace' && o.id.startsWith(`${a.id}.T`)) || (o.kind === 'brace' && pid.startsWith(`${o.id}.T`));
@@ -711,8 +738,8 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
   {
     const cols = [...byId.values()].filter((m) => m.kind === 'column');
     const pc = [...byId.values()].filter((m) => m.kind === 'purlin' || m.kind === 'cleat');
-    const cb = new Map(cols.map((m) => [m.id, aabb(m)]));
-    for (const p of pc) { const bp = aabb(p); for (const c of cols) if (aabbOverlap(bp, cb.get(c.id)!)) test(p, c, ' (פטה/תושבת מול עמוד)'); }
+    const nearC = gridOf(cols);
+    for (const p of pc) { const bp = box(p); for (const c of nearC(bp)) if (aabbOverlap(bp, box(c))) test(p, c, ' (פטה/תושבת מול עמוד)'); }
   }
   return out;
 }

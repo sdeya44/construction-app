@@ -228,6 +228,9 @@ class Pane {
 }
 
 /** מנוע תצוגה תלת־ממדי: תצוגה בלבד; כל שינוי במודל עובר דרך store/פקודות. */
+/** מודל גדול (מעל 6000 חלקי ברגים): ברגים מוסתרים בסקירה הכללית */
+export const largeModel = (d: { members: { kind: string }[] }) => { let n = 0; for (const m of d.members) if (m.kind === 'bolt' && ++n > 6000) return true; return false; };
+
 export class Viewport {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
@@ -345,7 +348,9 @@ export class Viewport {
       this.scene.remove(this.model.mesh, this.model.edges);
       this.model.mesh.geometry.dispose(); this.model.edges.geometry.dispose();
     }
-    const vis = visibleMembers(s.derived, s.hidden, s.isolated).filter((m) => s.filter[m.kind] !== false);
+    let vis = visibleMembers(s.derived, s.hidden, s.isolated).filter((m) => s.filter[m.kind] !== false);
+    // מודל גדול: ברגים (רוב הגיאומטריה) מוצגים רק במצב בידוד — ובבחירה (שכבת הבחירה) — כדי שהתצוגה תישאר מהירה
+    if (!s.isolated && largeModel(s.derived)) vis = vis.filter((m) => m.kind !== 'bolt');
     let colorOf: ((m: Member) => number | undefined) | undefined;
     if (s.colorMode === 'sizing') {
       const sz = sizingAll(s.project, s.derived);
@@ -356,6 +361,13 @@ export class Viewport {
   }
 
   private rebuildSelection(s: AppState) {
+    // מודל גדול: בבחירה מוצגים גם הברגים של החיבורים של האלמנט הנבחר
+    if (largeModel(s.derived) && s.selection.length && s.selection.length < 200) {
+      const ids = new Set(s.selection);
+      const extra: string[] = [];
+      for (const c of s.derived.connections) if (c.parts.some((x) => ids.has(x)) || c.members.some((x) => ids.has(x))) for (const b of c.bolts) extra.push(`${b.id}.H`, `${b.id}.S`, `${b.id}.N`);
+      s = { ...s, selection: [...s.selection, ...extra.filter((x) => s.derived.byId.has(x))] };
+    }
     for (const c of [...this.selGroup.children]) { this.selGroup.remove(c); (c as THREE.Mesh).geometry.dispose(); }
     const ms = s.selection.map((id) => s.derived.byId.get(id)).filter(Boolean) as NonNullable<ReturnType<typeof s.derived.byId.get>>[];
     if (!ms.length) return;
