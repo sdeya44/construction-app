@@ -135,7 +135,9 @@ export function App() {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && k === 'k') { e.preventDefault(); setPalette((x) => !x); return; }
       const t = e.target as HTMLElement;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+      // שדות הקלדה בלבד — תיבת סימון/כפתור רדיו לא חוסמים קיצורים (Delete, Ctrl+Z)
+      const typing = t && ((t.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'range'].includes((t as HTMLInputElement).type)) || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      if (typing) return;
       // סטודיו הפרטים פתוח — המקשים שייכים לו (Delete שם מוחק פעולה, לא אלמנט מהמודל)
       if (dialog || palette || menu || store.state.detailStudio) return;
       if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); store.undo(); }
