@@ -1,6 +1,7 @@
 import { GUTTER_DEVS, gutterDev, gutterRuns, gutterSpec } from '../geometry/gutter';
 import type { GutterSpec } from '../model/types';
 import { OpeningsSchematic, WallCladSchematic } from './schematics';
+import { Schematic, type SDim } from './Schematic';
 import { useState } from 'react';
 import { useMemo } from 'react';
 import { setBuilding } from '../commands/commands';
@@ -47,33 +48,7 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
         <div className="field"><label>בליטה לתוך המזחלה</label><LenField mm={cl.roof.eaveExt} unit="mm" onCommit={(v) => set({ roof: { ...cl.roof, eaveExt: v } })} /></div>
         <label className="row"><input type="checkbox" checked={cl.gutter.enabled} data-testid="clad-gutter" onChange={(e) => set({ gutter: { ...cl.gutter, enabled: e.target.checked } })} />מזחלות ומרזבים</label>
         <div className="field"><label>מרזב כל</label><LenField mm={cl.gutter.downpipeSpacing} unit={unit} onCommit={(v) => set({ gutter: { ...cl.gutter, downpipeSpacing: v } })} /></div>
-        {cl.gutter.enabled && (() => {
-          const gs = gutterSpec(cl.gutter);
-          const setG = (patch: Partial<GutterSpec>) => set({ gutter: { ...cl.gutter, spec: { ...(cl.gutter.spec ?? {}), ...patch } } });
-          const n = (k: keyof GutterSpec, lbl: string) => <div className="field" key={k}><label>{lbl}</label><LenField testId={`gut-${k}`} mm={gs[k] as number} unit="mm" onCommit={(v) => setG({ [k]: v } as Partial<GutterSpec>)} /></div>;
-          return <Adv id="gutter" label="חתך המזחלה, תמיכות וירידות">
-            <div className="hint" style={{ marginTop: 0 }}>פריסת הפח: <b>{gutterDev(gs)} מ"מ</b> · {(gs.support ?? 'twin') === 'plate' ? `פלטה ${gs.plateT ?? 8} מ"מ בקצה הקורה + זוויתן ${gs.bracket.replace('x', '/')} אופקי` : `תומך ${gs.bracket.replace('x', '/')} ×2 בכל קצה קורה`} (מרותך במסגריה). פרט מלא בגיליון K-02.</div>
-            <div className="field"><label>פריסה סטנדרטית</label>
-              <select className="inp" data-testid="gut-dev" value={GUTTER_DEVS[gutterDev(gs)] ? String(gutterDev(gs)) : ''} onChange={(e) => { const v = GUTTER_DEVS[Number(e.target.value)]; if (v) setG(v); }}>
-                <option value="">מותאם ({gutterDev(gs)})</option>{Object.keys(GUTTER_DEVS).map((k) => <option key={k} value={k}>{k} מ"מ</option>)}
-              </select></div>
-            <div className="field"><label>סוג תמיכה</label>
-              <select className="inp" data-testid="gut-support" value={gs.support ?? 'web'} onChange={(e) => setG({ support: e.target.value as 'web' | 'twin' | 'plate' })}>
-                <option value="web">זוויתן בחפיפה על צד הווב (נמוך מהקורה — על פלטה)</option><option value="twin">2 זוויתנים מרותכים לקצה הקורה</option><option value="plate">פלטה בקצה הקורה + זוויתן</option>
-              </select></div>
-            <div className="field"><label>כיוון התושבת</label>
-              <select className="inp" data-testid="gut-slope" value={gs.bracketSlope ?? 'horizontal'} onChange={(e) => setG({ bracketSlope: e.target.value as 'horizontal' | 'roof' })}>
-                <option value="horizontal">אופקית</option><option value="roof">בשיפוע הגג</option>
-              </select></div>
-            <div className="field"><label>גובה המזחלה והתושבת (+ למעלה)</label><LenField testId="gut-offset" mm={gs.bracketOffset ?? 0} unit="mm" onCommit={(v) => setG({ bracketOffset: v })} /></div>
-            {(gs.support ?? 'web') === 'web' && <div className="field"><label>אורך חפיפה על הווב</label><LenField testId="gut-lap" mm={gs.lap ?? 150} unit="mm" onCommit={(v) => setG({ lap: Math.max(50, v) })} /></div>}
-            {gs.support === 'plate' && <div className="field"><label>עובי פלטה</label><LenField testId="gut-plateT" mm={gs.plateT ?? 8} unit="mm" onCommit={(v) => setG({ plateT: v })} /></div>}
-            <div className="field"><label>חתך משתנה — תוספת עומק בירידה</label><LenField testId="gut-fall" mm={gs.fall ?? 0} unit="mm" onCommit={(v) => setG({ fall: Math.max(0, v) })} /></div>
-            {n('t', 'עובי פח')}{n('bottom', 'רוחב תחתית')}{n('inner', 'דופן פנימית')}{n('outer', 'דופן חיצונית')}{n('lip', 'כיפוף שפה')}
-            <div className="field prof"><label>זוויתן תומך</label><ProfilePicker value={gs.bracket} families={['L']} onCommit={(v) => setG({ bracket: v })} /></div>
-            {n('hangerSpacing', 'מתלי פח כל (0=ללא)')}{n('pipeD', 'קוטר ירידת מרזב')}{n('clampSpacing', 'שלות כל')}
-          </Adv>;
-        })()}
+        {cl.gutter.enabled && <Adv id="gutter" label="חתך המזחלה, תמיכות וירידות"><GutterFields /></Adv>}
         {cl.gutter.enabled && <GutterBays />}
         <div className="field"><label>ברגים לגג (למ"ר)</label><NumField value={cl.roofScrewsPerM2} onCommit={(v) => set({ roofScrewsPerM2: v })} /></div>
       </>}
@@ -177,14 +152,14 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
 }
 
 /** מזחלות: באילו מפתחים יש מזחלה, ובאילו מסגרות יש ירידת מרזב — לכל מזחלה (קצה תחתון של מישור) */
-function GutterBays() {
+function GutterBays({ only }: { only?: string } = {}) {
   const p = useStore((s) => s.project);
   const d = useStore((s) => s.derived);
   const b = p.building, cl = b.cladding!;
   const fr = [...b.frames].sort((a, c) => a.y - c.y);
   const nb = fr.length - 1;
   const local = d.plan?.local.derived ?? d;
-  const runs = d.section ? gutterRuns({ ...b, cladding: { ...cl, gutter: { ...cl.gutter, perRun: undefined } } }, d.section, local.members).filter((r) => r.kind === 'eave' && r.planeId) : [];
+  const runs = d.section ? gutterRuns({ ...b, cladding: { ...cl, gutter: { ...cl.gutter, perRun: undefined } } }, d.section, local.members).filter((r) => r.kind === 'eave' && r.planeId && (!only || r.planeId === only)) : [];
   const cur = gutterRuns(b, d.section!, local.members);
   if (!runs.length) return null;
   const setRun = (pid: string, patch: { bays?: boolean[]; downpipes?: number[] | undefined }) => {
@@ -208,4 +183,92 @@ function GutterBays() {
     })}
     <div className="hint">סימון מפתח מבטל/מוסיף מזחלה באותו מפתח (התושבות נבנות רק במסגרות של המקטעים הפעילים). ירידות — לפי המסגרות שסומנו; בלי סימון ידני — אוטומטי לפי "מרזב כל".</div>
   </div>;
+}
+
+/** שדות המזחלה (חתך, תמיכה, ירידות) — משותפים לתפריט החיפוי ולאשף המזחלה */
+export function GutterFields() {
+  const p = useStore((st) => st.project);
+  const cl = p.building.cladding!;
+  const set = (patch: Partial<CladdingParams>) => store.exec(setBuilding({ cladding: { ...cl, ...patch } }));
+  const gs = gutterSpec(cl.gutter);
+  const setG = (patch: Partial<GutterSpec>) => set({ gutter: { ...cl.gutter, spec: { ...(cl.gutter.spec ?? {}), ...patch } } });
+  const n = (k: keyof GutterSpec, lbl: string) => <div className="field" key={k}><label>{lbl}</label><LenField testId={`gut-${k}`} mm={gs[k] as number} unit="mm" onCommit={(v) => setG({ [k]: v } as Partial<GutterSpec>)} /></div>;
+  return <>
+            <div className="hint" style={{ marginTop: 0 }}>פריסת הפח: <b>{gutterDev(gs)} מ"מ</b> · {(gs.support ?? 'web') === 'plate' ? `פלטה ${gs.plateT ?? 8} מ"מ בקצה הקורה + זוויתן ${gs.bracket.replace('x', '/')}` : (gs.support ?? 'web') === 'web' ? `זוויתן ${gs.bracket.replace('x', '/')} בחפיפה ${gs.lap ?? 150} על צד הווב (נמוך מהקורה — על פלטת קצה)` : `תומך ${gs.bracket.replace('x', '/')} ×2 בכל קצה קורה`} (מרותך במסגריה). פרט מלא בגיליון K-02.</div>
+            <div className="field"><label>פריסה סטנדרטית</label>
+              <select className="inp" data-testid="gut-dev" value={GUTTER_DEVS[gutterDev(gs)] ? String(gutterDev(gs)) : ''} onChange={(e) => { const v = GUTTER_DEVS[Number(e.target.value)]; if (v) setG(v); }}>
+                <option value="">מותאם ({gutterDev(gs)})</option>{Object.keys(GUTTER_DEVS).map((k) => <option key={k} value={k}>{k} מ"מ</option>)}
+              </select></div>
+            <div className="field"><label>סוג תמיכה</label>
+              <select className="inp" data-testid="gut-support" value={gs.support ?? 'web'} onChange={(e) => setG({ support: e.target.value as 'web' | 'twin' | 'plate' })}>
+                <option value="web">זוויתן בחפיפה על צד הווב (נמוך מהקורה — על פלטה)</option><option value="twin">2 זוויתנים מרותכים לקצה הקורה</option><option value="plate">פלטה בקצה הקורה + זוויתן</option>
+              </select></div>
+            <div className="field"><label>כיוון התושבת</label>
+              <select className="inp" data-testid="gut-slope" value={gs.bracketSlope ?? 'horizontal'} onChange={(e) => setG({ bracketSlope: e.target.value as 'horizontal' | 'roof' })}>
+                <option value="horizontal">אופקית</option><option value="roof">בשיפוע הגג</option>
+              </select></div>
+            <div className="field"><label>גובה המזחלה והתושבת (+ למעלה)</label><LenField testId="gut-offset" mm={gs.bracketOffset ?? 0} unit="mm" onCommit={(v) => setG({ bracketOffset: v })} /></div>
+            {(gs.support ?? 'web') === 'web' && <div className="field"><label>אורך חפיפה על הווב</label><LenField testId="gut-lap" mm={gs.lap ?? 150} unit="mm" onCommit={(v) => setG({ lap: Math.max(50, v) })} /></div>}
+            {gs.support === 'plate' && <div className="field"><label>עובי פלטה</label><LenField testId="gut-plateT" mm={gs.plateT ?? 8} unit="mm" onCommit={(v) => setG({ plateT: v })} /></div>}
+            <div className="field"><label>חתך משתנה — תוספת עומק בירידה</label><LenField testId="gut-fall" mm={gs.fall ?? 0} unit="mm" onCommit={(v) => setG({ fall: Math.max(0, v) })} /></div>
+            {n('t', 'עובי פח')}{n('bottom', 'רוחב תחתית')}{n('inner', 'דופן פנימית')}{n('outer', 'דופן חיצונית')}{n('lip', 'כיפוף שפה')}
+            <div className="field prof"><label>זוויתן תומך</label><ProfilePicker value={gs.bracket} families={['L']} onCommit={(v) => setG({ bracket: v })} /></div>
+            {n('hangerSpacing', 'מתלי פח כל (0=ללא)')}{n('pipeD', 'קוטר ירידת מרזב')}{n('clampSpacing', 'שלות כל')}
+          </>;
+}
+
+/** חתך המזחלה בשרטוט עם מידות לעריכה בלחיצה (✎) */
+export function GutterSchematic() {
+  const p = useStore((st) => st.project);
+  const cl = p.building.cladding!;
+  const gs = gutterSpec(cl.gutter);
+  const setG = (patch: Partial<GutterSpec>) => store.exec(setBuilding({ cladding: { ...cl, gutter: { ...cl.gutter, spec: { ...(cl.gutter.spec ?? {}), ...patch } } } }));
+  const k = 150 / Math.max(gs.bottom + 260, gs.outer + 120, 400);
+  const X0 = 70, Y0 = 20 + gs.outer * k, x = (mm: number) => X0 + mm * k, y = (mm: number) => Y0 - mm * k;
+  const inner = gs.inner, lap = gs.lap ?? 150, lh = 50;
+  const sup = gs.support ?? 'web';
+  const sl = (gs.bracketSlope ?? 'horizontal') === 'roof' ? 0.1 : 0;
+  const dims: SDim[] = [
+    { a: [x(0), y(0)], b: [x(gs.bottom), y(0)], off: -10, value: gs.bottom, testId: 'gsch-bottom', onCommit: (v) => setG({ bottom: v }) },
+    { a: [x(0), y(0)], b: [x(0), y(inner)], off: 12, value: inner, testId: 'gsch-inner', onCommit: (v) => setG({ inner: v }) },
+    { a: [x(gs.bottom), y(0)], b: [x(gs.bottom), y(gs.outer)], off: -12, value: gs.outer, testId: 'gsch-outer', onCommit: (v) => setG({ outer: v }) },
+    ...(sup === 'web' ? [{ a: [x(-lap), y(-lh) + 14] as [number, number], b: [x(0), y(-lh) + 14] as [number, number], off: -6, value: lap, testId: 'gsch-lap', onCommit: (v: number) => setG({ lap: Math.max(50, v) }) }] : []),
+  ];
+  return (
+    <Schematic w={260} h={Math.round(Y0 + lh * k + 50)} dims={dims} testId="gut-sch" caption="חתך המזחלה — לחיצה על מידה ✎ משנה אותה">
+      {/* קצה הקורה והפטה האחרונה */}
+      <rect x={x(-lap - 120)} y={y(inner - 20)} width={(lap + 120) * k} height={Math.max(8, 180 * k)} className="sm-main" fill="none" strokeWidth={1} />
+      <rect x={x(-70)} y={y(inner + 10) - 0} width={50 * k} height={20 * k + 4} className="sm-main" fill="none" strokeWidth={1} />
+      {/* המזחלה */}
+      <polyline points={[[x(-gs.lip), y(inner)], [x(0), y(inner)], [x(0), y(0)], [x(gs.bottom), y(0)], [x(gs.bottom), y(gs.outer)], [x(gs.bottom - gs.lip), y(gs.outer)]].map((q) => q.join(',')).join(' ')} className="sm-hi" fill="none" strokeWidth={2} />
+      {/* זוויתן התמיכה */}
+      {sup === 'web'
+        ? <polygon points={[[x(-lap), y(lap * sl)], [x(gs.bottom + 20), y(-(gs.bottom + 20) * sl)], [x(gs.bottom + 20), y(-(gs.bottom + 20) * sl - lh)], [x(-lap), y(lap * sl - lh)]].map((q) => q.join(',')).join(' ')} className="sm-main" fill="rgba(80,100,90,.15)" strokeWidth={1} />
+        : <polygon points={[[x(0), y(0)], [x(gs.bottom + 20), y(0)], [x(gs.bottom + 20), y(-5)], [x(5), y(-5)], [x(5), y(-lh)], [x(0), y(-lh)]].map((q) => q.join(',')).join(' ')} className="sm-main" fill="rgba(80,100,90,.15)" strokeWidth={1} />}
+      <text x={x(gs.bottom / 2)} y={y(gs.outer) - 4} className="sm-lbl-s" textAnchor="middle">פריסה {gutterDev(gs)} · t={gs.t}</text>
+      <text x={x(-lap - 60)} y={y(inner - 20) - 3} className="sm-lbl-s" textAnchor="middle">קורה + פטה</text>
+    </Schematic>
+  );
+}
+
+/** אשף מזחלה — נפתח בלחיצה על המזחלה בתלת־ממד */
+export function GutterWizard({ planeId }: { planeId: string }) {
+  const p = useStore((st) => st.project);
+  const d = useStore((st) => st.derived);
+  const cl = p.building.cladding;
+  if (!cl?.gutter.enabled) return <div className="panel-body"><div className="hint">המזחלות כבויות.</div></div>;
+  const local = d.plan?.local.derived ?? d;
+  const runs = d.section ? gutterRuns(p.building, d.section, local.members).filter((r) => (r.planeId ?? r.id) === planeId) : [];
+  const r0 = runs[0];
+  return (
+    <div className="panel-body" data-testid="gutter-wizard">
+      <div className="el-head"><div className="k">מזחלה</div><div className="t"><b>{r0?.label.replace(/ \(מפתחים.*\)$/, '') ?? planeId}</b>
+        <button className="icon-btn" aria-label="סגירה" onClick={() => store.set({ activeGutter: null })}><Icon name="x" /></button></div></div>
+      {runs.length > 0 && <div className="hint" style={{ marginTop: 0 }}>{runs.map((r) => `${((r.y1 - r.y0) / 1000).toFixed(1)} מ' · ${r.downpipes.length} ירידות`).join(' | ')} · גובה תחתית {(r0!.zBottom / 1000).toFixed(2)}</div>}
+      <GutterSchematic />
+      <GutterFields />
+      <GutterBays only={planeId} />
+      <div className="hint">השינויים חלים על כל המזחלות בפרויקט (חתך ותמיכה); המפתחים והירידות — למזחלה הזו. פרט מלא בגיליון K-02.</div>
+    </div>
+  );
 }

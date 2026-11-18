@@ -71,8 +71,10 @@ test('UX-03: תפריט מעגלי בלחיצה ימנית ולוח פקודות
   await page.keyboard.press('Control+k');
   await expect(page.getByTestId('cmdk')).toBeVisible();
   await page.getByTestId('cmdk-input').fill('הצג הכל');
+  await expect(page.getByTestId('cmdk')).toContainText('הצג הכל');
+  await page.waitForTimeout(150); // הרשימה מתעדכנת אחרי ההקלדה
   await page.keyboard.press('Enter');
-  expect(await page.evaluate(() => (window as any).__ksp.store.state.isolated)).toBeNull();
+  await expect.poll(() => page.evaluate(() => (window as any).__ksp.store.state.isolated)).toBeNull();
   // לוח פקודות: חיפוש אלמנט
   await page.keyboard.press('Control+k');
   await page.getByTestId('cmdk-input').fill('PL.R.04');

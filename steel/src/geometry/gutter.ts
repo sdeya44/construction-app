@@ -261,9 +261,9 @@ function plateSupport(out: { members: Member[]; connections: Connection[]; issue
 }
 
 /** משטחים לתצוגה: פח המזחלה (חתך מוחלץ לאורך Y) וירידות המרזב */
-export function gutterSurfaces(b: BuildingParams, runs: GutterRun[]): { kind: 'gutter' | 'pipe'; pts: Vec3[] }[] {
+export function gutterSurfaces(b: BuildingParams, runs: GutterRun[]): { kind: 'gutter' | 'pipe'; pts: Vec3[]; ref?: string }[] {
   const s = gutterSpec(b.cladding?.gutter);
-  const out: { kind: 'gutter' | 'pipe'; pts: Vec3[] }[] = [];
+  const out: { kind: 'gutter' | 'pipe'; pts: Vec3[]; ref?: string }[] = [];
   for (const r of runs) {
     const d = r.dir;
     const prof = r.kind === 'eave'
@@ -271,14 +271,14 @@ export function gutterSurfaces(b: BuildingParams, runs: GutterRun[]): { kind: 'g
       : [[r.x, r.zInnerTop], [r.x, r.zBottom], [r.x + s.bottom, r.zBottom], [r.x + s.bottom, r.zInnerTop]];
     for (let i = 0; i < prof.length - 1; i++) {
       const [ax, az] = prof[i]!, [bx, bz] = prof[i + 1]!;
-      out.push({ kind: 'gutter', pts: [v3(ax, r.y0, az), v3(bx, r.y0, bz), v3(bx, r.y1, bz), v3(ax, r.y1, az)] });
+      out.push({ kind: 'gutter', ref: r.planeId ?? r.id, pts: [v3(ax, r.y0, az), v3(bx, r.y0, bz), v3(bx, r.y1, bz), v3(ax, r.y1, az)] });
     }
     for (const dp of r.downpipes) {
       const R = s.pipeD / 2, n = 8;
       for (let i = 0; i < n; i++) {
         const a0 = (2 * Math.PI * i) / n, a1 = (2 * Math.PI * (i + 1)) / n;
         const p = (a: number, z: number) => v3(dp.x + R * Math.cos(a), dp.y + R * Math.sin(a), z);
-        out.push({ kind: 'pipe', pts: [p(a0, dp.zBottom), p(a1, dp.zBottom), p(a1, dp.zTop), p(a0, dp.zTop)] });
+        out.push({ kind: 'pipe', ref: r.planeId ?? r.id, pts: [p(a0, dp.zBottom), p(a1, dp.zBottom), p(a1, dp.zTop), p(a0, dp.zTop)] });
       }
     }
   }

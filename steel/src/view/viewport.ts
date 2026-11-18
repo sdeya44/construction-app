@@ -395,14 +395,17 @@ export class Viewport {
     const unit = s.project.displayUnit;
     const fmt = (mm: number) => (unit === 'm' ? fromMm(mm, 'm').toFixed(2) : mm.toFixed(0));
     // משטחי חיפוי שקופים (גג וקירות)
-    if (s.view.cladding && b.cladding) {
+    this.gutterMeshes = [];
+    if (b.cladding) {
       const t = claddingTakeoff(s.project, d);
-      if (t) for (const sf of t.surfaces) {
+      // מזחלות וירידות — מוצגות תמיד (גם כששכבת החיפוי כבויה) וניתנות לבחירה בלחיצה; פנלי חיפוי — לפי השכבה
+      if (t) for (const sf of t.surfaces.filter((x) => s.view.cladding || x.kind === 'gutter' || x.kind === 'pipe')) {
         const pos: number[] = [];
         for (let i = 1; i < sf.pts.length - 1; i++) for (const q of [sf.pts[0], sf.pts[i], sf.pts[i + 1]]) pos.push(q.x, q.y, q.z);
         const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
         const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: sf.kind === 'roof' ? 0x6f8fa8 : sf.kind === 'gutter' ? 0x8c9aa6 : sf.kind === 'pipe' ? 0x7a8790 : 0x9aa8a0, transparent: true, opacity: sf.kind === 'roof' ? 0.16 : sf.kind === 'gutter' || sf.kind === 'pipe' ? 0.75 : 0.12, side: THREE.DoubleSide, depthWrite: false }));
         mesh.renderOrder = 2;
+        if ((sf.kind === 'gutter' || sf.kind === 'pipe') && sf.ref) { mesh.userData.gutter = sf.ref; this.gutterMeshes.push(mesh); if (s.activeGutter === sf.ref) (mesh.material as THREE.MeshBasicMaterial).color.set(0xe0662c); }
         this.helpers.add(mesh);
         const lp: number[] = []; for (let i = 0; i < sf.pts.length; i++) { const a = sf.pts[i], c = sf.pts[(i + 1) % sf.pts.length]; lp.push(a.x, a.y, a.z, c.x, c.y, c.z); }
         const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
@@ -597,6 +600,15 @@ export class Viewport {
     return { ids, points, tri };
   }
 
+  gutterMeshes: THREE.Mesh[] = [];
+  pickGutter(p: Pane, clientX: number, clientY: number): { ref: string; d: number } | null {
+    if (!this.gutterMeshes.length) return null;
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(p.ndc(clientX, clientY), p.camera);
+    const h = rc.intersectObjects(this.gutterMeshes, false)[0];
+    return h ? { ref: h.object.userData.gutter as string, d: h.distance } : null;
+  }
+
   handleClick(p: Pane, e: PointerEvent) {
     const s = store.state;
     const r = this.pickAll(p, e.clientX, e.clientY);
@@ -608,6 +620,15 @@ export class Viewport {
       store.set({ measure: !m.a || m.b ? { a: v } : { a: m.a, b: v } });
       return;
     }
+    // מזחלה/ירידה לפני כל אלמנט אחר בקרן — פתיחת אשף המזחלה
+    const g = this.pickGutter(p, e.clientX, e.clientY);
+    if (g && (!r.points.length || g.d < r.points[0]!.distanceTo(p.camera.position) - 1)) {
+      store.select([]);
+      store.set({ activeGutter: g.ref, activeConn: null });
+      p.lastPick = undefined;
+      return;
+    }
+    if (s.activeGutter) store.set({ activeGutter: null });
     if (!r.ids.length) {
       if (!e.ctrlKey && !e.metaKey && !e.shiftKey) store.select([]);
       p.lastPick = undefined;

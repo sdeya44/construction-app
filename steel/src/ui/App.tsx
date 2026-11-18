@@ -48,10 +48,10 @@ export function App() {
   const [treeHidden, setTreeHiddenS] = useState(() => { try { return localStorage.getItem('ksp-tree-hidden') === '1'; } catch { return false; } });
   const setTreeHidden = (v: boolean) => { setTreeHiddenS(v); try { localStorage.setItem('ksp-tree-hidden', v ? '1' : '0'); } catch { /* */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 30); };
   const [lpFull, setLpFull] = useState(false);
-  const selNow = useStore((x) => x.selection), connNow = useStore((x) => x.activeConn);
+  const selNow = useStore((x) => x.selection), connNow = useStore((x) => x.activeConn), gutNow = useStore((x) => x.activeGutter);
   // בחירה חדשה / חיבור פתוח ← הפאנל עובר למאפיינים; ניקוי הבחירה ← חזרה להגדרות
   const selSig = `${selNow.join(',')}|${connNow ?? ''}`;
-  useEffect(() => { setLp(selNow.length || connNow ? 'sel' : 'nav'); }, [selSig]);
+  useEffect(() => { setLp(selNow.length || connNow || gutNow ? 'sel' : 'nav'); }, [selSig, gutNow]);
   const navShown = !wide || lp === 'nav';
   useEffect(() => { const k = navShown ? nav : undefined; if (store.state.navKey !== k) store.set({ navKey: k }); }, [nav, navShown]);
   const setTab = (t: SideTab) => setNav(t);
@@ -261,7 +261,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.30</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.30.1</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -386,7 +386,7 @@ export function App() {
           {wide && (
             <div className="lp-tabs" role="tablist" aria-label="תוכן הפאנל">
               <button role="tab" aria-selected={lp === 'nav'} className={`lp-tab${lp === 'nav' ? ' on' : ''}`} onClick={() => setLp('nav')} data-testid="lp-nav" title="ההגדרות של הסעיף שנבחר בעץ">⚙ {NAV_INDEX_LABEL(nav)}</button>
-              <button role="tab" aria-selected={lp === 'sel'} className={`lp-tab${lp === 'sel' ? ' on' : ''}`} onClick={() => setLp('sel')} data-testid="lp-sel" title="מאפייני האלמנטים שנבחרו במודל">{s.activeConn ? 'חיבור' : 'מאפיינים'}{sel.length ? ` (${sel.length})` : ''}</button>
+              <button role="tab" aria-selected={lp === 'sel'} className={`lp-tab${lp === 'sel' ? ' on' : ''}`} onClick={() => setLp('sel')} data-testid="lp-sel" title="מאפייני האלמנטים שנבחרו במודל">{s.activeConn ? 'חיבור' : s.activeGutter ? 'מזחלה' : 'מאפיינים'}{sel.length ? ` (${sel.length})` : ''}</button>
               <button className="lp-full-btn" onClick={() => { setLpFull(!lpFull); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }} title={lpFull ? 'חזרה לגודל רגיל (Esc)' : 'פאנל במסך מלא — לעריכה של טבלאות ופרטים גדולים'} data-testid="lp-full">{lpFull ? '⤡' : '⤢'}</button>
             </div>
           )}

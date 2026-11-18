@@ -121,3 +121,27 @@ test('V129-05 חלון מכלול: נעילה אופקית — צורה לציר
   await page.getByTestId('ds-close').first().click();
   expect(errors).toEqual([]);
 });
+
+test('V130-01 לחיצה על המזחלה בתלת־ממד פותחת את אשף המזחלה; מידה בשרטוט משנה את החתך', async ({ page }) => {
+  const errors = await boot(page);
+  await page.getByTestId('tab-clad').click().catch(() => {});
+  await page.getByTestId('nav-w:roof').click();
+  if (await page.getByTestId('clad-enable').count()) await page.getByTestId('clad-enable').click();
+  await page.waitForTimeout(500);
+  await page.evaluate(() => (window as any).__ksp.viewport.fitAll('iso'));
+  await page.waitForTimeout(400);
+  const pt = await page.evaluate(() => {
+    const vp = (window as any).__ksp.viewport;
+    const m = vp.gutterMeshes.find((x: any) => x.geometry.attributes.position.count >= 6);
+    const a = m.geometry.attributes.position;
+    const c = { x: (a.getX(0) + a.getX(2)) / 2, y: (a.getY(0) + a.getY(2)) / 2, z: (a.getZ(0) + a.getZ(2)) / 2 };
+    return vp.screenOf(c, 0);
+  });
+  await page.mouse.click(pt.x, pt.y);
+  await expect(page.getByTestId('gutter-wizard')).toBeVisible();
+  await shot(page, 'v130-gutter-wizard');
+  await page.getByTestId('gsch-bottom').click();
+  await page.getByTestId('gsch-bottom-inp').fill('400'); await page.getByTestId('gsch-bottom-inp').press('Enter');
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.cladding.gutter.spec.bottom)).toBe(400);
+  expect(errors).toEqual([]);
+});

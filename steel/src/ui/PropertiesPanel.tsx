@@ -14,6 +14,7 @@ import { SpliceEditor } from './SpliceEditor';
 import { ConnectionEditor, MemberConnections } from './ConnectionEditor';
 import { NavContent, type NavKey } from './SideNav';
 import { AssemblyCard, assemblyOf } from './AssemblyCard';
+import { GutterWizard } from './CladdingPanel';
 import { trussFrames } from '../geometry/truss';
 import { CleatHubCtx, CleatTypePicker, EndTypePicker } from './ConnTypePicker';
 import type { Connection, Member, Project } from '../model/types';
@@ -22,7 +23,9 @@ const f1 = (n: number, d = 1) => n.toLocaleString('en-US', { maximumFractionDigi
 
 export function PropertiesPanel() {
   const active = useStore((s) => s.activeConn);
+  const gutter = useStore((s) => s.activeGutter);
   if (active) return <ConnectionEditor />;
+  if (gutter) return <GutterWizard planeId={gutter} />;
   return <PropertiesInner />;
 }
 

@@ -4,7 +4,7 @@ import type { DerivedModel, Member } from '../model/types';
 import { store, useStore } from '../store';
 import { cachedSolid } from '../view/scene';
 import { HaunchEditor } from './SectionEditor';
-import { NavContent } from './SideNav';
+import { GutterSchematic } from './CladdingPanel';
 import { BracePanel, LockTrussFields, PortalFields } from './StructurePanel';
 import { defaultPortal } from '../geometry/portal';
 import { defaultLockTruss } from '../geometry/lockTruss';
@@ -163,7 +163,10 @@ export function AssemblyCard({ m }: { m: Member }) {
       {asm.family === 'roofx' && <BracePanel part="roof" />}
       {asm.family === 'knee' && <BracePanel part="knee" />}
       {asm.family === 'haunch' && <HaunchEditor />}
-      {asm.family === 'gutter' && <NavContent nav="w:roof" onOpenConn={(id) => store.set({ activeConn: id })} />}
+      {asm.family === 'gutter' && <>
+        <GutterSchematic />
+        <button className="btn primary" data-testid="open-gutter-wizard" onClick={() => { const c = d.connections.find((x) => x.id === m.connId || x.parts.includes(m.id)); const pid = c?.id.split('.')[2]; store.select([]); store.set({ activeGutter: pid ?? null }); }}>אשף המזחלה המלא</button>
+      </>}
       </div>}
     </div>
   );

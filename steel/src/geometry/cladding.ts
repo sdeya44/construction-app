@@ -204,7 +204,7 @@ export interface CladdingTakeoff {
   gutters: { name: string; length: number; downpipes: number; dev?: number; sheetT?: number; hangers?: number; pipeD?: number; pipeLen?: number; clamps?: number; elbows?: number }[];
   screws: number;
   /** משטחים להצגה בתלת־ממד (מצולעים במ"מ) */
-  surfaces: { kind: 'roof' | 'wall' | 'gutter' | 'pipe'; pts: Vec3[] }[];
+  surfaces: { kind: 'roof' | 'wall' | 'gutter' | 'pipe'; pts: Vec3[]; ref?: string }[];
 }
 
 export function claddingTakeoff(p0: Project, d: DerivedModel): CladdingTakeoff | null {

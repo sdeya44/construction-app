@@ -47,6 +47,8 @@ export interface AppState {
   detailStudio: string | null;
   /** חיבור שהפלטות שלו נערכות בסטודיו (אשף הפלטה כחלק מהסטודיו) */
   studioConn?: string | null;
+  /** מזחלה שנבחרה בלחיצה (מזהה המישור) — פותח את אשף המזחלה */
+  activeGutter?: string | null;
   measure: { a?: { x: number; y: number; z: number }; b?: { x: number; y: number; z: number } };
   /** צביעת המודל: לפי סוג (רגיל) או לפי הערכת גדלים */
   colorMode: 'kind' | 'sizing';
