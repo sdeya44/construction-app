@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultBuilding, newProject } from '../src/model/defaults';
 import { generate } from '../src/geometry/generate';
-import { defaultTrussSpec, patternCells, trussUtil } from '../src/geometry/truss';
+import { defaultTrussSpec, panelsOnFrames, patternCells, resizeSpec, trussNodes, trussUtil } from '../src/geometry/truss';
 import { SECTION_TEMPLATES } from '../src/model/section';
 import { computeFabrication } from '../src/fab/marks';
 
@@ -40,6 +40,44 @@ describe('מסבכים', () => {
     expect(errs(d)).toEqual([]);
     expect(d.connections.filter((c) => c.id.startsWith('C.RS.TB.T1')).length).toBe(2);
     expect(d.members.filter((m) => m.id.startsWith('TB.T1.TR')).length).toBeGreaterThan(10);
+  });
+  it('TR-U5: מסבך נושא בחגורות RHS — פלטת תמיכה מרותכת, ברגים מחוץ לצינור, B2→B1, חיבור המשך פלנץ', () => {
+    const b = defaultBuilding(); const f = [...b.frames].sort((x, y) => x.y - y.y);
+    const spec = defaultTrussSpec(8, 1200, { top: 'RHS200x100x8', bottom: 'RHS200x100x8' });
+    spec.splice = [3];
+    b.transfers = [{ id: 'T1', lineId: 'L', from: f[0].id, to: f[4].id, removed: [f[1].id, f[2].id, f[3].id], profile: 'HEA160', support: 'A1', seat: 'B2', kind: 'truss', truss: spec }];
+    const d = generate(newProject('x', b));
+    expect(errs(d)).toEqual([]);
+    const sup = d.connections.find((c) => c.id === `C.TBS.T1.${f[0].id}`)!;
+    expect(sup.parts.some((id) => id.endsWith('.SP'))).toBe(true);
+    expect(sup.parts.some((id) => id.endsWith('.STR'))).toBe(false);
+    // ברגים מחוץ לדפנות הצינור (b=100)
+    const line = d.members.find((m) => m.id === 'TB.T1')!.start.x;
+    expect(sup.bolts.every((q) => Math.abs(q.p.x - line) > 50 + 20)).toBe(true);
+    // מושב B2 הוחלף ב-B1 (פלטה א מרותכת לצינור)
+    expect(d.members.some((m) => m.id.startsWith('C.TBR.T1.') && m.id.endsWith('.PA'))).toBe(true);
+    // חיבור המשך פלנץ בשתי החגורות
+    const rs = d.connections.filter((c) => c.id.startsWith('C.RS.TB.T1'));
+    expect(rs.length).toBe(2);
+    expect(rs.every((c) => c.label.includes('פלנץ'))).toBe(true);
+  });
+  it('TR-U6: שדות לא אחידים — צמתים לפי panelLens, צמתים על המסגרות, איפוס בשינוי מספר', () => {
+    const s = { ...defaultTrussSpec(4, 1000), panelLens: [1000, 3000, 3000, 1000] };
+    expect(trussNodes(s, 0, 16000)).toEqual([0, 2000, 8000, 14000, 16000]);
+    expect(resizeSpec(s, 5).panelLens).toBeUndefined();
+    const s2 = panelsOnFrames(defaultTrussSpec(5, 1000), 18000, [6000, 12000]);
+    const nodes = trussNodes(s2, 0, 18000);
+    expect(nodes.some((x) => Math.abs(x - 6000) < 2) && nodes.some((x) => Math.abs(x - 12000) < 2)).toBe(true);
+    // מודל: מסבך נושא עם שדות לא שווים — צמתים במסגרות, ללא אזהרת "לא על צומת"
+    const b = defaultBuilding(); const f = [...b.frames].sort((x, y) => x.y - y.y);
+    const span = f[4].y - f[0].y;
+    const sp = panelsOnFrames(defaultTrussSpec(6, 1200), span, [f[1].y, f[2].y, f[3].y].map((y) => y - f[0].y));
+    sp.panelLens = sp.panelLens!.map((L, i) => (i % 2 ? L * 1.4 : L * 0.6));
+    const fixed = panelsOnFrames(sp, span, [f[1].y, f[2].y, f[3].y].map((y) => y - f[0].y));
+    b.transfers = [{ id: 'T1', lineId: 'L', from: f[0].id, to: f[4].id, removed: [f[1].id, f[2].id, f[3].id], profile: 'HEA160', support: 'A1', seat: 'B1', kind: 'truss', truss: { ...sp, panelLens: fixed.panelLens!.map((L, i) => (i % 2 ? L * 1.4 : L * 0.6)) } }];
+    const d = generate(newProject('x', b));
+    expect(errs(d)).toEqual([]);
+    expect(d.issues.some((i) => i.code === 'TB_TRUSS' && i.message.includes('אינה על צומת'))).toBe(false);
   });
   it('TR-U4: הערכת ניצול — גובה כפול ⇒ כוח בחגורה חצי', () => {
     const s1 = defaultTrussSpec(8, 1000), s2 = { ...s1, depth: 2000 };

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { patternCells, resizeSpec, TRUSS_GROUP_HE, TRUSS_PATTERNS, trussUtil } from '../geometry/truss';
+import { hasPanelLens, panelsOnFrames, patternCells, resizeSpec, TRUSS_GROUP_HE, TRUSS_PATTERNS, trussFractions, trussPanelLens, trussUtil } from '../geometry/truss';
 import type { TrussCell, TrussSpec } from '../model/types';
 import { massPerMeter, tryProfile } from '../profiles/library';
 import { ProfilePicker } from './fields';
@@ -13,17 +13,24 @@ const COLORS = { top: '#1f5fa8', bottom: '#1b6e3d', endDiag: '#b00020', diag: '#
  * אשף מסבך: עורך שדות בלחיצה (שדה: ╱ ╲ X ריק · צומת: אנך · חגורה באמצע שדה: ✂ חיבור המשך), תבניות, סימטריה,
  * מספר שדות וגובה (מידה בלחיצה), פרופיל לכל קבוצה (סוג ← מידה) עם הערכת ניצול, משקל משוער.
  */
-export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId = 'tw', note, roof }: {
+export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId = 'tw', note, roof, frames, readOnlyProfiles }: {
   spec: TrussSpec; span: number; onChange: (s: TrussSpec) => void; chordFamilies: string[];
   loads: { q?: number; points?: [number, number][] }; testId?: string; note?: string;
   /** מסבך גג: צורת החגורות בשרטוט (רכס/חד-שיפועי, אופקית/מקבילה/מספריים) */
   roof?: { ridge: boolean; shape: 'flat' | 'parallel' | 'scissor'; rise: number; onRise: (v: number) => void };
+  /** מיקומי מסגרות לאורך המסבך (מ"מ מההתחלה) — לכפתור "צמתים על המסגרות" */
+  frames?: number[];
+  /** החתכים נבחרים במקום אחר (חלון האלמנט) — כאן תצוגה בלבד */
+  readOnlyProfiles?: boolean;
 }) {
   const n = spec.panels;
   const W = 300, H = 124, x0 = 18, x1 = 282, yT = 36, yB = 84;
-  const px = (i: number) => x0 + ((x1 - x0) * i) / n;
+  // מיקום הצמתים — שדות שווים או לפי panelLens
+  const fr = trussFractions(spec);
+  const lens = trussPanelLens(spec, span);
+  const px = (i: number) => x0 + (x1 - x0) * (fr[i] ?? i / n);
   // גובה החגורות בצמת i (שרטוט סכמטי)
-  const tri = (i: number) => (roof?.ridge ? 1 - Math.abs(i - n / 2) / (n / 2) : i / n);
+  const tri = (i: number) => (roof?.ridge ? 1 - Math.abs(i - n / 2) / (n / 2) : fr[i] ?? i / n);
   const yTop = (i: number) => (roof ? yT - 14 * tri(i) : yT);
   const riseV = roof?.shape === 'scissor' && roof.ridge ? Math.min(0.75 * (yB - yT), ((yB - yT) * roof.rise) / Math.max(spec.depth, 1)) : 0;
   const yBot = (i: number) => (!roof ? yB : roof.shape === 'parallel' ? yTop(i) + (yB - yT) : yB - riseV * (roof.ridge ? 1 - Math.abs(i - n / 2) / (n / 2) : 0));
@@ -43,27 +50,36 @@ export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId
     const cur = new Set(splices); if (cur.has(i)) cur.delete(i); else cur.add(i);
     set({ splice: [...cur].sort((a, b) => a - b) });
   };
+  /** שינוי אורך שדה i: השדות האחרים (שאינם נעולים) מתכווננים יחסית — סכום = מפתח */
+  const setLen = (i: number, v: number) => {
+    const lock = new Set([i, ...(sym ? [n - 1 - i] : [])]);
+    const val = Math.max(200, Math.min(v, (span - 200 * (n - lock.size)) / lock.size));
+    const rest = lens.reduce((a, L, j) => a + (lock.has(j) ? 0 : L), 0);
+    const k = rest > 0 ? (span - val * lock.size) / rest : 1;
+    set({ panelLens: lens.map((L, j) => Math.round(lock.has(j) ? val : L * k)) });
+  };
   const util = useMemo(() => trussUtil(spec, span, loads), [spec, span, loads]);
   const uOf = (g: keyof TrussSpec['profiles']) => util.find((u) => u.group === g);
   // משקל משוער
   const kg = useMemo(() => {
     const kgm = (pr: string) => { const p = tryProfile(pr); return p ? massPerMeter(p, 7850) : 0; };
-    const panel = span / n, diag = Math.hypot(panel, spec.depth) / 1000;
     let w = (span / 1000) * (kgm(spec.profiles.top) + kgm(spec.profiles.bottom));
-    spec.cells.forEach((c, i) => { const k = (c === 'X' ? 2 : c ? 1 : 0) * diag * kgm(i === 0 || i === n - 1 ? spec.profiles.endDiag : spec.profiles.diag); w += k; });
+    spec.cells.forEach((c, i) => { const diag = Math.hypot(lens[i] ?? span / n, spec.depth) / 1000; const k = (c === 'X' ? 2 : c ? 1 : 0) * diag * kgm(i === 0 || i === n - 1 ? spec.profiles.endDiag : spec.profiles.diag); w += k; });
     w += spec.verts.filter(Boolean).length * (spec.depth / 1000) * kgm(spec.profiles.vert);
     return w * 1.06; // + צמתים/פלטות
-  }, [spec, span, n]);
+  }, [spec, span, n, lens]);
   const members = spec.cells.reduce((a, c) => a + (c === 'X' ? 3 : c ? 1 : 0), 0) + spec.verts.filter(Boolean).length;
   const dims: SDim[] = [
     { a: [x1 + 3, yTop(n)], b: [x1 + 3, yBot(n)], off: -6, value: spec.depth, testId: `${testId}-depth`, min: 300, onCommit: (v) => set({ depth: Math.round(v) }) },
     ...(roof?.shape === 'scissor' && roof.ridge ? [{ a: [px(n / 2) + 4, yB], b: [px(n / 2) + 4, yBot(n / 2)], off: -6, value: roof.rise, text: `${Math.round(roof.rise)} (הגבהה)`, testId: `${testId}-rise`, min: 0, onCommit: (v: number) => roof.onRise(Math.round(v)) } as SDim] : []),
-    { a: [px(0), yB + 14], b: [px(1), yB + 14], off: 0, value: span / n, derived: true, text: `${Math.round(span / n)} (שדה)` },
+    // אורך כל שדה — לחיצה לעריכה (השאר מתאימים את עצמם כך שסכום = מפתח); ברכס — בחלוקה סימטרית בלבד
+    ...(n <= 16 ? lens.map((L, i) => ({ a: [px(i), yB + 14], b: [px(i + 1), yB + 14], off: 0, value: L, text: n > 10 ? `${(L / 1000).toFixed(1)}` : `${Math.round(L)}`, testId: `${testId}-pl-${i}`, min: 200, max: span - 200 * (n - 1), onCommit: (v: number) => setLen(i, v) } as SDim))
+      : [{ a: [px(0), yB + 14], b: [px(1), yB + 14], off: 0, value: lens[0], derived: true, text: `${Math.round(lens[0])} (שדה)` } as SDim]),
     { a: [px(0), yB + 26], b: [px(n), yB + 26], off: 0, value: span, derived: true, text: `${Math.round(span)} (מפתח)` },
   ];
   return (
     <div className="truss-wiz" data-testid={testId}>
-      <Schematic w={W} h={H} dims={dims} testId={`${testId}-sch`} caption="לחיצה על שדה: ╱ ╲ X ריק · על צומת תחתון: אנך · על ✂ בחגורה: חיבור המשך · על הגובה ✎">
+      <Schematic w={W} h={H} dims={dims} testId={`${testId}-sch`} caption="לחיצה על שדה: ╱ ╲ X ריק · על צומת תחתון: אנך · על ✂ בחגורה: חיבור המשך · על הגובה / אורך שדה ✎">
         {/* שדות לחיצה */}
         {Array.from({ length: n }, (_, i) => (
           <polygon key={`c${i}`} points={`${px(i) + 1},${yTop(i) + 1} ${px(i + 1) - 1},${yTop(i + 1) + 1} ${px(i + 1) - 1},${yBot(i + 1) - 1} ${px(i) + 1},${yBot(i) - 1}`} className="tw-cell" data-testid={`${testId}-cell-${i}`} onClick={() => setCell(i)} />
@@ -109,6 +125,10 @@ export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId
         <span className="tw-lbl">שדות:</span>
         <button className="btn small" data-testid={`${testId}-n-`} onClick={() => n > 2 && onChange(resizeSpec(spec, n - 1))}>−</button><b data-testid={`${testId}-n`}>{n}</b>
         <button className="btn small" data-testid={`${testId}-n+`} onClick={() => onChange(resizeSpec(spec, n + 1))}>+</button>
+        <button className={`tbtn${!hasPanelLens(spec) ? ' on' : ''}`} data-testid={`${testId}-eq`} title="כל השדות באורך שווה" onClick={() => set({ panelLens: undefined })}>שדות שווים</button>
+        {frames && frames.length > 0 && <button className="tbtn" data-testid={`${testId}-onframes`} title="חלוקה כך שכל קורת גג יושבת על צומת" onClick={() => onChange(panelsOnFrames(spec, span, frames))}>צמתים על המסגרות</button>}
+      </div>
+      <div className="tw-row">
         <span className="tw-lbl">חלוקה להובלה:</span>
         <select className="inp" data-testid={`${testId}-splice`} value={Array.isArray(spec.splice) ? 'manual' : spec.splice} onChange={(e) => set({ splice: e.target.value === 'manual' ? [] : (e.target.value as 'auto' | 'none') })}>
           <option value="auto">אוטומטית ≤ אורך מוט</option><option value="manual">ידנית (✂ על השדה)</option><option value="none">ללא</option>
@@ -121,7 +141,7 @@ export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId
           return (
             <tr key={g}>
               <td><span className="tw-sw" style={{ background: COLORS[g] }} />{TRUSS_GROUP_HE[g]}</td>
-              <td><ProfilePicker testId={`${testId}-p-${g}`} value={spec.profiles[g]} families={g === 'top' || g === 'bottom' ? chordFamilies : ['SHS', 'RHS', 'CHS', 'L', 'UPN']} onCommit={(v) => set({ profiles: { ...spec.profiles, [g]: v } })} /></td>
+              <td>{readOnlyProfiles ? <span className="mono" data-testid={`${testId}-pv-${g}`}>{spec.profiles[g]}</span> : <ProfilePicker testId={`${testId}-p-${g}`} value={spec.profiles[g]} families={g === 'top' || g === 'bottom' ? chordFamilies : ['SHS', 'RHS', 'CHS', 'L', 'UPN']} onCommit={(v) => set({ profiles: { ...spec.profiles, [g]: v } })} />}</td>
               <td className={`num ${cls}`} title={u?.note}>{u ? u.util.toFixed(2) : '—'}</td>
             </tr>
           );

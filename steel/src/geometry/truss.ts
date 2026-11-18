@@ -44,7 +44,46 @@ export function defaultTrussSpec(panels: number, depth: number, profiles?: Parti
 export function resizeSpec(spec: TrussSpec, n: number): TrussSpec {
   const pat = spec.pattern && spec.pattern !== 'custom' ? spec.pattern : 'warren-v';
   const base = patternCells(pat, n);
-  return { ...spec, panels: n, cells: base.cells, verts: base.verts, splice: Array.isArray(spec.splice) ? spec.splice.filter((i) => i < n) : spec.splice };
+  return { ...spec, panels: n, cells: base.cells, verts: base.verts, splice: Array.isArray(spec.splice) ? spec.splice.filter((i) => i < n) : spec.splice, panelLens: undefined };
+}
+
+/** האם יש חלוקת שדות לא אחידה תקפה */
+export function hasPanelLens(spec: TrussSpec): boolean {
+  const L = spec.panelLens;
+  return !!L && L.length === Math.max(2, Math.round(spec.panels)) && L.every((x) => Number.isFinite(x) && x > 0);
+}
+
+/** שברי מיקום הצמתים (0..1) לאורך המסבך — לפי panelLens (יחסית) או שווים */
+export function trussFractions(spec: TrussSpec): number[] {
+  const n = Math.max(2, Math.round(spec.panels));
+  if (!hasPanelLens(spec)) return Array.from({ length: n + 1 }, (_, i) => i / n);
+  const L = spec.panelLens!, tot = L.reduce((a, b) => a + b, 0);
+  let acc = 0;
+  return [0, ...L.map((x, i) => (i === n - 1 ? 1 : (acc += x) / tot))];
+}
+
+/** מיקום הצמתים בין a ל-b */
+export function trussNodes(spec: TrussSpec, a: number, b: number): number[] {
+  return trussFractions(spec).map((f) => a + (b - a) * f);
+}
+
+/** אורכי השדות בפועל (מ"מ) למפתח span */
+export function trussPanelLens(spec: TrussSpec, span: number): number[] {
+  const fr = trussFractions(spec);
+  return fr.slice(1).map((f, i) => (f - fr[i]) * span);
+}
+
+/** חלוקת שדות כך שכל מסגרת (מיקום יחסי 0..span) תיפול על צומת; מספר השדות בכל מפתח ∝ אורכו */
+export function panelsOnFrames(spec: TrussSpec, span: number, frameOffsets: number[]): TrussSpec {
+  const pts = [...new Set([0, ...frameOffsets.filter((x) => x > 1 && x < span - 1), span].map((x) => Math.round(x)))].sort((a, b) => a - b);
+  const bays = pts.slice(1).map((x, i) => x - pts[i]);
+  const n0 = Math.max(Math.round(spec.panels), bays.length);
+  const k = bays.map((L) => Math.max(1, Math.round((n0 * L) / span)));
+  const lens = bays.flatMap((L, i) => Array.from({ length: k[i] }, () => Math.round(L / k[i])));
+  const n = Math.max(2, lens.length);
+  const base = lens.length === n ? lens : [lens[0] / 2, lens[0] / 2];
+  const rs = n === Math.round(spec.panels) ? spec : resizeSpec(spec, n);
+  return { ...rs, panelLens: base };
 }
 
 // ------------------------------------------------------------------ בונה כללי במישור המסבך
@@ -232,9 +271,16 @@ export function roofTrussLayout(p: Project, members: Member[], frameId: string):
   const nodes: number[] = [];
   if (xR !== null) {
     if (n % 2) n += 1;
-    for (let i = 0; i <= n / 2; i++) nodes.push(x0 + ((xR - x0) * i) / (n / 2));
-    for (let i = 1; i <= n / 2; i++) nodes.push(xR + ((x1 - xR) * i) / (n / 2));
-  } else for (let i = 0; i <= n; i++) nodes.push(x0 + ((x1 - x0) * i) / n);
+    // שדות לא אחידים: כל חצי לפי חציו של panelLens (הרכס תמיד צומת)
+    const L = hasPanelLens(rt.spec) && rt.spec.panelLens!.length === n ? rt.spec.panelLens! : null;
+    const half = (ls: number[] | null, a: number, b: number, first: boolean) => {
+      const m = n / 2, tot = ls ? ls.reduce((q, w) => q + w, 0) : m;
+      let acc = 0;
+      for (let i = first ? 0 : 1; i <= m; i++) { if (i > 0) acc += ls ? ls[i - 1] : 1; nodes.push(i === m ? b : a + ((b - a) * (i === 0 ? 0 : acc)) / tot); }
+    };
+    half(L ? L.slice(0, n / 2) : null, x0, xR, true);
+    half(L ? L.slice(n / 2) : null, xR, x1, false);
+  } else nodes.push(...trussNodes(rt.spec, x0, x1));
   return { x0, x1, xR, nodes, rafters, colL, colR };
 }
 
@@ -414,7 +460,8 @@ export function trussUtil(spec: TrussSpec, span: number, opts: { q?: number; poi
   for (const [s, P] of opts.points ?? []) { const a = s / 1000, b = L - a; M += (P * a * b) / L; V = Math.max(V, (P * b) / L, (P * a) / L) + (opts.q ? 0 : 0); }
   const d = spec.depth / 1000;
   const Nch = M / d; // קנ"ט
-  const panel = span / spec.panels;
+  // שדה מקסימלי קובע (קריסת חגורה עליונה, אורך אלכסון)
+  const panel = Math.max(...trussPanelLens(spec, span));
   const diagL = Math.hypot(panel, spec.depth);
   const sin = spec.depth / diagL;
   const chi = (pr: string, Lk: number) => {

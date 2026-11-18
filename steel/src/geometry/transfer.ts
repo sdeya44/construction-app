@@ -9,7 +9,7 @@ import { add, norm, scale, sub, v3, type Plane, type Vec3 } from '../core/vec';
 import { getProfile, tryProfile } from '../profiles/library';
 import type { BoltInfo, BuildingParams, Connection, FrameDef, Member, Project, TransferDef, ValidationIssue, WeldInfo } from '../model/types';
 import type { NLine, NSection } from '../model/section';
-import { buildTrussPlane } from './truss';
+import { buildTrussPlane, trussNodes } from './truss';
 import { makeBolt } from './connections';
 
 const Z = v3(0, 0, 1), X = v3(1, 0, 0), Y = v3(0, 1, 0);
@@ -44,6 +44,8 @@ function rafterGeom(r: Member) {
   return { h, b: tryProfile(r.profile)?.props.b ?? 150, under, top, plane, cos, slope: dz / (dx || 1) };
 }
 
+const isBox = (p: { family: string } | null | undefined) => !!p && (p.family === 'RHS' || p.family === 'SHS');
+
 /** תכנון: אימות, עמודים מוסרים (נכנסים ל-deleted), מפלס ה-TB וקיצור עמודים ב-A1 */
 export function prepareTransfers(project: Project, b: BuildingParams, sec: NSection, members: Member[], deleted: Set<string>, issues: ValidationIssue[]): TbPlan[] {
   const out: TbPlan[] = [];
@@ -57,13 +59,19 @@ export function prepareTransfers(project: Project, b: BuildingParams, sec: NSect
     if (!removed.length) continue;
     const isTruss = def.kind === 'truss' && !!def.truss;
     if (isTruss && def.support !== 'A1') issues.push({ code: 'TB_TRUSS', severity: 'info', message: `מסבך נושא ${def.id}: נתמך על ראש העמוד (A1) — הגדרת התמיכה בצד הוחלפה` });
-    if (isTruss) def = { ...def, support: 'A1', seat: def.seat === 'B4' ? 'B1' : def.seat, profile: def.truss!.profiles.top };
+    if (isTruss) {
+      const hollowTop = isBox(tryProfile(def.truss!.profiles.top));
+      // חגורה עליונה חלולה: אין גישה לאום בתוך הצינור — מושב B2 (ברגים דרך האגף) מוחלף ב-B1 (פלטה מרותכת)
+      if (hollowTop && def.seat === 'B2') issues.push({ code: 'TB_SEAT', severity: 'info', message: `מסבך נושא ${def.id}: חגורה עליונה חלולה — "${SEAT_HE.B2}" הוחלף ב"${SEAT_HE.B1}" (פלטה מרותכת על הצינור)` });
+      def = { ...def, support: 'A1', seat: def.seat === 'B4' || (hollowTop && def.seat === 'B2') ? 'B1' : def.seat, profile: def.truss!.profiles.top };
+    }
     const prof = tryProfile(def.profile);
     if (!prof) { issues.push({ code: 'PROFILE', severity: 'error', message: `קורה נושאת ${def.id}: חתך לא מוכר ${def.profile}` }); continue; }
     const pBot = isTruss ? tryProfile(def.truss!.profiles.bottom) : null;
     if (isTruss && !pBot) { issues.push({ code: 'PROFILE', severity: 'error', message: `מסבך נושא ${def.id}: חתך חגורה תחתונה לא מוכר` }); continue; }
     // גובה כולל מתחת לפני העליון: קורה — h; מסבך — חצי חגורה עליונה + גובה צירים + חצי חגורה תחתונה
-    const hTot = isTruss ? prof.props.h / 2 + def.truss!.depth + pBot!.props.h / 2 : prof.props.h;
+    // חגורה תחתונה חלולה: + פלטת תמיכה מרותכת מתחתיה (20)
+    const hTot = isTruss ? prof.props.h / 2 + def.truss!.depth + pBot!.props.h / 2 + (isBox(pBot) ? 20 : 0) : prof.props.h;
     for (const f of removed) deleted.add(colId(f.id, line.id));
     const side = def.support !== 'A1';
     let seat = def.seat;
@@ -147,7 +155,7 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
       const BC: Member = { ...TB, id: bcId, label: `מסבך נושא ציר ${line.label} — חגורה תחתונה`, start: v3(x, ys, zBC), end: v3(x, ye, zBC), profile: tr.profiles.bottom, anchor: 'center' };
       res.members.push(BC);
       const n = Math.max(2, tr.panels);
-      const nodes = Array.from({ length: n + 1 }, (_, i) => y0 + ((y1 - y0) * i) / n);
+      const nodes = trussNodes(tr, y0, y1);
       const tp = buildTrussPlane({ idBase: `${tbId}.TR`, connId: `C.TBT.${def.id}`, label: `מסבך נושא ציר ${line.label}`, origin: v3(x, 0, 0), e: Y, nodes,
         top: { z: () => zTop - h / 2, h, memberAt: () => tbId }, bot: { z: () => zBC, h: pB!.props.h, memberAt: () => bcId }, spec: tr, mat });
       res.members.push(...tp.members); res.connections.push(tp.connection); res.issues.push(...tp.issues);
@@ -182,7 +190,19 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
       const sP = tr ? pB! : tbp, sId = tr ? bcId : tbId;
       const sh = sP.props.h, sbw = sP.props.b, stw = sP.dims.tw ?? 8, stf = sP.dims.tf ?? 12;
       const zB = tr ? zBC - sh / 2 : zTop - h;
-      if (def.support === 'A1') {
+      if (def.support === 'A1' && isBox(sP)) {
+        // חגורה חלולה (RHS/SHS): פלטת תמיכה מרותכת מתחת לחגורה (מסגריה), רחבה מהצינור — 4 ברגים מחוץ לדפנות אל פלטת ראש העמוד
+        const capL = cb + 160, eB = 35, capW = Math.max(cp.props.h + 40, sbw + 2 * (eB + 35));
+        const sp = plate(`${id}.SP`, `פלטת תמיכה לחגורה PL20×${Math.round(capW)}×${Math.round(capL)}`, v3(x, fy - capL / 2, zB), v3(x, fy + capL / 2, zB), capW, 20, Z, 'top', id);
+        const cap = plate(`${id}.CAP`, `פלטת ראש עמוד PL20×${Math.round(capW)}×${Math.round(capL)}`, v3(x, fy - capL / 2, zB - 20), v3(x, fy + capL / 2, zB - 20), capW, 20, Z, 'top', id);
+        res.members.push(sp, cap); parts.push(sp.id, cap.id);
+        welds.push(weld(id, 1, c.id, cap.id, 2 * (cp.props.h + cb), v3(x, fy, zB - 40)), weld(id, 2, sId, sp.id, 2 * (capL + sbw), v3(x, fy, zB)));
+        let k = 0;
+        for (const dx of [-(sbw / 2 + eB), sbw / 2 + eB]) for (const dy of [-(cb / 2 + 45), cb / 2 + 45]) {
+          bolts.push(makeBolt(`${id}.B${++k}`, id, v3(x + dx, fy + dy, zB - 40), Z, BOLT, 40, 'site', [cap.id, sp.id], X, res.members));
+        }
+        if (!tr?.verts[0] || !tr?.verts[tr.verts.length - 1]) res.issues.push({ code: 'TB_TRUSS', severity: 'info', elementId: id, message: `מסבך נושא ${def.id}: חגורה חלולה על תמיכה ללא אנך בקצה — בדוק כשל מקומי של דפנות הצינור (מומלץ אנך מעל העמוד)` });
+      } else if (def.support === 'A1') {
         const capL = cb + 160, capW = Math.max(cp.props.h, sbw) + 40;
         const cap = plate(`${id}.CAP`, `פלטת ראש עמוד PL20×${Math.round(capW)}×${Math.round(capL)}`, v3(x, fy - capL / 2, zB), v3(x, fy + capL / 2, zB), capW, 20, Z, 'top', id);
         res.members.push(cap); parts.push(cap.id);

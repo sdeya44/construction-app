@@ -338,6 +338,8 @@ export interface TrussSpec {
   splice: 'auto' | 'none' | number[];
   pattern?: 'warren-v' | 'warren' | 'pratt' | 'howe' | 'custom';
   symmetric?: boolean;
+  /** אורכי שדות (מ"מ) — חלוקה לא אחידה; מותאמים יחסית למפתח בפועל. חסר/לא תואם למספר השדות ⇒ שדות שווים */
+  panelLens?: Mm[];
 }
 export interface RoofTrussParams {
   enabled: boolean;

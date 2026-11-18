@@ -6,7 +6,7 @@ import type { Member, PurlinSideParams } from '../model/types';
 import { MATERIALS } from '../profiles/materials';
 import { purlinParams } from '../geometry/purlins';
 import { store, useStore } from '../store';
-import { LenField, ProfilePicker } from './fields';
+import { LenField, ProfilePicker, useEdit } from './fields';
 import { CleatSchematic, PurlinSlopeSchematic } from './schematics';
 
 const OPENING: Record<'up' | 'down', string> = { up: 'לכיוון הרכס / הצד הגבוה', down: 'לכיוון המרזב / הצד הנמוך' };
@@ -19,15 +19,16 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
   const f = (mm: number) => (u === 'm' ? fromMm(mm, 'm').toFixed(3) : mm.toFixed(0));
   const mono = freeStart ?? p.building.roofType === 'mono';
   const tid = (k: string) => `${side}-${k}`;
+  const ed = useEdit();
   return (
     <>
-      <div className="panel-title">{title}
+      {ed.showTitle && <div className="panel-title">{title}
         <label className="badge" style={{ cursor: 'pointer' }}>
           <input type="checkbox" checked={prm.enabled} data-testid={tid('enabled')} onChange={(e) => set({ enabled: e.target.checked })} />פעיל
         </label>
-      </div>
+      </div>}
       {prm.enabled && <>
-        <div className="field prof"><label>חתך הפטה</label><ProfilePicker testId={tid('profile')} role="purlin" value={prm.profile} families={['C', 'Z', 'RHS', 'IPE', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>
+        {ed.showProfile && <div className="field prof"><label>חתך הפטה</label><ProfilePicker testId={tid('profile')} role="purlin" value={prm.profile} families={['C', 'Z', 'RHS', 'IPE', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>}
         <PurlinSlopeSchematic side={side} items={items} mono={mono} />
         <div className="field"><label>חלוקה</label>
           <select className="inp" data-testid={tid('mode')} value={prm.layout ?? 'fixed'} onChange={(e) => set({ layout: e.target.value as 'fixed' | 'even' })}>
@@ -75,6 +76,7 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
             ? <><span className="badge warn">פריסה ידנית</span><button className="btn small" onClick={() => set({ manualPositions: null })}>חזרה לאוטומטי</button></>
             : <button className="btn small" data-testid={tid('manual')} onClick={() => set({ manualPositions: items.map((m) => m.purlin!.sSlope * (prm.measure === 'horizontal' ? 1 : 1)) })}>עריכה ידנית של המיקומים</button>}
         </div>
+        {ed.showConn && <>
         <div className="panel-title">תושבות פטה
           <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" checked={prm.cleat.enabled} data-testid={tid('cleat-enabled')} onChange={(e) => store.exec(setCleat(side, { enabled: e.target.checked }))} />פעיל</label>
         </div>
@@ -109,6 +111,7 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
           </div>
           </Adv>
           <div className="hint">מרותך לקורה במסגריה, מוברג לווב הפטה בשטח. הרגל הניצבת צמודה לווב (0 מ"מ), רגל הבסיס פונה הרחק מהאגף התחתון.</div>
+        </>}
         </>}
         {prm.manualPositions && (
           <div style={{ marginTop: 6 }}>

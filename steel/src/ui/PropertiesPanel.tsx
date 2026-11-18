@@ -1,6 +1,6 @@
 import { settingsOf } from './navIndex';
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
-import { resetOverrides, setBuilding, setKneeBraces, setMemberProps, type Command } from '../commands/commands';
+import { resetOverrides, setBuilding, setKneeBraces, setMemberProps, setTransfers, type Command } from '../commands/commands';
 import { useFab } from '../fab/useFab';
 import { fromMm } from '../core/units';
 import { dist } from '../core/vec';
@@ -8,16 +8,17 @@ import { cutLength } from '../geometry/solid';
 import { massPerMeter, tryProfile } from '../profiles/library';
 import { getMaterial, MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
-import { NumField, ProfilePicker } from './fields';
+import { EditCtx, NumField, ProfilePicker } from './fields';
 import { KIND_LABEL, kindLabelOf } from './TreePanel';
 import { SpliceEditor } from './SpliceEditor';
 import { ConnectionEditor, MemberConnections } from './ConnectionEditor';
 import { NavContent, type NavKey } from './SideNav';
 import { AssemblyCard, AssemblyConn, AssemblyShape, assemblyOf, type AsmScope } from './AssemblyCard';
 import { GutterWizard } from './CladdingPanel';
-import { trussFrames } from '../geometry/truss';
+import { trussFrames, TRUSS_GROUP_HE } from '../geometry/truss';
+import { RoofTrussPanel, TransferShape } from './TransferPanel';
 import { CleatHubCtx, CleatTypePicker, EndTypePicker } from './ConnTypePicker';
-import type { Connection, Member, Project } from '../model/types';
+import type { Connection, Member, Project, TransferDef, TrussSpec } from '../model/types';
 
 const f1 = (n: number, d = 1) => n.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
 
@@ -100,6 +101,8 @@ function PropertiesInner() {
   const plateLike = m.kind === 'plate' || m.kind === 'cleat' || m.kind === 'bolt' || m.kind === 'anchor';
   const asm = assemblyOf(m, d);
   const fam = asm && asm.family !== 'frame' ? asm : null;
+  const inRT = !!p.building.roofTruss?.enabled && !plateLike && (/^TR\./.test(m.id) || /^F[^.]+\.BC\.\d+$/.test(m.id) || (m.kind === 'rafter' && !!m.frameId && trussFrames(p).includes(m.frameId)));
+  const tbDef = /^TB\./.test(m.id) && !plateLike ? (p.building.transfers ?? []).find((t) => t.id === m.id.split('.')[1]) ?? null : null;
   const custom = plateLike && m.connId?.startsWith('C.CD.') ? d.connById.get(m.connId)?.custom : undefined;
   return (
     <div className="panel-body" data-testid="props-single">
@@ -161,6 +164,8 @@ function PropertiesInner() {
       </PSec>
       {/* 3 — צורה ומידות של המכלול */}
       {fam && <PSec id="shape" title={`צורה ומידות — ${fam.title.split(' — ')[0]}`} testId="psec-shape"><div data-testid="hub-settings"><AssemblyShape asm={fam} scope={scope} setScope={setScope} /></div></PSec>}
+      {inRT && <PSec id="shape" title="צורה ומידות — מסבך גג" testId="psec-shape"><div data-testid="hub-settings"><EditCtx.Provider value={{ embed: true, part: 'shape' }}><RoofTrussPanel /></EditCtx.Provider></div></PSec>}
+      {tbDef && <PSec id="shape" title={`צורה ומידות — ${tbDef.kind === 'truss' ? 'מסבך נושא' : 'קורה נושאת'}`} testId="psec-shape"><div data-testid="hub-settings"><TransferShape id={tbDef.id} /></div></PSec>}
       {/* 4 — חיבורים: סוג חיבור בכל קצה + פרטי החיבור + רשימה */}
       <PSec id="conns" title={`חיבורים${conns ? ` (${conns})` : ''}`} testId="ptab-conns">
         {!plateLike && <DetailEnds m={m} />}
@@ -174,10 +179,13 @@ function PropertiesInner() {
         {plateLike && !custom && <HubSettings m={m} />}
         <MemberConnections memberId={m.id} />
         {!conns && <div className="hint">אין חיבורים לאלמנט זה.</div>}
-        {m.kind !== 'bolt' && <SpliceEditor m={m} />}
+        {/* חיבור המשך — רק לאלמנטים ארוכים (לא מוטות מילוי של מסבך, לא תומכים/פלטות) */}
+        {['column', 'rafter', 'beam', 'purlin', 'girt'].includes(m.kind) && !/(^|\.)TR\./.test(m.id) && <SpliceEditor m={m} />}
       </PSec>
       {/* 5 — הגדרות כלליות של המבנה (עמוד/קורה/פטה): מקופל */}
-      {!plateLike && !fam && <PSec id="general" title="הגדרות כלליות (לכל המבנה)" testId="psec-general" closed><HubSettings m={m} /></PSec>}
+      {!plateLike && !fam && !tbDef && !inRT && <PSec id="general" title="הגדרות כלליות (לכל המבנה)" testId="psec-general" closed>
+        {/* פטה: החתך וסוג התושבת כבר למעלה — כאן רק פריסה ומידות */}
+        <EditCtx.Provider value={m.purlin ? { embed: true, part: 'shape' } : { embed: false }}><HubSettings m={m} /></EditCtx.Provider></PSec>}
       {/* 6 — מתקדם */}
       <PSec id="adv" title="מתקדם — סיבוב, קואורדינטות, תכונות חתך" testId="ptab-adv" closed>
         <div className="field"><label>סיבוב סביב הציר</label><NumField value={m.rollDeg} suffix="°" onCommit={(v) => store.exec(setMemberProps([m.id], { rollDeg: v }))} /></div>
@@ -244,6 +252,24 @@ function profileRoute(m: Member, p: Project): { all: (v: string) => Command; one
   if (/^BR\.W/.test(id)) return { all: (v) => setBuilding({ bracing: { ...br, walls: { ...br.walls, profile: v } } }), one: false, what: 'קושרות הקיר' };
   if (/^BR\.T/.test(id)) return { all: (v) => setBuilding({ bracing: { ...br, purlinTies: { ...br.purlinTies, profile: v } } }), one: false, what: 'שורות הקשירה' };
   if (/^BB\./.test(id) && br.walls.portal) { const isK = /\.K\d+$/.test(id); return { all: (v) => setBuilding({ bracing: { ...br, walls: { ...br.walls, portal: { ...br.walls.portal!, ...(isK ? { brace: v } : { beam: v }) } } } }), one: false, what: isK ? 'אלכסוני אגד B' : 'קורות אגד B' }; }
+  if (/^TB\./.test(id)) {
+    const tid = id.split('.')[1], defs = b.transfers ?? [], def = defs.find((t) => t.id === tid);
+    if (def) {
+      const put = (patch: Partial<TransferDef>) => setTransfers(defs.map((t) => (t.id === tid ? { ...t, ...patch } : t)));
+      if (def.kind === 'truss' && def.truss) {
+        const n = def.truss.panels, dm = /\.TR\.D(\d+)[ab]$/.exec(id);
+        const g: keyof TrussSpec['profiles'] = /\.BC$/.test(id) ? 'bottom' : /\.TR\.V\d+$/.test(id) ? 'vert' : dm ? (+dm[1] === 0 || +dm[1] === n - 1 ? 'endDiag' : 'diag') : 'top';
+        return { all: (v) => put({ truss: { ...def.truss!, profiles: { ...def.truss!.profiles, [g]: v } } }), one: false, what: `${TRUSS_GROUP_HE[g]} במסבך הנושא` };
+      }
+      return { all: (v) => put({ profile: v }), one: false, what: 'הקורה הנושאת' };
+    }
+  }
+  const rt = b.roofTruss;
+  if (rt?.enabled && (/^TR\./.test(id) || /^F[^.]+\.BC\.\d+$/.test(id))) {
+    const n = rt.spec.panels, dm = /\.D(\d+)[ab]$/.exec(id);
+    const g: keyof TrussSpec['profiles'] = /\.BC\.\d+$/.test(id) ? 'bottom' : /\.V\d+$/.test(id) ? 'vert' : dm ? (+dm[1] === 0 || +dm[1] === n - 1 ? 'endDiag' : 'diag') : 'diag';
+    return { all: (v) => setBuilding({ roofTruss: { ...rt, spec: { ...rt.spec, profiles: { ...rt.spec.profiles, [g]: v } } } }), one: false, what: `${TRUSS_GROUP_HE[g]} במסבכי הגג` };
+  }
   if (/^HB\./.test(id) && br.roof.rhs) { const isD = /\.D\d+$/.test(id); return { all: (v) => setBuilding({ bracing: { ...br, roof: { ...br.roof, rhs: { ...br.roof.rhs!, ...(isD ? { diag: v } : { strut: v }) } } } }), one: false, what: isD ? 'אלכסוני הסבכה' : 'מוטות הסבכה' }; }
   return null;
 }
@@ -304,6 +330,8 @@ function HubSettings({ m }: { m: Member }) {
     const base = m.id.replace(/\.(H|S|N)$/, '');
     const c = (m.connId && d.connById.get(m.connId)) || d.connections.find((x) => x.parts.includes(m.id) || x.parts.includes(base));
     if (c && m.kind !== 'cleat') return <StudioPlateButton c={c} />;
+    // תומך שאינו תושבת פטה (תומך מזחלה וכו') — רק הסטודיו; הגדרות השיפוע אינן שלו
+    if (c && c.type !== 'purlin-cleat') return <StudioPlateButton c={c} />;
     if (c) return <><StudioPlateButton c={c} /><CleatHubCtx.Provider value={c.type === 'purlin-cleat' ? c.id : undefined}><HubNav m={m} /></CleatHubCtx.Provider></>;
   }
   return <HubNav m={m} />;

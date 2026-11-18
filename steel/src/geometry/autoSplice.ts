@@ -1,6 +1,6 @@
 import { add, dot, norm, scale, sub, v3, type Vec3 } from '../core/vec';
 import type { BoltInfo, Connection, Member, Project, SupportPoint, ValidationIssue, WeldInfo } from '../model/types';
-import { tryProfile } from '../profiles/library';
+import { tryProfile, type Profile } from '../profiles/library';
 import { axialExtent, BEAM_SPLICE_T } from './parts';
 import { proposeSplices } from './purlins';
 import { localFrame } from './frame';
@@ -97,6 +97,7 @@ export function buildBeamSplices(project: Project, members: Member[], splices: R
     const pr = tryProfile(m.profile);
     const welded = (m.kind === 'column' ? project.settings.spliceJoint?.columns : project.settings.spliceJoint?.beams) === 'welded';
     if (welded && pr) { weldedSplice(m, pr, ts, auto, out); continue; }
+    if (pr && (pr.family === 'RHS' || pr.family === 'SHS')) { boxFlangeSplice(m, pr, ts, auto, out, bolt, eE, nutR); continue; }
     if (!pr || !['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(pr.family)) continue;
     const f = localFrame(m);
     const h = pr.props.h, b = pr.props.b, tf = pr.dims.tf ?? 10, tw = pr.dims.tw ?? 7;
@@ -154,6 +155,41 @@ export function buildBeamSplices(project: Project, members: Member[], splices: R
   }
   void v3; void project;
   return out;
+}
+
+/**
+ * חיבור המשך מוברג לצינור מלבני/ריבועי (פלנץ): שתי פלטות קצה PL20 מרותכות סביב קצות הצינור (מסגריה),
+ * רחבות מהצינור לצדדים בלבד — הברגים מחוץ לדפנות הצד (גישה לאום), ללא בליטה מעל/מתחת לחגורה.
+ */
+function boxFlangeSplice(m: Member, pr: Profile, ts: number[], auto: Set<string>, out: { members: Member[]; connections: Connection[]; issues: ValidationIssue[] }, bolt: { d: number; grade: string; standard: string; clearance: number }, eE: number, nutR: number) {
+  const f = localFrame(m);
+  const T = 20, h = pr.props.h, b = pr.props.b;
+  const vc = m.anchor === 'top' ? -h / 2 : 0;
+  const a = b / 2 + Math.ceil(nutR + 5); // מרכז הבורג מציר הצינור (לרוחב)
+  const W = Math.round(2 * (a + eE)), Hp = Math.round(h);
+  const rows = h >= 220 ? [h / 2 - eE, 0, -(h / 2 - eE)] : [h / 2 - eE, -(h / 2 - eE)];
+  const { tMin, tMax } = axialExtent(m);
+  ts.forEach((t, k) => {
+    if (!(t > tMin + 100 && t < tMax - 100)) return;
+    const id = `C.RS.${m.id}.${k + 1}`;
+    const at = (dt: number, dv: number, du = 0) => add(add(add(m.start, scale(f.ex, t + dt)), scale(f.v, vc + dv)), scale(f.u, du));
+    const plates: string[] = [];
+    for (const [pid, dt] of [[`${id}.PL1`, -T / 2], [`${id}.PL2`, T / 2]] as const) {
+      out.members.push({
+        id: pid, kind: 'plate', label: `פלטת פלנץ PL${T}×${W}×${Hp}`, start: at(dt, -Hp / 2), end: at(dt, Hp / 2), profile: `PL${W}x${T}`, material: m.material,
+        rollDeg: 0, mirror: false, anchor: 'center', refUp: f.ex, source: 'generated', manualPlacement: false, connId: id, partDesc: `פלטת פלנץ לצינור PL${T}×${W}×${Hp}`,
+      });
+      plates.push(pid);
+    }
+    const bolts: BoltInfo[] = [];
+    for (const dv of rows) for (const du of [-a, a]) bolts.push(makeBolt(`${id}.B${bolts.length + 1}`, id, at(-T, dv, du), f.ex, bolt, 2 * T, 'site', plates, f.v, out.members));
+    const cOf = (pid: string) => { const pm = out.members.find((x) => x.id === pid)!; return v3((pm.start.x + pm.end.x) / 2, (pm.start.y + pm.end.y) / 2, (pm.start.z + pm.end.z) / 2); };
+    const welds: WeldInfo[] = plates.map((pid, i) => ({ id: `${id}.W${i + 1}`, connId: id, type: 'fillet', a: 6, length: Math.round(2 * (b + h)), location: 'shop', between: [m.id, pid], from: cOf(pid), to: cOf(pid) }));
+    out.connections.push({
+      id, type: 'beam-splice', label: `חיבור המשך פלנץ ${m.label} (${(t / 1000).toFixed(2)} מ')${auto.has(m.id) ? ' — אוטומטי' : ''}`,
+      members: [m.id], parts: [...plates, ...bolts.map((x) => x.id)], bolts, welds, status: 'not-verified', fixity: 'rigid', overridden: false,
+    });
+  });
 }
 
 /**
