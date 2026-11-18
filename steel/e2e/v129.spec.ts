@@ -21,9 +21,15 @@ test('V129-01 קושרת גג: פרט מוט הברגה + טבלת קטעים', 
   expect(s.err).toEqual([]);
   const rods = s.ids.filter((id) => id.endsWith('.ROD')).length;
   expect(rods).toBeGreaterThan(0);
-  await expect(page.getByTestId('br-seg-table')).toBeVisible();
-  // ביטול קטע אחד במפתח הראשון — פחות מוטות
-  await page.locator('[data-testid^="br-seg-0-"]').first().uncheck();
+  await expect(page.getByTestId('br-roof-grid')).toBeVisible();
+  // תא קיים (מפתח 1, שיפוע שמאל): X אחד → שניים — יותר מוטות; עוד שתי לחיצות → ללא
+  await page.getByTestId('br-grid-0-L').click();
+  await page.waitForTimeout(400);
+  s = await state(page);
+  expect(s.err).toEqual([]);
+  expect(s.ids.filter((id) => id.endsWith('.ROD')).length).toBeGreaterThan(rods);
+  await page.getByTestId('br-grid-0-L').click();
+  await page.getByTestId('br-grid-0-L').click();
   await page.waitForTimeout(400);
   s = await state(page);
   expect(s.ids.filter((id) => id.endsWith('.ROD')).length).toBeLessThan(rods);
@@ -85,5 +91,33 @@ test('V129-04 צורת תוכנית: מקבילית וטרפז', async ({ page }
   expect(s.err).toEqual([]);
   await page.evaluate(() => (window as any).__ksp.viewport.fitAll('top'));
   await shot(page, 'v129-taper');
+  expect(errors).toEqual([]);
+});
+
+test('V129-05 חלון מכלול: נעילה אופקית — צורה לציר אחד, תמונה; אשף פלטה בסטודיו', async ({ page }) => {
+  const errors = await boot(page);
+  await page.getByTestId('nav-b:walls').click();
+  if (!(await page.getByTestId('br-walls').isChecked())) await page.getByTestId('br-walls').check();
+  await page.getByTestId('br-walls-truss').click();
+  await page.waitForTimeout(400);
+  const chord = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => /^LT\.\d+\.L\.S$/.test(m.id))?.id);
+  expect(chord).toBeTruthy();
+  await page.evaluate((id) => (window as any).__ksp.store.select([id]), chord);
+  await expect(page.getByTestId('asm-card')).toBeVisible();
+  await expect(page.getByTestId('asm-title')).toContainText('נעילה');
+  await expect(page.getByTestId('asm-pic')).toBeVisible();
+  await shot(page, 'v129-asm-lock');
+  await page.getByTestId('asm-scope-line').check();
+  await page.getByTestId('asm-type-portal').click();
+  await page.waitForTimeout(400);
+  const s = await page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { bbL: d.members.some((m: any) => /^BB\..*\.L$/.test(m.id)), ltR: d.members.some((m: any) => /^LT\..*\.R\./.test(m.id)), err: d.issues.filter((i: any) => i.severity === 'error').length }; });
+  expect(s).toEqual({ bbL: true, ltR: true, err: 0 });
+  // פלטה: עריכה בסטודיו (אשף הפלטה הוא חלק מהסטודיו)
+  const plate = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => /^C\.EAVE\..*\.PL$/.test(m.id))?.id);
+  await page.evaluate((id) => (window as any).__ksp.store.select([id]), plate);
+  await page.getByTestId('open-plate-studio').click();
+  await expect(page.getByTestId('ds-plate-wizard')).toBeVisible();
+  await shot(page, 'v129-studio-plate');
+  await page.getByTestId('ds-close').first().click();
   expect(errors).toEqual([]);
 });

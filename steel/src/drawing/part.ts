@@ -319,10 +319,11 @@ export function plateGeom(part: MarkedPart, d: DerivedModel) {
     if (Math.hypot(a.x - b.x, a.y - b.y) > 0.05) face.push([{ x: a.x, y: a.y }, { x: b.x, y: b.y }]);
     if (Math.hypot(a.x - b.x, a.z - b.z) > 0.05) edge.push([{ x: a.x, y: a.z }, { x: b.x, y: b.z }]);
   }
-  const bolts = new Map(d.connections.flatMap((c) => c.bolts).map((b) => [b.id, b]));
+  const bolts = new Map<string, { p: Vec3 }>([...d.connections.flatMap((c) => c.bolts).map((b) => [b.id, b] as const), ...d.connections.flatMap((c) => c.holes ?? []).map((h) => [h.id, h] as const)]);
   const holes = part.holes.map((h) => { const b = bolts.get(h.boltId); if (!b) return null; const q = P2(b.p); return { x: q.x, y: q.y, d: h.d }; }).filter((h): h is { x: number; y: number; d: number } => !!h);
-  // מוטות עיגון מרותכים לפלטה (פלטה מבוטנת) — מיקומי ריתוך, לא חורים
-  const studs = d.members.filter((a) => a.kind === 'anchor' && a.connId && a.connId === m.connId).map((a) => { const q = P2(a.start); return { x: q.x, y: q.y, d: Number(a.profile.replace(/\D/g, '')) || 16 }; });
+  // מוטות עיגון מרותכים לפלטה (פלטה מבוטנת) — עכשיו עוברים בחור (מסומן כחור); סימון ריתוך רק למוט שאין לו חור
+  const holeAt = new Set(holes.map((h) => `${Math.round(h.x)}|${Math.round(h.y)}`));
+  const studs = d.members.filter((a) => a.kind === 'anchor' && a.connId && a.connId === m.connId).filter((a) => { const q = P2(a.start); return !holeAt.has(`${Math.round(q.x)}|${Math.round(q.y)}`); }).map((a) => { const q = P2(a.start); return { x: q.x, y: q.y, d: Number(a.profile.replace(/\D/g, '')) || 16 }; });
   const xs = face.flatMap(([a, b]) => [a.x, b.x]), ys = face.flatMap(([a, b]) => [a.y, b.y]);
   return { face, edge, holes, studs, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys), T: ext[order[2]] };
 }

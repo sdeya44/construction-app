@@ -39,6 +39,7 @@ test('HUB-02: לחיצה על אלכסון אגד B — שרטוט סכמטי ע
   const id = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BB.'))?.id);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), id);
   await expect(page.getByTestId('hub-settings')).toBeVisible();
+  await page.getByTestId('asm-scope-all').check(); // חלון המכלול: שינוי לכל הצירים
   await page.getByTestId('hub-settings').getByTestId('sch-pb-drop').click();
   await page.getByTestId('sch-pb-drop-inp').fill('900'); await page.getByTestId('sch-pb-drop-inp').press('Enter');
   expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.walls.portal.drop)).toBe(900);

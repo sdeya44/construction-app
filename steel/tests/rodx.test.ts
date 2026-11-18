@@ -69,3 +69,35 @@ describe('מזחלה — תמיכת פלטה + זוויתן אופקי', () => {
     expect(buildSheet(def, pn, d, fab, bom).ents.length).toBeGreaterThan(10);
   });
 });
+
+describe('מזחלה — זוויתן על הווב, מפתחים וירידות', () => {
+  const mk = (spec: object = {}, perRun?: object) => {
+    const b = defaultBuilding();
+    b.cladding = defaultCladding();
+    b.cladding.gutter = { ...b.cladding.gutter, enabled: true, spec, ...(perRun ? { perRun } : {}) } as typeof b.cladding.gutter;
+    return newProject('g', b);
+  };
+  it('ברירת מחדל: זוויתן בחפיפה על הווב, ללא התנגשות; דופן פנימית מעל הפטה', () => {
+    const d = generate(mk());
+    expect(d.issues.filter((i) => i.severity === 'error').map((i) => i.message)).toEqual([]);
+    const gb = d.connections.filter((c) => c.type === 'gutter');
+    expect(gb.length).toBeGreaterThan(0);
+    for (const c of gb) {
+      const raf = d.byId.get(c.members[0]!)!;
+      for (const pid of c.parts) { const k = clash(d.byId.get(pid)!, raf); expect(k?.depth ?? 0).toBeLessThan(0.6); }
+    }
+    for (const sl of ['horizontal', 'roof']) {
+      const d2 = generate(mk({ bracketSlope: sl, bracketOffset: -150 }));
+      expect(d2.issues.filter((i) => i.severity === 'error').map((i) => i.message)).toEqual([]);
+    }
+  });
+  it('מזחלה רק בחלק מהמפתחים וירידות לפי בחירה', () => {
+    const all = generate(mk()).connections.filter((c) => c.type === 'gutter').length;
+    const p = mk({}, { L: { bays: [true, true, false, false, true], downpipes: [0, 2] } });
+    const d = generate(p);
+    expect(d.connections.filter((c) => c.type === 'gutter').length).toBeLessThan(all);
+    const t = claddingTakeoff(p, d)!;
+    expect(t.gutters.length).toBeGreaterThan(1);
+  });
+});
+import { claddingTakeoff } from '../src/geometry/cladding';

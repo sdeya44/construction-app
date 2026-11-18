@@ -54,6 +54,8 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
   const reach = pp.drop / tA;
   const base = { finT: pp.plateT, tongueT: pp.plateT, bolt: pp.bolt, weldSize: pp.weldSize, mat: L.mat };
   const T = pp.plateT; // הסטת ציר ה-RHS מהפח: (פח + לשונית) / 2
+  // חיבור קורת האגד: פח ולשונית שוכבים (ברירת מחדל) — הקורה על ציר העמודים; אחרת במישור הקיר והקורה מוסטת ב-T
+  const horiz = (pp.finOrient ?? 'horizontal') === 'horizontal';
   for (const bay of bays) {
     const f0 = L.frames[bay], f1 = L.frames[bay + 1];
     const key = `${bay + 1}.${L.side}`;
@@ -67,7 +69,7 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
     // קורה-עמוד בשני הקצוות
     const ends = ([['E0', ya, 1, colA], ['E1', yb, -1, colB]] as const).map(([k, yF, sg, col]) => {
       const cid = `C.BB.${key}.${k}`;
-      const j = finJoint({ ...base, cid, desc: 'קורת אגד', hostId: col, memberId: bid, P: v3(x, yF, zc), n: v3(0, sg, 0), d: v3(0, sg, 0), pn: X, side: 1, prof: bp, profile: pp.beam, bolts: pp.beamBolts ?? 2 });
+      const j = finJoint({ ...base, cid, desc: 'קורת אגד', hostId: col, memberId: bid, P: horiz ? v3(x, yF, zc - T) : v3(x, yF, zc), n: v3(0, sg, 0), d: v3(0, sg, 0), pn: horiz ? v3(0, 0, 1) : X, side: 1, prof: bp, profile: pp.beam, bolts: pp.beamBolts ?? 2 });
       if (!hollow && bp.props.b / 2 + T > inner / 2 + 0.5) out.issues.push({ code: 'PLATE_WIDE', severity: 'warning', elementId: cid, message: `${lab}: קורת האגד המוסטת ${hollow ? 'רחבה מפני העמוד' : 'אינה נכנסת בין אגפי העמוד'} (${Math.round(inner)})` });
       return { cid, col, j, label: `${lab} — קורה לעמוד` };
     });

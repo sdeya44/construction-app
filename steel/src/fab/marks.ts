@@ -50,6 +50,11 @@ function boltsThrough(d: DerivedModel, id: string) {
   if (!idx) {
     idx = new Map();
     for (const c of d.connections) for (const b of c.bolts) for (const h of b.holesIn) idx.set(h, [...(idx.get(h) ?? []), b]);
+    // חורים ללא בורג — כחורי "בורג" מדומים (מיקום, ציר, קוטר)
+    for (const c of d.connections) for (const h of c.holes ?? []) {
+      const pb = { id: h.id, connId: c.id, p: h.p, axis: h.axis, d: h.d, hole: h.d, grade: '', standard: 'HOLE', grip: 0, length: 0, location: 'shop' as const, holesIn: [h.memberId], ...(h.slot ? { slots: { [h.memberId]: h.slot } } : {}) };
+      idx.set(h.memberId, [...(idx.get(h.memberId) ?? []), pb]);
+    }
     boltIndex.set(d, idx);
   }
   return idx.get(id) ?? [];

@@ -45,6 +45,8 @@ export interface AppState {
   eaveCheck: string | null;
   /** סטודיו פרטי חיבור: מפתח האתר (קצה אלמנט) הפתוח לעריכה */
   detailStudio: string | null;
+  /** חיבור שהפלטות שלו נערכות בסטודיו (אשף הפלטה כחלק מהסטודיו) */
+  studioConn?: string | null;
   measure: { a?: { x: number; y: number; z: number }; b?: { x: number; y: number; z: number } };
   /** צביעת המודל: לפי סוג (רגיל) או לפי הערכת גדלים */
   colorMode: 'kind' | 'sizing';

@@ -9,6 +9,7 @@ import { assignDetail, saveDetail } from '../commands/commands';
 import type { CustomDetail, DetailOp, DetailRef, Member } from '../model/types';
 import { store, useStore } from '../store';
 import { Icon } from './icons';
+import { PlateWizard } from './PlateWizard';
 
 /**
  * סטודיו פרטי חיבור: בונים פרט מחלקים — גוררים מהמחסן (פחים, חיתוכים, חורים, ברגים, ריתוך) אל פנים של האלמנט,
@@ -51,6 +52,7 @@ const fmt = (x: number | undefined) => (x === undefined || !Number.isFinite(x) ?
 
 function Studio({ siteKey: key }: { siteKey: string }) {
   const project = useStore((s) => s.project);
+  const studioConn = useStore((s) => s.studioConn);
   const { id } = parseSiteKey(key);
   // מודל בסיס ללא הפרט המותאם באתר הזה — רואים את האלמנט "נקי"
   const base = useMemo(() => { const a = { ...(project.detailAssign ?? {}) }; delete a[key]; return generate({ ...project, detailAssign: a }); }, [project, key]);
@@ -130,10 +132,14 @@ function Studio({ siteKey: key }: { siteKey: string }) {
     window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
   });
   const usedBy = Object.entries(project.detailAssign ?? {}).filter(([k, v]) => v === det.id && k !== key).length;
-  const close = () => store.set({ detailStudio: null });
+  const close = () => store.set({ detailStudio: null, studioConn: null });
   const main = base.byId.get(id);
+  const live = store.state.derived;
+  // אשף הפלטה (חלק מהסטודיו): החיבור הרגיל באתר הזה — לפי בחירה, או החיבור של האלמנט הקרוב לקצה
+  const stdConn = (studioConn && live.connById.get(studioConn)) || (site ? live.connections.find((c) => c.type !== 'custom' && c.members.includes(id) && c.parts.some((pid) => { const pm = live.byId.get(pid); return !!pm && len(sub(scale(add(pm.start, pm.end), 0.5), site.P)) < 700; })) : undefined);
   if (!main || !site || !res) return (
-    <div className="overlay"><div className="dialog"><header><h2>סטודיו פרטים</h2><button className="icon-btn" onClick={close} aria-label="סגירה"><Icon name="x" /></button></header><div className="body">לא נמצא אלמנט לקצה הזה.</div></div></div>
+    <div className="overlay"><div className="dialog wide"><header><h2>סטודיו פרטים{stdConn ? ` — ${stdConn.label}` : ''}</h2><button className="icon-btn" onClick={close} aria-label="סגירה" data-testid="ds-close"><Icon name="x" /></button></header>
+      <div className="body">{stdConn ? <div data-testid="ds-plate-wizard"><PlateWizard c={stdConn} /></div> : 'לא נמצא אלמנט לקצה הזה.'}</div></div></div>
   );
 
   const nextId = (k: DetailOp['k']) => { let i = 1; while (det.ops.some((o) => o.id === `${PREFIX[k]}${i}`)) i++; return `${PREFIX[k]}${i}`; };
@@ -265,6 +271,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
           {preview !== key && <div className="studio-preview">תצוגה על קצה אחר: {base.byId.get(pKey.id)?.label} <button className="btn small" onClick={() => setPreview(key)}>חזרה</button></div>}
         </section>
         <aside className="studio-side">
+          {stdConn && <details className="ss-card" open={!!studioConn} data-testid="ds-plate-wizard"><summary><h4 style={{ display: 'inline' }}>פלטות החיבור הקיים — {stdConn.label}</h4></summary><PlateWizard c={stdConn} /></details>}
           {fx && <FormulaBuilder target={fx} tokens={fxTokens} setTokens={setFxTokens} vars={res.values} det={det} groups={fxGroups} onClose={() => setFx(null)} />}
           <section className="ss-card"><h4>פעולות הפרט</h4>
             <ol className="ss-ops" data-testid="ds-ops">

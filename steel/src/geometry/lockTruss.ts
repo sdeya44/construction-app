@@ -63,7 +63,8 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
       for (const [k, yF, sg, colId] of [['A', ya, 1, colA], ['B', yb, -1, colB]] as const) {
         const cid = `C.LT.${key}.${c.id.slice(-1)}${k}`;
         const P = v3(x, yF, c.z), n = v3(0, sg, 0);
-        if (lt.conn === 'plate') {
+        const connK = (k === 'A' ? lt.connA : lt.connB) ?? lt.conn;
+        if (connK === 'plate') {
           // פלטת קצה מרותכת לסיב (מסגריה), צמודה לפני העמוד; ברגים עוברים דרך העמוד — נבנים לכל עמוד בהמשך
           const t = lt.plateT, pd = endPlateDims(cpf, lt);
           const pid = `${cid}.PE`, pc = add(P, scale(n, t / 2));
@@ -76,7 +77,10 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
           pts.push(add(P, scale(n, t)));
           endReach = Math.max(endReach, t + (pd.H / 2 - ch / 2));
         } else {
-          const j = finJoint({ cid, desc: c.id.endsWith('C') ? 'סיב נעילה' : 'חגורת מסבך', hostId: colId, memberId: c.id, P, n, d: n, pn: X, side: 1, prof: cpf, profile: lt.chord, finT: lt.plateT, tongueT: lt.plateT, bolt: lt.bolt, bolts: 2, weldSize: lt.weldSize, mat: L.mat });
+          // לשונית שוכבת (ברירת מחדל): הפח מרותך לפני העמוד אופקית, החריץ בסיב אופקי; ציר הסיב נשאר בגובה התכנוני
+          const horiz = (lt.finOrient ?? 'horizontal') === 'horizontal';
+          const Pj = horiz ? v3(P.x, P.y, P.z - lt.plateT) : P;
+          const j = finJoint({ cid, desc: c.id.endsWith('C') ? 'סיב נעילה' : 'חגורת מסבך', hostId: colId, memberId: c.id, P: Pj, n, d: n, pn: horiz ? Z : X, side: 1, prof: cpf, profile: lt.chord, finT: lt.plateT, tongueT: lt.plateT, bolt: lt.bolt, bolts: 2, weldSize: lt.weldSize, mat: L.mat });
           out.members.push(...j.members); out.issues.push(...j.issues);
           out.connections.push({ id: cid, type: 'knee', label: `${lab} — ${c.id.endsWith('C') ? 'סיב' : 'חגורה'} לעמוד (לשונית)`, members: [colId, c.id], parts: j.parts, bolts: j.bolts, welds: j.welds, status: 'not-verified', fixity: 'pinned', overridden: false });
           pts.push(j.start);
@@ -93,14 +97,15 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
     const zLoF = Math.min(zCont, zSec) + ch / 2, zHiF = Math.max(zCont, zSec) - ch / 2;
     const hF = zHiF - zLoF;
     const wd = dpf.props.b;
-    const y0 = ya + endReach + 15, y1 = yb - endReach - 15;
+    const ec = lt.endClear && lt.endClear > 0 ? Math.max(lt.endClear, endReach) : endReach + 15;
+    const y0 = ya + ec, y1 = yb - ec;
     const span = y1 - y0;
     let nd = lt.diags > 0 ? lt.diags : Math.max(2, 2 * Math.round(span / (2 * hF / Math.tan((50 * Math.PI) / 180))));
     if (lt.diags <= 0 && nd % 2) nd++;
     const pnl = span / nd;
     const sinT = hF / Math.hypot(hF, pnl);
     if (sinT > 0.97 || sinT < 0.5) out.issues.push({ code: 'BRACE_ANGLE', severity: 'warning', message: `${lab}: זווית אלכסוני המסבך ${Math.round((Math.asin(sinT) * 180) / Math.PI)}° — לשנות מספר אלכסונים/גובה` });
-    const s = wd / (2 * sinT) + 10; // חצי טביעת האלכסון בפני החגורה + רווח
+    const s = wd / (2 * sinT) + (lt.nodeGap ?? 20) / 2; // חצי טביעת האלכסון בפני החגורה + חצי המרווח בצומת
     const loId = zCont < zSec ? chords[0].id : chords[1].id, hiId = zCont < zSec ? chords[1].id : chords[0].id;
     const cid = `C.LT.${key}.TR`;
     const parts: string[] = [], welds: WeldInfo[] = [];

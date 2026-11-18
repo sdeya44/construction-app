@@ -99,7 +99,8 @@ test('קושרות: ביטול/הוספה דרך הממשק, ללא התנגשו
   await boot(page);
   const count = () => page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('BR.R')).length);
   expect(await count()).toBe(8);
-  await page.getByTestId('br-roof-bays').getByText('3', { exact: true }).click();
+  await page.getByTestId('br-grid-2-L').click();
+  await page.getByTestId('br-grid-2-R').click();
   expect(await count()).toBe(12);
   await page.getByTestId('br-roof').uncheck();
   expect(await count()).toBe(0);

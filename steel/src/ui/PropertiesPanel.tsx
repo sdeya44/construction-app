@@ -13,10 +13,10 @@ import { KIND_LABEL, kindLabelOf } from './TreePanel';
 import { SpliceEditor } from './SpliceEditor';
 import { ConnectionEditor, MemberConnections } from './ConnectionEditor';
 import { NavContent, type NavKey } from './SideNav';
-import { PlateWizard } from './PlateWizard';
+import { AssemblyCard, assemblyOf } from './AssemblyCard';
 import { trussFrames } from '../geometry/truss';
 import { CleatHubCtx, CleatTypePicker, EndTypePicker } from './ConnTypePicker';
-import type { Member, Project } from '../model/types';
+import type { Connection, Member, Project } from '../model/types';
 
 const f1 = (n: number, d = 1) => n.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
 
@@ -109,6 +109,7 @@ function PropertiesInner() {
         <button role="tab" className={ptab === 'adv' ? 'on' : ''} onClick={() => setPtab('adv')} data-testid="ptab-adv">מתקדם</button>
       </div>
       {ptab === 'basic' && <>
+        <AssemblyCard m={m} />
         {plateLike && m.kind !== 'cleat' && m.connId && (d.connById.get(m.connId)?.type === 'purlin-cleat' || d.connById.get(m.connId)?.custom?.site.includes('|x:')) && <div className="hub-set"><CleatTypePicker connId={m.connId} /></div>}
         {plateLike && m.connId?.startsWith('C.CD.') && d.connById.get(m.connId)?.custom && (
           <div className="hub-set"><div className="hub-set-h">פרט מותאם: {p.customDetails?.find((x) => x.id === d.connById.get(m.connId!)!.custom!.detailId)?.name}</div>
@@ -165,7 +166,7 @@ function PropertiesInner() {
         {m.purlin && <div className="hub-set"><CleatTypePicker side={m.purlin.paramKey ?? (m.purlin.side === 'R' ? 'right' : 'left')} /></div>}
         <div className="hint">שינוי חל מיד · Ctrl+Z לביטול</div>
         {!plateLike && <DetailEnds m={m} />}
-        {!plateLike && <HubSettings m={m} />}
+        {!plateLike && !['lock', 'portal', 'wallx', 'roofx', 'knee', 'gutter', 'haunch'].includes(assemblyOf(m, d)?.family ?? '') && <HubSettings m={m} />}
       </>}
       {ptab === 'conns' && <>
         {!plateLike && <DetailEnds m={m} />}
@@ -283,10 +284,25 @@ function HubSettings({ m }: { m: Member }) {
   if (m.kind === 'plate' || m.kind === 'cleat' || m.kind === 'bolt' || m.kind === 'anchor') {
     const base = m.id.replace(/\.(H|S|N)$/, '');
     const c = (m.connId && d.connById.get(m.connId)) || d.connections.find((x) => x.parts.includes(m.id) || x.parts.includes(base));
-    if (c && m.kind !== 'cleat') return <PlateWizard c={c} plateId={m.kind === 'plate' ? m.id : undefined} />;
-    if (c) return <><PlateWizard c={c} plateId={m.id} /><CleatHubCtx.Provider value={c.type === 'purlin-cleat' ? c.id : undefined}><HubNav m={m} /></CleatHubCtx.Provider></>;
+    if (c && m.kind !== 'cleat') return <StudioPlateButton c={c} />;
+    if (c) return <><StudioPlateButton c={c} /><CleatHubCtx.Provider value={c.type === 'purlin-cleat' ? c.id : undefined}><HubNav m={m} /></CleatHubCtx.Provider></>;
   }
   return <HubNav m={m} />;
+}
+
+/** אשף הפלטה הוא חלק מהסטודיו: מהמאפיינים פותחים את הסטודיו על החיבור של הפלטה */
+function StudioPlateButton({ c }: { c: Connection }) {
+  const d = useStore((s) => s.derived);
+  const open = () => {
+    const pts = c.parts.map((x) => d.byId.get(x)).filter((x): x is Member => !!x).map((x) => ({ x: (x.start.x + x.end.x) / 2, y: (x.start.y + x.end.y) / 2, z: (x.start.z + x.end.z) / 2 }));
+    const P = pts.length ? { x: pts.reduce((a, q) => a + q.x, 0) / pts.length, y: pts.reduce((a, q) => a + q.y, 0) / pts.length, z: pts.reduce((a, q) => a + q.z, 0) / pts.length } : null;
+    let best: [string, 'start' | 'end', number] | null = null;
+    for (const id of c.members) { const mm = d.byId.get(id); if (!mm || !P) continue; for (const e of ['start', 'end'] as const) { const q = mm[e]; const dd = Math.hypot(q.x - P.x, q.y - P.y, q.z - P.z); if (!best || dd < best[2]) best = [id, e, dd]; } }
+    store.set({ detailStudio: best ? `${best[0]}|${best[1]}` : `${c.members[0]}|start`, studioConn: c.id });
+  };
+  return <div className="hub-set" data-testid="plate-studio"><div className="hub-set-h">פלטות וברגים: {c.label}</div>
+    <button className="btn primary" data-testid="open-plate-studio" onClick={open}>עריכת הפלטה בסטודיו</button>
+    <div className="hint">אשף הפלטה (מידות, חורים, ברגים, סטנדרט מסגריה) נמצא בסטודיו, ליד בניית פרט מותאם.</div></div>;
 }
 
 const DETAIL_KINDS = new Set(['column', 'rafter', 'beam', 'brace', 'purlin', 'girt']);

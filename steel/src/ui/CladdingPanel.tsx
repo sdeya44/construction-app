@@ -1,4 +1,4 @@
-import { GUTTER_DEVS, gutterDev, gutterSpec } from '../geometry/gutter';
+import { GUTTER_DEVS, gutterDev, gutterRuns, gutterSpec } from '../geometry/gutter';
 import type { GutterSpec } from '../model/types';
 import { OpeningsSchematic, WallCladSchematic } from './schematics';
 import { useState } from 'react';
@@ -58,9 +58,15 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
                 <option value="">מותאם ({gutterDev(gs)})</option>{Object.keys(GUTTER_DEVS).map((k) => <option key={k} value={k}>{k} מ"מ</option>)}
               </select></div>
             <div className="field"><label>סוג תמיכה</label>
-              <select className="inp" data-testid="gut-support" value={gs.support ?? 'twin'} onChange={(e) => setG({ support: e.target.value as 'twin' | 'plate' })}>
-                <option value="twin">2 זוויתנים מרותכים לקצה הקורה</option><option value="plate">פלטה בקצה הקורה + זוויתן אופקי</option>
+              <select className="inp" data-testid="gut-support" value={gs.support ?? 'web'} onChange={(e) => setG({ support: e.target.value as 'web' | 'twin' | 'plate' })}>
+                <option value="web">זוויתן בחפיפה על צד הווב (נמוך מהקורה — על פלטה)</option><option value="twin">2 זוויתנים מרותכים לקצה הקורה</option><option value="plate">פלטה בקצה הקורה + זוויתן</option>
               </select></div>
+            <div className="field"><label>כיוון התושבת</label>
+              <select className="inp" data-testid="gut-slope" value={gs.bracketSlope ?? 'horizontal'} onChange={(e) => setG({ bracketSlope: e.target.value as 'horizontal' | 'roof' })}>
+                <option value="horizontal">אופקית</option><option value="roof">בשיפוע הגג</option>
+              </select></div>
+            <div className="field"><label>גובה המזחלה והתושבת (+ למעלה)</label><LenField testId="gut-offset" mm={gs.bracketOffset ?? 0} unit="mm" onCommit={(v) => setG({ bracketOffset: v })} /></div>
+            {(gs.support ?? 'web') === 'web' && <div className="field"><label>אורך חפיפה על הווב</label><LenField testId="gut-lap" mm={gs.lap ?? 150} unit="mm" onCommit={(v) => setG({ lap: Math.max(50, v) })} /></div>}
             {gs.support === 'plate' && <div className="field"><label>עובי פלטה</label><LenField testId="gut-plateT" mm={gs.plateT ?? 8} unit="mm" onCommit={(v) => setG({ plateT: v })} /></div>}
             <div className="field"><label>חתך משתנה — תוספת עומק בירידה</label><LenField testId="gut-fall" mm={gs.fall ?? 0} unit="mm" onCommit={(v) => setG({ fall: Math.max(0, v) })} /></div>
             {n('t', 'עובי פח')}{n('bottom', 'רוחב תחתית')}{n('inner', 'דופן פנימית')}{n('outer', 'דופן חיצונית')}{n('lip', 'כיפוף שפה')}
@@ -68,6 +74,7 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
             {n('hangerSpacing', 'מתלי פח כל (0=ללא)')}{n('pipeD', 'קוטר ירידת מרזב')}{n('clampSpacing', 'שלות כל')}
           </Adv>;
         })()}
+        {cl.gutter.enabled && <GutterBays />}
         <div className="field"><label>ברגים לגג (למ"ר)</label><NumField value={cl.roofScrewsPerM2} onCommit={(v) => set({ roofScrewsPerM2: v })} /></div>
       </>}
       {show('walls') && <>
@@ -167,4 +174,38 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
       <div style={{ marginTop: 10 }}><button className="btn small" onClick={() => { if (confirm('להסיר את החיפוי, פטות הקיר והפתחים מהמבנה?')) store.exec(setBuilding({ cladding: undefined })); }}>הסרת חיפוי</button></div>
     </div>
   );
+}
+
+/** מזחלות: באילו מפתחים יש מזחלה, ובאילו מסגרות יש ירידת מרזב — לכל מזחלה (קצה תחתון של מישור) */
+function GutterBays() {
+  const p = useStore((s) => s.project);
+  const d = useStore((s) => s.derived);
+  const b = p.building, cl = b.cladding!;
+  const fr = [...b.frames].sort((a, c) => a.y - c.y);
+  const nb = fr.length - 1;
+  const local = d.plan?.local.derived ?? d;
+  const runs = d.section ? gutterRuns({ ...b, cladding: { ...cl, gutter: { ...cl.gutter, perRun: undefined } } }, d.section, local.members).filter((r) => r.kind === 'eave' && r.planeId) : [];
+  const cur = gutterRuns(b, d.section!, local.members);
+  if (!runs.length) return null;
+  const setRun = (pid: string, patch: { bays?: boolean[]; downpipes?: number[] | undefined }) => {
+    const prev = cl.gutter.perRun?.[pid] ?? {};
+    store.exec(setBuilding({ cladding: { ...cl, gutter: { ...cl.gutter, perRun: { ...(cl.gutter.perRun ?? {}), [pid]: { ...prev, ...patch } } } } }));
+  };
+  return <div className="field" style={{ display: 'block' }} data-testid="gut-bays">
+    {runs.map((r) => {
+      const pid = r.planeId!;
+      const pr = cl.gutter.perRun?.[pid];
+      const bays = Array.from({ length: nb }, (_, i) => pr?.bays?.[i] ?? true);
+      const dpNow = new Set(cur.filter((x) => x.planeId === pid).flatMap((x) => x.downpipes.map((q) => fr.findIndex((f) => Math.abs(f.y - q.y) < 400))));
+      return <div key={pid} style={{ marginTop: 6 }}>
+        <label>{r.label}</label>
+        <table className="mini-table"><tbody>
+          <tr><td>מזחלה במפתח</td>{bays.map((on, i) => <td key={i} title={`מפתח ${i + 1}`}><input type="checkbox" data-testid={`gut-bay-${pid}-${i}`} checked={on} onChange={() => setRun(pid, { bays: bays.map((x, j) => (j === i ? !x : x)) })} /></td>)}</tr>
+          <tr><td>ירידה במסגרת</td>{fr.map((f, i) => <td key={f.id} title={`מסגרת ${i + 1}`}><input type="checkbox" data-testid={`gut-dp-${pid}-${i}`} checked={dpNow.has(i)} onChange={() => { const s0 = new Set(pr?.downpipes ?? [...dpNow]); if (s0.has(i)) s0.delete(i); else s0.add(i); setRun(pid, { downpipes: [...s0].sort((a, c) => a - c) }); }} /></td>)}</tr>
+        </tbody></table>
+        {pr?.downpipes && <button className="btn small" onClick={() => setRun(pid, { downpipes: undefined })}>ירידות אוטומטיות</button>}
+      </div>;
+    })}
+    <div className="hint">סימון מפתח מבטל/מוסיף מזחלה באותו מפתח (התושבות נבנות רק במסגרות של המקטעים הפעילים). ירידות — לפי המסגרות שסומנו; בלי סימון ידני — אוטומטי לפי "מרזב כל".</div>
+  </div>;
 }

@@ -5,6 +5,7 @@ test('PW-01: לחיצה על פלטת ראש עמוד — אשף פלטה: שר�
   await boot(page);
   const pid = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.kind === 'plate' && m.connId?.startsWith('C.EAVE.'))?.id);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), pid);
+  await page.getByTestId('open-plate-studio').click(); // אשף הפלטה — בסטודיו
   await expect(page.getByTestId('plate-wizard')).toBeVisible();
   await expect(page.getByTestId('pw-why')).toContainText('רוחב');
   await shot(page, 'PW_01_eave');
@@ -23,8 +24,11 @@ test('PW-01: לחיצה על פלטת ראש עמוד — אשף פלטה: שר�
 test('PW-02: פלטת בסיס ופח אלכסון — אשף עם שרטוט ושדות', async ({ page }) => {
   await boot(page);
   await page.evaluate(() => { const k = (window as any).__ksp; const m = k.store.state.derived.members.find((x: any) => x.kind === 'plate' && x.connId?.startsWith('C.BASE.')); k.store.select([m.id]); });
+  await page.getByTestId('open-plate-studio').click();
   await expect(page.getByTestId('plate-wizard')).toBeVisible();
   await shot(page, 'PW_02_base');
+  await page.getByTestId('ds-close').first().click();
   await page.evaluate(() => { const k = (window as any).__ksp; const m = k.store.state.derived.members.find((x: any) => x.kind === 'plate' && x.connId?.includes('.BR.') ); k.store.select([m.id]); });
+  await page.getByTestId('open-plate-studio').click();
   await expect(page.getByTestId('pw-br-t')).toBeVisible();
 });

@@ -1,4 +1,5 @@
 import { add, dot, norm, scale, sub, v3, type Vec3 } from '../core/vec';
+import { localFrame } from './frame';
 import type { NSection } from '../model/section';
 import type { BuildingParams, Connection, GutterSpec, Member, ValidationIssue, WeldInfo } from '../model/types';
 import { tryProfile } from '../profiles/library';
@@ -33,6 +34,8 @@ export interface GutterRun {
   /** קצוות הקורות בכל מסגרת (נקודת התמיכה) */
   ends: { frameId: string; rafterId: string; faceX: number; y: number }[];
   downpipes: { y: number; x: number; zTop: number; zBottom: number }[];
+  /** מזחלת קצה: מזהה המישור ושיפוע הגג כלפי חוץ */
+  planeId?: string; dzdxOut?: number;
 }
 
 const Y = v3(0, 1, 0), Z = v3(0, 0, 1);
@@ -78,7 +81,8 @@ export function gutterRuns(b: BuildingParams, sec: NSection, members: Member[]):
     if (!r0) continue;
     const rp = tryProfile(r0.profile);
     const tos = r0.anchor === 'top' ? (which === 'start' ? r0.start.z : r0.end.z) : (which === 'start' ? r0.start.z : r0.end.z) + (rp?.props.h ?? 300) / 2;
-    const zInnerTop = tos + pu - 10, zBottom = zInnerTop - s.inner;
+    // הדופן הפנימית עולה עד מעל הפטה האחרונה (השפה מכופפת פנימה מעל הפטה, מתחת לפח הגג); הגבהה/הנמכה לפי bracketOffset
+    const zInnerTop = tos + pu + 2 + (s.bracketOffset ?? 0), zBottom = zInnerTop - s.inner;
     // הדופן הפנימית: מחוץ לפני הקצה של הקורה ומחוץ לחיפוי הקיר
     let face = -Infinity * dir;
     const pick = (x: number) => (dir > 0 ? Math.max(face, x) : Math.min(face, x));
@@ -95,14 +99,30 @@ export function gutterRuns(b: BuildingParams, sec: NSection, members: Member[]):
       const colH = tryProfile(b.columnProfile)?.props.h ?? 200;
       face = pick(edgeLine.x + dir * (colH / 2 + girtH + 60));
     }
-    const x = face + dir * (5 + ((s.support ?? 'twin') === 'plate' ? s.plateT ?? 8 : 0));
-    // ירידות: בעמודים (מסגרות), מרווח ≤ downpipeSpacing, תמיד בשני הקצוות
-    const nDp = Math.max(1, Math.ceil((y1 - y0) / cl.gutter.downpipeSpacing));
-    const picks = nDp === 1 ? [frames[0]!] : Array.from({ length: nDp + 1 }, (_, i) => frames[Math.round((i * (frames.length - 1)) / nDp)]!).filter((f, i, a) => a.indexOf(f) === i);
+    const x = face + dir * (5 + ((s.support ?? 'web') === 'plate' ? s.plateT ?? 8 : 0));
     const zBase = b.lineBase?.[edgeLine?.id ?? ''] ?? b.baseElevation;
-    runs.push({
-      id: `G.${pl.id}`, label: `מזחלה — קצה תחתון ${pl.label}`, kind: 'eave', x, dir, zBottom, zInnerTop, y0, y1, ends: es,
-      downpipes: picks.map((f) => ({ y: f.y + (f === frames[0] ? 350 : -350), x: x + dir * (s.bottom / 2), zTop: zBottom, zBottom: zBase + 150 })),
+    const dzdxOut = ((low.z - high.z) / (low.x - high.x)) * dir; // שיפוע הגג כלפי חוץ (שלילי — יורד)
+    // מפתחים עם מזחלה (בחירת משתמש) — מקטעים רציפים; ירידות לפי בחירה או אוטומטי בכל מקטע
+    const pr = cl.gutter.perRun?.[pl.id];
+    const nb = frames.length - 1;
+    const on = Array.from({ length: nb }, (_, i) => pr?.bays?.[i] ?? true);
+    const segs: [number, number][] = [];
+    for (let i = 0; i < nb; i++) if (on[i]) { if (segs.length && segs[segs.length - 1]![1] === i) segs[segs.length - 1]![1] = i + 1; else segs.push([i, i + 1]); }
+    segs.forEach(([a, c], k) => {
+      const sy0 = a === 0 ? y0 : frames[a]!.y, sy1 = c === nb ? y1 : frames[c]!.y;
+      const fIn = frames.slice(a, c + 1);
+      let dpF: typeof frames;
+      if (pr?.downpipes?.length) dpF = pr.downpipes.filter((i) => i >= a && i <= c).map((i) => frames[i]!).filter(Boolean);
+      else {
+        const nDp = Math.max(1, Math.ceil((sy1 - sy0) / cl.gutter.downpipeSpacing));
+        dpF = nDp === 1 ? [fIn[0]!] : Array.from({ length: nDp + 1 }, (_, i) => fIn[Math.round((i * (fIn.length - 1)) / nDp)]!).filter((f, i, arr) => arr.indexOf(f) === i);
+      }
+      const ids = new Set(fIn.map((f) => f.id));
+      runs.push({
+        id: k === 0 ? `G.${pl.id}` : `G.${pl.id}.${k + 1}`, label: `מזחלה — קצה תחתון ${pl.label}${segs.length > 1 ? ` (מפתחים ${a + 1}–${c})` : ''}`, kind: 'eave', x, dir, zBottom, zInnerTop, y0: sy0, y1: sy1,
+        ends: es.filter((e) => ids.has(e.frameId)), planeId: pl.id, dzdxOut,
+        downpipes: dpF.map((f) => ({ y: f.y + (f.y <= sy0 + 1 || f === frames[0] ? 350 : f.y >= sy1 - 1 ? -350 : 350), x: x + dir * (s.bottom / 2), zTop: zBottom, zBottom: zBase + 150 })),
+      });
     });
   }
   // שקעים: נקודה נמוכה משותפת לשני מישורים שעולים ממנה
@@ -135,7 +155,9 @@ export function buildGutterBrackets(b: BuildingParams, sec: NSection, members: M
     for (const e of r.ends) {
       const raf = byId.get(e.rafterId);
       if (!raf) continue;
-      if ((s.support ?? 'twin') === 'plate') { plateSupport(out, r, e, raf, s, lp); continue; }
+      const sup = s.support ?? 'web';
+      if (sup === 'plate') { plateSupport(out, r, e, raf, s, lp); continue; }
+      if (sup === 'web') { if (!webSupport(out, r, e, raf, s, lp)) plateSupport(out, r, e, raf, s, lp); continue; }
       const rb = tryProfile(raf.profile)?.props.b ?? 150;
       const zc = r.zBottom - lp.props.h / 2; // הרגל האופקית העליונה בגובה תחתית המזחלה
       const x0 = e.faceX + r.dir * 0.5, x1 = r.x + r.dir * (s.bottom + 20);
@@ -155,6 +177,46 @@ export function buildGutterBrackets(b: BuildingParams, sec: NSection, members: M
     }
   }
   return out;
+}
+
+/**
+ * תמיכת מזחלה (בקשת משתמש 18.11.2026): זוויתן מרותך בחפיפה על צד ווב הקורה (מסגריה), בולט החוצה מתחת לתחתית המזחלה —
+ * אופקי או בשיפוע הגג. הרגל האנכית צמודה לווב, הרגל האופקית למעלה (עליה יושבת המזחלה). אם הזוויתן נמוך מתחום הווב
+ * (מתחת לאגף התחתון של הקורה) — מחזיר false, והתמיכה נבנית על פלטת קצה.
+ */
+function webSupport(out: { members: Member[]; connections: Connection[]; issues: ValidationIssue[] }, r: GutterRun, e: GutterRun['ends'][number], raf: Member, s: GutterSpec, lp: NonNullable<ReturnType<typeof tryProfile>>): boolean {
+  const rp = tryProfile(raf.profile);
+  if (!rp || !['IPE', 'HEA', 'HEB', 'HEM', 'INP', 'UPN', 'UPE'].includes(rp.family)) return false;
+  const h = rp.props.h, tf = rp.dims.tf ?? 10, tw = rp.dims.tw ?? 8, rr = rp.dims.r ?? 0;
+  const lap = s.lap ?? 150;
+  const which = Math.abs(raf.start.x - e.faceX) < Math.abs(raf.end.x - e.faceX) ? 'start' : 'end';
+  const P = which === 'start' ? raf.start : raf.end, Q = which === 'start' ? raf.end : raf.start;
+  const ex = norm(sub(P, Q)); // החוצה לאורך הקורה
+  const tosAt = (x: number) => (raf.anchor === 'top' ? 0 : h / 2) + P.z + ((x - P.x) * ex.z) / (ex.x || 1e-9);
+  const sloped = (s.bracketSlope ?? 'horizontal') === 'roof';
+  const a = lp.props.h; // רגל אנכית
+  const xIn = e.faceX - r.dir * lap, xOut = r.x + r.dir * (s.bottom + 20);
+  // גובה פני העליון של הזוויתן: תחתית המזחלה בדופן הפנימית; בשיפוע — לאורך שיפוע הגג
+  const zTopAt = (x: number) => r.zBottom + (sloped ? (r.dzdxOut ?? 0) * r.dir * (x - r.x) : 0);
+  // תחום הווב בחפיפה (בין האגפים, אחרי הרדיוס)
+  for (const x of [xIn, e.faceX - r.dir * 5]) {
+    const top = tosAt(x) - tf - rr, bot = tosAt(x) - h + tf + rr;
+    if (zTopAt(x) > top + 0.5 || zTopAt(x) - a < bot - 0.5) return false;
+  }
+  const id = `C.GB.${r.id.slice(2)}.${e.frameId}`;
+  const lid = `${id}.L1`;
+  const yS = e.y + tw / 2; // פני הווב בצד +y
+  const S = v3(xIn, yS, zTopAt(xIn)), E = v3(xOut, yS, zTopAt(xOut));
+  const m: Member = { id: lid, kind: 'cleat', label: `זוויתן תומך מזחלה ${s.bracket.replace('x', '/')} (על הווב)`, start: S, end: E, profile: s.bracket, material: raf.material, rollDeg: 0, mirror: false, anchor: 'corner', refUp: v3(0, 0, -1),
+    source: 'generated', manualPlacement: false, connId: id, partDesc: `זוויתן תומך מזחלה ${s.bracket.replace('x', '/')}×${Math.round(Math.hypot(E.x - S.x, E.z - S.z))} — מרותך בחפיפה ${lap} לווב${sloped ? ', בשיפוע הגג' : ''}` };
+  if (dot(localFrame(m).u, v3(0, 1, 0)) < 0) m.mirror = true;
+  out.members.push(m);
+  const len = Math.abs(xOut - e.faceX);
+  if (len > 700) out.issues.push({ code: 'GUTTER_BRACKET', severity: 'warning', elementId: id, message: `תומך מזחלה במסגרת ${e.frameId}: זיז ארוך (${Math.round(len)} מ"מ) — לבדוק חתך התומך` });
+  out.connections.push({ id, type: 'gutter', label: `תומך מזחלה — זוויתן על ווב הקורה ${r.label.replace('מזחלה — ', '')} · ${e.frameId}`, members: [raf.id], parts: [lid], bolts: [],
+    welds: [{ id: `${lid}.W`, connId: id, type: 'fillet', a: 4, length: 2 * lap + a, location: 'shop', between: [raf.id, lid], from: S, to: v3(e.faceX, yS, zTopAt(e.faceX)) }],
+    status: 'not-verified', fixity: 'pinned', overridden: false });
+  return true;
 }
 
 /**
@@ -205,7 +267,7 @@ export function gutterSurfaces(b: BuildingParams, runs: GutterRun[]): { kind: 'g
   for (const r of runs) {
     const d = r.dir;
     const prof = r.kind === 'eave'
-      ? [[r.x, r.zInnerTop], [r.x, r.zBottom], [r.x + d * s.bottom, r.zBottom], [r.x + d * s.bottom, r.zBottom + s.outer], [r.x + d * (s.bottom - s.lip), r.zBottom + s.outer]]
+      ? [[r.x - d * s.lip, r.zInnerTop], [r.x, r.zInnerTop], [r.x, r.zBottom], [r.x + d * s.bottom, r.zBottom], [r.x + d * s.bottom, r.zBottom + s.outer], [r.x + d * (s.bottom - s.lip), r.zBottom + s.outer]]
       : [[r.x, r.zInnerTop], [r.x, r.zBottom], [r.x + s.bottom, r.zBottom], [r.x + s.bottom, r.zInnerTop]];
     for (let i = 0; i < prof.length - 1; i++) {
       const [ax, az] = prof[i]!, [bx, bz] = prof[i + 1]!;

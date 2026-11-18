@@ -105,12 +105,24 @@ export interface BracingParams {
     /** פרט קצה לקושרות X בגג: gusset = פח מרותך לווב + ברגים (ברירת מחדל); rod = מוט הברגה מרותך לזוויתן דרך חור אובלי בווב (תוכנית 110) */
     endDetail?: 'gusset' | 'rod';
     rod?: RodEndParams;
+    /** מספר פנלי X לאורך השיפוע בקטע: מפתחות `${bay}|${segment}`; חסר = אוטומטי (לפי אורך חומר הגלם) */
+    segCount?: Record<string, number>;
+    /** מרווח בין שני קצוות קושרות שמגיעים לאותה נקודה באותו מפתח (שני חורים זה ליד זה), ברירת מחדל 200 */
+    sameGap?: Mm;
+    /** מוט הברגה: מרווח אנכי בין מוטות משני מפתחים סמוכים שמגיעים לאותה נקודה (חורים זה מעל זה), ברירת מחדל 40 */
+    adjGap?: Mm;
+    /** מרחק קצה הקושרת מפני עמוד שממשיך מעל הגג (גג מדורג), ברירת מחדל 150 */
+    colClear?: Mm;
   };
   walls: {
     enabled: boolean; profile: string; left: number[]; right: number[];
     /** x = קושרות X (ברירת מחדל); portal = אגד B: קורת RHS בין העמודים + שני אלכסונים קטנים; truss = נעילה אופקית: מסבך RHS + סיב רציף (תוכנית 130) */
     type?: 'x' | 'portal' | 'truss';
     truss?: LockTrussParams;
+    /** לכל ציר: סוג וחריגות פרמטרים (חלון המכלול — "לציר זה בלבד") */
+    lineType?: Record<string, 'x' | 'portal' | 'truss'>;
+    lineTruss?: Record<string, Partial<LockTrussParams>>;
+    linePortal?: Record<string, Partial<PortalBraceParams>>;
     /** מפתחים לכל ציר עמודים (מזהה ציר → מפתחים). חסר = left לציר הראשון ו-right לאחרון */
     byLine?: Record<string, number[]>;
     portal?: PortalBraceParams;
@@ -156,6 +168,8 @@ export interface PortalBraceParams {
   beamBolts?: number;
   /** בשאר המפתחים של ציר עם אגד: קורה רציפה באותו חתך, ללא אלכסונים (העברת כוחות אופקיים) */
   continuous?: boolean;
+  /** חיבור קורת האגד לעמוד: horizontal = פח ולשונית שוכבים (ברירת מחדל), vertical = במישור הקיר */
+  finOrient?: 'horizontal' | 'vertical';
 }
 
 /**
@@ -177,6 +191,15 @@ export interface LockTrussParams {
   diags: number;
   /** סיב בשאר המפתחים */
   continuous: boolean;
+  /** סוג חיבור בכל צד (עמוד בתחילת המפתח / בסופו); חסר = conn */
+  connA?: 'plate' | 'tongue';
+  connB?: 'plate' | 'tongue';
+  /** לשונית: horizontal = הפח והלשונית שוכבים (חריץ אופקי בסיב, ברירת מחדל); vertical = במישור המסבך */
+  finOrient?: 'horizontal' | 'vertical';
+  /** מרחק מפני העמוד לצומת הראשון של האלכסונים (0 = אוטומטי לפי הפרט) — הסיב והחגורה "בולטים" מעבר לאלכסונים */
+  endClear?: Mm;
+  /** מרווח בין שני אלכסונים בצומת (על פני החגורה) */
+  nodeGap?: Mm;
 }
 
 export interface PlanShape {
@@ -360,8 +383,17 @@ export interface GutterSpec {
   hangerSpacing: Mm;
   /** קוטר ירידת מרזב ומרווח שלות */
   pipeD: Mm; clampSpacing: Mm;
-  /** סוג התמיכה: twin = 2 זוויתנים מרותכים לקצה הקורה (ברירת מחדל); plate = פלטה בקצה הקורה + זוויתן אופקי אחד מתחת למזחלה */
-  support?: 'twin' | 'plate';
+  /** סוג התמיכה: web = זוויתן מרותך בחפיפה על צד ווב הקורה (ברירת מחדל; נמוך מהקורה — מרותך לפלטת קצה);
+   *  twin = 2 זוויתנים מרותכים לקצה הקורה; plate = פלטה בקצה הקורה + זוויתן אחד */
+  support?: 'web' | 'twin' | 'plate';
+  /** כיוון זוויתן התמיכה: horizontal = אופקי (ברירת מחדל), roof = בשיפוע הגג */
+  bracketSlope?: 'horizontal' | 'roof';
+  /** הגבהה/הנמכה של המזחלה ביחס למיקום האוטומטי (+ למעלה) */
+  bracketOffset?: Mm;
+  /** אורך החפיפה על הווב */
+  lap?: Mm;
+  /** מיקום הדופן הפנימית: purlin = מעל הפטה האחרונה (ברירת מחדל), end = בקצה הקורה */
+  innerAt?: 'purlin' | 'end';
   /** עובי הפלטה בתמיכת plate */
   plateT?: Mm;
   /** חתך משתנה: תוספת עומק בירידת המרזב (תחתית בשיפוע לכיוון הירידה); 0 = חתך קבוע */
@@ -376,7 +408,9 @@ export interface CladdingParams {
   posts: { enabled: boolean; profile: string; maxSpacing: Mm };
   jambProfile: string;
   openings: OpeningDef[];
-  gutter: { enabled: boolean; downpipeSpacing: Mm; spec?: Partial<GutterSpec> };
+  gutter: { enabled: boolean; downpipeSpacing: Mm; spec?: Partial<GutterSpec>;
+    /** לכל מזחלה (מזהה מישור): באילו מפתחים יש מזחלה (חסר = בכולם), ומיקומי ירידות לפי אינדקס מסגרת (חסר = אוטומטי) */
+    perRun?: Record<string, { bays?: boolean[]; downpipes?: number[] }> };
   roofScrewsPerM2: number; wallScrewsPerM2: number;
 }
 
@@ -712,6 +746,8 @@ export interface Connection {
   overridden: boolean;
   /** חורי אוורור נוספים שהוגדרו בפרט מותאם */
   vents?: { memberId: string; p: Vec3; axis: Vec3; d: Mm }[];
+  /** חורים ללא בורג (מוט עיגון עובר בפלטה ומרותך מעליה וכד') */
+  holes?: { id: string; memberId: string; p: Vec3; axis: Vec3; d: Mm; slot?: Mm }[];
   /** פרט מותאם: מזהה הפרט ומפתח האתר */
   custom?: { detailId: string; site: string };
 }

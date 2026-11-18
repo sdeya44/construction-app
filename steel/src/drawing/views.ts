@@ -556,13 +556,26 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       v.line({ x: gx0, y: r.zInnerTop }, { x: gx0 - gs.lip, y: r.zInnerTop }, 'CUT');
       // תומך L50/50/5
       const lh = tryProfile(gs.bracket)?.props.h ?? 50;
-      const pS = (gs.support ?? 'twin') === 'plate', pT = pS ? gs.plateT ?? 8 : 0;
+      const sup0 = gs.support ?? 'web';
+      // תמיכה על הווב: אם בפועל נבנתה פלטה (הזוויתן נמוך מהקורה) — מציירים פלטה
+      const gbc = d.connections.find((c) => c.type === 'gutter' && c.id.endsWith(`.${e0?.frameId ?? ''}`) && c.id.includes(`.${r.id.slice(2)}.`));
+      const builtPlate = !!gbc?.parts.some((x) => x.endsWith('.PL'));
+      const pS = sup0 === 'plate' || (sup0 === 'web' && builtPlate), pT = pS ? gs.plateT ?? 8 : 0;
+      const webLap = sup0 === 'web' && !builtPlate;
       if (pS) {
         // פלטה בקצה הקורה, יורדת עד מתחת לזוויתן האופקי
         v.poly([{ x: 0, y: tos }, { x: pT, y: tos }, { x: pT, y: r.zBottom - lh - 5 }, { x: 0, y: r.zBottom - lh - 5 }], true, 'CUT');
         v.text({ x: pT + 30, y: tos - hR - 60 }, `פלטה t=${pT}`, 2.4, 'left', 'TEXT');
       }
-      v.poly([{ x: pT, y: r.zBottom }, { x: gx1 + 20, y: r.zBottom }, { x: gx1 + 20, y: r.zBottom - 5 }, { x: pT + 5, y: r.zBottom - 5 }, { x: pT + 5, y: r.zBottom - lh }, { x: pT, y: r.zBottom - lh }], true, 'OUTLINE');
+      if (webLap) {
+        // זוויתן בחפיפה על צד הווב: מתחיל בתוך הקורה (אורך החפיפה), בולט החוצה מתחת למזחלה
+        const lap = gs.lap ?? 150;
+        const sl = (gs.bracketSlope ?? 'horizontal') === 'roof' ? (r.dzdxOut ?? 0) : 0;
+        const zz = (x: number) => r.zBottom + sl * (x - gx0);
+        v.poly([{ x: -lap, y: zz(-lap) }, { x: gx1 + 20, y: zz(gx1 + 20) }, { x: gx1 + 20, y: zz(gx1 + 20) - lh }, { x: -lap, y: zz(-lap) - lh }], true, 'OUTLINE');
+        v.dim({ x: -lap, y: zz(-lap) - lh }, { x: 0, y: zz(0) - lh }, { x: 1, y: 0 }, -8, `חפיפה ${lap}`);
+        v.text({ x: -lap - 40, y: zz(-lap) - lh / 2 }, 'ריתוך לווב', 2.2, 'right', 'TEXT');
+      } else v.poly([{ x: pT, y: r.zBottom }, { x: gx1 + 20, y: r.zBottom }, { x: gx1 + 20, y: r.zBottom - 5 }, { x: pT + 5, y: r.zBottom - 5 }, { x: pT + 5, y: r.zBottom - lh }, { x: pT, y: r.zBottom - lh }], true, 'OUTLINE');
       // מידות
       v.dim({ x: gx0, y: r.zBottom }, { x: gx1, y: r.zBottom }, { x: 1, y: 0 }, -10);
       v.dim({ x: gx0, y: r.zBottom }, { x: gx0, y: r.zInnerTop }, { x: 0, y: 1 }, 8);
@@ -571,7 +584,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       v.level({ x: gx1, y: r.zBottom }, r.zBottom, 1, 12);
       v.level({ x: -900, y: tos }, tos, -1, 12);
       v.text({ x: (gx0 + gx1) / 2, y: r.zBottom + gs.outer + 70 }, `מזחלה — פח מגולוון t=${gs.t} · פריסה ${gutterDev(gs)} מ"מ`, 2.5, 'center', 'TEXT', 0, true);
-      v.text({ x: (gx0 + gx1) / 2, y: r.zBottom - lh - 330 }, pS ? `פלטה ${pT} מ"מ על קצה הקורה + ${gs.bracket.replace('x', '/')} אופקי מרותך לפלטה (מסגריה)` : `2×${gs.bracket.replace('x', '/')} מרותכים לקצה הקורה בכל מסגרת (מסגריה)`, 2.4, 'center', 'TEXT');
+      v.text({ x: (gx0 + gx1) / 2, y: r.zBottom - lh - 330 }, webLap ? `${gs.bracket.replace('x', '/')} מרותך בחפיפה ${gs.lap ?? 150} על צד ווב הקורה${(gs.bracketSlope ?? 'horizontal') === 'roof' ? ', בשיפוע הגג' : ', אופקי'} (מסגריה)` : pS ? `פלטה ${pT} מ"מ על קצה הקורה + ${gs.bracket.replace('x', '/')} מרותך לפלטה (מסגריה)` : `2×${gs.bracket.replace('x', '/')} מרותכים לקצה הקורה בכל מסגרת (מסגריה)`, 2.4, 'center', 'TEXT');
       sh.ents.push({ k: 'text', p: { x: area.x1 - 2, y: area.y1 - 3 }, s: `פרט מזחלה — חתך בקצה הקורה  1:${v.scale}`, h: 3, align: 'right', layer: 'TEXT', bold: true });
       // ---- ירידת מרזב: מבט חזית, לאורך עמוד
       const dp = r.downpipes[0];

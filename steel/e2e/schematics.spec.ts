@@ -26,7 +26,7 @@ test('SCH-01: שרטוטים אינטראקטיביים — פטות, תומך, 
   // קושרות גג — מפתח בלחיצה; פח חיבור
   await page.getByTestId('nav-b:roof').click();
   const before = (await st(page)).bracing.roof.bays.length;
-  await page.getByTestId('sch-roof-bays-2').click();
+  await page.getByTestId('br-grid-2-L').click();
   expect((await st(page)).bracing.roof.bays.length).not.toBe(before);
   await editDim(page, 'sch-brc-end', '35');
   expect((await st(page)).bracing.conn.endDist).toBe(35);

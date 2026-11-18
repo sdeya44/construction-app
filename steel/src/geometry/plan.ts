@@ -221,6 +221,7 @@ export function applyPlan(project: Project, local: DerivedModel, map: PlanMap): 
     bolts: c.bolts.map((b) => ({ ...b, p: ptOf(c.id, b.p), axis: vecOf(c.id, b.p, b.axis) })),
     welds: c.welds.map((w) => ({ ...w, from: ptOf(c.id, w.from), to: ptOf(c.id, w.to) })),
     ...(c.vents ? { vents: c.vents.map((v) => ({ ...v, p: ptOf(c.id, v.p), axis: vecOf(c.id, v.p, v.axis) })) } : {}),
+    ...(c.holes ? { holes: c.holes.map((h) => ({ ...h, p: ptOf(c.id, h.p), axis: vecOf(c.id, h.p, h.axis) })) } : {}),
   }));
   // חלקי ייצור: t לאורך הציר החדש (הקושרות/פטות מתארכות במקבילית)
   const tMap = (lmOld: Member, mNew: Member, t: number) => {

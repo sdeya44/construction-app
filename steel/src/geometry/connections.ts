@@ -102,6 +102,7 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
   const issue = (i: ValidationIssue) => res.issues.push(i);
   const isGen = (m?: Member) => !!m && m.source === 'generated' && !m.manualPlacement;
 
+  const baseHoles: Record<string, NonNullable<Connection['holes']>> = {};
   for (const f of b.frames) {
     const fi = b.frames.indexOf(f) + 1;
     // ---- ראש עמוד: פלטה מרותכת לעמוד ופלטה מרותכת לקורה (מסגריה), מוברגות זו לזו (שטח)
@@ -356,10 +357,13 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
         gy.forEach((yy, ci) => gx.forEach((xx, ri) => {
           if (!(ci === 0 || ci === prm.cols - 1 || ri === 0 || ri === prm.rows - 1)) return;
           k++;
-          const p0 = add(top, v3(xx, yy, -prm.t));
+          // המוט עובר בחור בפלטה ומרותך מעליה (ריתוך היקפי בפני העליון) — במסגריה
+          const pTop = add(top, v3(xx, yy, 0));
           const aid = `${id}.A${k}`;
-          res.members.push({ id: aid, kind: 'anchor', label: `מוט עיגון Φ${prm.bolt.d}`, start: p0, end: add(p0, v3(0, 0, -(prm.anchorLength ?? 800))), profile: `RD${prm.bolt.d}`, material: 'S235', rollDeg: 0, mirror: false, anchor: 'center', refUp: X, source: 'generated', manualPlacement: false, connId: id, partDesc: `מוט עיגון Φ${prm.bolt.d} L=${prm.anchorLength ?? 800} מרותך לפלטה` });
-          welds.push({ id: `${id}.WA${k}`, connId: id, type: 'fillet', a: prm.weldSize, length: Math.PI * prm.bolt.d, location: 'shop', between: [pid, aid], from: p0, to: p0 });
+          const aLen = (prm.anchorLength ?? 800) + prm.t + 3;
+          res.members.push({ id: aid, kind: 'anchor', label: `מוט עיגון Φ${prm.bolt.d}`, start: add(pTop, v3(0, 0, 3)), end: add(pTop, v3(0, 0, 3 - aLen)), profile: `RD${prm.bolt.d}`, material: 'S235', rollDeg: 0, mirror: false, anchor: 'center', refUp: X, source: 'generated', manualPlacement: false, connId: id, partDesc: `מוט עיגון Φ${prm.bolt.d} L=${Math.round(aLen)} — עובר בפלטה, מרותך מעליה` });
+          welds.push({ id: `${id}.WA${k}`, connId: id, type: 'fillet', a: prm.weldSize, length: Math.round(Math.PI * prm.bolt.d), location: 'shop', between: [pid, aid], from: pTop, to: pTop });
+          (baseHoles[id] ??= []).push({ id: `${id}.H${k}`, memberId: pid, p: pTop, axis: v3(0, 0, -1), d: prm.bolt.d + 2 });
         }));
         const edge = Math.min(prm.l / 2 - ((prm.rows - 1) / 2) * prm.pitch, prm.w / 2 - ((prm.cols - 1) / 2) * prm.gauge);
         if (edge < prm.bolt.d) issue({ code: 'ANCHOR_EDGE', severity: 'warning', elementId: id, message: `${label}: מוט עיגון קרוב לשפת הפלטה (${edge.toFixed(1)} מ"מ)` });
@@ -377,7 +381,7 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
         welds.push({ id: `${id}.W1`, connId: id, type: 'fillet', a: prm.weldSize, length: outlinePerimeter(col!.profile), location: 'shop', between: [col!.id, pid], from: top, to: top });
       }
       if (prm.l < cp.props.h + 2 * prm.weldSize || prm.w < cp.props.b + 2 * prm.weldSize) issue({ code: 'PLATE_SMALL', severity: 'warning', elementId: id, message: `${label}: הפלטה קטנה מחתך העמוד בתוספת מקום לריתוך` });
-      res.connections.push({ id, type: 'base', label, members: [col!.id], parts: [pid, ...bolts.map((x) => x.id), ...res.members.filter((m) => m.connId === id && m.kind === 'anchor').map((m) => m.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'pinned', overridden: !!project.connectionOverrides[id] });
+      res.connections.push({ id, type: 'base', label, ...(baseHoles[id] ? { holes: baseHoles[id] } : {}), members: [col!.id], parts: [pid, ...bolts.map((x) => x.id), ...res.members.filter((m) => m.connId === id && m.kind === 'anchor').map((m) => m.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'pinned', overridden: !!project.connectionOverrides[id] });
     }
   }
 

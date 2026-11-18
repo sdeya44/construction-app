@@ -81,7 +81,10 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         if (!isJoined(e) && inside.length) return toward > 0 ? inside[0] : inside[inside.length - 1];
         // סבכת RHS בקצה שמחובר לצד עמוד שממשיך למעלה: צומת הסבכה (פח + לשוניות) רחב — מתרחקים גם בחצי עומק העמוד
         const side = topo.junctions.some((j) => j.plane === pl && j.kind === 'side' && j.end === e);
-        return E.x + toward * (ridgeGap + (side && br.roof.type === 'rhs' ? col.props.h / 2 + 40 : 0));
+        // צד עמוד שממשיך מעל הגג: מרחק מפני העמוד (ניתן לשינוי) — אחרת הפח/המוט חודרים לעמוד
+        if (side) { const jn = topo.junctions.find((j) => j.plane === pl && j.kind === 'side' && j.end === e)!; const ch = getProfile(profOf?.(`${frames[0].id}.COL.${jn.line.id}`) ?? b.columnProfile).props.h;
+          return jn.line.x + toward * (ch / 2 + (br.roof.colClear ?? 150) + (br.roof.type === 'rhs' ? 40 : bc.gussetEdge)); }
+        return E.x + toward * ridgeGap;
       };
       let xa = endX('a'), xc = endX('b');
       // עמוד יחיד מתחת למישור (סככת T / קונזולה): הקושרות עד קצות המישור
@@ -95,13 +98,16 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
       // סדר מנקודה a לנקודה c (תאימות למזהים בגג הקלאסי)
       const ordered = xa <= xc ? st : [...st].reverse();
       const nseg = ordered.length - 1;
+      // שני קטעים שנפגשים בציר פנימי: הקצוות מוזזים זה מזה (שני חורים/פחים זה ליד זה, מרווח sameGap)
+      const half = (br.roof.sameGap ?? 200) / 2, dirO = Math.sign(ordered[nseg] - ordered[0]) || 1;
       for (let k = 0; k < nseg; k++) {
-        const s0 = ordered[k], s1 = ordered[k + 1];
+        const s0 = ordered[k] + (k > 0 ? dirO * half : 0), s1 = ordered[k + 1] - (k < nseg - 1 ? dirO * half : 0);
         slopes.push({ side: nseg > 1 ? `${pl.id}${k + 1}` : pl.id, pid: pl.id, a: { x: s0, z: zAt(pl, s0) }, c: { x: s1, z: zAt(pl, s1) }, rid: pl.rafterId });
       }
     }
     res.segments = slopes.map((q) => ({ id: q.side, plane: q.pid, x0: Math.min(q.a.x, q.c.x), x1: Math.max(q.a.x, q.c.x) }));
-    for (const bay of resolveBays(br.roof.bays, nb)) {
+    const roofBays = resolveBays(br.roof.bays, nb);
+    for (const bay of roofBays) {
       const f0 = frames[bay], f1 = frames[bay + 1];
       for (const sl of slopes) {
         if (br.roof.segOff?.includes(`${bay}|${sl.side}`)) continue;
@@ -115,7 +121,11 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         const need = tieDrop + 15 + brLeg, maxD = raf.props.h - tfR - brLeg / 2 - bc.gussetEdge - 3;
         // אין מקום לשניהם בקורה רדודה: הקושרת באמצע הגובה, ושורת הקשירה לא נבנית במפתח הזה (הקושרת מייצבת את הפטות)
         if (tieDrop && need > Math.max(raf.props.h / 2, maxD)) skipTie.add(`${bay}|${sl.pid}`);
-        const depth = need > Math.max(raf.props.h / 2, maxD) ? raf.props.h / 2 : Math.max(raf.props.h / 2, Math.min(need, maxD));
+        let depth = need > Math.max(raf.props.h / 2, maxD) ? raf.props.h / 2 : Math.max(raf.props.h / 2, Math.min(need, maxD));
+        // מוט הברגה ושני מפתחים סמוכים עם קושרות: המוטות מגיעים לאותה נקודה משני צדי הווב — מישור הקושרות במפתחים
+        // לסירוגין גבוה/נמוך, כך שהחורים יוצאים זה מעל זה (מרווח adjGap)
+        const rodMode = (br.roof.endDetail ?? 'gusset') === 'rod' && br.roof.type !== 'rhs';
+        if (rodMode && roofBays.some((x) => Math.abs(x - bay) === 1)) depth += (bay % 2 ? 1 : -1) * (br.roof.adjGap ?? 40) / 2;
         const o = add(v3(sl.a.x, 0, sl.a.z), scale(n, -depth));
         const L = Math.hypot(sl.c.x - sl.a.x, sl.c.z - sl.a.z);
         const rid = sl.rid;
@@ -130,7 +140,11 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
           const bayW = Math.abs(f1.y - f0.y), stock = stockLen;
           let k = 1;
           while (k < 8 && Math.hypot(L / k, bayW) > stock - 100) k++;
-          const gap = k > 1 ? bc.gussetEdge + 120 : 0; // פחי החיבור של שני פנלים סמוכים זה ליד זה על הקורה
+          // מספר X בקטע שנקבע ידנית (לא פחות מהנדרש לחומר הגלם)
+          const kUser = br.roof.segCount?.[`${bay}|${sl.side}`];
+          if (kUser && kUser > k) k = Math.min(8, Math.round(kUser));
+          if (kUser && kUser < k && !res.issues.some((i) => i.code === 'X_COUNT' && i.elementId === `${bay}|${sl.side}`)) res.issues.push({ code: 'X_COUNT', severity: 'info', elementId: `${bay}|${sl.side}`, message: `קטע ${sl.side} מפתח ${bay + 1}: נדרשים לפחות ${k} פנלי X (אורך האלכסון מוגבל לחומר הגלם)` });
+          const gap = k > 1 ? (br.roof.sameGap ?? 200) / 2 : 0; // שני פנלים סמוכים: קצוות זה ליד זה (מרווח sameGap)
           const rod = (br.roof.endDetail ?? 'gusset') === 'rod' && getProfile(br.roof.profile).family === 'L';
           if ((br.roof.endDetail ?? 'gusset') === 'rod' && !rod && !res.issues.some((i) => i.code === 'ROD_PROFILE')) res.issues.push({ code: 'ROD_PROFILE', severity: 'warning', message: `פרט מוט הברגה דורש זוויתן (החתך ${br.roof.profile}) — נבנה פרט פח חיבור` });
           for (let j = 0; j < k; j++) {
@@ -164,15 +178,16 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
       const rafV = raf.props.h * Math.sqrt(1 + sl * sl);
       const side = l.id;
       const x = l.x, eave = ct.z;
-      if ((br.walls.type ?? 'x') === 'truss') {
-        buildLockTrussLine(res, br.walls.truss ?? defaultLockTruss(), {
+      const lType = br.walls.lineType?.[l.id] ?? br.walls.type ?? 'x';
+      if (lType === 'truss') {
+        buildLockTrussLine(res, { ...(br.walls.truss ?? defaultLockTruss()), ...(br.walls.lineTruss?.[l.id] ?? {}) }, {
           side, label: l.label, x, frames: frames.map((f) => ({ id: f.id, y: f.y })), portalBays: resolveBays(bays, nb),
           colProfile: profOf?.(`${frames[0].id}.COL.${l.id}`) ?? b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - 60, mat,
         });
         continue;
       }
-      if ((br.walls.type ?? 'x') === 'portal') {
-        buildPortalLine(res, br.walls.portal ?? defaultPortal(), {
+      if (lType === 'portal') {
+        buildPortalLine(res, { ...(br.walls.portal ?? defaultPortal()), ...(br.walls.linePortal?.[l.id] ?? {}) }, {
           side, label: l.label, x, frames: frames.map((f) => ({ id: f.id, y: f.y })), portalBays: resolveBays(bays, nb),
           colProfile: b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - 60, mat,
         });
@@ -394,16 +409,17 @@ function xBraceRod(res: BracingResult, b: BuildingParams, rp: RodEndParams, cros
       const fN = v3(0, Math.sign(r.y) || 1, 0);
       const rN = Math.abs(r.y), rW = dot(r, wDir);
       const Pw = add(W, scale(r, (tw / 2) / Math.max(rN, 0.2)));
-      // זוויתן דסקית: עקב על פני הווב, רגליים ב-±45° לווב; המוט חודר את הרגל הנוטה נגד כיוון המוט
-      const sig = -(Math.sign(rW) || 1);
-      const eLeg = norm(add(fN, scale(wDir, sig))), eLeg2 = norm(sub(fN, scale(wDir, sig)));
-      const a = wleg * 0.55;
-      const lam = a / (Math.SQRT2 * Math.max(rN, 0.2));
-      const mu = lam * rW - (sig * a) / Math.SQRT2;
-      const H = add(add(Pw, scale(wDir, mu)), scale(up, -off)); // העקב — במישור הקושרות (המוט מעליו/מתחתיו ב-off)
-      const pierce = add(Pw, scale(r, lam));
-      const cosr = Math.max(Math.abs(dot(r, eLeg2)), 0.3);
-      const nutS = add(pierce, scale(r, wt / cosr));
+      // זוויתן דסקית (בקשת משתמש 18.11.2026): שתי הרגליים צמודות לווב (קצות הרגליים על הפנים), העקב בולט החוצה;
+      // המוט חודר את הרגל שכמעט ניצבת לו, והאום על הפנים החיצוניות שלה
+      const sig = Math.sign(rW) || 1;
+      const eLeg = norm(add(scale(fN, -1), scale(wDir, sig))), eLeg2 = norm(sub(scale(fN, -1), scale(wDir, sig)));
+      const hd = wleg / Math.SQRT2; // מרחק העקב מפני הווב
+      const lam = wleg / (2 * Math.SQRT2 * Math.max(rN, 0.2));
+      const hw = lam * rW - (sig * wleg) / (2 * Math.SQRT2);
+      const H = add(add(add(Pw, scale(fN, hd)), scale(wDir, hw)), scale(up, -off)); // העקב (פינה חיצונית) — במישור הקושרות
+      const pierce = add(add(H, scale(up, off)), scale(eLeg, wleg / 2));
+      void wt;
+      const nutS = pierce;
       const tip = add(nutS, scale(r, h.m + 8));
       const inner = add(tip, scale(r, -rp.length));
       ends.push({ tip, inner });

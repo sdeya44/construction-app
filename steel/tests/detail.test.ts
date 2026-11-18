@@ -289,7 +289,7 @@ describe('מזחלה וירידות מרזב', () => {
     expect(d.issues.filter((i) => i.severity === 'error').map((i) => i.message)).toEqual([]);
     const gb = d.connections.filter((c) => c.type === 'gutter');
     expect(gb.length).toBe(12); // 6 מסגרות × 2 קצוות
-    expect(gb.every((c) => c.parts.length === 2 && c.welds.every((w) => w.location === 'shop'))).toBe(true);
+    expect(gb.every((c) => c.parts.length >= 1 && c.welds.every((w) => w.location === 'shop'))).toBe(true); // ברירת מחדל: זוויתן בחפיפה על הווב
     const t = claddingTakeoff(p, d)!;
     expect(t.gutters.length).toBe(2);
     expect(t.gutters[0]!.dev).toBe(1130);

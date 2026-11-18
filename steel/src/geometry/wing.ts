@@ -194,6 +194,7 @@ function mapWing(wd: DerivedModel, g: Geo): DerivedModel {
   const connections: Connection[] = wd.connections.map((c) => ({
     ...c, id: pre(c.id), label: `כנף · ${c.label}`, members: c.members.map(pre), parts: c.parts.map(pre), bolts: c.bolts.map(bolt), welds: c.welds.map(weld),
     vents: c.vents?.map((v) => ({ ...v, memberId: pre(v.memberId), p: P(v.p), axis: D(v.axis) })),
+    ...(c.holes ? { holes: c.holes.map((h) => ({ ...h, id: pre(h.id), memberId: pre(h.memberId), p: P(h.p), axis: D(h.axis) })) } : {}),
   }));
   return {
     members, connections,
