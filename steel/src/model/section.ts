@@ -9,7 +9,9 @@ import type { BuildingParams, RoofInfo } from './types';
  *  · שני מישורים שקצותיהם נפגשים ללא עמוד ⇒ רכס (פלטות קצה), כולל רכס על קונזולה
  * כל המסגרות לאורך Y זהות בחתך.
  */
-export interface SectionLineDef { id: string; x: Mm }
+export interface SectionLineDef { id: string; x: Mm;
+  /** קיר קיים (סככה צמודה לקיר): אין עמוד — קורות הגג מעוגנות לקיר בפלטת קצה ועוגנים כימיים */
+  wall?: boolean }
 export interface RoofPlaneDef {
   id: string;
   /** קו ייחוס (TOS או ציר לפי heightRef) מ-(x0,z0) עד (x1,z1); x0 < x1 */
@@ -23,7 +25,7 @@ export interface RoofPlaneDef {
 }
 export interface CustomSection { lines: SectionLineDef[]; planes: RoofPlaneDef[]; template?: string }
 
-export interface NLine { id: string; label: string; x: Mm }
+export interface NLine { id: string; label: string; x: Mm; wall?: boolean }
 export interface NPlane {
   id: string;
   label: string;
@@ -52,7 +54,7 @@ export const xMax = (p: Pick<NPlane, 'a' | 'b'>) => Math.max(p.a.x, p.b.x);
 /** חתך מנורמל מתוך פרמטרי המבנה: מצב קלאסי (דו/חד־שיפועי) או חתך מודולרי (building.section). */
 export function normalizeSection(b: BuildingParams, roof: RoofInfo): NSection {
   if (b.section) {
-    const lines = [...b.section.lines].sort((p, q) => p.x - q.x).map((l, i) => ({ id: l.id, label: lineLabel(i), x: l.x }));
+    const lines = [...b.section.lines].sort((p, q) => p.x - q.x).map((l, i) => ({ id: l.id, label: lineLabel(i), x: l.x, ...(l.wall ? { wall: true } : {}) }));
     const planes: NPlane[] = b.section.planes.map((pl, i) => {
       const p0 = { x: pl.x0, z: pl.z0 }, p1 = { x: pl.x1, z: pl.z1 };
       const startAt = pl.start === 'x0' ? 'b' : 'b'; // הקורה תמיד מהקצה הרחוק אל קצה ההתחלה
@@ -98,7 +100,7 @@ export function normalizeSection(b: BuildingParams, roof: RoofInfo): NSection {
 export function toCustomSection(b: BuildingParams, roof: RoofInfo): CustomSection {
   const n = normalizeSection({ ...b, section: undefined }, roof);
   return {
-    lines: n.lines.map((l) => ({ id: l.id, x: l.x })),
+    lines: n.lines.map((l) => ({ id: l.id, x: l.x, ...(l.wall ? { wall: true } : {}) })),
     planes: n.planes.map((p) => {
       const [s0, s1] = p.a.x <= p.b.x ? [p.a, p.b] : [p.b, p.a];
       const startPt = p.startAt === 'b' ? p.b : p.a;
@@ -179,6 +181,30 @@ export const SECTION_TEMPLATES: { id: string; name: string; desc: string; make: 
     ] }),
   },
   {
+    id: 'monitor', name: 'מוניטור (גג מוגבה לאוורור)', desc: '4 צירים: גג דו־שיפועי מוגבה מעל שני העמודים הפנימיים, ושני גגות נמוכים משני הצדדים שמתחברים לצד העמודים — פתח אוורור בין הגגות',
+    make: () => ({ template: 'monitor', lines: [{ id: 'A', x: 0 }, { id: 'B', x: 9000 }, { id: 'C', x: 15000 }, { id: 'D', x: 24000 }], planes: [
+      { id: 'P1', x0: -300, z0: 5500 - 30, x1: 9000, z1: 5500 + 900, start: 'x1' },
+      { id: 'P2', x0: 8700, z0: 7400 - 30, x1: 12000, z1: 7400 + 300, start: 'x0' },
+      { id: 'P3', x0: 12000, z0: 7400 + 300, x1: 15300, z1: 7400 - 30, start: 'x1' },
+      { id: 'P4', x0: 15000, z0: 5500 + 900, x1: 24300, z1: 5500 - 30, start: 'x0' },
+    ] }),
+  },
+  {
+    id: 'barn', name: 'אסם (מרכז גבוה + שתי כנפיים)', desc: '4 צירים: מפתח מרכזי רחב וגבוה בגג דו־שיפועי, ושתי כנפיים נמוכות חד־שיפועיות שנשענות על צדי העמודים המרכזיים',
+    make: () => ({ template: 'barn', lines: [{ id: 'A', x: 0 }, { id: 'B', x: 6000 }, { id: 'C', x: 18000 }, { id: 'D', x: 24000 }], planes: [
+      { id: 'P1', x0: -300, z0: 4000 - 30, x1: 6000, z1: 4000 + 600, start: 'x1' },
+      { id: 'P2', x0: 5700, z0: 6500 - 45, x1: 12000, z1: 6500 + 900, start: 'x0' },
+      { id: 'P3', x0: 12000, z0: 6500 + 900, x1: 18300, z1: 6500 - 45, start: 'x1' },
+      { id: 'P4', x0: 18000, z0: 4000 + 600, x1: 24300, z1: 4000 - 30, start: 'x0' },
+    ] }),
+  },
+  {
+    id: 'lean-to', name: 'צמודה לקיר קיים (חד־שיפועי)', desc: 'שורת עמודים אחת בחזית; קורות הגג מעוגנות לקיר הקיים בפלטת קצה ועוגנים כימיים',
+    make: () => ({ template: 'lean-to', lines: [{ id: 'W', x: 0, wall: true }, { id: 'A', x: 8000 }], planes: [
+      { id: 'P1', x0: 0, z0: 5000, x1: 8300, z1: 5000 - 0.1 * 8300, start: 'x0' },
+    ] }),
+  },
+  {
     id: 't-canopy', name: 'סככת T — עמוד מרכזי', desc: 'שורת עמודים אחת במרכז, רכס מעל העמוד, קונזולות לשני הצדדים (חניה)',
     make: () => ({ template: 't-canopy', lines: [{ id: 'A', x: 0 }], planes: [
       { id: 'P1', x0: -5000, z0: 4000 - 250, x1: 0, z1: 4000, start: 'x0' },
@@ -218,6 +244,7 @@ export function sectionTopology(sec: NSection, colHalf: number, minExt: number):
   const endsAt = (p: NPlane, x: number): 'a' | 'b' | null => (Math.abs(p.a.x - x) <= colHalf + TOL ? 'a' : Math.abs(p.b.x - x) <= colHalf + TOL ? 'b' : null);
   // הארכת קצוות על עמוד קיצוני (העמוד הגבוה ביותר שם, ואין מישור אחר שממשיך)
   for (const l of sec.lines) {
+    if (l.wall) continue;
     const cover = sec.planes.filter((p) => xMin(p) - colHalf - TOL <= l.x && l.x <= xMax(p) + colHalf + TOL);
     if (!cover.length) continue;
     const top = Math.max(...cover.map((p) => zAt(p, l.x)));
@@ -236,6 +263,15 @@ export function sectionTopology(sec: NSection, colHalf: number, minExt: number):
     }
   }
   for (const l of sec.lines) {
+    if (l.wall) {
+      // קיר קיים: המישור חייב להסתיים בפני הקיר; חיבור "צד" לקיר (ללא עמוד)
+      for (const p of sec.planes) {
+        const e = Math.abs(p.a.x - l.x) <= TOL + 1 ? 'a' : Math.abs(p.b.x - l.x) <= TOL + 1 ? 'b' : null;
+        if (e) { const other = p[e === 'a' ? 'b' : 'a']; junctions.push({ line: l, plane: p, kind: 'side', side: other.x > l.x ? 1 : -1, end: e }); }
+        else if (xMin(p) < l.x - 1 && xMax(p) > l.x + 1) issues.push({ code: 'PLANE_THROUGH', severity: 'error', message: `${p.label} עובר דרך הקיר הקיים (ציר ${l.label}) — יש לסיים את המישור בפני הקיר` });
+      }
+      continue;
+    }
     const cover = sec.planes.filter((p) => xMin(p) - colHalf - TOL <= l.x && l.x <= xMax(p) + colHalf + TOL);
     if (!cover.length) { issues.push({ code: 'LINE_FREE', severity: 'error', message: `ציר ${l.label}: אין מישור גג מעל העמוד` }); continue; }
     const top = Math.max(...cover.map((p) => zAt(p, Math.max(xMin(p), Math.min(xMax(p), l.x)))));

@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { addFrame, removeFrame, respaceFrames, setBuilding, setFrameY, setMeta, setSettings } from '../commands/commands';
-import type { BuildingParams, PortalBraceParams, RhsTrussParams, RidgeReinfParams } from '../model/types';
+import type { BuildingParams, LockTrussParams, PortalBraceParams, RhsTrussParams, RidgeReinfParams } from '../model/types';
 import { defaultPortal } from '../geometry/portal';
+import { defaultLockTruss } from '../geometry/lockTruss';
 import { defaultRhsTruss } from '../geometry/hbrace';
 import { defaultRidgeReinf } from '../model/defaults';
-import { resolveBays, wallBays } from '../geometry/bracing';
+import { defaultRodEnd, resolveBays, wallBays } from '../geometry/bracing';
 import { catalogNames } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
 import { Adv, LenField, NumField, ProfilePicker, TextField } from './fields';
 import { Icon } from './icons';
-import { KneeEditor, SectionEditor } from './SectionEditor';
+import { HaunchEditor, KneeEditor, SectionEditor } from './SectionEditor';
 import { BaysSchematic, GussetSchematic, PortalSchematic, RidgeSchematic } from './schematics';
 import { MenuPic } from './pics';
 
@@ -124,6 +125,7 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
       <div className="field"><label>אורך המבנה</label><LenField testId="bld-length" mm={frames[frames.length - 1].y - frames[0].y} unit={u} min={1000} onCommit={(v) => store.exec(respaceFrames(frames.length, v / (frames.length - 1)))} /></div>
       <div className="field"><label>מספר מפתחים</label><NumField testId="bld-bays" value={frames.length - 1} onCommit={(v) => { const nb = Math.max(1, Math.round(v)); store.exec(respaceFrames(nb + 1, (frames[frames.length - 1].y - frames[0].y) / nb)); }} /></div>
       <div className="hint" style={{ marginTop: 0 }}>אורך ומספר מפתחים ⇒ מרווחים שווים. מרווחים שונים — בטבלה (שינוי מרווח מזיז את כל מה שאחריו) או בלחיצה על המידה בתלת־ממד.</div>
+      <PlanShapeFields />
       <div className="panel-title">מסגרות ({frames.length})
         <button className="btn small" data-testid="add-frame" onClick={() => {
           const last = frames[frames.length - 1];
@@ -213,6 +215,58 @@ function WallLines({ nb }: { nb: number }) {
   );
 }
 
+/** צורת תוכנית: מלבן / מקבילית / טרפז */
+function PlanShapeFields() {
+  const b = useStore((s) => s.project.building);
+  const u = useStore((s) => s.project.displayUnit);
+  const pl = b.plan ?? { shape: 'rect' as const };
+  const set = (patch: Partial<NonNullable<BuildingParams['plan']>>) => store.exec(setBuilding({ plan: { ...pl, ...patch } }));
+  return <>
+    <div className="field"><label>צורת התוכנית</label>
+      <select className="inp" data-testid="plan-shape" value={pl.shape} disabled={!!b.wing?.enabled} onChange={(e) => set({ shape: e.target.value as 'rect' | 'skew' | 'taper', skewDeg: pl.skewDeg ?? 15, taperLine: pl.taperLine ?? 'last', taperEnd: pl.taperEnd ?? 2000 })}>
+        <option value="rect">מלבן</option><option value="skew">מקבילית — מסגרות מוסטות באלכסון</option><option value="taper">טרפז — ציר קצה משופע (מפתח משתנה)</option>
+      </select></div>
+    {pl.shape === 'skew' && <div className="field"><label>זווית הסטה</label><NumField testId="plan-skew" value={pl.skewDeg ?? 15} suffix="°" onCommit={(v) => set({ skewDeg: Math.max(-40, Math.min(40, v)) })} /></div>}
+    {pl.shape === 'taper' && <>
+      <div className="field"><label>הציר המשופע</label>
+        <select className="inp" data-testid="plan-taper-line" value={pl.taperLine ?? 'last'} onChange={(e) => set({ taperLine: e.target.value as 'first' | 'last' })}>
+          <option value="last">הציר האחרון</option><option value="first">הציר הראשון</option>
+        </select></div>
+      <div className="field"><label>הזזה במסגרת האחרונה (+ החוצה)</label><LenField testId="plan-taper" mm={pl.taperEnd ?? 2000} unit={u} onCommit={(v) => set({ taperEnd: v })} /></div>
+    </>}
+    {pl.shape !== 'rect' && <div className="hint">המסגרות נבנות זהות ומוצבות לפי הצורה. מקבילית: הפטות והקושרות מקבילות לקירות המשופעים, התושבות מסובבות. טרפז: שיפוע הגג נשמר — העמוד בציר המשופע מתארך/מתקצר, והפטות ליד הציר מקבילות לו. {b.wing?.enabled ? 'לא זמין עם כנף L.' : ''}</div>}
+  </>;
+}
+
+function LockTrussFields() {
+  const br = useStore((s) => s.project.building.bracing);
+  const p = br.walls.truss ?? defaultLockTruss();
+  const set = (patch: Partial<LockTrussParams>) => store.exec(setBuilding({ bracing: { ...br, walls: { ...br.walls, truss: { ...p, ...patch } } } }));
+  return (
+    <>
+      <div className="field prof"><label>סיב וחגורה</label><ProfilePicker testId="lt-chord" value={p.chord} families={['RHS', 'SHS']} onCommit={(v) => set({ chord: v })} /></div>
+      <div className="field prof"><label>אלכסונים</label><ProfilePicker testId="lt-diag" value={p.diag} families={['RHS', 'SHS', 'CHS']} onCommit={(v) => set({ diag: v })} /></div>
+      <div className="field"><label>גובה המסבך (צירים)</label><NumField testId="lt-height" value={p.height} suffix='מ"מ' onCommit={(v) => set({ height: Math.max(300, v) })} /></div>
+      <div className="field"><label>מיקום המסבך</label>
+        <select className="inp" data-testid="lt-pos" value={p.position} onChange={(e) => set({ position: e.target.value as 'above' | 'below' })}>
+          <option value="above">מעל הסיב הרציף</option><option value="below">מתחת לסיב הרציף</option>
+        </select></div>
+      <div className="field"><label>חיבור לעמוד</label>
+        <select className="inp" data-testid="lt-conn" value={p.conn} onChange={(e) => set({ conn: e.target.value as 'plate' | 'tongue' })}>
+          <option value="plate">פלטת קצה + 4 ברגים דרך העמוד</option><option value="tongue">פח + לשונית (כמו אלכסון עמוד-קורה)</option>
+        </select></div>
+      <Adv id="lt" label="מתקדם — מרווחים, פלטות וברגים">
+        <div className="field"><label>מרווח מתחת לקורה הראשית</label><NumField testId="lt-gap" value={p.gap} suffix='מ"מ' onCommit={(v) => set({ gap: Math.max(0, v) })} /></div>
+        <div className="field"><label>אלכסונים במפתח (0 = אוטומטי)</label><NumField testId="lt-diags" value={p.diags} onCommit={(v) => set({ diags: Math.max(0, Math.round(v)) })} /></div>
+        <div className="field"><label>עובי פלטות</label><NumField value={p.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: v })} /></div>
+        <div className="field"><label>קוטר בורג</label><NumField value={p.bolt.d} suffix="M" onCommit={(v) => set({ bolt: { ...p.bolt, d: Math.round(v) } })} /></div>
+        <div className="field"><label>סיב בשאר המפתחים</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="lt-cont" checked={p.continuous} onChange={(e) => set({ continuous: e.target.checked })} />{p.continuous ? 'כן' : 'לא'}</label></div>
+      </Adv>
+      <div className="hint">לפי תוכנית 130 "פרט נעילה אופקית": סיב RHS רציף בכל המפתחים של הציר; במפתחים הנעולים מסבך — חגורה שנייה ואלכסונים מרותכים במסגריה (מכלול אחד). פלטה: פלטת קצה מרותכת לכל סיב, 4 ברגים ארוכים דרך העמוד שמחברים את שני המפתחים. לשונית: כמו פרט האלכסון עמוד-קורה.</div>
+    </>
+  );
+}
+
 function PortalFields() {
   const br = useStore((s) => s.project.building.bracing);
   const p = br.walls.portal ?? defaultPortal();
@@ -274,8 +328,28 @@ export type BraceSection = 'knee' | 'ridge' | 'roof' | 'walls' | 'ties';
 export function BracePanel({ part }: { part?: BraceSection }) {
   return (
     <div className="panel-body" data-testid="brace-panel">
-      {(!part || part === 'knee') && <KneeEditor />}
+      {(!part || part === 'knee') && <><KneeEditor /><HaunchEditor /></>}
       {(!part || part !== 'knee') && <BracingEditor part={part} />}
+    </div>
+  );
+}
+
+/** כיסוי חלקי: טבלת מפתחים × קטעי שיפוע — סימון = יש X בקטע */
+function RoofSegPicker() {
+  const b = useStore((s) => s.project.building);
+  const segs = useStore((s) => s.derived.roofSegments) ?? [];
+  const br = b.bracing;
+  const nb = b.frames.length - 1;
+  const bays = resolveBays(br.roof.bays, nb);
+  if (!segs.length || !bays.length || segs.length < 2 && bays.length < 2) return null;
+  const off = new Set(br.roof.segOff ?? []);
+  const toggle = (k: string) => { const n = new Set(off); if (n.has(k)) n.delete(k); else n.add(k); store.exec(setBuilding({ bracing: { ...br, roof: { ...br.roof, segOff: [...n] } } })); };
+  return (
+    <div className="field" style={{ display: 'block' }}>
+      <label>קטעים עם X (מפתח × קטע לאורך השיפוע)</label>
+      <table className="mini-table" data-testid="br-seg-table"><thead><tr><th>מפתח</th>{segs.map((sg) => <th key={sg.id} title={`${(sg.x0 / 1000).toFixed(2)}–${(sg.x1 / 1000).toFixed(2)} מ'`}>{sg.id}</th>)}</tr></thead>
+        <tbody>{bays.map((bay) => <tr key={bay}><td>{bay + 1}</td>{segs.map((sg) => { const k = `${bay}|${sg.id}`; return <td key={k}><input type="checkbox" data-testid={`br-seg-${bay}-${sg.id}`} checked={!off.has(k)} onChange={() => toggle(k)} /></td>; })}</tr>)}</tbody>
+      </table>
     </div>
   );
 }
@@ -305,7 +379,24 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
         <Adv id="roofbays" label="מתקדם — מפתחים בשדות">
         <div className="field"><label>מפתחים</label><BayPicker testId="br-roof-bays" bays={br.roof.bays} count={nb} onChange={(x) => set({ roof: { ...br.roof, bays: x } })} /></div>
         </Adv>
-        <div className="hint">שיפוע ארוך מחולק אוטומטית לכמה פנלי X לאורך השיפוע, כך שאלכסון לא יעלה על אורך חומר הגלם.</div>
+        {(br.roof.type ?? 'x') === 'x' && <>
+          <div className="field"><label>פרט קצה</label>
+            <select className="inp" data-testid="br-roof-end" value={br.roof.endDetail ?? 'gusset'} onChange={(e) => set({ roof: { ...br.roof, endDetail: e.target.value as 'gusset' | 'rod', rod: br.roof.rod ?? defaultRodEnd(), ...(e.target.value === 'rod' && !br.roof.profile.startsWith('L') ? { profile: 'L50x50x4' } : {}) } })}>
+              <option value="gusset">פח חיבור מרותך לווב + ברגים</option><option value="rod">מוט הברגה מרותך לזוויתן, דרך חור אובלי בקורה</option>
+            </select></div>
+          {br.roof.endDetail === 'rod' && (() => { const rp = br.roof.rod ?? defaultRodEnd(); const sr = (q: Partial<typeof rp>) => set({ roof: { ...br.roof, rod: { ...rp, ...q } } }); return <>
+            <div className="field"><label>קוטר מוט</label><NumField testId="rod-d" value={rp.d} suffix="M" onCommit={(v) => sr({ d: Math.round(v) })} /></div>
+            <div className="field"><label>אורך מוט</label><NumField testId="rod-l" value={rp.length} suffix='מ"מ' onCommit={(v) => sr({ length: v })} /></div>
+            <div className="field"><label>חפיפת ריתוך</label><NumField testId="rod-ov" value={rp.overlap} suffix='מ"מ' onCommit={(v) => sr({ overlap: v })} /></div>
+            <div className="field prof"><label>זוויתן דסקית</label><ProfilePicker value={rp.washer} families={['L']} onCommit={(v) => sr({ washer: v })} /></div>
+            <div className="field"><label>אורך זוויתן דסקית</label><NumField value={rp.washerL} suffix='מ"מ' onCommit={(v) => sr({ washerL: v })} /></div>
+            <div className="field"><label>תוספת לחור האובלי</label><NumField value={rp.slotExtra} suffix='מ"מ' onCommit={(v) => sr({ slotExtra: v })} /></div>
+            <div className="field"><label>בורג הצטלבות</label><NumField value={rp.crossD} suffix="M" onCommit={(v) => sr({ crossD: Math.round(v) })} /></div>
+            <div className="hint">הזוויתן מקוצר כך שהמוט ({rp.length}) מרותך בחפיפה {rp.overlap} ועובר דרך חור אובלי בווב הקורה; בצד השני זוויתן קצר עם חור ואום. אורך החור האובלי מחושב לפי זווית האלכסון.</div>
+          </>; })()}
+        </>}
+        <RoofSegPicker />
+        <div className="hint">כל שיפוע מחולק לקטעים בכל ציר עמודים פנימי, וקטע ארוך מחולק אוטומטית לכמה פנלי X לפי אורך חומר הגלם. בטבלה — בחירה אילו קטעים מקבלים X בכל מפתח (כיסוי חלקי).</div>
       </>}
       </>}
       {on('walls') && <>
@@ -314,16 +405,16 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
       </div>
       {br.walls.enabled && <>
         <div className="choice2" role="radiogroup" aria-label="סוג קשיחות הקיר">
-          {([['x', 'אלכסוני X', 'קושרות X מזוויתנים — עובדות במתיחה', 'brace'], ['portal', 'אגד B', 'קורת RHS בין העמודים + שני אלכסונים קטנים', 'walls']] as const).map(([k, t, dsc, pic]) => (
+          {([['x', 'אלכסוני X', 'קושרות X מזוויתנים — עובדות במתיחה', 'brace'], ['portal', 'אגד B', 'קורת RHS בין העמודים + שני אלכסונים קטנים', 'walls'], ['truss', 'נעילה אופקית', 'מסבך RHS במפתחים הנעולים + סיב רציף לכל האורך', 'walls']] as const).map(([k, t, dsc, pic]) => (
             <button key={k} role="radio" aria-checked={(br.walls.type ?? 'x') === k} className={`choice-tile${(br.walls.type ?? 'x') === k ? ' on' : ''}`} data-testid={`br-walls-${k}`}
-              onClick={() => set({ walls: { ...br.walls, type: k, portal: br.walls.portal ?? defaultPortal() } })}>
+              onClick={() => set({ walls: { ...br.walls, type: k, portal: br.walls.portal ?? defaultPortal(), truss: br.walls.truss ?? defaultLockTruss() } })}>
               <MenuPic name={pic} size={44} /><b>{t}</b><span>{dsc}</span>
             </button>
           ))}
         </div>
         {(br.walls.type ?? 'x') === 'x'
           ? <div className="field prof"><label>חתך</label><ProfilePicker value={br.walls.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ walls: { ...br.walls, profile: v } })} /></div>
-          : <PortalFields />}
+          : br.walls.type === 'truss' ? <LockTrussFields /> : <PortalFields />}
         <WallLines nb={nb} />
       </>}
       </>}

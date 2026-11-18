@@ -100,11 +100,17 @@ export interface BracingParams {
     /** x = אלכסוני זוויתן במתיחה (ברירת מחדל); rhs = סבכה אופקית: מוטות RHS ואלכסונים RHS */
     type?: 'x' | 'rhs';
     rhs?: RhsTrussParams;
+    /** קטעים ללא קושרות (כיסוי חלקי של המפתח): מפתחות `${bay}|${segment}` כאשר segment = מזהה קטע השיפוע (למשל P12) */
+    segOff?: string[];
+    /** פרט קצה לקושרות X בגג: gusset = פח מרותך לווב + ברגים (ברירת מחדל); rod = מוט הברגה מרותך לזוויתן דרך חור אובלי בווב (תוכנית 110) */
+    endDetail?: 'gusset' | 'rod';
+    rod?: RodEndParams;
   };
   walls: {
     enabled: boolean; profile: string; left: number[]; right: number[];
-    /** x = קושרות X (ברירת מחדל); portal = אגד B: קורת RHS בין העמודים + שני אלכסונים קטנים */
-    type?: 'x' | 'portal';
+    /** x = קושרות X (ברירת מחדל); portal = אגד B: קורת RHS בין העמודים + שני אלכסונים קטנים; truss = נעילה אופקית: מסבך RHS + סיב רציף (תוכנית 130) */
+    type?: 'x' | 'portal' | 'truss';
+    truss?: LockTrussParams;
     /** מפתחים לכל ציר עמודים (מזהה ציר → מפתחים). חסר = left לציר הראשון ו-right לאחרון */
     byLine?: Record<string, number[]>;
     portal?: PortalBraceParams;
@@ -113,6 +119,26 @@ export interface BracingParams {
   purlinTies: { enabled: boolean; profile: string };
   /** חיבורי קושרות X: פח חיבור מרותך לקורה/עמוד במסגריה, הזוויתן מוברג בשטח; בורג בהצטלבות עם פח מילוי */
   conn: BraceConnParams;
+}
+
+/**
+ * פרט קצה "מוט הברגה" לקושרת X בגג (פרט הלקוח, תוכנית 110): זוויתן מקוצר, מוט הברגה מרותך לזוויתן בחפיפה,
+ * עובר דרך חור אובלי בווב הקורה (בגלל זווית האלכסון); בצד השני זוויתן קצר עם חור (התאמת זווית) ואום.
+ */
+export interface RodEndParams {
+  /** קוטר מוט ההברגה */
+  d: Mm;
+  /** אורך המוט */
+  length: Mm;
+  /** חפיפת ריתוך המוט לזוויתן */
+  overlap: Mm;
+  /** זוויתן הדסקית בצד השני של הווב, ואורכו */
+  washer: string; washerL: Mm;
+  /** תוספת לאורך החור האובלי (כוונון בשטח) */
+  slotExtra: Mm;
+  /** קוטר בורג ההצטלבות */
+  crossD: Mm;
+  weldSize: Mm;
 }
 
 /** אגד B — קשיחות לאורך במפתח קיר: קורה + שני אלכסונים לעמודים */
@@ -130,6 +156,47 @@ export interface PortalBraceParams {
   beamBolts?: number;
   /** בשאר המפתחים של ציר עם אגד: קורה רציפה באותו חתך, ללא אלכסונים (העברת כוחות אופקיים) */
   continuous?: boolean;
+}
+
+/**
+ * נעילה אופקית לאורך (תוכנית 130 "פרט נעילה אופקית"): סיב RHS רציף בכל המפתחים של הציר, ובמפתחים הנעולים —
+ * מסבך: חגורה שנייה מעל/מתחת לסיב + אלכסוני RHS (וורן) מרותכים במסגריה. חיבור לעמוד: פלטה-פלטה עם 4 ברגים, או לשונית.
+ */
+export interface LockTrussParams {
+  chord: string; diag: string;
+  /** מרחק צירים בין הסיב לחגורה השנייה */
+  height: Mm;
+  /** המסבך מעל הסיב הרציף או מתחתיו */
+  position: 'above' | 'below';
+  /** plate = פלטה מרותכת לעמוד + פלטת קצה בסיב, 4 ברגים; tongue = פח + לשונית (כמו אלכסון עמוד-קורה) */
+  conn: 'plate' | 'tongue';
+  plateT: Mm; bolt: BoltSpec; weldSize: Mm;
+  /** מרווח מתחתית הקורה הראשית לראש האלמנט העליון */
+  gap: Mm;
+  /** מספר אלכסונים במפתח; 0 = אוטומטי (זווית ≈ 50°) */
+  diags: number;
+  /** סיב בשאר המפתחים */
+  continuous: boolean;
+}
+
+export interface PlanShape {
+  shape: 'rect' | 'skew' | 'taper';
+  /** מקבילית: זווית ההסטה (מעלות) — כל מסגרת מוסטת ב-tan(זווית)×מרחק מהמסגרת הראשונה */
+  skewDeg?: number;
+  /** טרפז: איזה ציר קצה זז (first = הציר הראשון, last = האחרון), ובכמה הוא זז החוצה במסגרת האחרונה (שלילי = פנימה) */
+  taperLine?: 'first' | 'last';
+  taperEnd?: Mm;
+}
+
+export interface HaunchParams {
+  enabled: boolean;
+  /** אורך המכפל מפני העמוד (אופקי לאורך הקורה) */
+  length: Mm;
+  /** עומק המכפל בפני העמוד (מתחת לתחתית הקורה); 0 = עומק הקורה */
+  depth: Mm;
+  /** עובי פח הגוף (0 = עובי ווב הקורה) ועובי האגף (0 = עובי אגף הקורה) */
+  webT: Mm; flangeT: Mm;
+  weldSize: Mm;
 }
 
 /** סבכה אופקית בגג מ-RHS (במקום X) */
@@ -214,6 +281,10 @@ export interface BuildingParams {
   roofTruss?: RoofTrussParams;
   /** כנף ניצבת (סככת L): סככה נמוכה שהמסגרת הראשונה שלה נשענת על עמודי הצד של הסככה הראשית */
   wing?: WingDef;
+  /** תוכנית לא מלבנית: skew = מקבילית (המסגרות מוסטות באלכסון, קירות הקצה משופעים); taper = טרפז (ציר קצה אחד משופע — המפתח משתנה) */
+  plan?: PlanShape;
+  /** מכפל (haunch) בראש העמוד: מכפל משולש מרותך מתחת לקורת הגג ליד העמוד — מאפשר קורה קלה יותר במפתחים גדולים */
+  haunch?: HaunchParams;
 }
 
 export interface WingDef {
@@ -289,6 +360,12 @@ export interface GutterSpec {
   hangerSpacing: Mm;
   /** קוטר ירידת מרזב ומרווח שלות */
   pipeD: Mm; clampSpacing: Mm;
+  /** סוג התמיכה: twin = 2 זוויתנים מרותכים לקצה הקורה (ברירת מחדל); plate = פלטה בקצה הקורה + זוויתן אופקי אחד מתחת למזחלה */
+  support?: 'twin' | 'plate';
+  /** עובי הפלטה בתמיכת plate */
+  plateT?: Mm;
+  /** חתך משתנה: תוספת עומק בירידת המרזב (תחתית בשיפוע לכיוון הירידה); 0 = חתך קבוע */
+  fall?: Mm;
 }
 export interface CladdingParams {
   roof: { enabled: boolean; panel: string; cover: Mm; eaveExt: Mm };
@@ -600,6 +677,10 @@ export interface BoltInfo {
   location: 'site' | 'shop';
   /** חורים בחלקים המחוברים */
   holesIn: string[];
+  /** חור אובלי: אורך החור (מקצה לקצה) לאורך ציר החלק, לפי מזהה חלק */
+  slots?: Record<string, Mm>;
+  /** rod = מוט הברגה מרותך (בכתב הכמויות: אום בלבד) */
+  rod?: boolean;
 }
 
 export interface WeldInfo {
@@ -720,6 +801,10 @@ export interface DerivedModel {
   connById: Map<string, Connection>;
   /** חתך מנורמל (צירים ומישורי גג) */
   section?: import('./section').NSection;
+  /** תוכנית לא מלבנית: המודל המלבני המקומי ומיפוי נקודה לעולם */
+  plan?: { shape: 'skew' | 'taper'; local: { project: Project; derived: DerivedModel }; P: (q: Vec3) => Vec3 };
+  /** קטעי קושרות הגג לאורך השיפועים (לבחירת כיסוי חלקי) */
+  roofSegments?: { id: string; plane: string; x0: number; x1: number }[];
   /** כנף (סככת L): קו החיבור ותחום המפתחים */
   wing?: { side: 'L' | 'R'; xLine: number; y0: number; y1: number; off: number; dir: 1 | -1;
     /** מודל הכנף במערכת המקומית שלה (לחיפוי, מזחלות ושרטוטים) ומיפוי נקודה לעולם */

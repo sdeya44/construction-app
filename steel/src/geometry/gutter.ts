@@ -1,4 +1,4 @@
-import { add, scale, v3, type Vec3 } from '../core/vec';
+import { add, dot, norm, scale, sub, v3, type Vec3 } from '../core/vec';
 import type { NSection } from '../model/section';
 import type { BuildingParams, Connection, GutterSpec, Member, ValidationIssue, WeldInfo } from '../model/types';
 import { tryProfile } from '../profiles/library';
@@ -12,6 +12,14 @@ import { tryProfile } from '../profiles/library';
 export function defaultGutterSpec(): GutterSpec {
   return { t: 2, bottom: 350, inner: 270, outer: 450, lip: 30, bracket: 'L50x5', hangerSpacing: 1500, pipeD: 200, clampSpacing: 2000 };
 }
+/** פריסות סטנדרטיות של רצועת הפח (רוחב גליל): חלוקה לדפנות ותחתית, שפות 30 */
+export const GUTTER_DEVS: Record<number, Pick<GutterSpec, 'inner' | 'bottom' | 'outer' | 'lip'>> = {
+  500: { inner: 120, bottom: 150, outer: 170, lip: 30 },
+  625: { inner: 150, bottom: 200, outer: 215, lip: 30 },
+  750: { inner: 180, bottom: 250, outer: 260, lip: 30 },
+  1000: { inner: 250, bottom: 300, outer: 390, lip: 30 },
+  1250: { inner: 300, bottom: 400, outer: 490, lip: 30 },
+};
 export const gutterSpec = (g: { spec?: Partial<GutterSpec> } | undefined): GutterSpec => ({ ...defaultGutterSpec(), ...(g?.spec ?? {}) });
 /** פריסת הפח (רוחב הרצועה לכיפוף) */
 export const gutterDev = (s: GutterSpec) => s.lip + s.outer + s.bottom + s.inner + s.lip;
@@ -87,7 +95,7 @@ export function gutterRuns(b: BuildingParams, sec: NSection, members: Member[]):
       const colH = tryProfile(b.columnProfile)?.props.h ?? 200;
       face = pick(edgeLine.x + dir * (colH / 2 + girtH + 60));
     }
-    const x = face + dir * 5;
+    const x = face + dir * (5 + ((s.support ?? 'twin') === 'plate' ? s.plateT ?? 8 : 0));
     // ירידות: בעמודים (מסגרות), מרווח ≤ downpipeSpacing, תמיד בשני הקצוות
     const nDp = Math.max(1, Math.ceil((y1 - y0) / cl.gutter.downpipeSpacing));
     const picks = nDp === 1 ? [frames[0]!] : Array.from({ length: nDp + 1 }, (_, i) => frames[Math.round((i * (frames.length - 1)) / nDp)]!).filter((f, i, a) => a.indexOf(f) === i);
@@ -127,6 +135,7 @@ export function buildGutterBrackets(b: BuildingParams, sec: NSection, members: M
     for (const e of r.ends) {
       const raf = byId.get(e.rafterId);
       if (!raf) continue;
+      if ((s.support ?? 'twin') === 'plate') { plateSupport(out, r, e, raf, s, lp); continue; }
       const rb = tryProfile(raf.profile)?.props.b ?? 150;
       const zc = r.zBottom - lp.props.h / 2; // הרגל האופקית העליונה בגובה תחתית המזחלה
       const x0 = e.faceX + r.dir * 0.5, x1 = r.x + r.dir * (s.bottom + 20);
@@ -146,6 +155,47 @@ export function buildGutterBrackets(b: BuildingParams, sec: NSection, members: M
     }
   }
   return out;
+}
+
+/**
+ * תמיכת מזחלה מסוג "פלטה + זוויתן אופקי" (פרט הלקוח: "מזחלה סוגי תמיכות פלטה עם פרופיל וזוית"):
+ * פלטה (8 מ"מ) מרותכת על פני הקצה של הקורה, יורדת עד מתחת למזחלה; זוויתן L50/5 אופקי (לא בשיפוע הגג)
+ * מרותך לתחתית הפלטה ובולט החוצה מתחת לתחתית המזחלה. הדופן הפנימית של המזחלה צמודה לפלטה. מסגריה בלבד.
+ */
+function plateSupport(out: { members: Member[]; connections: Connection[]; issues: ValidationIssue[] }, r: GutterRun, e: GutterRun['ends'][number], raf: Member, s: GutterSpec, lp: NonNullable<ReturnType<typeof tryProfile>>) {
+  const rp = tryProfile(raf.profile);
+  const rb = rp?.props.b ?? 150, rh = rp?.props.h ?? 300;
+  const t = s.plateT ?? 8;
+  const which = Math.abs(raf.start.x - e.faceX) < Math.abs(raf.end.x - e.faceX) ? 'start' : 'end';
+  const P = which === 'start' ? raf.start : raf.end, Q = which === 'start' ? raf.end : raf.start;
+  const cut = which === 'start' ? raf.startCut : raf.endCut;
+  // נורמל פני הקצה (החוצה): מישור החיתוך אם יש, אחרת ציר הקורה
+  const ax = norm(sub(P, Q));
+  let nrm = cut ? norm(cut.normal) : ax;
+  if (dot(nrm, ax) < 0) nrm = scale(nrm, -1);
+  nrm = norm(v3(nrm.x, 0, nrm.z));
+  const pt = cut ? cut.point : P;
+  const tos = raf.anchor === 'top' ? P.z : P.z + rh / 2;
+  const zLow = r.zBottom - lp.props.h - 5;
+  // נקודה על מישור הפנים בגובה z
+  const onFace = (z: number) => { const x = pt.x - (nrm.z * (z - pt.z)) / (nrm.x || 1e-9); return v3(x, e.y, z); };
+  const A = add(onFace(zLow), scale(nrm, t / 2)), B = add(onFace(tos), scale(nrm, t / 2));
+  const id = `C.GB.${r.id.slice(2)}.${e.frameId}`;
+  const pid = `${id}.PL`, lid = `${id}.L1`;
+  const H = Math.round(Math.hypot(B.x - A.x, B.z - A.z));
+  const W = Math.ceil(rb / 10) * 10;
+  out.members.push({ id: pid, kind: 'plate', label: `פלטת קצה למזחלה PL${t}×${W}×${H}`, start: A, end: B, profile: `PL${W}x${t}`, material: raf.material, rollDeg: 0, mirror: false, anchor: 'center', refUp: nrm, source: 'generated', manualPlacement: false, connId: id, partDesc: `פלטת קצה למזחלה PL${t}×${W}×${H}` });
+  // זוויתן אופקי: הרגל העליונה בגובה תחתית המזחלה, מהפלטה החוצה עד מעבר לדופן החיצונית
+  const zc = r.zBottom - lp.props.h / 2;
+  const x0 = onFace(zc).x + r.dir * (t + 0.5), x1 = r.x + r.dir * (s.bottom + 20);
+  const len = Math.abs(x1 - x0);
+  out.members.push({ id: lid, kind: 'cleat', label: `זוויתן תומך מזחלה ${s.bracket.replace('x', '/')} (אופקי)`, start: v3(x0, e.y, zc), end: v3(x1, e.y, zc), profile: s.bracket, material: raf.material, rollDeg: 0, mirror: false, anchor: 'center', refUp: Z, source: 'generated', manualPlacement: false, connId: id, partDesc: `זוויתן תומך מזחלה ${s.bracket.replace('x', '/')}×${Math.round(len)} אופקי` });
+  const welds: WeldInfo[] = [
+    { id: `${pid}.W`, connId: id, type: 'fillet', a: 5, length: 2 * rb + 2 * rh, location: 'shop', between: [raf.id, pid], from: A, to: B },
+    { id: `${lid}.W`, connId: id, type: 'fillet', a: 4, length: 2 * lp.props.h + 2 * lp.props.b, location: 'shop', between: [pid, lid], from: v3(x0, e.y, zc), to: v3(x0, e.y + 1, zc) },
+  ];
+  if (len > 700) out.issues.push({ code: 'GUTTER_BRACKET', severity: 'warning', elementId: id, message: `תומך מזחלה במסגרת ${e.frameId}: זיז ארוך (${Math.round(len)} מ"מ) — לבדוק חתך התומך` });
+  out.connections.push({ id, type: 'gutter', label: `תומך מזחלה — פלטה + זוויתן אופקי ${r.label.replace('מזחלה — ', '')} · ${e.frameId}`, members: [raf.id], parts: [pid, lid], bolts: [], welds, status: 'not-verified', fixity: 'pinned', overridden: false });
 }
 
 /** משטחים לתצוגה: פח המזחלה (חתך מוחלץ לאורך Y) וירידות המרזב */
@@ -183,6 +233,7 @@ export function gutterTakeoff(b: BuildingParams, runs: GutterRun[]) {
     const len = r.y1 - r.y0;
     const hangers = r.kind === 'eave' && s.hangerSpacing > 0 ? bays * Math.max(0, Math.ceil((len / Math.max(1, bays)) / s.hangerSpacing) - 1) : 0;
     const pipeLen = r.downpipes.reduce((a, d) => a + (d.zTop - d.zBottom), 0);
-    return { name: r.label, length: len, downpipes: r.downpipes.length, dev, sheetT: s.t, hangers, pipeD: s.pipeD, pipeLen, clamps: r.downpipes.reduce((a, d) => a + Math.max(2, Math.ceil((d.zTop - d.zBottom) / s.clampSpacing) + 1), 0), elbows: r.downpipes.length };
+    const fall = Math.max(0, s.fall ?? 0);
+    return { name: r.label + (fall ? ` (חתך משתנה, +${fall} בירידה)` : ''), length: len, downpipes: r.downpipes.length, dev: dev + fall, sheetT: s.t, hangers, pipeD: s.pipeD, pipeLen, clamps: r.downpipes.reduce((a, d) => a + Math.max(2, Math.ceil((d.zTop - d.zBottom) / s.clampSpacing) + 1), 0), elbows: r.downpipes.length };
   });
 }

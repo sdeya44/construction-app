@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { setBuilding, setKneeBraces, setSection } from '../commands/commands';
 import { defaultKneeBraces } from '../geometry/knee';
+import { defaultHaunch } from '../geometry/haunch';
 import { lineLabel, moveLines, setAxisCount, setPlaneEndZ, setPlaneSlope, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
 import { store, useStore } from '../store';
 import { Adv, LenField, NumField, ProfilePicker } from './fields';
@@ -65,7 +66,7 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
         }}><Icon name="plus" />ציר</button>
       </div>
       <table className="tbl" data-testid="sec-lines">
-        <thead><tr><th>ציר</th><th>מיקום X</th><th>מפתח</th><th title="מפלס תחתית העמוד: פני חגורה / יסוד, ביחס ל-±0.00">תחתית עמוד</th><th /></tr></thead>
+        <thead><tr><th>ציר</th><th>מיקום X</th><th>מפתח</th><th title="מפלס תחתית העמוד: פני חגורה / יסוד, ביחס ל-±0.00">תחתית עמוד</th><th title="קיר קיים: אין עמוד — הקורות מעוגנות לקיר">קיר</th><th /></tr></thead>
         <tbody>
           {lines.map((l, i) => (
             <tr key={l.id}>
@@ -76,6 +77,7 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
                 apply(moveLines(sec, new Map(sec.lines.filter((q) => q.x >= l.x).map((q) => [q.id, q.x + delta]))), 'שינוי מרווח צירים');
               }} /> : <span className="hint">—</span>}</td>
               <td><LenField mm={(lineBase[l.id] ?? baseEl) - baseEl} unit={u} testId={`sec-base-${i}`} onCommit={(v) => store.exec(setBuilding({ lineBase: { ...lineBase, [l.id]: baseEl + v } }))} /></td>
+              <td><input type="checkbox" data-testid={`sec-wall-${i}`} title="קיר קיים (ללא עמוד)" checked={!!l.wall} onChange={(e) => apply({ ...sec, lines: sec.lines.map((q) => (q.id === l.id ? { ...q, wall: e.target.checked || undefined } : q)) }, 'קיר קיים')} /></td>
               <td>{lines.length > 1 && <button className="icon-btn" title="מחיקת ציר" onClick={() => apply({ ...sec, lines: sec.lines.filter((q) => q.id !== l.id) }, 'מחיקת ציר')}><Icon name="x" /></button>}</td>
             </tr>
           ))}
@@ -159,6 +161,26 @@ function Overhangs({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' | 'm
           <LenField testId={`ovh-step-${st.li}`} mm={st.v} unit={u} onCommit={(v) => setEnd(st.pl, st.end, st.end === 'x0' ? st.x - Math.max(0, v) : st.x + Math.max(0, v))} /></div>
       ))}
       {steps.length > 0 && <div className="hint">זיז בדירוג: הקורה העליונה ממשיכה מעבר לעמוד מעל הגג הנמוך — מונע כניסת גשם לפתח שבין הגגות.</div>}
+    </>
+  );
+}
+
+export function HaunchEditor() {
+  const b = useStore((s) => s.project.building);
+  const hp = b.haunch ?? { ...defaultHaunch(), enabled: false };
+  const n = useStore((s) => s.derived.connections.filter((c) => c.id.startsWith('C.HN.')).length);
+  const set = (patch: Partial<typeof hp>) => store.exec(setBuilding({ haunch: { ...hp, ...patch } }));
+  return (
+    <>
+      <div className="panel-title">מכפל בראש העמוד
+        <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="hn-on" checked={hp.enabled} onChange={(e) => set({ enabled: e.target.checked })} />פעיל {hp.enabled ? `(${n})` : ''}</label>
+      </div>
+      {hp.enabled && <>
+        <div className="field"><label>אורך מפני העמוד</label><NumField testId="hn-length" value={hp.length} suffix='מ"מ' onCommit={(v) => set({ length: Math.max(300, v) })} /></div>
+        <div className="field"><label>עומק בפני העמוד (0 = עומק הקורה)</label><NumField testId="hn-depth" value={hp.depth} suffix='מ"מ' onCommit={(v) => set({ depth: Math.max(0, v) })} /></div>
+        <div className="field"><label>עובי גוף / אגף (0 = כמו הקורה)</label><span className="row"><NumField value={hp.webT} suffix='מ"מ' onCommit={(v) => set({ webT: Math.max(0, v) })} /><NumField value={hp.flangeT} suffix='מ"מ' onCommit={(v) => set({ flangeT: Math.max(0, v) })} /></span></div>
+        <div className="hint">פח גוף משולש + פח אגף משופע, מרותכים מתחת לקורת הגג במסגריה (מכלול אחד עם הקורה), בכל צד שבו הקורה ממשיכה מעבר לעמוד. מאפשר קורה קלה יותר במפתח גדול — ללא בדיקת חוזק בתוכנה.</div>
+      </>}
     </>
   );
 }

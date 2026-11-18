@@ -7,7 +7,7 @@ import { getMaterial } from '../profiles/materials';
 import type { DerivedModel, FabPart, Member, MemberKind, Project } from '../model/types';
 
 /** חור בחלק: מיקום לאורך החלק (מתחילת החלק), קואורדינטה רוחבית על הפאה, קוטר, והפאה (ווב/אגף). */
-export interface Hole { t: number; c: number; c2?: number; d: number; face: 'web' | 'flange' | 'section'; boltId: string }
+export interface Hole { t: number; c: number; c2?: number; d: number; face: 'web' | 'flange' | 'section'; boltId: string; /** חור אובלי: אורך כולל לאורך ציר החלק */ slot?: number }
 
 export interface MarkedPart extends FabPart {
   mark: string;
@@ -130,7 +130,8 @@ export function memberHoles(m: Member, d: DerivedModel): Hole[] {
     const throughV = Math.abs(dot(b.axis, f.v)) > Math.abs(dot(b.axis, f.u));
     // דרך אגף (ציר הבורג לאורך v) ⇒ קואורדינטה רוחבית u; דרך ווב ⇒ קואורדינטה v
     const cc = throughV ? dot(r, f.u) : dot(r, f.v);
-    out.push({ t, c: cc, c2: throughV ? dot(r, f.v) : dot(r, f.u), d: b.hole, face: throughV ? 'flange' : 'web', boltId: b.id });
+    const sl = b.slots?.[m.id];
+    out.push({ t, c: cc, c2: throughV ? dot(r, f.v) : dot(r, f.u), d: b.hole, face: throughV ? 'flange' : 'web', boltId: b.id, ...(sl && sl > b.hole ? { slot: Math.round(sl) } : {}) });
   }
   ventHoles(m, d).forEach((v, i) => out.push({ t: v.t, c: v.c, c2: v.c2, d: v.d, face: 'flange', boltId: `VENT.${i + 1}` }));
   return out.sort((a, b) => a.t - b.t || a.c - b.c);
@@ -152,7 +153,7 @@ export function computeFabrication(project: Project, d: DerivedModel): Fabricati
     const holes = memberHoles(m, d).filter((h) => h.t >= p.t0 - 0.01 && h.t <= p.t1 + 0.01).map((h) => ({ ...h, t: h.t - p.t0 }));
     const cutStart = first ? cutAngle(m, 'start') : 0, cutEnd = last ? cutAngle(m, 'end') : 0;
     // חתימה: חורים באגף/ווב — מיקום לאורך ורוחב בלבד (c2 = צד ראש הבורג, לא משנה ייצור); חלק הפוך קצה-לקצה זהה
-    const hs = (rev: boolean) => holes.map((h) => h.face === 'section' ? `${h.face}${r1(h.t)}/${r1(h.c)}/${r1(h.c2 ?? 0)}/${h.d}` : `${h.face}${r1(rev ? p.length - h.t : h.t)}/${r1(h.c)}/${h.d}`).sort().join(';');
+    const hs = (rev: boolean) => holes.map((h) => h.face === 'section' ? `${h.face}${r1(h.t)}/${r1(h.c)}/${r1(h.c2 ?? 0)}/${h.d}` : `${h.face}${r1(rev ? p.length - h.t : h.t)}/${r1(h.c)}/${h.d}${h.slot ? `x${h.slot}` : ''}`).sort().join(';');
     const cont = m.contour ? `C${m.contour.map((q) => `${r1(q.s)},${r1(q.u)}`).join(';')}` : '';
     const fwd = [m.kind, p.profile, p.material, r1(p.length), cutStart, cutEnd, hs(false), cont].join('|');
     const rev = holes.some((h) => h.face === 'section') || cont ? fwd : [m.kind, p.profile, p.material, r1(p.length), cutEnd, cutStart, hs(true), cont].join('|');

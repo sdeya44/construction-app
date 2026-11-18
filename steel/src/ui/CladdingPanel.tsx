@@ -1,4 +1,4 @@
-import { gutterDev, gutterSpec } from '../geometry/gutter';
+import { GUTTER_DEVS, gutterDev, gutterSpec } from '../geometry/gutter';
 import type { GutterSpec } from '../model/types';
 import { OpeningsSchematic, WallCladSchematic } from './schematics';
 import { useState } from 'react';
@@ -52,7 +52,17 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
           const setG = (patch: Partial<GutterSpec>) => set({ gutter: { ...cl.gutter, spec: { ...(cl.gutter.spec ?? {}), ...patch } } });
           const n = (k: keyof GutterSpec, lbl: string) => <div className="field" key={k}><label>{lbl}</label><LenField testId={`gut-${k}`} mm={gs[k] as number} unit="mm" onCommit={(v) => setG({ [k]: v } as Partial<GutterSpec>)} /></div>;
           return <Adv id="gutter" label="חתך המזחלה, תמיכות וירידות">
-            <div className="hint" style={{ marginTop: 0 }}>פריסת הפח: <b>{gutterDev(gs)} מ"מ</b> · תומך {gs.bracket.replace('x', '/')} ×2 בכל קצה קורה (מרותך במסגריה). פרט מלא בגיליון K-02.</div>
+            <div className="hint" style={{ marginTop: 0 }}>פריסת הפח: <b>{gutterDev(gs)} מ"מ</b> · {(gs.support ?? 'twin') === 'plate' ? `פלטה ${gs.plateT ?? 8} מ"מ בקצה הקורה + זוויתן ${gs.bracket.replace('x', '/')} אופקי` : `תומך ${gs.bracket.replace('x', '/')} ×2 בכל קצה קורה`} (מרותך במסגריה). פרט מלא בגיליון K-02.</div>
+            <div className="field"><label>פריסה סטנדרטית</label>
+              <select className="inp" data-testid="gut-dev" value={GUTTER_DEVS[gutterDev(gs)] ? String(gutterDev(gs)) : ''} onChange={(e) => { const v = GUTTER_DEVS[Number(e.target.value)]; if (v) setG(v); }}>
+                <option value="">מותאם ({gutterDev(gs)})</option>{Object.keys(GUTTER_DEVS).map((k) => <option key={k} value={k}>{k} מ"מ</option>)}
+              </select></div>
+            <div className="field"><label>סוג תמיכה</label>
+              <select className="inp" data-testid="gut-support" value={gs.support ?? 'twin'} onChange={(e) => setG({ support: e.target.value as 'twin' | 'plate' })}>
+                <option value="twin">2 זוויתנים מרותכים לקצה הקורה</option><option value="plate">פלטה בקצה הקורה + זוויתן אופקי</option>
+              </select></div>
+            {gs.support === 'plate' && <div className="field"><label>עובי פלטה</label><LenField testId="gut-plateT" mm={gs.plateT ?? 8} unit="mm" onCommit={(v) => setG({ plateT: v })} /></div>}
+            <div className="field"><label>חתך משתנה — תוספת עומק בירידה</label><LenField testId="gut-fall" mm={gs.fall ?? 0} unit="mm" onCommit={(v) => setG({ fall: Math.max(0, v) })} /></div>
             {n('t', 'עובי פח')}{n('bottom', 'רוחב תחתית')}{n('inner', 'דופן פנימית')}{n('outer', 'דופן חיצונית')}{n('lip', 'כיפוף שפה')}
             <div className="field prof"><label>זוויתן תומך</label><ProfilePicker value={gs.bracket} families={['L']} onCommit={(v) => setG({ bracket: v })} /></div>
             {n('hangerSpacing', 'מתלי פח כל (0=ללא)')}{n('pipeD', 'קוטר ירידת מרזב')}{n('clampSpacing', 'שלות כל')}

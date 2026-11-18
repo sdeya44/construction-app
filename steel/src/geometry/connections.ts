@@ -249,6 +249,47 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       const id = `C.SIDE.${f.id}.${jn.line.id}.${jn.plane.id}`;
       const col = byId.get(`${f.id}.COL.${jn.line.id}`), raf = byId.get(jn.plane.rafterId(f.id));
       const prm = effPlate(project, 'side', id);
+      if (jn.line.wall) {
+        // ---- סככה צמודה לקיר קיים: פלטת קצה מרותכת לקורה (מסגריה), מעוגנת לקיר בעוגנים כימיים (שטח). אין ריתוך בשטח.
+        if (!isGen(raf)) continue;
+        const wid = `C.WALL.${f.id}.${jn.plane.id}`;
+        const rp = getProfile(raf!.profile);
+        const X = v3(1, 0, 0);
+        const sgn = jn.side;
+        const t = Math.max(prm.t, 12);
+        const xFace = jn.line.x;
+        const cut: Plane = { point: v3(xFace + sgn * t, f.y, 0), normal: X };
+        if (jn.end === 'b') raf!.endCut = cut; else raf!.startCut = cut;
+        const pl = jn.plane;
+        const sl = (pl.b.z - pl.a.z) / (pl.b.x - pl.a.x);
+        const hv = rp.props.h * Math.sqrt(1 + sl * sl);
+        const zRef = zAt(pl, xFace);
+        const tos = raf!.anchor === 'top' ? zRef : zRef + hv / 2;
+        const ext = Math.max(prm.l, 80);
+        const zTop = tos + ext, zBot = tos - hv - ext;
+        const Hp = Math.ceil((zTop - zBot) / 5) * 5;
+        const W = Math.max(prm.w, Math.ceil((rp.props.b + 80) / 10) * 10);
+        const pid = `${wid}.PL`;
+        const xc = xFace + sgn * t / 2;
+        res.members.push(partMember(pid, 'plate', `PL${W}x${t}`, v3(xc, f.y, zBot), v3(xc, f.y, zBot + Hp), X, 'center', wid, `פלטת עיגון לקיר PL${t}×${W}×${Hp}`, mat));
+        const h = hw(prm.bolt.d);
+        const e = Math.max(45, Math.ceil((1.5 * (prm.bolt.d + prm.bolt.clearance)) / 5) * 5);
+        const g = W - 2 * e;
+        const zs = [zBot + e, zBot + Hp - e];
+        const embed = Math.max(125, 8 * prm.bolt.d);
+        const spec = { ...prm.bolt, grade: '5.8', standard: 'עוגן כימי' };
+        const bolts: BoltInfo[] = [];
+        for (const [ci, gy] of [[1, -g / 2], [2, g / 2]] as const) for (const [ri, zz] of zs.entries()) {
+          const head = v3(xFace + sgn * (t + h.w + h.m + 2 * h.P), f.y + gy, zz);
+          bolts.push(makeBolt(`${wid}.A${ci}${ri + 1}`, wid, head, scale(X, -sgn), spec, t, 'site', [pid], Z, res.members, embed + t + h.w + h.m + 2 * h.P));
+        }
+        const label = `עיגון ${pl.label} לקיר קיים (ציר ${jn.line.label}) מסגרת ${fi}`;
+        issue({ code: 'WALL_ANCHOR', severity: 'info', elementId: wid, message: `${label}: 4 עוגנים כימיים M${prm.bolt.d} בעומק ${embed} — לאשר את חוזק הקיר הקיים ואת סוג העוגן מול יצרן/מהנדס` });
+        res.connections.push({ id: wid, type: 'rafter-side', label, members: [raf!.id], parts: [pid, ...bolts.map((x) => x.id)], bolts,
+          welds: [{ id: `${wid}.W1`, connId: wid, type: 'fillet', a: prm.weldSize, length: outlinePerimeter(raf!.profile), location: 'shop', between: [raf!.id, pid], from: v3(xc, f.y, tos), to: v3(xc, f.y, tos) }],
+          status: statusOf(project, wid), fixity: 'pinned', overridden: !!project.connectionOverrides[wid] });
+        continue;
+      }
       if (!prm.enabled || !isGen(col) || !isGen(raf)) continue;
       const cp = getProfile(col!.profile), rp = getProfile(raf!.profile);
       const X = v3(1, 0, 0);
@@ -383,24 +424,30 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
         }
         return o;
       };
+      const d00 = sp0.bolt.d + sp0.bolt.clearance;
+      // פטה נמוכה (C120 וכד'): אין מקום לשני ברגים לגובה — שני ברגים בשורה אופקית בכל צד, באמצע הגובה
+      const rowMode = gV < 2.2 * d00 - 0.01;
+      const pH = Math.max(Math.ceil((2.4 * d00) / 5) * 5, 40);
       const oL = offFor(-1), oR = offFor(1);
-      const L = oL + oR + 2 * sp0.edge;
+      const L = oL + oR + 2 * sp0.edge + (rowMode ? 2 * pH : 0);
       const J = add(pur.start, scale(lf.ex, t));
       const C = add(add(J, scale(n, h / 2)), scale(back, tw / 2 + sp0.plateT / 2));
-      const y0p = -(oL + sp0.edge), y1p = oR + sp0.edge;
+      const y0p = -(oL + sp0.edge + (rowMode ? pH : 0)), y1p = oR + sp0.edge + (rowMode ? pH : 0);
       res.members.push(partMember(pid, 'plate', `PL${H}x${sp0.plateT}`, add(C, scale(lf.ex, y0p)), add(C, scale(lf.ex, y1p)), back, 'center', id,
         `פלטת המשך פטה PL${sp0.plateT}×${H}×${L}`, b.purlins.material));
       const bolts: BoltInfo[] = [];
-      [-1, 1].forEach((sg, si) => [-gV / 2, gV / 2].forEach((zz, zi) => {
-        const head = add(add(add(J, scale(lf.ex, sg < 0 ? -oL : oR)), scale(n, h / 2 + zz)), scale(d, tw / 2));
+      [-1, 1].forEach((sg, si) => (rowMode ? [0, 1] : [-gV / 2, gV / 2]).forEach((zz, zi) => {
+        const along = (sg < 0 ? -oL : oR) + (rowMode ? sg * zz * pH : 0);
+        const head = add(add(add(J, scale(lf.ex, along)), scale(n, h / 2 + (rowMode ? 0 : zz))), scale(d, tw / 2));
         bolts.push(makeBolt(`${id}.B${si + 1}${zi + 1}`, id, head, back, sp0.bolt, tw + sp0.plateT, 'site', [pur.id, pid], n, res.members));
       }));
       const d0 = sp0.bolt.d + sp0.bolt.clearance;
       const label = `חיבור המשך ${pur.label} (${(t / 1000).toFixed(3)} מ')`;
-      edgeChecks(label, id, d0, sp0.edge, sp0.edge, gV, null, res.issues);
+      edgeChecks(label, id, d0, sp0.edge, rowMode ? H / 2 : sp0.edge, rowMode ? pH : gV, null, res.issues);
       if (Math.min(oL, oR) < 1.2 * d0) issue({ code: 'BOLT_EDGE', severity: 'warning', elementId: id, message: `${label}: מרחק הבורג מקצה הפטה ${Math.min(oL, oR)} מ"מ < 1.2·d0` });
       const flat0 = 2 * tw, flat1 = h - 2 * tw;
-      if (h / 2 - gV / 2 - d0 / 2 < flat0 || h / 2 + gV / 2 + d0 / 2 > flat1) issue({ code: 'HOLE_FLAT', severity: 'warning', elementId: id, message: `${label}: חור מחוץ לאזור השטוח של ווב הפטה` });
+      const gEff = rowMode ? 0 : gV;
+      if (h / 2 - gEff / 2 - d0 / 2 < flat0 || h / 2 + gEff / 2 + d0 / 2 > flat1) issue({ code: 'HOLE_FLAT', severity: 'warning', elementId: id, message: `${label}: חור מחוץ לאזור השטוח של ווב הפטה` });
       if (pp.family === 'C' && H > h - 2 * tw - 2 * (pp.dims.r ?? tw)) issue({ code: 'PLATE_WIDE', severity: 'warning', elementId: id, message: `${label}: גובה הפלטה ${H} גדול מהאזור השטוח בין האגפים` });
       const arr = splicePlates.get(pur.id) ?? [];
       arr.push({ id: pid, y0: t + y0p, y1: t + y1p, T: sp0.plateT });

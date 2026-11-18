@@ -208,6 +208,12 @@ export interface CladdingTakeoff {
 }
 
 export function claddingTakeoff(p0: Project, d: DerivedModel): CladdingTakeoff | null {
+  // תוכנית לא מלבנית: כמויות לפי המודל המקומי, המשטחים ממופים לעולם (אורכי קירות משופעים — בקירוב)
+  if (d.plan?.local) {
+    const pl = d.plan;
+    const t = claddingTakeoff({ ...p0, building: { ...p0.building, plan: undefined } }, pl.local.derived);
+    return t ? { ...t, surfaces: t.surfaces.map((sf) => ({ ...sf, pts: sf.pts.map((q) => pl.P(q)) })) } : t;
+  }
   // כנף: הקירות של הראשית לפי הפרויקט בלי חיפוי במפתחי הכנף; ירידות לפי הכנף
   const p = d.wing?.local ? { ...d.wing.local.mainProject, building: { ...d.wing.local.mainProject.building, wing: p0.building.wing } } : p0;
   const b = p.building, cl = b.cladding, sec = d.section;

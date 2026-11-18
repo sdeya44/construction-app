@@ -44,7 +44,7 @@ export function partToNc1(p: MarkedPart, project: Project, d: DerivedModel, qty:
     for (const hl of p.holes) {
       if (hl.face === 'section') continue;
       if (isPlate) lines.push(`  v ${f2(hl.t)} ${f2(hl.c - umin)} ${f2(hl.d)}`);
-      else if (hl.face === 'web') lines.push(`  v ${f2(hl.t)} ${f2(hl.c - vmin)} ${f2(hl.d)}`);
+      else if (hl.face === 'web') lines.push(`  v ${f2(hl.t)} ${f2(hl.c - vmin)} ${f2(hl.d)}${hl.slot ? ` ${f2(0)}l ${f2(hl.slot - hl.d)} ${f2(0)} ${f2(0)}` : ''}`);
       else lines.push(`  ${(hl.c2 ?? 0) > mid ? 'o' : 'u'} ${f2(hl.t)} ${f2(hl.c - umin)} ${f2(hl.d)}`);
     }
   }

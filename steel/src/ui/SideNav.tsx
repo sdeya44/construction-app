@@ -90,9 +90,9 @@ export function SideNav({ nav, setNav, onOpenConn, treeOnly }: { nav: NavKey; se
           { key: 'r:splices', label: 'חיבורי המשך פטות', n: d.splices.filter((x) => x.memberId.startsWith('PL.')).length, pic: 'splice' },
         ])}
         {group('brace', '3 · חיזוקים', 'tab-brace', 'brace0', [
-          { key: 'b:knee', label: 'אלכסוני עמוד-קורה', n: connCount.get('knee') ? d.connections.filter((c) => c.id.startsWith('C.KB.')).length : undefined, pic: 'knee' },
+          { key: 'b:knee', label: 'אלכסוני עמוד-קורה ומכפל', n: connCount.get('knee') ? d.connections.filter((c) => c.id.startsWith('C.KB.')).length : undefined, pic: 'knee' },
           { key: 'b:roof', label: 'קושרות גג', pic: 'roofX' },
-          { key: 'b:walls', label: 'קשיחות קירות / אגד B', pic: 'walls' },
+          { key: 'b:walls', label: 'קשיחות קירות / אגד B / נעילה אופקית', pic: 'walls' },
           { key: 'b:ties', label: 'שורות קשירה לפטות', pic: 'ties' },
           { key: 'b:ridge', label: 'חיזוק רכס', pic: 'ridge' },
         ])}

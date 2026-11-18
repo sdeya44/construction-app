@@ -29,7 +29,7 @@ describe('חתך מודולרי — מערכת לבניית סוגי סככות'
       const d = generate(withTpl(t.id, true));
       expect(d.issues.filter((i) => i.severity === 'error')).toEqual([]);
       expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
-      expect(d.members.filter((m) => m.kind === 'column').length).toBe(6 * t.make().lines.length);
+      expect(d.members.filter((m) => m.kind === 'column').length).toBe(6 * t.make().lines.filter((l) => !l.wall).length);
       expect(types(d).knee).toBeGreaterThan(0);
     });
   }

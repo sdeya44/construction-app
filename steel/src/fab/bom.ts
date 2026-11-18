@@ -31,6 +31,12 @@ export function computeBom(d: DerivedModel, fab: Fabrication): Bom {
   for (const c of d.connections) {
     for (const b of c.bolts) {
       const anchor = b.standard !== 'ISO 4017';
+      if (b.rod) {
+        const k = `ROD${b.d}|${b.location}`;
+        const r = bolts.get(k) ?? { desc: `אום M${b.d} למוט הברגה מרותך (המוט — חלק במכלול הקושרת)`, d: b.d, length: 0, grade: b.grade, standard: b.standard, location: b.location, qty: 0, nuts: 0, washers: 0 };
+        r.nuts++; bolts.set(k, r);
+        continue;
+      }
       const desc = anchor ? `בורג עיגון M${b.d}×${b.length}` : `M${b.d}×${b.length}`;
       const k = `${desc}|${b.grade}|${b.location}`;
       const r = bolts.get(k) ?? { desc, d: b.d, length: b.length, grade: b.grade, standard: b.standard, location: b.location, qty: 0, nuts: 0, washers: 0 };

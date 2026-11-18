@@ -42,13 +42,18 @@ export function partSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: st
     for (const y of [ya, yb]) line({ x: x - 1.1, y: y - 0.8 }, { x: x + 1.1, y: y + 0.8 }, 'DIM');
     text({ x: x - 1.2, y: (ya + yb) / 2 }, label, 2, 'center', 'DIM', false, 90);
   };
-  const holeCircle = (c: P, dmm: number, sc: number) => {
-    E.push({ k: 'circle', c, r: Math.max(dmm / 2 / sc, 0.6), layer: 'HOLE' });
+  const holeCircle = (c: P, dmm: number, sc: number, slot?: number) => {
+    if (slot && slot > dmm) {
+      // חור אובלי לאורך ציר החלק (אופקי בשרטוט)
+      const r0 = Math.max(dmm / 2 / sc, 0.6), hl = (slot - dmm) / 2 / sc;
+      E.push({ k: 'circle', c: { x: c.x - hl, y: c.y }, r: r0, layer: 'HOLE' }, { k: 'circle', c: { x: c.x + hl, y: c.y }, r: r0, layer: 'HOLE' });
+      line({ x: c.x - hl, y: c.y - r0 }, { x: c.x + hl, y: c.y - r0 }, 'HOLE'); line({ x: c.x - hl, y: c.y + r0 }, { x: c.x + hl, y: c.y + r0 }, 'HOLE');
+    } else E.push({ k: 'circle', c, r: Math.max(dmm / 2 / sc, 0.6), layer: 'HOLE' });
     const r = Math.max(dmm / 2 / sc, 0.6) + 1.2;
     line({ x: c.x - r, y: c.y }, { x: c.x + r, y: c.y }, 'AXIS'); line({ x: c.x, y: c.y - r }, { x: c.x, y: c.y + r }, 'AXIS');
   };
   const chain = (vals: number[]) => [...new Set(vals.map((x) => Math.round(x * 10) / 10))].sort((a, b) => a - b);
-  const holeNote = (hs: { d: number }[]) => { const g = new Map<number, number>(); for (const h of hs) g.set(h.d, (g.get(h.d) ?? 0) + 1); return [...g].map(([dd, q]) => `${q}×Ø${dd}`).join(', '); };
+  const holeNote = (hs: { d: number; slot?: number }[]) => { const g = new Map<string, number>(); for (const h of hs) { const k = h.slot ? `אובלי ${h.d}×${h.slot}` : `Ø${h.d}`; g.set(k, (g.get(k) ?? 0) + 1); } return [...g].map(([dd, q]) => `${q}×${dd}`).join(', '); };
   const rows: string[] = [];
   const qty = fab.parts.filter((x) => x.mark === part.mark).length;
   let scaleLabel: string;
@@ -190,8 +195,8 @@ export function partSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: st
     }
     for (const [ax0, ax1] of zones) line(PF(ax0, (vmin + vmax) / 2), PF(ax1, (vmin + vmax) / 2), 'AXIS');
     for (const h of part.holes) {
-      if (h.face === 'web') holeCircle(PF(h.t, h.c), h.d, sc);
-      if (h.face === 'flange') holeCircle(PT(h.t, h.c), h.d, sc);
+      if (h.face === 'web') holeCircle(PF(h.t, h.c), h.d, sc, h.slot);
+      if (h.face === 'flange') holeCircle(PT(h.t, h.c), h.d, sc, h.slot);
     }
     // חריצים: מלבן ברוחב עובי+1 ובעומק הכניסה+2, עם מידות ותווית
     for (const sl of slots) {

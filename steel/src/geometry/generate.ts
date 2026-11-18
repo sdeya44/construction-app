@@ -17,6 +17,8 @@ import { generateWithWing } from './wing';
 import { buildTransfers, prepareTransfers } from './transfer';
 import { buildRoofTrusses, roofTrussRafterSplices } from './truss';
 import { buildBracing } from './bracing';
+import { buildHaunches } from './haunch';
+import { applyPlan, planMap } from './plan';
 import { applyCustomDetails } from './detail';
 
 const HEB_LETTERS = 'אבגדהוזחטיכלמנסעפצקרשת';
@@ -35,6 +37,14 @@ const Z = v3(0, 0, 1), X = v3(1, 0, 0);
 /** בניית המודל: סככה ראשית, ואם הוגדרה — כנף (צורת L) שמחוברת אליה */
 export function generate(project: Project): DerivedModel {
   if (project.building.wing?.enabled) return generateWithWing(project, generateBase);
+  const pl = project.building.plan;
+  if (pl && pl.shape !== 'rect') {
+    // תוכנית לא מלבנית: בנייה מלבנית במערכת מקומית ומיפוי לעולם
+    const local = generateBase({ ...project, building: { ...project.building, plan: undefined } });
+    if (hasErrors(local.issues) && !local.members.length) return local;
+    const map = planMap(local, project);
+    return map ? applyPlan(project, local, map) : local;
+  }
   return generateBase(project);
 }
 
@@ -200,6 +210,7 @@ export function generateBase(project: Project): DerivedModel {
   supports = supports.filter((sp) => byId.has(sp.purlinId) && byId.has(sp.rafterId));
   // חיבורים: משנים חיתוכי קצה של עמודים/קורות לפי עובי פלטות, ומוסיפים זוויתנים, פלטות וברגים
   let connections: Connection[] = [];
+  let roofSegments: DerivedModel["roofSegments"];
   let projEff: Project = project;
   // שגיאה מקומית (פטה, חיבור בודד) אינה חוסמת את שאר המודל — רק שגיאות מבנה/טופולוגיה או חתך לא מוכר בעמוד/קורה
   const fatal = structuralError || issues.some((i) => i.severity === 'error' && i.code === 'PROFILE' && /\.(COL|RAF)\b/.test(i.elementId ?? ''));
@@ -214,12 +225,19 @@ export function generateBase(project: Project): DerivedModel {
     out.push(...cr.members.filter((m) => !hidden.has(m.id)));
     connections = cr.connections;
     issues.push(...cr.issues);
+    {
+      const hn = buildHaunches(projEff, out, byId, topo, connections);
+      out.push(...hn.members.filter((m) => !hidden.has(m.id)));
+      connections.push(...hn.connections);
+      issues.push(...hn.issues);
+    }
     const bs = buildBeamSplices(projEff, out, eff.splices, eff.auto);
     out.push(...bs.members.filter((m) => !hidden.has(m.id)));
     connections.push(...bs.connections);
     issues.push(...bs.issues);
     if (eff.auto.size) issues.push({ code: 'AUTO_SPLICE', severity: 'info', message: `חיבורי המשך אוטומטיים ב-${eff.auto.size} אלמנטים ארוכים מחומר הגלם (${(project.settings.stockLength / 1000).toFixed(1)} מ') — לשינוי: בחר אלמנט ← "חיבורי המשך"` });
     const bb = buildBracing(b, topo, out.filter((m) => m.purlin), bEff, project.settings.stockLength, (id) => byId.get(id)?.profile);
+    roofSegments = bb.segments;
     out.push(...bb.members.filter((m) => !hidden.has(m.id)));
     // חלוקה אוטומטית גם לשורות הקשירה הארוכות
     const effT = effectiveSplices(projEff, bb.members, []);
@@ -314,7 +332,7 @@ export function generateBase(project: Project): DerivedModel {
   const dis = new Set(project.dismissedIssues ?? []);
   const hiddenIssues = dis.size ? issues.filter((i) => i.severity !== 'error' && (dis.has(`${i.code}|*`) || dis.has(issueKey(i)))) : [];
   if (hiddenIssues.length) { const h = new Set(hiddenIssues); const keep = issues.filter((i) => !h.has(i)); issues.length = 0; issues.push(...keep); }
-  return { members: out, nodes, grid, roof, issues, byId, supports, parts: pp.parts, splices: pp.splices, hiddenIssues, connections, connById: new Map(connections.map((c) => [c.id, c])), section: sec ?? undefined };
+  return { members: out, nodes, grid, roof, issues, byId, supports, parts: pp.parts, splices: pp.splices, hiddenIssues, connections, connById: new Map(connections.map((c) => [c.id, c])), section: sec ?? undefined, roofSegments };
 }
 
 function getProfileSafe(n: string) { try { return getProfile(n); } catch { return null; } }

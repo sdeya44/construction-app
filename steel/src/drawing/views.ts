@@ -34,10 +34,11 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
     const ax = g.map((fid) => p.building.frames.findIndex((f) => f.id === fid) + 1);
     out.push({ id: `D-FRAME-${g[0]}`, type: 'frame', number: `F-${String(k + 1).padStart(2, '0')}`, title: g.length > 1 ? `חתך מסגרת טיפוסי – צירים ${ax.join(', ')}` : `חתך מסגרת – ציר ${ax[0]}`, ref: g[0], refs: g });
   }
-  out.push({ id: 'D-SIDE', type: 'side', number: 'E-01', title: 'חזיתות צד – צירים א ו-ב', ref: 'LR' });
+  { const ls = d.section?.lines ?? []; const a = ls[0]?.label ?? 'א', z = ls[ls.length - 1]?.label ?? 'ב';
+    out.push({ id: 'D-SIDE', type: 'side', number: 'E-01', title: `חזיתות צד – צירים ${a} ו-${z}`, ref: 'LR' }); }
   if (p.building.cladding?.walls.enabled && (p.building.cladding.walls.sides.F || p.building.cladding.walls.sides.B)) out.push({ id: 'D-ENDWALLS', type: 'side', number: 'E-02', title: 'קירות קצה – עמודי רוח, פטות קיר ופתחים', ref: 'FB' });
   if (p.building.cladding) out.push({ id: 'D-CLAD', type: 'cladding', number: 'K-01', title: 'חיפוי, פחים ומזחלות — כתב כמויות' });
-  if (d.section && gutterRuns(p.building, d.section, d.members).length) out.push({ id: 'D-GUTTER', type: 'gutter', number: 'K-02', title: 'פרט מזחלה וירידת מרזב' });
+  if (d.section && gutterRuns(p.building, d.section, (d.plan?.local.derived ?? d).members).length) out.push({ id: 'D-GUTTER', type: 'gutter', number: 'K-02', title: 'פרט מזחלה וירידת מרזב' });
   const types: [string, string][] = [['eave', 'פרט חיבור קורה-עמוד'], ['ridge', 'פרט חיבור רכס'], ['base', 'פרט פלטת בסיס'], ['purlin-cleat', 'פרט תומך פטה'], ['purlin-splice', 'פרט חיבור המשך פטה'], ['brace-end', 'פרט פח חיבור קושרת'], ['brace-cross', 'פרט הצטלבות קושרות'], ['rafter-side', 'פרט חיבור קורה לצד עמוד'], ['knee', 'פרט אלכסון עמוד-קורה'], ['ridge-tie', 'פרט חיזוק רכס אופקי'], ['tb-support', 'פרט קורה נושאת ↔ עמוד'], ['tb-seat', 'פרט קורת גג על קורה נושאת'], ['truss', 'פרט צמתי מסבך'], ['truss-splice', 'פרט חיבור המשך חגורת מסבך'], ['truss-end', 'פרט חגורה תחתונה ↔ עמוד']];
   types.forEach(([t, title], i) => {
     const c = d.connections.find((x) => x.type === t);
@@ -49,6 +50,31 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
     const nm = p.customDetails?.find((x) => x.id === c.custom!.detailId)?.name ?? 'פרט מותאם';
     out.push({ id: `D-CONN-cd-${c.custom!.detailId}`, type: 'connection', number: `D-${String(types.length + k + 1).padStart(2, '0')}`, title: `פרט ${nm}`, ref: c.id });
   });
+  // משפחות פרטים נוספות באותו סוג חיבור (נעילה אופקית, מכפל, אגד B, עיגון לקיר, מוט הברגה) — גיליון פרט לכל משפחה
+  {
+    const firstIds = new Set(out.filter((x) => x.type === 'connection').map((x) => x.ref));
+    const fam = (c: Connection): [string, string] | null => {
+      if (c.id.startsWith('C.LT.') && c.type === 'truss') return ['lt-truss', 'פרט מסבך נעילה אופקית (צמתים מרותכים)'];
+      if (c.id.startsWith('C.LT.')) return ['lt-joint', 'פרט נעילה אופקית — סיב לעמוד'];
+      if (c.id.startsWith('C.HN.')) return ['haunch', 'פרט מכפל בראש העמוד'];
+      if (c.id.startsWith('C.BB.')) return ['portal', 'פרט אגד B'];
+      if (c.id.startsWith('C.WALL.')) return ['wall', 'פרט עיגון קורה לקיר קיים'];
+      if (c.type === 'brace-end' && c.bolts.some((b) => b.rod)) return ['rod', 'פרט מוט הברגה בקושרת גג (חור אובלי)'];
+      if (c.type === 'gutter' && c.parts.some((id) => id.endsWith('.PL'))) return ['gutter-plate', 'פרט תמיכת מזחלה — פלטה וזוויתן אופקי'];
+      return null;
+    };
+    const seen = new Set<string>();
+    // אם הראשון מסוגו כבר שייך למשפחה — המשפחה מכוסה
+    for (const c of d.connections) if (firstIds.has(c.id)) { const f = fam(c); if (f) { seen.add(f[0]); const it = out.find((x) => x.ref === c.id); if (it) it.title = f[1]; } }
+    let k = out.filter((x) => x.type === 'connection').length;
+    for (const c of d.connections) {
+      const f = fam(c);
+      if (!f || seen.has(f[0])) continue;
+      seen.add(f[0]);
+      k++;
+      out.push({ id: `D-CONN-fam-${f[0]}`, type: 'connection', number: `D-${String(types.length + used.length + k).padStart(2, '0')}`, title: f[1], ref: c.id });
+    }
+  }
   const asm = [...new Set(fab.assemblies.map((a) => a.mark))].sort(num);
   for (const m of asm) {
     out.push({ id: `D-ASM-${m}`, type: 'assembly', number: `A-${m}`, title: `שרטוט מכלול ${m}`, ref: m });
@@ -495,7 +521,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       break;
     }
     case 'gutter': {
-      const runs = d.section ? gutterRuns(b, d.section, d.members) : [];
+      const runs = d.section ? gutterRuns(b, d.section, (d.plan?.local.derived ?? d).members) : [];
       const r = runs.find((x) => x.kind === 'eave') ?? runs[0];
       if (!r) break;
       const gs = gutterSpec(b.cladding?.gutter);
@@ -530,7 +556,13 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       v.line({ x: gx0, y: r.zInnerTop }, { x: gx0 - gs.lip, y: r.zInnerTop }, 'CUT');
       // תומך L50/50/5
       const lh = tryProfile(gs.bracket)?.props.h ?? 50;
-      v.poly([{ x: 0, y: r.zBottom }, { x: gx1 + 20, y: r.zBottom }, { x: gx1 + 20, y: r.zBottom - 5 }, { x: 5, y: r.zBottom - 5 }, { x: 5, y: r.zBottom - lh }, { x: 0, y: r.zBottom - lh }], true, 'OUTLINE');
+      const pS = (gs.support ?? 'twin') === 'plate', pT = pS ? gs.plateT ?? 8 : 0;
+      if (pS) {
+        // פלטה בקצה הקורה, יורדת עד מתחת לזוויתן האופקי
+        v.poly([{ x: 0, y: tos }, { x: pT, y: tos }, { x: pT, y: r.zBottom - lh - 5 }, { x: 0, y: r.zBottom - lh - 5 }], true, 'CUT');
+        v.text({ x: pT + 30, y: tos - hR - 60 }, `פלטה t=${pT}`, 2.4, 'left', 'TEXT');
+      }
+      v.poly([{ x: pT, y: r.zBottom }, { x: gx1 + 20, y: r.zBottom }, { x: gx1 + 20, y: r.zBottom - 5 }, { x: pT + 5, y: r.zBottom - 5 }, { x: pT + 5, y: r.zBottom - lh }, { x: pT, y: r.zBottom - lh }], true, 'OUTLINE');
       // מידות
       v.dim({ x: gx0, y: r.zBottom }, { x: gx1, y: r.zBottom }, { x: 1, y: 0 }, -10);
       v.dim({ x: gx0, y: r.zBottom }, { x: gx0, y: r.zInnerTop }, { x: 0, y: 1 }, 8);
@@ -539,7 +571,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       v.level({ x: gx1, y: r.zBottom }, r.zBottom, 1, 12);
       v.level({ x: -900, y: tos }, tos, -1, 12);
       v.text({ x: (gx0 + gx1) / 2, y: r.zBottom + gs.outer + 70 }, `מזחלה — פח מגולוון t=${gs.t} · פריסה ${gutterDev(gs)} מ"מ`, 2.5, 'center', 'TEXT', 0, true);
-      v.text({ x: (gx0 + gx1) / 2, y: r.zBottom - lh - 330 }, `2×${gs.bracket.replace('x', '/')} מרותכים לקצה הקורה בכל מסגרת (מסגריה)`, 2.4, 'center', 'TEXT');
+      v.text({ x: (gx0 + gx1) / 2, y: r.zBottom - lh - 330 }, pS ? `פלטה ${pT} מ"מ על קצה הקורה + ${gs.bracket.replace('x', '/')} אופקי מרותך לפלטה (מסגריה)` : `2×${gs.bracket.replace('x', '/')} מרותכים לקצה הקורה בכל מסגרת (מסגריה)`, 2.4, 'center', 'TEXT');
       sh.ents.push({ k: 'text', p: { x: area.x1 - 2, y: area.y1 - 3 }, s: `פרט מזחלה — חתך בקצה הקורה  1:${v.scale}`, h: 3, align: 'right', layer: 'TEXT', bold: true });
       // ---- ירידת מרזב: מבט חזית, לאורך עמוד
       const dp = r.downpipes[0];
@@ -571,7 +603,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
         sh.ents.push({ k: 'text', p: { x: area.x0 + half - 6, y: area.y1 - 3 }, s: `פרט ירידת מרזב — חזית  1:${w.scale}`, h: 3, align: 'right', layer: 'TEXT', bold: true });
       }
       const tk = gutterTakeoff(b, runs);
-      sh.ents.push({ k: 'text', p: { x: area.x1 - 2, y: area.y0 + 4 }, s: `ירידות: ${tk.reduce((a1, x) => a1 + x.downpipes, 0)} · מרווח מרבי ${(b.cladding!.gutter.downpipeSpacing / 1000).toFixed(1)} מ' · מתלי פח בין המסגרות כל ${(gs.hangerSpacing / 1000).toFixed(1)} מ' (פחחות) · שיפוע אורכי במזחלה לפי הפחח`, h: 2.4, align: 'right', layer: 'TEXT' });
+      sh.ents.push({ k: 'text', p: { x: area.x1 - 2, y: area.y0 + 4 }, s: `ירידות: ${tk.reduce((a1, x) => a1 + x.downpipes, 0)} · מרווח מרבי ${(b.cladding!.gutter.downpipeSpacing / 1000).toFixed(1)} מ' · מתלי פח בין המסגרות כל ${(gs.hangerSpacing / 1000).toFixed(1)} מ' (פחחות) · ${gs.fall ? `חתך משתנה: עומק +${gs.fall} מ"מ בירידות (תחתית בשיפוע)` : 'שיפוע אורכי במזחלה לפי הפחח'}`, h: 2.4, align: 'right', layer: 'TEXT' });
       break;
     }
     case 'cladding': {
@@ -842,7 +874,8 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       const c = d.connById.get(def.ref!)!;
       const ids = [...c.members, ...c.parts.flatMap((x) => [x, `${x}.H`, `${x}.S`, `${x}.N`])];
       const ms = ids.map((x) => d.byId.get(x)).filter((m): m is Member => !!m);
-      const first = d.byId.get(c.parts[0])!;
+      // חלק ראשון במרכז הפרט (בהצטלבות עם בורג בלבד — שוק הבורג)
+      const first = c.parts.flatMap((x) => [x, `${x}.S`]).map((x) => d.byId.get(x)).find((m): m is Member => !!m) ?? d.byId.get(c.members[0])!;
       const fs = cachedSolidPure(first);
       const cen = [...fs.startRing, ...fs.endRing].reduce((a, q) => ({ x: a.x + q.x, y: a.y + q.y, z: a.z + q.z }), { x: 0, y: 0, z: 0 });
       const n = fs.startRing.length * 2;
@@ -894,7 +927,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       T(c.label, true);
       T(`סטטוס: ${c.status === 'approved' ? 'מאושר' : c.status === 'for-review' ? 'לבדיקה' : 'לא מאומת'}`);
       const agg = new Map<string, number>();
-      for (const bo of c.bolts) { const k = `M${bo.d}×${bo.length} ${bo.grade}, חור Ø${bo.hole}, ${bo.location === 'site' ? 'שטח' : 'מסגריה'}`; agg.set(k, (agg.get(k) ?? 0) + 1); }
+      for (const bo of c.bolts) { const sl = bo.slots ? Object.values(bo.slots)[0] : 0; const k = bo.rod ? `מוט הברגה M${bo.d}×${bo.length} מרותך + אום, חור אובלי ${bo.hole}×${sl} בקורה, ${bo.location === 'site' ? 'שטח' : 'מסגריה'}` : `M${bo.d}×${bo.length} ${bo.grade}, חור Ø${bo.hole}, ${bo.location === 'site' ? 'שטח' : 'מסגריה'}`; agg.set(k, (agg.get(k) ?? 0) + 1); }
       for (const [k, q] of agg) T(`${q}× ${k}`);
       for (const w of c.welds.slice(0, 6)) T(`ריתוך פינתי a${w.a}, L=${Math.round(w.length)} — ${w.location === 'shop' ? 'מסגריה' : 'שטח (תיקון גלוון)'}`);
       for (const pid of c.parts.filter((x) => d.byId.get(x)?.kind === 'plate' || d.byId.get(x)?.kind === 'cleat')) {
