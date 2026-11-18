@@ -824,3 +824,7 @@ details.adv .adv-body { padding-bottom: 6px; }
 .deleted-list { max-height: 300px; overflow: auto; margin-top: 6px; }
 .deleted-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line, #eceeec); font-size: 13px; }
 .deleted-row .dl-lbl { font-weight: 600; }
+.schem .kb-on { stroke: #7a3fc4; stroke-width: 1.8; stroke-linecap: round; }
+.schem .kb-off { stroke: #c9c3b6; stroke-width: 0.9; stroke-dasharray: 1.5 1.5; }
+.schem .bay-cell:hover .kb-off { stroke: #7a3fc4; }
+.schem .kb-hd:hover { fill: #7a3fc4; }

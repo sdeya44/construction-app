@@ -454,6 +454,8 @@ export interface KneeBraceParams {
   exclude: string[];
   /** הגדרה לכל צד בנפרד (מזהה "קו.מישור.צד"): ביטול / ירידה / זווית / מרחק / חתך — דורס את הכללי */
   sides?: Record<string, KneeSideOverride>;
+  /** ביטול במסגרת מסוימת: "מסגרת|קו.מישור.צד" */
+  offCells?: string[];
 }
 export interface KneeSideOverride { on?: boolean; drop?: Mm; angle?: number; reach?: Mm; mode?: 'angle' | 'reach'; profile?: string }
 

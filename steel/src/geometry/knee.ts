@@ -48,6 +48,7 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
       for (const s of sides) {
         const key = `${jn.line.id}.${pl.id}.${s < 0 ? 'L' : 'R'}`;
         if (kb.exclude.includes(key)) continue;
+        if (kb.offCells?.includes(`${f.id}|${key}`)) continue;
         // הגדרה לכל צד בנפרד (מפתחים שונים — אורכים שונים): דריסה של ההגדרות הכלליות
         const ov = kb.sides?.[key];
         if (ov?.on === false) continue;

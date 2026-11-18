@@ -1,22 +1,34 @@
 import { expect, test } from '@playwright/test';
 import { boot, shot } from './helpers';
 
-test('KB-02: אלכסוני עמוד-קורה — הגדרה לכל צד: ביטול צד ושינוי ירידה בצד אחר', async ({ page }) => {
-  await boot(page);
+test('KB-02: אלכסוני עמוד-קורה — תוכנית איפה יש: תא, מסגרת, מפתח; מידות לכל מפתח (שורה אחת)', async ({ page }) => {
+  const errors = await boot(page);
   await page.getByTestId('nav-b:knee').click();
   await page.getByTestId('kb-on').check();
-  await expect(page.getByTestId('kb-sides')).toBeVisible();
+  await expect(page.getByTestId('kb-grid')).toBeVisible();
   const n = () => page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('KB.')).length);
   const n0 = await n();
-  await page.getByTestId('kb-side-on-L.L.R').uncheck();
-  expect(await n()).toBe(n0 - n0 / 2);
-  const inp = page.getByTestId('kb-side-drop-R.R.L');
+  // שורה אחת לכל מפתח — לא שורה לכל צד
+  expect(await page.locator('[data-testid^="kb-spanrow-"]').count()).toBe(1);
+  // תא בודד: מסגרת 1, ליד עמוד שמאל
+  await page.getByTestId('kb-cell-0-L.L.R').click();
+  expect(await n()).toBe(n0 - 1);
+  // כל מסגרת 2
+  await page.getByTestId('kb-frame-1').click();
+  expect(await n()).toBe(n0 - 3);
+  await shot(page, 'KB_02_grid');
+  // כותרת המפתח: כבוי בכל המסגרות, ושוב — דלוק בכולן
+  await page.getByTestId('kb-span-0').click();
+  expect(await n()).toBe(0);
+  await page.getByTestId('kb-span-0').click();
+  expect(await n()).toBe(n0);
+  // מידה למפתח — חלה על שני הצדדים
+  const inp = page.getByTestId('kb-span-drop-0');
   await inp.fill('1200'); await inp.press('Enter');
   const ov = await page.evaluate(() => (window as any).__ksp.store.state.project.building.kneeBraces.sides);
+  expect(ov['L.L.R'].drop).toBe(1200);
   expect(ov['R.R.L'].drop).toBe(1200);
-  await shot(page, 'KB_02_sides');
-  await page.getByTestId('kb-side-reset-L.L.R').click();
-  expect(await n()).toBe(n0);
+  expect(errors).toEqual([]);
 });
 
 test('HUB-01: לחיצה על עמוד — חתך (סוג ← מידה) עם היקף "כל העמודים" + הגדרות הגיאומטריה באותו פאנל', async ({ page }) => {

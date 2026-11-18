@@ -222,51 +222,117 @@ export function KneeEditor() {
         {(kb.mode ?? 'angle') === 'angle'
           ? <div className="field"><label>זווית מהאופק</label><NumField testId="kb-angle" value={kb.angle ?? 45} suffix="°" onCommit={(v) => set({ angle: Math.max(15, Math.min(75, v)) })} /></div>
           : <div className="field"><label>מרחק על הקורה (אופקי)</label><NumField testId="kb-reach" value={kb.reach} suffix='מ"מ' onCommit={(v) => set({ reach: v })} /></div>}
-        {ed.embed
-          ? <Adv id="kb-sides" label="הגדרה לכל צד (ביטול צד, ירידה וזווית שונות)"><KneeSides /></Adv>
-          : <Adv id="kb" label="מתקדם — פרט חיבור, ברגים, עובי, הגדרה לכל צד">{connFields}<KneeSides /></Adv>}
+        <KneeSides />
+        {!ed.embed && <Adv id="kb" label="מתקדם — פרט חיבור, ברגים, עובי">{connFields}</Adv>}
         {ed.showTitle && <div className="hint">בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. פרט הלקוח: פח מרותך לעמוד ולקורה (במישור המסגרת, מסגריה); בקצות ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. אין בדיקת חוזק.</div>}
       </>}
     </>
   );
 }
 
-/** הגדרה לכל צד בנפרד: כל מפגש עמוד-קורה וצד (מפתח) — פעיל, ירידה, זווית/מרחק; ריק = לפי ההגדרה הכללית */
+/**
+ * אלכסוני עמוד-קורה — איפה יש ואיפה אין: תוכנית לחיצה (עמודות = מפתחים, שורות = מסגרות), בכל תא שני אלכסונים
+ * (ליד העמוד השמאלי וליד הימני). מתחת — מידות לכל מפתח (שורה אחת למפתח; חלה על שני הצדדים).
+ */
 function KneeSides() {
   const kb = useStore((s) => s.project.building.kneeBraces) ?? defaultKneeBraces();
+  const p = useStore((s) => s.project);
   const d = useStore((s) => s.derived);
   const lines = [...(d.section?.lines ?? [])].sort((a, b) => a.x - b.x);
-  const keys = [...new Set([...d.connections.filter((c) => c.type === 'knee').map((c) => c.id.split('.').slice(3).join('.')), ...Object.keys(kb.sides ?? {})])]
-    .sort((a, b) => lines.findIndex((l) => l.id === a.split('.')[0]) - lines.findIndex((l) => l.id === b.split('.')[0]) || a.localeCompare(b));
+  const frames = [...p.building.frames].sort((a, b) => a.y - b.y);
+  const truss = new Set(p.building.roofTruss?.enabled ? (p.building.roofTruss.frames === 'all' ? frames.map((f) => f.id) : p.building.roofTruss.frames) : []);
+  const keys = [...new Set([...d.connections.filter((c) => c.type === 'knee').map((c) => c.id.split('.').slice(3).join('.')), ...Object.keys(kb.sides ?? {}), ...(kb.offCells ?? []).map((x) => x.split('|')[1])])];
   if (!keys.length) return null;
-  const setSide = (key: string, patch: Partial<KneeSideOverride> | null) => {
+  // מפתח (0..) של כל מפתח-צד: צד ימין של ציר i ⇒ מפתח i; צד שמאל של ציר i ⇒ מפתח i-1
+  const spanOf = (key: string) => { const [lid, , sd] = key.split('.'); const li = lines.findIndex((l) => l.id === lid); return sd === 'R' ? li : li - 1; };
+  const nSpan = Math.max(1, lines.length - 1);
+  const spans = Array.from({ length: nSpan }, (_, i) => ({ i, left: keys.find((k) => spanOf(k) === i && k.endsWith('.R')), right: keys.find((k) => spanOf(k) === i && k.endsWith('.L')) })).filter((q) => q.left || q.right);
+  const off = new Set(kb.offCells ?? []);
+  const globalOff = (k: string) => kb.sides?.[k]?.on === false || kb.exclude.includes(k);
+  const isOn = (fid: string, k: string) => !truss.has(fid) && !globalOff(k) && !off.has(`${fid}|${k}`);
+  const commit = (nOff: Set<string>, sides: Record<string, KneeSideOverride>) => {
+    // נרמול: מפתח-צד כבוי בכל המסגרות ⇒ on:false; דלוק בכולן ⇒ ללא רשומות
+    for (const k of keys) {
+      const fr = frames.filter((f) => !truss.has(f.id));
+      const allOff = fr.length > 0 && fr.every((f) => nOff.has(`${f.id}|${k}`));
+      if (allOff) { for (const f of frames) nOff.delete(`${f.id}|${k}`); sides[k] = { ...(sides[k] ?? {}), on: false }; }
+    }
+    store.exec(setKneeBraces({ offCells: [...nOff].sort(), sides, exclude: kb.exclude.filter((k) => !keys.includes(k) || sides[k]?.on === false) }));
+  };
+  const setCells = (cells: [string, string][], on: boolean) => {
+    const nOff = new Set(off); const sides = { ...(kb.sides ?? {}) };
+    for (const [fid, k] of cells) {
+      if (globalOff(k)) {
+        // היה כבוי בכל המסגרות — מדליקים את התא הזה בלבד
+        const o = { ...(sides[k] ?? {}) }; delete o.on; sides[k] = o; if (!Object.keys(o).length) delete sides[k];
+        for (const f of frames) if (!cells.some(([ff, kk]) => ff === f.id && kk === k)) nOff.add(`${f.id}|${k}`);
+      }
+      if (on) nOff.delete(`${fid}|${k}`); else nOff.add(`${fid}|${k}`);
+    }
+    commit(nOff, sides);
+  };
+  const toggle = (fid: string, k: string) => setCells([[fid, k]], !isOn(fid, k));
+  const colKeys = (q: (typeof spans)[number]) => [q.left, q.right].filter((k): k is string => !!k);
+  const toggleSpan = (q: (typeof spans)[number]) => { const ks = colKeys(q); const any = frames.some((f) => ks.some((k) => isOn(f.id, k))); setCells(frames.filter((f) => !truss.has(f.id)).flatMap((f) => ks.map((k) => [f.id, k] as [string, string])), !any); };
+  const toggleFrame = (fid: string) => { const ks = spans.flatMap(colKeys); const any = ks.some((k) => isOn(fid, k)); setCells(ks.map((k) => [fid, k] as [string, string]), !any); };
+  // מידות לכל מפתח — כותבות לשני הצדדים
+  const setSpan = (q: (typeof spans)[number], patch: Partial<KneeSideOverride> | null) => {
     const sides = { ...(kb.sides ?? {}) };
-    if (patch === null) delete sides[key]; else sides[key] = { ...(sides[key] ?? {}), ...patch };
+    for (const k of colKeys(q)) { if (patch === null) { const on = sides[k]?.on; delete sides[k]; if (on === false) sides[k] = { on: false }; } else sides[k] = { ...(sides[k] ?? {}), ...patch }; }
     store.exec(setKneeBraces({ sides }));
   };
   const lenOf = (key: string) => { const m = d.members.find((x) => x.id.startsWith('KB.') && x.id.endsWith(`.${key}`)); return m ? Math.round(Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y, m.end.z - m.start.z)) : null; };
   const angleMode = (kb.mode ?? 'angle') === 'angle';
+  const total = frames.reduce((a, f) => a + spans.flatMap(colKeys).filter((k) => isOn(f.id, k)).length, 0);
+  // שרטוט
+  const X0 = 22, cw = Math.max(34, Math.min(60, 230 / spans.length)), rh = Math.max(11, Math.min(18, 170 / frames.length)), Y0 = 16;
+  const W = X0 + cw * spans.length + 4, H = Y0 + rh * frames.length + 4;
   return (
     <div className="op-card" data-testid="kb-sides">
-      <b>הגדרה לכל צד (מפתח)</b>
-      <div className="hint">ריק = לפי ההגדרה הכללית. מאפשר אורכי אלכסון שונים במפתחים שונים.</div>
-      <table className="mini-table"><thead><tr><th>מיקום</th><th>פעיל</th><th>ירידה</th><th>{angleMode ? 'זווית' : 'מרחק'}</th><th>אורך</th><th /></tr></thead>
-        <tbody>{keys.map((key) => {
-          const [lineId, , sd] = key.split('.');
-          const li = lines.findIndex((l) => l.id === lineId);
-          const span = sd === 'L' ? li : li + 1;
-          const ov = kb.sides?.[key] ?? {};
-          const L = lenOf(key);
+      <b>איפה יש אלכסונים ({total})</b>
+      <div className="hint">לחיצה על אלכסון בתא — הדלקה/כיבוי במסגרת הזו · על כותרת מפתח — בכל המסגרות · על מספר מסגרת — כל המסגרת.</div>
+      <div className="schem" data-testid="kb-grid">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="אלכסוני עמוד-קורה — תוכנית" style={{ maxWidth: `${Math.round(W * 3)}px`, margin: '0 auto', display: 'block' }}>
+          {spans.map((q, c) => {
+            const a = X0 + c * cw;
+            return <g key={q.i}>
+              <text x={a + cw / 2} y={9} className="sm-lbl-s kb-hd" textAnchor="middle" data-testid={`kb-span-${q.i}`} onClick={() => toggleSpan(q)} style={{ cursor: 'pointer' }}>{`${lines[q.i]?.label ?? ''}–${lines[q.i + 1]?.label ?? ''}`}</text>
+              {frames.map((f, r) => {
+                const y = Y0 + r * rh, tr = truss.has(f.id);
+                const dia = (k: string | undefined, leftSide: boolean) => {
+                  if (!k) return null;
+                  const on = isOn(f.id, k);
+                  const xA = leftSide ? a + 2 : a + cw - 2, xB = leftSide ? a + cw * 0.36 : a + cw * 0.64;
+                  return <g className="bay-cell" data-testid={`kb-cell-${r}-${k}`} onClick={() => !tr && toggle(f.id, k)}>
+                    <rect x={leftSide ? a : a + cw / 2} y={y} width={cw / 2} height={rh} fill="transparent" />
+                    <line x1={xA} y1={y + rh - 2} x2={xB} y2={y + 2.5} className={on ? 'kb-on' : 'kb-off'} />
+                  </g>;
+                };
+                return <g key={f.id}>
+                  <rect x={a} y={y} width={cw} height={rh} className={tr ? 'bay' : 'bay on'} />
+                  <line x1={a + 1} y1={y + 2} x2={a + cw - 1} y2={y + 2} className="sm-main" strokeWidth={0.8} />
+                  {tr ? <text x={a + cw / 2} y={y + rh / 2 + 2} className="sm-lbl-s" textAnchor="middle">מסבך</text> : <>{dia(q.left, true)}{dia(q.right, false)}</>}
+                </g>;
+              })}
+            </g>;
+          })}
+          {frames.map((f, r) => <text key={f.id} x={X0 - 4} y={Y0 + r * rh + rh / 2 + 2} className="sm-lbl-s" textAnchor="end" data-testid={`kb-frame-${r}`} onClick={() => toggleFrame(f.id)} style={{ cursor: 'pointer' }}>{r + 1}</text>)}
+        </svg>
+      </div>
+      <table className="mini-table"><thead><tr><th>מפתח</th><th>ירידה</th><th>{angleMode ? 'זווית' : 'מרחק'}</th><th>אורך</th><th /></tr></thead>
+        <tbody>{spans.map((q) => {
+          const k0 = (q.left ?? q.right)!, ov = kb.sides?.[k0] ?? {};
+          const Ls = colKeys(q).map(lenOf).filter((x): x is number => x !== null);
+          const custom = colKeys(q).some((k) => { const o = kb.sides?.[k]; return o && Object.keys(o).some((x) => x !== 'on'); });
           return (
-            <tr key={key} data-testid={`kb-side-${key}`}>
-              <td>ציר {lines[li]?.label ?? lineId} · {sd === 'L' ? 'שמאל' : 'ימין'} (מפתח {span})</td>
-              <td><input type="checkbox" data-testid={`kb-side-on-${key}`} checked={ov.on !== false} onChange={(e) => setSide(key, { on: e.target.checked })} /></td>
-              <td><NumField testId={`kb-side-drop-${key}`} value={ov.drop ?? kb.drop} suffix="" onCommit={(v) => setSide(key, { drop: v })} /></td>
+            <tr key={q.i} data-testid={`kb-spanrow-${q.i}`}>
+              <td>{lines[q.i]?.label}–{lines[q.i + 1]?.label}</td>
+              <td><NumField testId={`kb-span-drop-${q.i}`} value={ov.drop ?? kb.drop} suffix="" onCommit={(v) => setSpan(q, { drop: v })} /></td>
               <td>{angleMode
-                ? <NumField testId={`kb-side-angle-${key}`} value={ov.angle ?? kb.angle ?? 45} suffix="°" onCommit={(v) => setSide(key, { angle: Math.max(15, Math.min(75, v)) })} />
-                : <NumField testId={`kb-side-reach-${key}`} value={ov.reach ?? kb.reach} suffix="" onCommit={(v) => setSide(key, { reach: v })} />}</td>
-              <td className="num">{ov.on === false ? '—' : L ?? '—'}</td>
-              <td>{kb.sides?.[key] && <button className="btn small" title="חזרה להגדרה הכללית" data-testid={`kb-side-reset-${key}`} onClick={() => setSide(key, null)}>↺</button>}</td>
+                ? <NumField testId={`kb-span-angle-${q.i}`} value={ov.angle ?? kb.angle ?? 45} suffix="°" onCommit={(v) => setSpan(q, { angle: Math.max(15, Math.min(75, v)) })} />
+                : <NumField testId={`kb-span-reach-${q.i}`} value={ov.reach ?? kb.reach} suffix="" onCommit={(v) => setSpan(q, { reach: v })} />}</td>
+              <td className="num">{Ls.length ? [...new Set(Ls)].join('/') : '—'}</td>
+              <td>{custom && <button className="btn small" title="חזרה להגדרה הכללית" onClick={() => setSpan(q, null)}>↺</button>}</td>
             </tr>
           );
         })}</tbody></table>
