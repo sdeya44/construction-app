@@ -366,3 +366,4 @@ boq/**/*.db
 boq/**/*.sqlite
 boq/node_modules/
 boq/dist/
+out-*/
