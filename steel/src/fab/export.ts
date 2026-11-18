@@ -20,7 +20,45 @@ export function bomTables(bom: Bom, plans: CutPlan[]): Table[] {
         [p.profile, p.material, 'סיכום', `${p.bars.length} מוטות`, `ניצולת ${(p.utilization * 100).toFixed(1)}%`, Math.round(p.waste)],
       ]),
     },
+    orderTable(bom, plans),
   ];
+}
+
+/**
+ * הזמנת חומר גלם: מספר מוטות לכל חתך ולכל אורך מלאי (מתוכנית החיתוך), משקל רכש;
+ * פחים לפי עובי — שטח ומשקל נטו (ללא קינון בגיליון — להוסיף פחת לפי המסגריה).
+ */
+export function orderTable(bom: Bom, plans: CutPlan[]): Table {
+  const f1 = (n: number) => Math.round(n * 10) / 10;
+  const kgm = new Map(bom.profiles.map((r) => [`${r.profile}|${r.material}`, r.length > 0 ? (r.weight / r.length) * 1000 : 0]));
+  const rows: (string | number)[][] = [];
+  let totKg = 0;
+  for (const p of plans) {
+    const by = new Map<number, number>();
+    for (const b of p.bars) by.set(b.stock, (by.get(b.stock) ?? 0) + 1);
+    const w = kgm.get(`${p.profile}|${p.material}`) ?? 0;
+    for (const [st, n] of [...by.entries()].sort((a, b) => b[0] - a[0])) {
+      const kg = (n * st * w) / 1000; totKg += kg;
+      rows.push([p.profile, p.material, st / 1000, n, f1((n * st) / 1000), Math.round(kg), `${(p.utilization * 100).toFixed(0)}%`]);
+    }
+    if (p.tooLong.length) rows.push([p.profile, p.material, 'ארוך מהמלאי', p.tooLong.length, f1(p.tooLong.reduce((a, t) => a + t.length, 0) / 1000), Math.round((p.tooLong.reduce((a, t) => a + t.length, 0) * w) / 1000), 'הזמנה מיוחדת']);
+  }
+  // פחים: לפי עובי
+  const plates = new Map<string, { kg: number; m2: number }>();
+  // עובי אמיתי = המידה הקטנה מבין רוחב, "עובי" בשם וחלק האורך (פלטות קצה מוגדרות לפעמים לאורך העובי)
+  for (const r of bom.parts) {
+    const m = /^PL(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/i.exec(r.profile);
+    if (!m) continue;
+    const t = Math.round(Math.min(Number(m[1]), Number(m[2]), r.length) * 10) / 10, k = `${t}|${r.material}`;
+    const e = plates.get(k) ?? { kg: 0, m2: 0 };
+    e.kg += r.weight; e.m2 += r.weight / (7.85 * t); plates.set(k, e);
+  }
+  for (const [k, e] of [...plates.entries()].sort((a, b) => Number(a[0].split('|')[0]) - Number(b[0].split('|')[0]))) {
+    const [t, mat] = k.split('|'); totKg += e.kg;
+    rows.push([`פח ${t} מ"מ`, mat, 'גיליון', '', `${f1(e.m2)} מ"ר`, Math.round(e.kg), 'נטו — להוסיף פחת']);
+  }
+  rows.push(['סה"כ', '', '', '', '', Math.round(totKg), '']);
+  return { name: 'הזמנת חומר', headers: ['חתך', 'חומר', 'אורך מוט (מ\')', 'כמות מוטות', 'אורך כולל (מ\')', 'משקל רכש (ק"ג)', 'ניצולת / הערה'], rows };
 }
 
 const csvCell = (v: string | number) => { const s = String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
