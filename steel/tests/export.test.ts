@@ -37,7 +37,7 @@ rows=list(ws.iter_rows(values_only=True))
 print(json.dumps({'sheets':wb.sheetnames,'rtl':ws.sheet_view.rightToLeft,'head':rows[0],'tw':sum(r[4] for r in rows[1:]),'parts':wb['חלקים'].max_row}))
 " "${f}"`).toString();
     const r = JSON.parse(out.trim());
-    expect(r.sheets).toEqual(['חתכים', 'חלקים', 'מכלולים', 'ברגים', 'ריתוכים', 'חיתוך']);
+    expect(r.sheets).toEqual(['חתכים', 'חלקים', 'מכלולים', 'ברגים', 'ריתוכים', 'חיתוך', 'הזמנת חומר']);
     expect(r.rtl).toBe(true);
     expect(r.head[0]).toBe('חתך');
     expect(r.tw).toBeCloseTo(bom.totalWeight, -1);
