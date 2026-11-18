@@ -13,7 +13,7 @@ import { lineBaseAt } from '../model/section';
 
 export function defaultCladding(): CladdingParams {
   return {
-    roof: { enabled: true, panel: 'פנל מבודד 50 מ"מ', cover: 1000, eaveExt: 100 },
+    roof: { enabled: true, panel: 'פנל מבודד 50 מ"מ', cover: 1000, eaveExt: 100, kind: 'panel50', thickness: 50 },
     walls: { enabled: true, sides: { L: true, R: true, F: true, B: true }, panel: 'פנל קיר 40 מ"מ', cover: 1000, bottom: 0 },
     girts: { enabled: true, profile: 'C150x50x20x2.5', first: 300, spacing: 1500 },
     posts: { enabled: true, profile: 'IPE180', maxSpacing: 6000 },
@@ -207,6 +207,13 @@ export interface CladdingTakeoff {
   surfaces: { kind: 'roof' | 'wall' | 'gutter' | 'pipe'; pts: Vec3[]; ref?: string }[];
 }
 
+/** סוגי חיפוי גג מוצעים: פנל מבודד 50 / 100 מ"מ, או איסכורית (פח גלי) */
+export const ROOF_KINDS: Record<'panel50' | 'panel100' | 'sheet', { panel: string; cover: number; thickness: number; label: string }> = {
+  panel50: { panel: 'פנל מבודד 50 מ"מ', cover: 1000, thickness: 50, label: 'פנל גג מבודד 5 ס"מ' },
+  panel100: { panel: 'פנל מבודד 100 מ"מ', cover: 1000, thickness: 100, label: 'פנל גג מבודד 10 ס"מ' },
+  sheet: { panel: 'איסכורית — פח גלי 0.5 מ"מ', cover: 1060, thickness: 18, label: 'איסכורית (פח גלי)' },
+};
+
 export function claddingTakeoff(p0: Project, d: DerivedModel): CladdingTakeoff | null {
   // תוכנית לא מלבנית: כמויות לפי המודל המקומי, המשטחים ממופים לעולם (אורכי קירות משופעים — בקירוב)
   if (d.plan?.local) {
@@ -242,7 +249,7 @@ export function claddingTakeoff(p0: Project, d: DerivedModel): CladdingTakeoff |
       res.roofSheets.push({ where: `מישור ${pl.label}`, panel: cl.roof.panel, count: n, length: len });
       counts.set(key(high), (counts.get(key(high)) ?? 0));
       const nn = norm(v3(-(pl.b.z - pl.a.z), 0, pl.b.x - pl.a.x)); const up = nn.z < 0 ? scale(nn, -1) : nn;
-      const off = scale(up, lift);
+      const off = scale(up, lift + (cl.roof.thickness ?? ROOF_KINDS[cl.roof.kind ?? 'panel50']?.thickness ?? 0));
       const A = add(v3(pl.a.x, y0, pl.a.z), off), B = add(v3(pl.b.x, y0, pl.b.z), off);
       res.surfaces.push({ kind: 'roof', pts: [A, B, add(B, v3(0, Wy, 0)), add(A, v3(0, Wy, 0))] });
       // מזחלה בקצה נמוך חופשי; מזחלה פנימית בשקע בין שני מישורים

@@ -400,7 +400,11 @@ export interface GutterSpec {
   fall?: Mm;
 }
 export interface CladdingParams {
-  roof: { enabled: boolean; panel: string; cover: Mm; eaveExt: Mm };
+  roof: { enabled: boolean; panel: string; cover: Mm; eaveExt: Mm;
+    /** סוג החיפוי: panel50 / panel100 = פנל מבודד (סנדוויץ') 50/100 מ"מ, sheet = איסכורית (פח גלי) */
+    kind?: 'panel50' | 'panel100' | 'sheet';
+    /** עובי החיפוי (לתצוגה ולפרטים) */
+    thickness?: Mm };
   walls: { enabled: boolean; sides: Record<WallId, boolean>; panel: string; cover: Mm; bottom: Mm;
     /** לכל קיר: מפתחים מחופים (L/R: בין מסגרות; F/B: בין שורות העמודים), גובה תחתון/עליון מעל ±0.00 (ריק = ברירת מחדל / עד הגג) */
     per?: Partial<Record<WallId, { bays?: boolean[]; bottom?: Mm; top?: Mm | null }>> };

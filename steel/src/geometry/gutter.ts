@@ -36,6 +36,8 @@ export interface GutterRun {
   downpipes: { y: number; x: number; zTop: number; zBottom: number }[];
   /** מזחלת קצה: מזהה המישור ושיפוע הגג כלפי חוץ */
   planeId?: string; dzdxOut?: number;
+  /** שיפוע תחתית המזחלה כלפי חוץ (dz/dx) — כשהתושבת בשיפוע הגג */
+  bottomSlope?: number;
 }
 
 const Y = v3(0, 1, 0), Z = v3(0, 0, 1);
@@ -61,6 +63,31 @@ export function gutterRuns(b: BuildingParams, sec: NSection, members: Member[]):
   for (const pl of sec.planes) for (const q of [pl.a, pl.b]) ends.set(key(q), (ends.get(key(q)) ?? 0) + 1);
   const lines = [...sec.lines].sort((a, c) => a.x - c.x);
   const runs: GutterRun[] = [];
+  /**
+   * מזחלה (קצה תחתון / פנימית / שקע) מחולקת למקטעים לפי המפתחים שנבחרו; ירידות לפי בחירה או אוטומטי בכל מקטע.
+   * key — מזהה המזחלה לבחירת המשתמש (מזהה מישור, או V<x> לשקע).
+   */
+  const pushSegs = (key: string, label: string, mk: (seg: Set<string>) => Omit<GutterRun, 'id' | 'label' | 'y0' | 'y1' | 'downpipes' | 'planeId'>,
+    dp: (f: typeof frames[number], sy0: number, sy1: number) => GutterRun['downpipes'][number], atLeastTwo: boolean) => {
+    const pr = cl.gutter.perRun?.[key];
+    const nb = frames.length - 1;
+    const on = Array.from({ length: nb }, (_, i) => pr?.bays?.[i] ?? true);
+    const segs: [number, number][] = [];
+    for (let i = 0; i < nb; i++) if (on[i]) { if (segs.length && segs[segs.length - 1]![1] === i) segs[segs.length - 1]![1] = i + 1; else segs.push([i, i + 1]); }
+    segs.forEach(([a, c], k) => {
+      const sy0 = a === 0 ? y0 : frames[a]!.y, sy1 = c === nb ? y1 : frames[c]!.y;
+      const fIn = frames.slice(a, c + 1);
+      let dpF: typeof frames;
+      if (pr?.downpipes?.length) dpF = pr.downpipes.filter((i) => i >= a && i <= c).map((i) => frames[i]!).filter(Boolean);
+      else {
+        const nDp = Math.max(atLeastTwo ? 2 : 1, Math.ceil((sy1 - sy0) / cl.gutter.downpipeSpacing));
+        dpF = Array.from({ length: nDp + (atLeastTwo ? 0 : 1) }, (_, i) => fIn[Math.round((i * (fIn.length - 1)) / Math.max(1, nDp - (atLeastTwo ? 1 : 0)))]!).filter((f, i, arr) => !!f && arr.indexOf(f) === i);
+        if (nDp === 1 && !atLeastTwo) dpF = [fIn[0]!];
+      }
+      runs.push({ ...mk(new Set(fIn.map((f) => f.id))), id: k === 0 ? `G.${key}` : `G.${key}.${k + 1}`, label: `${label}${segs.length > 1 ? ` (מפתחים ${a + 1}–${c})` : ''}`, y0: sy0, y1: sy1, planeId: key,
+        downpipes: dpF.map((f) => dp(f, sy0, sy1)) });
+    });
+  };
   const girtH = cl.walls.enabled && cl.girts.enabled ? tryProfile(cl.girts.profile)?.props.h ?? 150 : 0;
   for (const pl of sec.planes) {
     const lowIsA = pl.a.z <= pl.b.z, low = lowIsA ? pl.a : pl.b, high = lowIsA ? pl.b : pl.a;
@@ -72,8 +99,8 @@ export function gutterRuns(b: BuildingParams, sec: NSection, members: Member[]):
     const atInner = lines.some((l) => Math.abs(l.x - low.x) < colH0 / 2 + 400 && lines.some((o) => dir * (o.x - l.x) > 1));
     if (atInner) {
       const zIT = low.z + pu - 10;
-      runs.push({ id: `G.${pl.id}`, label: `מזחלה פנימית — קצה ${pl.label} (צמודה לעמוד)`, kind: 'valley', x: low.x - (dir > 0 ? s.bottom : 0), dir: 1, zBottom: zIT - s.inner, zInnerTop: zIT, y0, y1, ends: [],
-        downpipes: frames.filter((_, i) => i === 0 || i === frames.length - 1).map((f, i) => ({ y: f.y + (i === 0 ? 350 : -350), x: low.x - dir * s.bottom / 2, zTop: zIT - s.inner, zBottom: b.baseElevation + 150 })) });
+      pushSegs(pl.id, `מזחלה פנימית — קצה ${pl.label} (צמודה לעמוד)`, () => ({ kind: 'valley', x: low.x - (dir > 0 ? s.bottom : 0), dir: 1, zBottom: zIT - s.inner, zInnerTop: zIT, ends: [] }),
+        (f, sy0, sy1) => ({ y: f.y + (f.y <= sy0 + 1 ? 350 : f.y >= sy1 - 1 ? -350 : 350), x: low.x - dir * s.bottom / 2, zTop: zIT - s.inner, zBottom: b.baseElevation + 150 }), true);
       continue;
     }
     const which: 'start' | 'end' = (() => { const r0 = byId.get(pl.rafterId(frames[0]!.id)); if (!r0) return 'end'; return Math.abs(r0.start.x - low.x) < Math.abs(r0.end.x - low.x) ? 'start' : 'end'; })();
@@ -102,28 +129,9 @@ export function gutterRuns(b: BuildingParams, sec: NSection, members: Member[]):
     const x = face + dir * (5 + ((s.support ?? 'web') === 'plate' ? s.plateT ?? 8 : 0));
     const zBase = b.lineBase?.[edgeLine?.id ?? ''] ?? b.baseElevation;
     const dzdxOut = ((low.z - high.z) / (low.x - high.x)) * dir; // שיפוע הגג כלפי חוץ (שלילי — יורד)
-    // מפתחים עם מזחלה (בחירת משתמש) — מקטעים רציפים; ירידות לפי בחירה או אוטומטי בכל מקטע
-    const pr = cl.gutter.perRun?.[pl.id];
-    const nb = frames.length - 1;
-    const on = Array.from({ length: nb }, (_, i) => pr?.bays?.[i] ?? true);
-    const segs: [number, number][] = [];
-    for (let i = 0; i < nb; i++) if (on[i]) { if (segs.length && segs[segs.length - 1]![1] === i) segs[segs.length - 1]![1] = i + 1; else segs.push([i, i + 1]); }
-    segs.forEach(([a, c], k) => {
-      const sy0 = a === 0 ? y0 : frames[a]!.y, sy1 = c === nb ? y1 : frames[c]!.y;
-      const fIn = frames.slice(a, c + 1);
-      let dpF: typeof frames;
-      if (pr?.downpipes?.length) dpF = pr.downpipes.filter((i) => i >= a && i <= c).map((i) => frames[i]!).filter(Boolean);
-      else {
-        const nDp = Math.max(1, Math.ceil((sy1 - sy0) / cl.gutter.downpipeSpacing));
-        dpF = nDp === 1 ? [fIn[0]!] : Array.from({ length: nDp + 1 }, (_, i) => fIn[Math.round((i * (fIn.length - 1)) / nDp)]!).filter((f, i, arr) => arr.indexOf(f) === i);
-      }
-      const ids = new Set(fIn.map((f) => f.id));
-      runs.push({
-        id: k === 0 ? `G.${pl.id}` : `G.${pl.id}.${k + 1}`, label: `מזחלה — קצה תחתון ${pl.label}${segs.length > 1 ? ` (מפתחים ${a + 1}–${c})` : ''}`, kind: 'eave', x, dir, zBottom, zInnerTop, y0: sy0, y1: sy1,
-        ends: es.filter((e) => ids.has(e.frameId)), planeId: pl.id, dzdxOut,
-        downpipes: dpF.map((f) => ({ y: f.y + (f.y <= sy0 + 1 || f === frames[0] ? 350 : f.y >= sy1 - 1 ? -350 : 350), x: x + dir * (s.bottom / 2), zTop: zBottom, zBottom: zBase + 150 })),
-      });
-    });
+    const slope = (s.bracketSlope ?? 'horizontal') === 'roof' ? dzdxOut : 0;
+    pushSegs(pl.id, `מזחלה — קצה תחתון ${pl.label}`, (seg) => ({ kind: 'eave', x, dir, zBottom, zInnerTop, ends: es.filter((e) => seg.has(e.frameId)), dzdxOut, bottomSlope: slope }),
+      (f, sy0, sy1) => ({ y: f.y + (f.y <= sy0 + 1 || f === frames[0] ? 350 : f.y >= sy1 - 1 ? -350 : 350), x: x + dir * (s.bottom / 2), zTop: zBottom + slope * (s.bottom / 2), zBottom: zBase + 150 }), false);
   }
   // שקעים: נקודה נמוכה משותפת לשני מישורים שעולים ממנה
   const done = new Set<string>();
@@ -134,10 +142,8 @@ export function gutterRuns(b: BuildingParams, sec: NSection, members: Member[]):
     if (!others.every((o) => Math.max(o.a.z, o.b.z) > q.z + 1)) continue;
     done.add(k);
     const zInnerTop = q.z + pu - 10, zBottom = zInnerTop - s.inner;
-    const nDp = Math.max(2, Math.ceil((y1 - y0) / cl.gutter.downpipeSpacing));
-    const picks = Array.from({ length: nDp }, (_, i) => frames[Math.round((i * (frames.length - 1)) / (nDp - 1))]!).filter((f, i, a) => a.indexOf(f) === i);
-    runs.push({ id: `G.V${Math.round(q.x)}`, label: `מזחלה פנימית (שקע) x=${(q.x / 1000).toFixed(2)}`, kind: 'valley', x: q.x - s.bottom / 2, dir: 1, zBottom, zInnerTop, y0, y1, ends: [],
-      downpipes: picks.map((f) => ({ y: f.y + (f === frames[0] ? 350 : -350), x: q.x, zTop: zBottom, zBottom: b.baseElevation + 150 })) });
+    pushSegs(`V${Math.round(q.x)}`, `מזחלה פנימית (שקע) x=${(q.x / 1000).toFixed(2)}`, () => ({ kind: 'valley', x: q.x - s.bottom / 2, dir: 1, zBottom, zInnerTop, ends: [] }),
+      (f, sy0, sy1) => ({ y: f.y + (f.y <= sy0 + 1 ? 350 : f.y >= sy1 - 1 ? -350 : 350), x: q.x, zTop: zBottom, zBottom: b.baseElevation + 150 }), true);
   }
   return runs;
 }
@@ -266,8 +272,9 @@ export function gutterSurfaces(b: BuildingParams, runs: GutterRun[]): { kind: 'g
   const out: { kind: 'gutter' | 'pipe'; pts: Vec3[]; ref?: string }[] = [];
   for (const r of runs) {
     const d = r.dir;
+    const zo = r.zBottom + (r.bottomSlope ?? 0) * s.bottom; // תחתית בדופן החיצונית (תחתית משופעת כשהתושבת בשיפוע)
     const prof = r.kind === 'eave'
-      ? [[r.x - d * s.lip, r.zInnerTop], [r.x, r.zInnerTop], [r.x, r.zBottom], [r.x + d * s.bottom, r.zBottom], [r.x + d * s.bottom, r.zBottom + s.outer], [r.x + d * (s.bottom - s.lip), r.zBottom + s.outer]]
+      ? [[r.x - d * s.lip, r.zInnerTop], [r.x, r.zInnerTop], [r.x, r.zBottom], [r.x + d * s.bottom, zo], [r.x + d * s.bottom, zo + s.outer], [r.x + d * (s.bottom - s.lip), zo + s.outer]]
       : [[r.x, r.zInnerTop], [r.x, r.zBottom], [r.x + s.bottom, r.zBottom], [r.x + s.bottom, r.zInnerTop]];
     for (let i = 0; i < prof.length - 1; i++) {
       const [ax, az] = prof[i]!, [bx, bz] = prof[i + 1]!;

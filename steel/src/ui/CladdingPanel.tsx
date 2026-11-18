@@ -5,7 +5,7 @@ import { Schematic, type SDim } from './Schematic';
 import { useState } from 'react';
 import { useMemo } from 'react';
 import { setBuilding } from '../commands/commands';
-import { claddingTakeoff, defaultCladding, WALL_HE } from '../geometry/cladding';
+import { claddingTakeoff, defaultCladding, ROOF_KINDS, WALL_HE } from '../geometry/cladding';
 import type { CladdingParams, OpeningDef, WallId } from '../model/types';
 import { store, useStore } from '../store';
 import { Adv, LenField, NumField, ProfilePicker, TextField } from './fields';
@@ -43,7 +43,13 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
       {show('roof') && <>
         <div className="panel-title">חיפוי גג ומזחלות</div>
         <label className="row"><input type="checkbox" checked={cl.roof.enabled} data-testid="clad-roof" onChange={(e) => set({ roof: { ...cl.roof, enabled: e.target.checked } })} />חיפוי גג</label>
-        <div className="field"><label>סוג פנל</label><TextField testId="clad-roof-panel" value={cl.roof.panel} onCommit={(v) => set({ roof: { ...cl.roof, panel: v } })} /></div>
+        <div className="field"><label>סוג חיפוי גג</label>
+          <select className="inp" data-testid="clad-roof-kind" value={cl.roof.kind ?? ''} onChange={(e) => { const k = e.target.value as keyof typeof ROOF_KINDS; const v = ROOF_KINDS[k]; if (v) set({ roof: { ...cl.roof, kind: k, panel: v.panel, cover: v.cover, thickness: v.thickness } }); }}>
+            {!cl.roof.kind && <option value="">מותאם</option>}
+            {(Object.keys(ROOF_KINDS) as (keyof typeof ROOF_KINDS)[]).map((k) => <option key={k} value={k}>{ROOF_KINDS[k].label}</option>)}
+          </select></div>
+        <div className="field"><label>תיאור פנל</label><TextField testId="clad-roof-panel" value={cl.roof.panel} onCommit={(v) => set({ roof: { ...cl.roof, panel: v } })} /></div>
+        <div className="field"><label>עובי</label><LenField testId="clad-roof-thk" mm={cl.roof.thickness ?? 0} unit="mm" onCommit={(v) => set({ roof: { ...cl.roof, thickness: Math.max(0, v) } })} /></div>
         <div className="field"><label>רוחב כיסוי</label><LenField mm={cl.roof.cover} unit="mm" onCommit={(v) => set({ roof: { ...cl.roof, cover: v } })} /></div>
         <div className="field"><label>בליטה לתוך המזחלה</label><LenField mm={cl.roof.eaveExt} unit="mm" onCommit={(v) => set({ roof: { ...cl.roof, eaveExt: v } })} /></div>
         <label className="row"><input type="checkbox" checked={cl.gutter.enabled} data-testid="clad-gutter" onChange={(e) => set({ gutter: { ...cl.gutter, enabled: e.target.checked } })} />מזחלות ומרזבים</label>
@@ -159,7 +165,7 @@ function GutterBays({ only }: { only?: string } = {}) {
   const fr = [...b.frames].sort((a, c) => a.y - c.y);
   const nb = fr.length - 1;
   const local = d.plan?.local.derived ?? d;
-  const runs = d.section ? gutterRuns({ ...b, cladding: { ...cl, gutter: { ...cl.gutter, perRun: undefined } } }, d.section, local.members).filter((r) => r.kind === 'eave' && r.planeId && (!only || r.planeId === only)) : [];
+  const runs = d.section ? gutterRuns({ ...b, cladding: { ...cl, gutter: { ...cl.gutter, perRun: undefined } } }, d.section, local.members).filter((r, i, arr) => r.planeId && (!only || r.planeId === only) && arr.findIndex((q) => q.planeId === r.planeId) === i) : [];
   const cur = gutterRuns(b, d.section!, local.members);
   if (!runs.length) return null;
   const setRun = (pid: string, patch: { bays?: boolean[]; downpipes?: number[] | undefined }) => {
@@ -240,10 +246,10 @@ export function GutterSchematic() {
       <rect x={x(-lap - 120)} y={y(inner - 20)} width={(lap + 120) * k} height={Math.max(8, 180 * k)} className="sm-main" fill="none" strokeWidth={1} />
       <rect x={x(-70)} y={y(inner + 10) - 0} width={50 * k} height={20 * k + 4} className="sm-main" fill="none" strokeWidth={1} />
       {/* המזחלה */}
-      <polyline points={[[x(-gs.lip), y(inner)], [x(0), y(inner)], [x(0), y(0)], [x(gs.bottom), y(0)], [x(gs.bottom), y(gs.outer)], [x(gs.bottom - gs.lip), y(gs.outer)]].map((q) => q.join(',')).join(' ')} className="sm-hi" fill="none" strokeWidth={2} />
+      <polyline points={[[x(-gs.lip), y(inner)], [x(0), y(inner)], [x(0), y(0)], [x(gs.bottom), y(-gs.bottom * sl)], [x(gs.bottom), y(gs.outer - gs.bottom * sl)], [x(gs.bottom - gs.lip), y(gs.outer - gs.bottom * sl)]].map((q) => q.join(',')).join(' ')} className="sm-hi" fill="none" strokeWidth={2} />
       {/* זוויתן התמיכה */}
       {sup === 'web'
-        ? <polygon points={[[x(-lap), y(lap * sl)], [x(gs.bottom + 20), y(-(gs.bottom + 20) * sl)], [x(gs.bottom + 20), y(-(gs.bottom + 20) * sl - lh)], [x(-lap), y(lap * sl - lh)]].map((q) => q.join(',')).join(' ')} className="sm-main" fill="rgba(80,100,90,.15)" strokeWidth={1} />
+        ? <polygon points={[[x(-lap), y(lap * sl)], [x(gs.bottom + 20), y(-(gs.bottom + 20) * sl)], [x(gs.bottom + 20), y(-(gs.bottom + 20) * sl) + lh * k], [x(-lap), y(lap * sl) + lh * k]].map((q) => q.join(',')).join(' ')} className="sm-main" fill="rgba(80,100,90,.15)" strokeWidth={1} />
         : <polygon points={[[x(0), y(0)], [x(gs.bottom + 20), y(0)], [x(gs.bottom + 20), y(-5)], [x(5), y(-5)], [x(5), y(-lh)], [x(0), y(-lh)]].map((q) => q.join(',')).join(' ')} className="sm-main" fill="rgba(80,100,90,.15)" strokeWidth={1} />}
       <text x={x(gs.bottom / 2)} y={y(gs.outer) - 4} className="sm-lbl-s" textAnchor="middle">פריסה {gutterDev(gs)} · t={gs.t}</text>
       <text x={x(-lap - 60)} y={y(inner - 20) - 3} className="sm-lbl-s" textAnchor="middle">קורה + פטה</text>

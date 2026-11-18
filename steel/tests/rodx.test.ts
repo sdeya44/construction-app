@@ -101,3 +101,35 @@ describe('מזחלה — זוויתן על הווב, מפתחים וירידות
   });
 });
 import { claddingTakeoff } from '../src/geometry/cladding';
+
+import { gutterRuns, gutterSurfaces } from '../src/geometry/gutter';
+import { SECTION_TEMPLATES as TPL2 } from '../src/model/section';
+describe('מזחלות בגג מדורג ושן מסור — כל המזחלות ניתנות לבחירה; תחתית משופעת', () => {
+  for (const id of ['sawtooth', 'stepped', 'twin-gable', 'butterfly']) {
+    it(id, () => {
+      const b = defaultBuilding();
+      b.section = TPL2.find((t) => t.id === id)!.make();
+      b.cladding = defaultCladding();
+      const p = newProject(id, b);
+      const d = generate(p);
+      const runs = gutterRuns(b, d.section!, d.members);
+      expect(runs.length).toBeGreaterThan(0);
+      expect(runs.every((r) => !!r.planeId)).toBe(true);
+      // ביטול מפתח 2 בכל המזחלות ⇒ כל מזחלה מתפצלת לשני מקטעים
+      b.cladding.gutter.perRun = Object.fromEntries(runs.map((r) => [r.planeId!, { bays: [true, false, true, true, true] }]));
+      const runs2 = gutterRuns(b, d.section!, generate(newProject(id, b)).members);
+      expect(runs2.length).toBe(2 * new Set(runs.map((r) => r.planeId)).size);
+    });
+  }
+  it('תושבת בשיפוע הגג ⇒ תחתית המזחלה בשיפוע', () => {
+    const b = defaultBuilding(); b.cladding = defaultCladding();
+    b.cladding.gutter.spec = { bracketSlope: 'roof' };
+    const d = generate(newProject('s', b));
+    expect(d.issues.filter((i) => i.severity === 'error').map((i) => i.message)).toEqual([]);
+    const r = gutterRuns(b, d.section!, d.members).find((x) => x.kind === 'eave')!;
+    expect(r.bottomSlope).toBeLessThan(0);
+    const sf = gutterSurfaces(b, [r]).filter((x) => x.kind === 'gutter');
+    const zs = sf.flatMap((x) => x.pts.map((q) => Math.round(q.z)));
+    expect(Math.min(...zs)).toBeLessThan(r.zBottom - 5);
+  });
+});

@@ -551,7 +551,8 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       v.text({ x: -500, y: tos - hR / 2 }, raf?.profile ?? '', 2.5, 'center', 'TEXT');
       v.text({ x: -300, y: tos + pu + 60 }, b.purlins.left.profile, 2.2, 'center', 'TEXT');
       // מזחלה
-      const g = [{ x: gx0, y: r.zInnerTop }, { x: gx0, y: r.zBottom }, { x: gx1, y: r.zBottom }, { x: gx1, y: r.zBottom + gs.outer }, { x: gx1 - gs.lip, y: r.zBottom + gs.outer }];
+      const zo = r.zBottom + (r.bottomSlope ?? 0) * gs.bottom; // תחתית משופעת (תושבת בשיפוע הגג)
+      const g = [{ x: gx0, y: r.zInnerTop }, { x: gx0, y: r.zBottom }, { x: gx1, y: zo }, { x: gx1, y: zo + gs.outer }, { x: gx1 - gs.lip, y: zo + gs.outer }];
       v.poly(g, false, 'CUT');
       v.line({ x: gx0, y: r.zInnerTop }, { x: gx0 - gs.lip, y: r.zInnerTop }, 'CUT');
       // תומך L50/50/5
