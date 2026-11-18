@@ -817,3 +817,10 @@ details.adv .adv-body { padding-bottom: 6px; }
 .psec[open] > summary::before { transform: rotate(-90deg); }
 .psec-b { padding: 0 2px 6px; }
 .psec .hub-set { margin-top: 6px; }
+
+/* רשימת אלמנטים שנמחקו (שחזור אחד-אחד) */
+.deleted-pop { position: absolute; bottom: 86px; left: 50%; transform: translateX(-50%); z-index: 30; width: min(560px, calc(100% - 32px));
+  background: var(--panel, #fff); border: 1px solid var(--line, #d9ded9); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 10px 12px; }
+.deleted-list { max-height: 300px; overflow: auto; margin-top: 6px; }
+.deleted-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line, #eceeec); font-size: 13px; }
+.deleted-row .dl-lbl { font-weight: 600; }

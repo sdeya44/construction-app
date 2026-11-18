@@ -20,6 +20,7 @@ import { NavContent, NavCrumb, SideNav, NAV_INDEX_LABEL, navGroupOf, type NavKey
 import { EaveCheckDialog } from './EaveCheckDialog';
 import { DetailStudio } from './DetailStudio';
 import { LayersMenu } from './LayersMenu';
+import { DeletedPanel } from './DeletedPanel';
 
 type DialogKind = null | 'new' | 'open' | 'move' | 'copy' | 'rotate' | 'mirror' | 'catalog';
 type SideTab = 'structure' | 'roof' | 'brace' | 'tree' | 'conns' | 'issues';
@@ -38,6 +39,7 @@ export function App() {
   const host = useRef<HTMLDivElement>(null);
   const vp = useRef<Viewport | null>(null);
   const [dialog, setDialog] = useState<DialogKind>(null);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [nav, setNavRaw] = useState<NavKey>('structure');
   const tab = navGroup(nav);
   // מסך רחב: העץ מימין משמש לניווט בלבד; פאנל אחד משמאל מציג או את הגדרות העץ או את מאפייני הבחירה
@@ -356,8 +358,9 @@ export function App() {
             <TB icon="rotate" title="סיבוב" disabled={!sel.length} onClick={() => setDialog('rotate')} testId="tool-rotate" desk />
             <TB icon="mirror" title="שיקוף" disabled={!sel.length} onClick={() => setDialog('mirror')} testId="tool-mirror" desk />
             <TB icon="trash" title="מחיקה (Delete)" disabled={!sel.length} onClick={() => store.exec(deleteMembers(sel))} testId="tool-delete" desk />
-            {s.project.deleted.length > 0 && <TB icon="history" label={`שחזור (${s.project.deleted.length})`} onClick={() => store.exec(restoreDeleted())} desk />}
+            {s.project.deleted.length > 0 && <TB icon="history" label={`שחזור (${s.project.deleted.length})`} title="רשימת האלמנטים שנמחקו — החזרה אחד-אחד או הכל" on={showDeleted} onClick={() => setShowDeleted(!showDeleted)} testId="tool-restore" />}
           </div>
+          {showDeleted && s.project.deleted.length > 0 && <DeletedPanel onClose={() => setShowDeleted(false)} />}
 
           {s.colorMode === 'sizing' && s.tool !== 'measure' && <SizingPanel />}
           {s.tool === 'measure' && (

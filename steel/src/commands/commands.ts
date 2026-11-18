@@ -278,6 +278,17 @@ export function deleteMembers(ids: string[]): Command {
   };
 }
 
+/** שחזור אלמנטים מסוימים — כולל החלקים שנוצרו איתם (מזהים שמתחילים במזהה או ב-C.מזהה) */
+export function restoreMembers(ids: string[]): Command {
+  return {
+    label: 'שחזור אלמנט',
+    run: (p) => {
+      const hit = (d: string) => ids.some((id) => d === id || d.startsWith(`${id}.`) || d.startsWith(`C.${id}.`));
+      return { ...clone(p), deleted: p.deleted.filter((d) => !hit(d)) };
+    },
+  };
+}
+
 export function restoreDeleted(): Command {
   return { label: 'שחזור אלמנטים שנמחקו', run: (p) => ({ ...clone(p), deleted: [] }) };
 }
