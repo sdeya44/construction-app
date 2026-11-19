@@ -219,8 +219,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
             if ((kUser && kUser > 1) || k > 1 || (br.roof.split === 'purlins' && k > 1)) {
               if (!res.issues.some((i) => i.code === 'X_STRUT' && i.elementId === `${bay}|${sl.side}`)) res.issues.push({ code: 'X_STRUT', severity: 'warning', elementId: `${bay}|${sl.side}`, message: `קטע ${sl.side} מפתח ${bay + 1}: יש תמוכות בין הקורות — החלוקה ל-${k} פנלי X בוטלה כדי שלא תהיה התנגשות; הפנלים נקבעים לפי התמוכות` });
             }
-            const half = (w: string) => strutPlateHalf(rsP, w) + bc.gussetEdge + 20;
-            const B = [{ w: 0, h: 0 }, ...sCuts.map((c) => ({ w: c.w, h: half(c.profile) })), { w: L, h: 0 }];
+            const B = [{ w: 0, h: 0 }, ...sCuts.map((c) => ({ w: c.w, h: strutPlateHalf(rsP, c.profile, c.detail) + bc.gussetEdge + 20 })), { w: L, h: 0 }];
             panels = [];
             for (let j = 0; j < B.length - 1; j++) {
               const a0 = B[j].w + B[j].h, a1 = B[j + 1].w - B[j + 1].h;

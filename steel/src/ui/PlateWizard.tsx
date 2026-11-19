@@ -3,6 +3,7 @@ import { setBuilding, setConnectionDefault, setKneeBraces } from '../commands/co
 import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import { defaultKneeBraces } from '../geometry/knee';
+import { RafterStrutConnFields } from './StructurePanel';
 import { defaultPortal } from '../geometry/portal';
 import { defaultSideConn } from '../model/defaults';
 import type { Connection, Member, PlateConnParams, Project } from '../model/types';
@@ -170,6 +171,7 @@ function OtherPlateFields({ c }: { c: Connection }) {
       </div>
     );
   }
+  if (/^C\.RS\d+\./.test(c.id)) return <div className="pw-fields" data-testid="pw-rs"><RafterStrutConnFields /></div>;
   if (c.id.startsWith('C.BB') || c.id.startsWith('C.PB')) {
     const pt = b.bracing.walls.portal ?? defaultPortal();
     const set = (patch: Partial<typeof pt>) => store.exec(setBuilding({ bracing: { ...b.bracing, walls: { ...b.bracing.walls, portal: { ...pt, ...patch } } } }));

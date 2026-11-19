@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { addFrame, removeFrame, respaceFrames, setBuilding, setFrameY, setMeta, setSettings } from '../commands/commands';
-import type { BuildingParams, RafterStrutRow, LockTrussParams, PortalBraceParams, RhsTrussParams, RidgeReinfParams } from '../model/types';
+import type { BuildingParams, RafterStrutDetail, RafterStrutRow, LockTrussParams, PortalBraceParams, RhsTrussParams, RidgeReinfParams } from '../model/types';
 import { defaultPortal } from '../geometry/portal';
 import { defaultLockTruss } from '../geometry/lockTruss';
 import { defaultRhsTruss } from '../geometry/hbrace';
 import { defaultRidgeReinf } from '../model/defaults';
 import { defaultRodEnd, resolveBays, wallBays } from '../geometry/bracing';
-import { defaultRafterStruts } from '../geometry/rafterStruts';
+import { defaultRafterStruts, STRUT_DETAIL_HE } from '../geometry/rafterStruts';
 import { uid } from '../core/ids';
 import { catalogNames } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
@@ -500,6 +500,29 @@ export function WallXShape() {
   return <WallLines nb={nb} />;
 }
 
+/** פרט החיבור של התמוכות בין הקורות (משותף לפאנל ולעורך החיבור) */
+export function RafterStrutConnFields() {
+  const br = useStore((s) => s.project.building.bracing);
+  const rs = br.rafterStruts ?? defaultRafterStruts();
+  const save = (patch: Partial<typeof rs>) => store.exec(setBuilding({ bracing: { ...br, rafterStruts: { ...rs, ...patch } } }));
+  const det = rs.detail ?? 'endplate';
+  return <>
+    <div className="field"><label>פרט חיבור לווב הקורה</label>
+      <select className="inp" data-testid="rs-detail" value={det} onChange={(e) => save({ detail: e.target.value as RafterStrutDetail })}>
+        {(Object.keys(STRUT_DETAIL_HE) as RafterStrutDetail[]).map((k) => <option key={k} value={k}>{STRUT_DETAIL_HE[k]}</option>)}
+      </select></div>
+    {det !== 'weld' && <>
+      <div className="field"><label>{det === 'fin' ? 'עובי פח ולשונית' : 'עובי פלטת קצה'}</label><NumField testId="rs-t" value={rs.plateT} suffix='מ"מ' onCommit={(v) => save({ plateT: Math.max(6, v) })} /></div>
+      <div className="field"><label>ברגים בכל קצה</label>
+        <select className="inp" data-testid="rs-nbolts" value={rs.bolts === 4 ? 4 : 2} onChange={(e) => save({ bolts: Number(e.target.value) })}>
+          <option value={2}>2</option><option value={4}>4</option>
+        </select></div>
+      <div className="field"><label>קוטר בורג</label><BoltSelect testId="rs-bolt" d={rs.bolt.d} onChange={(x) => save({ bolt: { ...rs.bolt, d: x } })} /></div>
+    </>}
+    {det === 'weld' && <div className="hint">ה-RHS נחתך לפני הווב ומרותך בשטח בריתוך היקפי — ללא פחים וברגים.</div>}
+  </>;
+}
+
 /**
  * תמוכות בין הקורות (1.40): שורות RHS לאורך המבנה בין קורות גג סמוכות, מחוברות לווב הקורות.
  * מיקום = מרחק אופקי מציר לכיוון ציר אחר; מפתחים: הכל / מפתחי הקושרות / בחירה. בקושרות גג — גבולות הפנלים.
@@ -545,17 +568,22 @@ export function RafterStrutsEditor() {
             {mode === 'pick' && <div className="row" style={{ flexWrap: 'wrap', gap: 4 }}>
               {Array.from({ length: nb }, (_, k) => <button key={k} className={`tbtn${sel.has(k) ? ' on' : ''}`} data-testid={`rs-bay-${i}-${k}`} onClick={() => { const n2 = new Set(sel); if (n2.has(k)) n2.delete(k); else n2.add(k); setRow(r.id, { bays: [...n2].sort((p, q) => p - q) }); }}>{k + 1}–{k + 2}</button>)}
             </div>}
+            <div className="field"><label>פרט חיבור</label>
+              <select className="inp" data-testid={`rs-detail-${i}`} value={r.detail ?? ''} onChange={(e) => setRow(r.id, { detail: (e.target.value || undefined) as RafterStrutDetail | undefined })}>
+                <option value="">כמו כל התמוכות ({STRUT_DETAIL_HE[rs.detail ?? 'endplate']})</option>
+                {(Object.keys(STRUT_DETAIL_HE) as RafterStrutDetail[]).map((k) => <option key={k} value={k}>{STRUT_DETAIL_HE[k]}</option>)}
+              </select></div>
             <div className="field prof"><label>חתך (חריג לשורה)</label><ProfilePicker value={r.profile ?? rs.profile} families={['RHS', 'SHS']} onCommit={(v) => setRow(r.id, { profile: v === rs.profile ? undefined : v })} /></div>
           </div>
         );
       })}
-      {rs.rows.length > 0 && <Adv id="rs-conn" label="חתך ופרט חיבור — כל התמוכות">
+      {rs.rows.length > 0 && <div className="op-card" data-testid="rs-conn">
+        <b>חתך ופרט חיבור — כל התמוכות</b>
         <div className="field prof"><label>חתך</label><ProfilePicker testId="rs-profile" value={rs.profile} families={['RHS', 'SHS']} onCommit={(v) => save({ profile: v })} /></div>
-        <div className="field"><label>עובי פלטת קצה</label><NumField testId="rs-t" value={rs.plateT} suffix='מ"מ' onCommit={(v) => save({ plateT: Math.max(6, v) })} /></div>
-        <div className="field"><label>ברגים (2 בכל קצה)</label><BoltSelect d={rs.bolt.d} onChange={(x) => save({ bolt: { ...rs.bolt, d: x } })} /></div>
-      </Adv>}
+        <RafterStrutConnFields />
+      </div>}
       {issues.length > 0 && <div data-testid="rs-issues">{issues.slice(0, 6).map((q, k) => <div key={k} className={`issue ${q.severity}`}><span className="ic">!</span>{q.message}</div>)}</div>}
-      {rs.rows.length > 0 && <Help>פלטת קצה מרותכת לתמוכה (מסגריה) ומוברגת לווב הקורה בשטח — 2 ברגים מחוץ לחתך. תמוכות משני צדי אותה קורה — אותם ברגים דרך הווב. בקושרות גג X: האלכסונים נעצרים לפני הפלטה, וחלוקה אחרת של הפנלים (מספר X בתא / צמתים על פטות) מבוטלת עם התראה. אין בדיקת חוזק.</Help>}
+      {rs.rows.length > 0 && <Help>פלטת קצה: מרותכת לתמוכה (מסגריה) ומוברגת לווב בשטח, ברגים מחוץ לחתך; משני צדי אותה קורה — אותם ברגים דרך הווב. פח + לשונית: פח מרותך לווב (מסגריה), לשונית בחריץ ה-RHS, מוברגים בחפיפה בשטח. ריתוך: ישיר לווב בשטח. בקושרות גג X: האלכסונים נעצרים לפני הפלטה, וחלוקה אחרת של הפנלים (מספר X בתא / צמתים על פטות) מבוטלת עם התראה. אין בדיקת חוזק.</Help>}
     </div>
   );
 }

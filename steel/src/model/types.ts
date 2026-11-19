@@ -144,12 +144,17 @@ export interface BracingParams {
 }
 
 /** שורת תמוכות בין הקורות: מיקום = מרחק אופקי מציר from לכיוון ציר toward; מפתחים חסר = כל המפתחים */
-export interface RafterStrutRow { id: string; from: string; toward: string; dist: Mm; bays?: number[]; profile?: string }
+export type RafterStrutDetail = 'endplate' | 'fin' | 'weld';
+export interface RafterStrutRow { id: string; from: string; toward: string; dist: Mm; bays?: number[]; profile?: string; detail?: RafterStrutDetail }
 export interface RafterStrutParams {
   rows: RafterStrutRow[];
   profile: string;
   /** פלטת קצה מרותכת לתמוכה (מסגריה), מוברגת לווב הקורה (שטח); בשני צדי הווב — אותם ברגים */
   plateT: Mm; bolt: BoltSpec;
+  /** endplate (ברירת מחדל): פלטת קצה מוברגת לווב · fin: פח מרותך לווב + לשונית בחריץ ה-RHS, מוברגים בחפיפה · weld: ריתוך ישיר לווב בשטח */
+  detail?: RafterStrutDetail;
+  /** ברגים בכל קצה (2 / 4) */
+  bolts?: number;
 }
 
 /**

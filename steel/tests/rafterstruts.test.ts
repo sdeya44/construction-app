@@ -4,10 +4,10 @@ import { generate } from '../src/geometry/generate';
 import { defaultRafterStruts } from '../src/geometry/rafterStruts';
 import { clash } from '../src/geometry/clash';
 
-const withStruts = (dist: number, bays?: number[], segCount?: Record<string, number>) => {
+const withStruts = (dist: number, bays?: number[], segCount?: Record<string, number>, extra: Record<string, unknown> = {}) => {
   const b = defaultBuilding();
   b.bracing.roof = { ...b.bracing.roof, enabled: true, bays: [0], ...(segCount ? { segCount } : {}) };
-  b.bracing.rafterStruts = { ...defaultRafterStruts(), rows: [{ id: 'r1', from: 'L', toward: 'R', dist, bays }] };
+  b.bracing.rafterStruts = { ...defaultRafterStruts(), ...extra, rows: [{ id: 'r1', from: 'L', toward: 'R', dist, bays }] };
   return generate(newProject('t', b));
 };
 
@@ -50,5 +50,26 @@ describe('תמוכות בין הקורות (1.40)', () => {
     expect(d.members.filter((m) => m.id.startsWith('BR.R1.L') && m.kind === 'brace').length).toBe(2); // מפתח 1 ללא תמוכה — X אחד
     const d2 = withStruts(40000);
     expect(d2.issues.some((i) => i.code === 'RS_OUT')).toBe(true);
+  });
+  it('RS-5: פרט חיבור — פח + לשונית בחריץ, ריתוך ישיר, 4 ברגים בפלטת קצה; ללא התנגשויות', () => {
+    const nb = defaultBuilding().frames.length - 1;
+    const fin = withStruts(4000, undefined, undefined, { detail: 'fin' });
+    const cf = fin.connections.filter((c) => c.id.startsWith('C.RS1.'));
+    expect(cf.length).toBe(nb + 1);
+    expect(cf.every((c) => c.parts.some((p) => p.endsWith('.T')) && c.parts.some((p) => p.endsWith('.PL')))).toBe(true);
+    expect(cf.find((c) => c.members.length === 3)!.bolts.length).toBe(4); // 2 בכל צד, לא דרך הווב
+    expect(fin.members.filter((m) => /^RS1\.\d+$/.test(m.id)).length).toBe(nb);
+    expect(fin.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
+    const w = withStruts(4000, undefined, undefined, { detail: 'weld' });
+    const cw = w.connections.filter((c) => c.id.startsWith('C.RS1.'));
+    expect(cw.every((c) => c.bolts.length === 0 && c.welds.every((x) => x.location === 'site'))).toBe(true);
+    expect(w.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
+    // RHS100 + M16: הפלטה נמוכה מכדי 2 ברגים בגובה — התראה ו-2 ברגים
+    const e2 = withStruts(4000, undefined, undefined, { bolts: 4 });
+    expect(e2.issues.some((i) => i.code === 'RS_BOLTS')).toBe(true);
+    expect(e2.connections.find((c) => c.id.startsWith('C.RS1.'))!.bolts.length).toBe(2);
+    const e4 = withStruts(4000, undefined, undefined, { bolts: 4, profile: 'RHS150x100x5' });
+    expect(e4.connections.find((c) => c.id.startsWith('C.RS1.'))!.bolts.length).toBe(4);
+    expect(e4.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
   });
 });
