@@ -49,3 +49,17 @@ describe('1.37: מפתח ארוך, סבולת מספור, סדר הקמה', () =
     expect(st.find((x) => x.title.startsWith('השלמות'))).toBeUndefined();
   });
 });
+
+describe('1.38.2: עמוד נחתך לפי קורת הגג בפועל', () => {
+  it('חריג חתך לקורה: קו הייחוס = פני עליון הקורה, החיתוך = עומק הקורה בפועל + פלטות', async () => {
+    const { cutLength } = await import('../src/geometry/solid');
+    for (const bp of ['IPE300', 'IPE400']) {
+      const p = proj(); const b = p.building;
+      b.roofType = 'mono'; b.eaveLeft = 6300; b.eaveRight = 6300; b.slopeLeftPct = 0; b.rafterProfile = bp;
+      for (const m of generate(p).members.filter((m) => m.kind === 'rafter')) p.memberOverrides[m.id] = { profile: 'IPE100' };
+      const d = generate(p); const c = d.byId.get('F2.COL.L')!;
+      expect(Math.round(c.end.z - c.start.z)).toBe(6300);
+      expect(Math.round(cutLength(c).max)).toBe(6300 - 100 - 24);
+    }
+  });
+});

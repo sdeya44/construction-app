@@ -255,7 +255,10 @@ describe('חריגים ושילובים מסימולציית הממשק', () => 
     const d = generate(setMemberProps(['F1.RAF.L'], { profile: 'IPE400' }).run(newProject('x', defaultBuilding())));
     expect(d.issues.filter((i) => i.code === 'CLASH').map((i) => i.message)).toEqual([]);
     const c = d.byId.get('F1.COL.L')!, c2 = d.byId.get('F2.COL.L')!;
-    expect(c.end.z).toBeLessThan(c2.end.z - 50); // IPE400 עמוקה ב-100 מ"מ מ-IPE300
+    // קו הייחוס נשאר בפני עליון הקורה; החיתוך יורד בעומק הקורה בפועל (IPE400 עמוקה ב-100 מ"מ מ-IPE300)
+    const { cutLength } = await import('../src/geometry/solid');
+    expect(Math.abs(c.end.z - c2.end.z)).toBeLessThan(1);
+    expect(cutLength(c).max).toBeLessThan(cutLength(c2).max - 90);
   });
 });
 

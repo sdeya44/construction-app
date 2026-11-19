@@ -114,6 +114,21 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       const raf = byId.get(jn.plane.rafterId(f.id));
       const prm = effPlate(project, 'eave', id);
       if (!prm.enabled || !isGen(col) || !isGen(raf) || !col!.endCut) continue;
+      // פני התחתון של הקורה בפועל (החתך הסופי של האלמנט, כולל כל חריג) — העמוד נחתך לפיה, גם אם החתך שונה מהחתך הכללי
+      {
+        const rpA = tryProfile(raf!.profile);
+        if (rpA) {
+          const lfR = localFrame(raf!);
+          const vs = rpA.outline.outer.map((q) => q.v);
+          const vTop = Math.max(...vs), vBot = Math.min(...vs);
+          const dv = raf!.anchor === 'top' ? -vTop : 0;
+          const nUp = lfR.v.z >= 0 ? lfR.v : scale(lfR.v, -1);
+          const bottom: Plane = { point: add(raf!.start, scale(lfR.v, vBot + dv)), normal: nUp };
+          const old = col!.endCut!;
+          const tO = linePlaneT(col!.end, Z, old) ?? 0, tN = linePlaneT(col!.end, Z, bottom) ?? 0;
+          if (Math.abs(tO - tN) > 0.5 && Math.abs(dot(nUp, old.normal)) > 0.999) col!.endCut = { point: add(col!.end, scale(Z, tN)), normal: old.normal };
+        }
+      }
       const U = col!.endCut!;
       const n = U.normal;
       const exr = norm(sub(raf!.end, raf!.start));

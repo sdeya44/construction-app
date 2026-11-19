@@ -141,7 +141,8 @@ export function generateBase(project: Project): DerivedModel {
         // מפלס תחתית העמוד בציר הזה (חגורה/יסוד בגובה שונה) — העמוד מתקצר, הגג לא זז
         const base = b.lineBase?.[l.id] ?? b.baseElevation;
         if (fi === 0 && ct.z - base < 1000) issues.push({ code: 'COL_SHORT', severity: 'error', message: `עמוד בציר ${l.label}: מפלס התחתית ${(base / 1000).toFixed(2)} גבוה מדי ביחס לראש העמוד` });
-        const top = v3(l.x, y, ct.z - (ct.cap ? dropAt.get(ct.cap.id) ?? 0 : 0));
+        // קו הייחוס של העמוד: עד פני עליון קורת הגג בציר (החיתוך — לפי פני התחתון של הקורה בפועל, endCut)
+        const top = v3(l.x, y, ct.z);
         const side = !sec!.custom ? (l.id as 'L' | 'R') : undefined;
         nodes.push({ id: `${f.id}.N.B${l.id}`, p: v3(l.x, y, base), frameId: f.id, role: `בסיס ציר ${l.label}` });
         nodes.push({ id: `${f.id}.N.E${l.id}`, p: top, frameId: f.id, role: `ראש עמוד ציר ${l.label}` });
