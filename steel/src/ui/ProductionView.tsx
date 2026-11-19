@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { approveRevision, numberParts, openNewRevision, setSettings } from '../commands/commands';
-import { boltsByNodeTable, bomTables, toCsv, toXlsx } from '../fab/export';
+import { boltsByNodeTable, bomTables, sequenceTable, toCsv, toXlsx } from '../fab/export';
 import { dstvZip } from '../fab/dstv';
 import { useFab } from '../fab/useFab';
 import { downloadText, safeFileName } from '../persist/files';
@@ -45,7 +45,7 @@ export function ProductionView() {
       ['סה"כ גג', '', '', Math.round(clad.roofArea * 10) / 10, 'מ"ר'], ['סה"כ קירות (נטו)', '', '', Math.round(clad.wallArea * 10) / 10, 'מ"ר'],
     ],
   } : null;
-  const tables = [...bomTables(bom, plans), boltsByNodeTable(p, store.state.derived), ...(cladTable ? [cladTable] : []), quoteTable];
+  const tables = [...bomTables(bom, plans), boltsByNodeTable(p, store.state.derived), sequenceTable(p, store.state.derived, fab), ...(cladTable ? [cladTable] : []), quoteTable];
   const isQuote = (i: number) => i === tables.length - 1;
   const setPrice = (k: keyof Pricing, v: number) => store.exec(setSettings({ pricing: { ...(p.settings.pricing ?? {}), [k]: v } }));
   const PRICE_FIELDS: [keyof Pricing, string][] = [
@@ -184,10 +184,12 @@ function UnifyPanel() {
     {!on && (bg.length
       ? <ul className="unify-list" data-testid="unify-bolts">{bg.map((g, i) => <li key={i}><span className="en">M{g.d}×{g.lengths.map((l) => `${l.length}(${l.qty})`).join(' / ')}</span> ← <b className="en">M{g.d}×{g.to}</b></li>)}</ul>
       : <div className="hint">אין אורכי ברגים קרובים לאיחוד.</div>)}
+    <label className="row" style={{ marginTop: 6 }}><input type="checkbox" data-testid="mark-tol" checked={(p.settings.markTol ?? 0) > 0} onChange={(e) => store.exec(setSettings({ markTol: e.target.checked ? Math.min(tol, 5) : 0 }))} /> סבולת מספור לחלקים {(p.settings.markTol ?? 0) > 0 ? `(עד ${p.settings.markTol} מ"מ — פעיל)` : '(עד 5 מ"מ)'}</label>
+    {(fab.unified?.length ?? 0) > 0 && <ul className="unify-list" data-testid="unify-applied">{fab.unified!.map((u, i) => <li key={i}><b className="en">{u.mark}</b> <span className="en">{u.profile} · {u.length}</span> ← <span className="en">{u.from.join(', ')}</span></li>)}</ul>}
     <div className="hint" style={{ marginTop: 6 }}>חלקים כמעט־זהים (אותו חתך ומספר חורים):</div>
     {pg.length
       ? <ul className="unify-list" data-testid="unify-parts">{pg.slice(0, 12).map((g, i) => <li key={i} title={g.note}><b className="en">{g.marks.map((m) => `${m.mark}×${m.qty}`).join(' ≈ ')}</b> <span className="en">{g.profile} · {g.marks.map((m) => m.length).join('/')}</span><br /><small>{g.note}</small></li>)}</ul>
       : <div className="hint" data-testid="unify-parts-none">לא נמצאו חלקים כמעט־זהים.</div>}
-    <div className="hint">ברגים: כל בורג בקבוצה מקבל את האורך הארוך — משפיע על כתב הכמויות ועל השרטוטים. חלקים: המלצה בלבד — שנה את הגיאומטריה או פרט החיבור כדי שיקבלו סימון אחד.</div>
+    <div className="hint">ברגים: כל בורג בקבוצה מקבל את האורך הארוך — משפיע על כתב הכמויות ועל השרטוטים. חלקים: עם סבולת מספור, חלקים שאורכם ומיקום חוריהם שונים עד הסבולת מקבלים סימון אחד ומיוצרים כמו החלק הנפוץ בקבוצה (ההפרש נבלע במרווח החור — לכן הסבולת מוגבלת ל-5 מ"מ). אחרי הפעלה — "הרץ מספור".</div>
   </div>;
 }

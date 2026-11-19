@@ -1,5 +1,7 @@
+import { erectionSequence } from './sequence';
 import { zipSync, strToU8 } from 'fflate';
 import type { DerivedModel, Project } from '../model/types';
+import type { Fabrication } from './marks';
 import { memberLocation } from './location';
 import type { Bom, CutPlan } from './bom';
 
@@ -123,4 +125,11 @@ export function boltsByNodeTable(p: Project, d: DerivedModel): Table {
   }
   rows.sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'he', { numeric: true }));
   return { name: 'ברגים לפי צומת', headers: ['מיקום', 'חיבור', 'ברגים', 'סה"כ'], rows };
+}
+
+/** סדר הקמה (הצעה): שלב, מה מרימים, הרמה כבדה ביותר, משקל שלב ומצטבר */
+export function sequenceTable(p: Project, d: DerivedModel, fab: Fabrication): Table {
+  const st = erectionSequence(p, d, fab);
+  return { name: 'סדר הקמה', headers: ['שלב', 'פעולה', 'מכלולים', 'הרמה כבדה (ק"ג)', 'משקל שלב (ק"ג)', 'מצטבר (ק"ג)', 'הערה'],
+    rows: st.map((x) => [x.n, x.title, x.items.map((i) => `${i.mark}×${i.qty}`).join(' '), Math.round(x.maxLift), Math.round(x.weight), Math.round(x.cum), x.note]) };
 }

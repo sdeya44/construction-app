@@ -221,7 +221,8 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   const r0 = s0.startRing.map(loc), r1 = s0.endRing.map(loc);
   const edgeT = (ring: { t: number; v: number }[], vv: number) => { const q = ring.filter((x) => Math.abs(x.v - vv) < 0.5); return q.length ? q.reduce((a, x) => a + x.t, 0) / q.length : null; };
   const sTop = edgeT(r0, vMaxMain) ?? 0, sBot = edgeT(r0, vMinMain) ?? 0, eTop = edgeT(r1, vMaxMain) ?? L, eBot = edgeT(r1, vMinMain) ?? L;
-  if (Math.abs(sTop - sBot) > 0.5 || Math.abs(eTop - eBot) > 0.5) {
+  const twoSideDims = Math.abs(sTop - sBot) > 0.5 || Math.abs(eTop - eBot) > 0.5;
+  if (twoSideDims) {
     dimH(PF(sTop, 0).x, PF(eTop, 0).x, PF(0, vMax).y + 22, `${Math.round(eTop - sTop)} (צד ${main.kind === 'column' ? 'ימין/עליון' : 'עליון'} במבט)`);
     dimH(PF(sBot, 0).x, PF(eBot, 0).x, yChain - 20, `${Math.round(eBot - sBot)} (צד ${main.kind === 'column' ? 'שמאל/תחתון' : 'תחתון'} במבט)`);
   }
@@ -307,17 +308,28 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     const all = [...ts].sort((a, b) => a - b);
     line({ x: PF(0, 0).x, y: yO }, { x: PF(L, 0).x, y: yO }, 'DIM');
     E.push({ k: 'circle', c: { x: PF(0, 0).x, y: yO }, r: 0.9, layer: 'DIM' });
-    // תוויות: מדלגים על תווית צפופה (הקצה האחרון תמיד מוצג; התווית שלפניו מוסרת אם צפופה)
-    const lab: { t: number; x: number }[] = [];
-    for (const t of all) {
-      const x = PF(t, 0).x;
-      if (t > 0) line({ x: x - 0.8, y: yO - 1.1 }, { x: x + 0.8, y: yO + 1.1 }, 'DIM');
-      const isLast = t === all[all.length - 1];
-      while (lab.length && x - lab[lab.length - 1].x < 3 && isLast && lab.length > 1) lab.pop();
-      if (lab.length && x - lab[lab.length - 1].x < 3 && !isLast) continue;
-      lab.push({ t, x });
+    // תוויות: כל ערך מוצג; תוויות צפופות נפרשות לצדדים (מרווח מזערי) עם קו מוביל שבור אל הסימון
+    const GAP = 3.9;
+    const lab = all.map((t) => ({ t, x: PF(t, 0).x, xl: PF(t, 0).x }));
+    for (const { t, x } of lab) if (t > 0) line({ x: x - 0.8, y: yO - 1.1 }, { x: x + 0.8, y: yO + 1.1 }, 'DIM');
+    // פריסה: מעבר קדימה (דחיפה ימינה), מעבר אחורה מהקצה, ואיזון למרכז כל אשכול
+    for (let i = 1; i < lab.length; i++) lab[i].xl = Math.max(lab[i].xl, lab[i - 1].xl + GAP);
+    const xEnd = lab.length ? lab[lab.length - 1].x : 0;
+    if (lab.length && lab[lab.length - 1].xl > xEnd + GAP * 2) { lab[lab.length - 1].xl = Math.max(xEnd, lab[lab.length - 1].xl - GAP); for (let i = lab.length - 2; i >= 0; i--) lab[i].xl = Math.min(lab[i].xl, lab[i + 1].xl - GAP); }
+    for (let i = 0; i < lab.length;) {
+      let j = i; while (j + 1 < lab.length && lab[j + 1].xl - lab[j].xl <= GAP + 0.01) j++;
+      if (j > i) { const sh0 = (lab.slice(i, j + 1).reduce((t, q) => t + q.x - q.xl, 0)) / (j - i + 1); const lo = i > 0 ? lab[i - 1].xl + GAP : -Infinity, hi = j + 1 < lab.length ? lab[j + 1].xl - GAP : Infinity;
+        const sh1 = Math.max(lo - lab[i].xl, Math.min(hi - lab[j].xl, sh0)); for (let k = i; k <= j; k++) lab[k].xl += sh1; }
+      i = j + 1;
     }
-    for (const { t, x } of lab) text({ x: x + 0.9, y: yO + 1.2 + (String(t).length * 1.45) / 2 }, String(t), 2.5, 'center', 'DIM', false, 90);
+    const spread = lab.some((q) => Math.abs(q.xl - q.x) > 0.3);
+    // מידה כוללת של הצד התחתון (קצה בשיפוע) יושבת מעל השורה — אז התוויות מתחת לקו
+    const dn = twoSideDims ? -1 : 1;
+    const yb = yO + dn * (spread ? 3.4 : 1.2);
+    for (const { t, x, xl } of lab) {
+      if (spread) { line({ x, y: yO + dn * 1.1 }, { x, y: yO + dn * 1.9 }, 'DIM'); line({ x, y: yO + dn * 1.9 }, { x: xl, y: yb - dn * 0.4 }, 'DIM'); }
+      text({ x: xl + 0.9, y: yb + dn * (String(t).length * 1.45) / 2 }, String(t), 2.5, 'center', 'DIM', false, 90);
+    }
     text({ x: PF(0, 0).x - 2, y: yO + 0.5 }, 'מצטבר', 2, 'right', 'DIM');
   }
 

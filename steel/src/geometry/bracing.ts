@@ -63,6 +63,39 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
     pA: { y: number; w: number }, pC: { y: number; w: number }, yFace0: number, yFace1: number, host0: string, host1: string) =>
     xBrace(res, b, bc, key, label, profile, plane0, n, wDir, pA, pC, yFace0, yFace1, host0, host1);
 
+  /**
+   * תמוכת קושרות גג: RHS לאורך השיפוע (במקביל לקורות) בגבול תת־מפתח, במישור הקושרות. תלויה מכל פטה שמעליה
+   * בפח תלייה מרותך לפאה העליונה (מסגריה) ומוברג לווב הפטה (2×M12, שטח). הקושרות מתחברות אליה בפחי חיבור כמו לקורה.
+   */
+  const roofStrut = (id: string, label: string, profile: string, _sb: number, sh: number, o: Vec3, n: Vec3, dir: Vec3, L: number, y: number, plane: string, bay: number) => {
+    const P = (w: number) => add(add(o, v3(0, y, 0)), scale(dir, w));
+    res.members.push(mk(id, label, profile, P(0), P(L), n, mat, 'center'));
+    const tp = 8, Wp = 80;
+    for (const pm of purlins.filter((m) => m.purlin?.side === plane)) {
+      const pp = getProfile(pm.profile);
+      const Pp = v3(pm.start.x, y, pm.start.z);
+      const w = dot(sub(Pp, P(0)), dir);
+      if (w < 50 || w > L - 50) continue;
+      const Q = P(w), gapN = dot(sub(Pp, Q), n) - sh / 2;
+      if (gapN < 5) { if (!res.issues.some((i) => i.code === 'STRUT_CLASH')) res.issues.push({ code: 'STRUT_CLASH', severity: 'warning', elementId: id, message: `${label}: התמוכה גבוהה מדי — נוגעת בפטות (בחר חתך נמוך יותר)` }); continue; }
+      const lf = localFrame(pm);
+      const fl = pp.family === 'Z' ? scale(lf.u, -1) : lf.u;
+      const back = Math.sign(dot(fl, dir)) || 1; // הצד ללא האגפים (גב הווב בפטת C)
+      const off = scale(dir, -back * ((pp.dims.t ?? 2) / 2 + tp / 2));
+      const cid = `C.${id}.P${pm.purlin!.index}`, pid = `${cid}.PL`;
+      const top = add(add(Q, scale(n, sh / 2)), off), end = add(add(Pp, scale(n, 70)), off);
+      res.members.push({ id: pid, kind: 'plate', label: `פח תלייה PL${tp}×${Wp}`, start: top, end, profile: `PL${Wp}x${tp}`, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: dir, source: 'generated', manualPlacement: false, connId: cid, partDesc: `פח תלייה לפטה PL${tp}×${Wp}×${Math.round(gapN + 70)}` });
+      const bolts: BoltInfo[] = [-20, 20].map((dy, i) => {
+        const at = add(add(Pp, v3(0, dy, 0)), scale(n, 40));
+        const head = add(at, scale(dir, -back * ((pp.dims.t ?? 2) / 2 + tp)));
+        return makeBolt(`${cid}.B${i + 1}`, cid, head, scale(dir, back), bolt(12), tp + (pp.dims.t ?? 2), 'site', [pid, pm.id], n, res.members);
+      });
+      const welds: WeldInfo[] = [{ id: `${cid}.W1`, connId: cid, type: 'fillet', a: 4, length: 2 * Wp, location: 'shop', between: [id, pid], from: add(top, v3(0, -Wp / 2, 0)), to: add(top, v3(0, Wp / 2, 0)) }];
+      res.connections.push({ id: cid, type: 'brace', label: `${label} — תלייה לפטה ${pm.purlin!.index}`, members: [id, pm.id], parts: [pid, ...bolts.map((x) => x.id)], bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: false });
+    }
+    void bay;
+  };
+
   const skipTie = new Set<string>();
   // ---- קושרות גג: במישור אמצע גובה קורת הגג, פח חיבור מרותך לווב הקורה בכל קצה
   if (br.roof.enabled) {
@@ -137,10 +170,23 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         if (br.roof.type === 'rhs') rhsTruss({ res, mat: b.material }, br.roof.rhs ?? defaultRhsTruss(), `R${bay + 1}.${sl.side}`, `סבכה אופקית מפתח ${bay + 1}`, o, n, dir, L,
           f0.y, f1.y, f0.y + rtw(rid(f0.id)) / 2, f1.y - rtw(rid(f1.id)) / 2, rid(f0.id), rid(f1.id));
         else {
-          // שיפוע ארוך: חלוקה לכמה פנלי X לאורך השיפוע, כך שאלכסון לא יעלה על חומר הגלם (החלטת משתמש 15.11.2026)
-          const bayW = Math.abs(f1.y - f0.y), stock = stockLen;
+          // מפתח ארוך בין מסגרות: חלוקה לאורך המבנה ל-nY תת־מפתחים עם תמוכת RHS רוחבית בכל גבול (תלויה מהפטות);
+          // אוטומטי מעל 9 מ' (תת־מפתח עד ~6 מ'), או לפי בחירת המשתמש (ySplit לפי מפתח)
+          const fullW = Math.abs(f1.y - f0.y), stock = stockLen;
+          const nYu = br.roof.ySplit?.[String(bay)];
+          const nY = Math.max(1, Math.min(6, Math.round(nYu ?? (fullW > 9000 ? Math.ceil(fullW / 6000) : 1))));
+          const strutP = tryProfile(br.roof.strut ?? 'RHS100x100x5') ?? getProfile('RHS100x100x5');
+          const strutName = tryProfile(br.roof.strut ?? '') ? br.roof.strut! : 'RHS100x100x5';
+          const sb = strutP.props.b, sh = strutP.props.h;
+          const sgn = Math.sign(f1.y - f0.y) || 1;
+          const yB = Array.from({ length: nY + 1 }, (_, i) => f0.y + (f1.y - f0.y) * i / nY);
+          const strutId = (i: number) => `BR.S${bay + 1}.${sl.side}.${i}`;
+          for (let i = 1; i < nY; i++) roofStrut(strutId(i), `תמוכת קושרות גג מפתח ${bay + 1} (${i}/${nY - 1})`, strutName, sb, sh, o, n, dir, L, yB[i], sl.pid, bay);
+          const bayW = fullW / nY;
           let k = 1;
-          while (k < 8 && Math.hypot(L / k, bayW) > stock - 100) k++;
+          // אלכסון שלא נכנס בחומר הגלם גם בפנל צר מאוד: אין טעם לחלק עוד לאורך השיפוע (הרוחב לבדו ארוך מדי)
+          if (bayW <= stock - 300) while (k < 8 && Math.hypot(L / k, bayW) > stock - 100) k++;
+          else if (!res.issues.some((i) => i.code === 'BRACE_LONG' && i.elementId === `R${bay}`)) res.issues.push({ code: 'BRACE_LONG', severity: 'warning', elementId: `R${bay}`, message: `קושרות גג מפתח ${bay + 1}: רוחב תת־המפתח ${(bayW / 1000).toFixed(1)} מ' — האלכסון ארוך מחומר הגלם בכל חלוקה לאורך השיפוע; הגדל את מספר החלוקות לאורך המבנה` });
           // מספר X בקטע שנקבע ידנית (לא פחות מהנדרש לחומר הגלם)
           const kUser = br.roof.segCount?.[`${bay}|${sl.side}`];
           if (kUser && kUser > k) k = Math.min(8, Math.round(kUser));
@@ -158,16 +204,23 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
             if (ok) cuts.splice(0, cuts.length, ...trial);
             else if (!res.issues.some((i) => i.code === 'X_SNAP' && i.elementId === `${bay}|${sl.side}`)) res.issues.push({ code: 'X_SNAP', severity: 'info', elementId: `${bay}|${sl.side}`, message: `קטע ${sl.side} מפתח ${bay + 1}: לא ניתן להעמיד את צמתי ה-X על פטות (אורך חומר הגלם / מרווח) — פנלים שווים` });
           }
-          for (let j = 0; j < k; j++) {
-            const w0 = cuts[j] + (j > 0 ? gap : 0), w1 = cuts[j + 1] - (j < k - 1 ? gap : 0);
-            if (rod) {
-              xBraceRod(res, b, br.roof.rod ?? defaultRodEnd(), bc.crossBolt, `R${bay + 1}.${sl.side}${k > 1 ? `.${j + 1}` : ''}`, `קושרת גג מפתח ${bay + 1}${k > 1 ? ` פנל ${j + 1}` : ''}`, br.roof.profile, o, n, dir,
-                { y: f0.y, w: w0 }, { y: f1.y, w: w1 }, rtw(rid(f0.id)), rtw(rid(f1.id)), rid(f0.id), rid(f1.id));
-              continue;
+          for (let q = 0; q < nY; q++) {
+            const ya = yB[q], yb = yB[q + 1];
+            const h0 = q === 0 ? rid(f0.id) : strutId(q), h1 = q === nY - 1 ? rid(f1.id) : strutId(q + 1);
+            const face0 = q === 0 ? f0.y + sgn * rtw(rid(f0.id)) / 2 : ya + sgn * sb / 2, face1 = q === nY - 1 ? f1.y - sgn * rtw(rid(f1.id)) / 2 : yb - sgn * sb / 2;
+            const sub = nY > 1 ? `.Y${q + 1}` : '', subL = nY > 1 ? ` תת־מפתח ${q + 1}/${nY}` : '';
+            for (let j = 0; j < k; j++) {
+              const w0 = cuts[j] + (j > 0 ? gap : 0), w1 = cuts[j + 1] - (j < k - 1 ? gap : 0);
+              const key = `R${bay + 1}.${sl.side}${sub}${k > 1 ? `.${j + 1}` : ''}`, lab = `קושרת גג מפתח ${bay + 1}${subL}${k > 1 ? ` פנל ${j + 1}` : ''}`;
+              if (rod && nY === 1) {
+                xBraceRod(res, b, br.roof.rod ?? defaultRodEnd(), bc.crossBolt, key, lab, br.roof.profile, o, n, dir,
+                  { y: f0.y, w: w0 }, { y: f1.y, w: w1 }, rtw(rid(f0.id)), rtw(rid(f1.id)), rid(f0.id), rid(f1.id));
+                continue;
+              }
+              xbrace(key, lab, br.roof.profile, o, n, dir, { y: ya, w: w0 }, { y: yb, w: w1 }, face0, face1, h0, h1);
             }
-            xbrace(`R${bay + 1}.${sl.side}${k > 1 ? `.${j + 1}` : ''}`, `קושרת גג מפתח ${bay + 1}${k > 1 ? ` פנל ${j + 1}` : ''}`, br.roof.profile, o, n, dir,
-              { y: f0.y, w: w0 }, { y: f1.y, w: w1 }, f0.y + rtw(rid(f0.id)) / 2, f1.y - rtw(rid(f1.id)) / 2, rid(f0.id), rid(f1.id));
           }
+          if (rod && nY > 1 && !res.issues.some((i) => i.code === 'ROD_SPLIT')) res.issues.push({ code: 'ROD_SPLIT', severity: 'info', message: 'מפתח מחולק לאורך המבנה: בתת־המפתחים נבנה פרט פח חיבור (מוט הברגה דרך חור אובלי — רק בווב קורה)' });
         }
       }
     }
@@ -211,7 +264,8 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         // עמוד גבוה: האלכסון ארוך מחומר הגלם — חלוקה לכמה פנלי X לגובה (כמו בגג)
         const H = z1 - z0, bayW = Math.abs(f1.y - f0.y);
         let k = 1;
-        while (k < 6 && Math.hypot(H / k, bayW) > stockLen - 100) k++;
+        if (bayW <= stockLen - 300) while (k < 6 && Math.hypot(H / k, bayW) > stockLen - 100) k++;
+        else if (!res.issues.some((i) => i.code === 'BRACE_LONG' && i.elementId === `W${l.id}${bay}`)) res.issues.push({ code: 'BRACE_LONG', severity: 'warning', elementId: `W${l.id}${bay}`, message: `קושרת קיר ציר ${l.label} מפתח ${bay + 1}: המפתח (${(bayW / 1000).toFixed(1)} מ') ארוך מחומר הגלם — חלוקה לגובה לא תעזור. מומלץ אגד B / נעילה אופקית בציר הזה, או חיבור המשך באלכסון` });
         const gap = k > 1 ? bc.gussetEdge + 120 : 0;
         for (let j = 0; j < k; j++) {
           const w0 = (H * j) / k + (j > 0 ? gap : 0), w1 = (H * (j + 1)) / k - (j < k - 1 ? gap : 0);

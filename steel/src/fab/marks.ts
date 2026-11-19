@@ -25,7 +25,9 @@ export interface MarkedPart extends FabPart {
 
 export interface Assembly { id: string; mark: string; provisional: boolean; main: string; parts: string[]; weight: number; signature: string; kind: MemberKind }
 
-export interface Fabrication { parts: MarkedPart[]; assemblies: Assembly[]; byPart: Map<string, MarkedPart>; changed: { id: string; from: string; to: string }[] }
+/** קבוצה שאוחדה בסבולת מספור: חתימת הנציג, אורכו, ואורכי החלקים שצורפו אליו */
+export interface UnifiedMark { signature: string; length: number; from: number[]; profile: string; mark?: string }
+export interface Fabrication { parts: MarkedPart[]; assemblies: Assembly[]; byPart: Map<string, MarkedPart>; changed: { id: string; from: string; to: string }[]; unified?: UnifiedMark[] }
 
 const PREFIX: Record<MemberKind, string> = {
   column: 'c', rafter: 'r', beam: 'b', brace: 'br', purlin: 'p', girt: 'g', cleat: 'cl', plate: 'pl', bolt: 'x', anchor: 'a',
@@ -150,6 +152,7 @@ export function computeFabrication(project: Project, d: DerivedModel): Fabricati
   const reg = project.marks;
   const counters = { ...reg.counters };
   const parts: MarkedPart[] = [];
+  const shapes = new Map<string, { key: string; length: number; ts: number[] }>();
   for (const p of d.parts) {
     const m = d.byId.get(p.memberId);
     if (!m) continue;
@@ -163,11 +166,47 @@ export function computeFabrication(project: Project, d: DerivedModel): Fabricati
     const fwd = [m.kind, p.profile, p.material, r1(p.length), cutStart, cutEnd, hs(false), cont].join('|');
     const rev = holes.some((h) => h.face === 'section') || cont ? fwd : [m.kind, p.profile, p.material, r1(p.length), cutEnd, cutStart, hs(true), cont].join('|');
     const sig = rev < fwd ? rev : fwd;
+    // לסבולת מספור: צורה ללא אורך ומיקומי חורים לאורך, ומיקומי החורים בכיוון הקנוני
+    const isRev = sig !== fwd;
+    const hShape = holes.map((h) => `${h.face}/${r1(h.c)}/${h.d}${h.slot ? `x${h.slot}` : ''}${h.face === 'section' ? `/${r1(h.t)}` : ''}`);
+    const tCanon = holes.filter((h) => h.face !== 'section').map((h) => (isRev ? p.length - h.t : h.t)).sort((a, b) => a - b);
+    shapes.set(p.id, { key: [m.kind, p.profile, p.material, isRev ? cutEnd : cutStart, isRev ? cutStart : cutEnd, [...hShape].sort().join(';'), cont].join('|'), length: p.length, ts: tCanon });
     parts.push({
       ...p, mark: '', provisional: false, kind: m.kind, desc: m.partDesc ?? `${m.profile}`,
       weight: m.contour ? (contourArea(m.contour) * pr.dims.t * getMaterial(p.material).density) / 1e9 : (massPerMeter(pr, getMaterial(p.material).density) * p.length) / 1000,
       holes, cutStart, cutEnd, assembly: '', signature: sig,
     });
+  }
+  // סבולת מספור (settings.markTol): חלקים באותה צורה שאורכם ומיקומי חוריהם שונים עד הסבולת — חתימה אחת
+  // (של החלק הנפוץ בקבוצה); ההפרש נבלע במרווח/בחור. ברירת מחדל 0 = כבוי.
+  const unified: UnifiedMark[] = [];
+  const tol = project.settings.markTol ?? 0;
+  if (tol > 0) {
+    const groups = new Map<string, MarkedPart[]>();
+    for (const x of parts) { const k = shapes.get(x.id)!.key; groups.set(k, [...(groups.get(k) ?? []), x]); }
+    for (const g of groups.values()) {
+      const bySig = new Map<string, MarkedPart[]>();
+      for (const x of g) bySig.set(x.signature, [...(bySig.get(x.signature) ?? []), x]);
+      if (bySig.size < 2) continue;
+      const reps = [...bySig.entries()].sort((a, b) => b[1].length - a[1].length || shapes.get(b[1][0].id)!.length - shapes.get(a[1][0].id)!.length);
+      const done = new Set<string>();
+      for (const [sg, xs] of reps) {
+        if (done.has(sg)) continue;
+        done.add(sg);
+        const R = shapes.get(xs[0].id)!;
+        const merged: number[] = [];
+        for (const [sg2, ys] of reps) {
+          if (done.has(sg2)) continue;
+          const Q = shapes.get(ys[0].id)!;
+          if (Math.abs(Q.length - R.length) > tol || Q.ts.length !== R.ts.length || Q.ts.some((t, i) => Math.abs(t - R.ts[i]) > tol)) continue;
+          done.add(sg2);
+          // מיוצר כמו הנציג: אורך, חורים, חיתוכים ומשקל זהים בכל הפלטים (שרטוט, כתב כמויות, DSTV, חיתוך)
+          for (const y of ys) { y.signature = sg; y.length = xs[0].length; y.holes = xs[0].holes; y.cutStart = xs[0].cutStart; y.cutEnd = xs[0].cutEnd; y.weight = xs[0].weight; }
+          merged.push(Math.round(Q.length));
+        }
+        if (merged.length) unified.push({ signature: sg, length: Math.round(R.length), from: merged, profile: xs[0].profile });
+      }
+    }
   }
   // סימונים: קיימים מהרישום, חדשים לפי סדר דטרמיניסטי
   const newSigs = [...new Set(parts.filter((x) => !reg.parts[x.signature]).map((x) => x.signature))].sort();
@@ -229,7 +268,8 @@ export function computeFabrication(project: Project, d: DerivedModel): Fabricati
   for (const { a, sig } of aNew) a.mark = aAssigned[sig];
   assemblies.sort((a, b) => a.mark.localeCompare(b.mark, 'en', { numeric: true }));
   const changed = parts.filter((x) => reg.lastByPart[x.id] && reg.lastByPart[x.id] !== x.mark).map((x) => ({ id: x.id, from: reg.lastByPart[x.id], to: x.mark }));
-  return { parts, assemblies, byPart, changed };
+  for (const u of unified) u.mark = parts.find((x) => x.signature === u.signature)?.mark;
+  return { parts, assemblies, byPart, changed, unified };
 }
 
 /** כתיבת הסימונים הזמניים לרישום (פקודת "מספור"), כולל היסטוריית שינויים. */

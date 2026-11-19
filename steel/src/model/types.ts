@@ -109,6 +109,10 @@ export interface BracingParams {
     segCount?: Record<string, number>;
     /** חלוקת פנלי X לאורך השיפוע: equal = שווים (ברירת מחדל); purlins = גבולות הפנלים על הפטה הקרובה (צמתים בפטות, פנלים לא שווים) */
     split?: 'equal' | 'purlins';
+    /** חלוקת מפתח בין מסגרות לאורך המבנה (לפי אינדקס מפתח): מספר תת־מפתחים עם תמוכת RHS בכל גבול; חסר = אוטומטי (מעל 9 מ') */
+    ySplit?: Record<string, number>;
+    /** חתך תמוכת הקושרות בגבול תת־מפתח (ברירת מחדל RHS100x100x5) */
+    strut?: string;
     /** קושרות גם ברצועת הקונזולה: מהעמוד הקיצוני עד קצה הגג (קטע נוסף) */
     toEave?: boolean;
     /** מרווח בין שני קצוות קושרות שמגיעים לאותה נקודה באותו מפתח (שני חורים זה ליד זה), ברירת מחדל 200 */
@@ -555,6 +559,8 @@ export interface Project {
   settings: { stockLength: Mm; stockLengths: Mm[]; kerf: Mm; checkedBy: string; approvedBy: string; autoSplice?: boolean;
     /** האחדת אורכי ברגים: הפרש מרבי (מ"מ) לאיחוד לאורך הארוך; 0/ריק = כבוי */
     boltUnify?: Mm;
+    /** סבולת מספור (מ"מ): חלקים באותה צורה שאורכם ומיקומי חוריהם שונים עד הסבולת מקבלים סימון אחד ומיוצרים כמו הנציג; 0/ריק = כבוי */
+    markTol?: Mm;
     /** stock = מוט מלא והשלמה (ברירת מחדל); equal = חלקים שווים */
     spliceMode?: 'stock' | 'equal';
     /** פלטות חיזוק משולשות בחיבור המשך של קורת I */
@@ -619,7 +625,7 @@ export interface MarkRegistry {
 export interface RevisionEntry { rev: string; date: string; note: string; status: 'approved' | 'draft'; snapshot?: string }
 export interface RevisionState { current: string; locked: boolean; log: RevisionEntry[] }
 
-export type DrawingType = 'cover' | 'plates' | 'cladding' | 'gutter' | 'roof-plan' | 'anchor-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga' | 'erection' | 'labels';
+export type DrawingType = 'cover' | 'plates' | 'cladding' | 'gutter' | 'roof-plan' | 'anchor-plan' | 'frame' | 'side' | 'part' | 'assembly' | 'connection' | 'ga' | 'erection' | 'labels' | 'sequence';
 export interface DrawingRecord {
   id: string;
   number: string;

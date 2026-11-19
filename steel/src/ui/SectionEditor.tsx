@@ -484,8 +484,11 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
             <g className="isec-dim" onClick={() => openEdit('ovr', '', (X(b) + X(R1)) / 2, yOv, R1 - b)} data-testid="isec-ovr"><line x1={X(b)} y1={yOv} x2={X(R1)} y2={yOv} /><text x={(X(b) + X(R1)) / 2} y={yOv - 2} className="t">{m(R1 - b)}</text></g>
           </>;
         })()}
-        {sec.planes.flatMap((p) => (['x0', 'x1'] as const).map((e) => {
+        {sec.planes.flatMap((p, pi) => (['x0', 'x1'] as const).map((e) => {
           const x = p[e], z = e === 'x0' ? p.z0 : p.z1;
+          // רכס/צומת משותף לשני מישורים באותו גובה: תווית אחת (שתיים היו נכתבות זו על זו)
+          const dup = sec.planes.some((q, qi) => qi < pi && ((Math.abs(q.x0 - x) < 1 && Math.abs(q.z0 - z) < 1) || (Math.abs(q.x1 - x) < 1 && Math.abs(q.z1 - z) < 1)));
+          if (dup) return null;
           return (
             <g key={`${p.id}${e}`} className="isec-dim z" onClick={() => openEdit('z', `${p.id}:${e}`, X(x), Y(z) - 10, z)} data-testid={`isec-z-${p.id}-${e}`}>
               <text x={X(x) + (e === 'x0' ? 2 : -2)} y={Y(z) - 5} className={`t ${e === 'x0' ? 'st' : 'en'}`}>{m(z)}</text>

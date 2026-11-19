@@ -395,12 +395,30 @@ function RoofXGrid() {
 /** חלוקת פנלי X (שווים / על הפטות) וקושרות ברצועת הקונזולה */
 function RoofXSplit() {
   const br = useStore((s) => s.project.building.bracing);
+  const frames = useStore((s) => s.project.building.frames);
   const set = (roof: Partial<BuildingParams['bracing']['roof']>) => store.exec(setBuilding({ bracing: { ...br, roof: { ...br.roof, ...roof } } }));
   return <>
     {(br.roof.type ?? 'x') === 'x' && <div className="field"><label>חלוקת פנלים לאורך השיפוע</label>
       <select className="inp" data-testid="br-split" value={br.roof.split ?? 'equal'} onChange={(e) => set({ split: e.target.value as 'equal' | 'purlins' })}>
         <option value="equal">שווים</option><option value="purlins">צמתים על הפטות (פנלים לא שווים)</option>
       </select></div>}
+    {(br.roof.type ?? 'x') === 'x' && (() => {
+      const fr = frames, nb = fr.length - 1;
+      const vals = Array.from({ length: nb }, (_, i) => br.roof.ySplit?.[String(i)]);
+      const cur = vals.every((v) => v === vals[0]) ? (vals[0] === undefined ? 'auto' : String(vals[0])) : 'mixed';
+      const long = fr.some((f, i) => i > 0 && Math.abs(f.y - fr[i - 1].y) > 9000);
+      const setAll = (v: string) => set({ ySplit: v === 'auto' ? undefined : Object.fromEntries(Array.from({ length: nb }, (_, i) => [String(i), Number(v)])) });
+      return <>
+        <div className="field"><label>חלוקה לאורך המבנה (מפתח בין מסגרות)</label>
+          <select className="inp" data-testid="br-ysplit" value={cur} onChange={(e) => setAll(e.target.value)}>
+            <option value="auto">אוטומטי (מפתח מעל 9 מ' — תת־מפתחים עד 6 מ')</option>
+            {cur === 'mixed' && <option value="mixed">משתנה בין מפתחים</option>}
+            {[1, 2, 3, 4].map((n) => <option key={n} value={String(n)}>{n === 1 ? 'ללא חלוקה' : `${n} תת־מפתחים`}</option>)}
+          </select></div>
+        {(long || (cur !== 'auto' && cur !== '1')) && <div className="field prof"><label>תמוכה בגבול תת־מפתח</label><ProfilePicker testId="br-strut" value={br.roof.strut ?? 'RHS100x100x5'} families={['RHS', 'SHS']} onCommit={(v) => set({ strut: v })} /></div>}
+        {long && <Help>מפתח ארוך: המפתח מחולק לאורך המבנה, ובכל גבול תמוכת RHS במקביל לקורות, תלויה מכל פטה בפח תלייה ו-2 ברגי M12. ה-X בכל תת־מפתח מתחבר לתמוכה בפחי חיבור — לאשר את הפרט מול המתכנן.</Help>}
+      </>;
+    })()}
     <label className="row"><input type="checkbox" data-testid="br-toeave" checked={!!br.roof.toEave} onChange={(e) => set({ toEave: e.target.checked })} />קושרות גם ברצועת הקונזולה (מהעמוד הקיצוני עד קצה הגג)</label>
   </>;
 }

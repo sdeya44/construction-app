@@ -7,6 +7,7 @@ import { claddingTakeoff, WALL_HE } from '../geometry/cladding';
 import { assemblyListSheet, assemblySheet, renderIso } from './assembly';
 import { purlinParams } from '../geometry/purlins';
 import { getProfile, tryProfile } from '../profiles/library';
+import { erectionSequence } from '../fab/sequence';
 import { assemblyLocations } from '../fab/location';
 import type { Bom } from '../fab/bom';
 import type { Fabrication } from '../fab/marks';
@@ -29,6 +30,7 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
   out.push({ id: 'D-COVER', type: 'cover', number: 'G-00', title: 'גיליון שער — רשימת שרטוטים והערות כלליות' });
   out.push({ id: 'D-GA', type: 'ga', number: 'G-01', title: 'שרטוט כללי והרכבה – איזומטריה' });
   out.push({ id: 'D-ERECT', type: 'erection', number: 'G-02', title: 'תוכנית הרכבה – סימון כל מכלול במקומו' });
+  out.push({ id: 'D-SEQ', type: 'sequence', number: 'G-03', title: 'סדר הקמה ומשקלי הרמה (הצעה)' });
   out.push({ id: 'D-ROOF', type: 'roof-plan', number: 'R-01', title: 'תוכנית גג ופריסת פטות' });
   if (d.connections.some((c) => c.type === 'base')) out.push({ id: 'D-ANCHOR', type: 'anchor-plan', number: 'B-01', title: 'תוכנית ברגי עיגון ופלטות בסיס' });
   // מסגרות זהות (אותם סימוני מכלול וחיבורים) — גיליון "חתך מסגרת טיפוסי" אחד לכל קבוצה
@@ -225,7 +227,7 @@ function fitsSheet(sh: Sheet): boolean {
  */
 export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrication, bom: Bom, rec?: DrawingRecord): Sheet {
   if (rec?.sheet) return buildSheetOn(def, p, d, fab, bom, rec, rec.sheet);
-  if (def.type === 'plates' || def.type === 'labels') return buildSheetOn(def, p, d, fab, bom, rec, def.type === 'labels' ? 'A4' : p.settings.paper ?? 'A4');
+  if (def.type === 'plates' || def.type === 'labels' || def.type === 'sequence') return buildSheetOn(def, p, d, fab, bom, rec, def.type === 'plates' ? p.settings.paper ?? 'A4' : 'A4');
   if ((p.settings.paper ?? 'A4') === 'A4' && def.type !== 'assembly') {
     const sh = buildSheetOn(def, p, d, fab, bom, rec, 'A4');
     const partKind = def.type === 'part' ? d.byId.get(fab.parts.find((x) => x.mark === def.ref)?.memberId ?? '')?.kind : undefined;
@@ -895,6 +897,35 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
           sh.ents.push({ k: 'line', a: { x: tx0, y }, b: { x: tx1, y }, layer: 'THIN' });
         }
       }
+      break;
+    }
+    case 'sequence': {
+      // סדר הקמה (1.37): טבלה — שלב, פעולה, מכלולים, הרמה כבדה, משקל שלב, מצטבר
+      const st = erectionSequence(p, d, fab);
+      const cols: [string, number][] = [['שלב', 9], ['פעולה', 62], ['מכלולים', 104], ['הרמה כבדה', 20], ['משקל שלב', 20], ['מצטבר', 20]];
+      const x1 = area.x1 - 1, rh = 4.4;
+      let y = area.y1 - 4;
+      sh.ents.push({ k: 'text', p: { x: x1, y }, s: 'סדר הקמה — הצעה לאישור מנהל העבודה. משקלים בק"ג (פלדה בלבד, ללא אביזרי הרמה).', h: 2.6, align: 'right', layer: 'TEXT', bold: true });
+      y -= 7;
+      const row = (vals: string[], bold: boolean, h: number) => {
+        let x = x1;
+        vals.forEach((v, i) => { sh.ents.push({ k: 'text', p: { x: x - 1, y: y - rh + 1.2 }, s: v, h, align: 'right', layer: 'TEXT', bold }); x -= cols[i][1]; });
+        y -= rh; sh.ents.push({ k: 'line', a: { x: x1 - cols.reduce((t, c) => t + c[1], 0), y }, b: { x: x1, y }, layer: 'THIN' });
+      };
+      row(cols.map((c) => c[0]), true, 2.4);
+      const maxRows = Math.floor((y - area.y0 - 8) / rh);
+      let rows = 0;
+      for (const x of st) {
+        const its = x.items.map((i) => `${i.mark}×${i.qty}`).join(' ');
+        const chunks: string[] = []; let cur = '';
+        for (const w of its.split(' ')) { if ((cur + ' ' + w).length > 62) { chunks.push(cur.trim()); cur = w; } else cur += ' ' + w; }
+        if (cur.trim()) chunks.push(cur.trim());
+        if (rows + chunks.length > maxRows) { sh.ents.push({ k: 'text', p: { x: x1 - 1, y: y - rh }, s: `…ועוד ${st.length - x.n + 1} שלבים — ראו גיליון "סדר הקמה" בקובץ ה-Excel`, h: 2.2, align: 'right', layer: 'TEXT' }); break; }
+        chunks.forEach((c, i) => row(i === 0 ? [String(x.n), x.title, c, Math.round(x.maxLift).toLocaleString('en-US'), Math.round(x.weight).toLocaleString('en-US'), Math.round(x.cum).toLocaleString('en-US')] : ['', '', c, '', '', ''], false, 2.2));
+        rows += chunks.length;
+      }
+      const heavy = st.length ? Math.max(...st.map((x) => x.maxLift)) : 0;
+      sh.ents.push({ k: 'text', p: { x: x1, y: area.y0 + 3 }, s: `ההרמה הכבדה ביותר: ${Math.round(heavy).toLocaleString('en-US')} ק"ג — לבחירת מנוף יש להוסיף אביזרי הרמה ולבדוק לפי טבלת העומסים של המנוף ברדיוס העבודה.`, h: 2.3, align: 'right', layer: 'TEXT' });
       break;
     }
     case 'labels': {
