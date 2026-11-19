@@ -17,13 +17,18 @@ async function clickMember(page: Page, pick: (m: any) => boolean): Promise<strin
     const f = new Function('m', `return (${src})(m)`);
     return (window as any).__ksp.store.state.derived.members.filter((m: any) => f(m)).slice(0, 6).map((m: any) => ({ id: m.id, p: { x: (m.start.x + m.end.x) / 2, y: (m.start.y + m.end.y) / 2, z: (m.start.z + m.end.z) / 2 } }));
   }, pick.toString());
+  const ok = (id: string) => page.evaluate(([i, src]) => { const m = (window as any).__ksp.store.state.derived.byId.get(i); return !!m && new Function('m', `return (${src})(m)`)(m); }, [id, pick.toString()] as const);
   for (const m of ms) {
     const c = await screenOf(page, m.p);
     if (!c) continue;
-    await page.mouse.click(c.x, c.y);
-    await page.waitForTimeout(150);
-    const sel = await selection(page);
-    if (sel.length === 1) return sel[0]!;
+    // כמו משתמש: אם נבחר אלמנט שלפני המבוקש — לחיצה נוספת באותה נקודה (רמז "לחיצה נוספת")
+    for (let k = 0; k < 4; k++) {
+      await page.mouse.click(c.x, c.y);
+      await page.waitForTimeout(150);
+      const sel = await selection(page);
+      if (sel.length === 1 && await ok(sel[0]!)) return sel[0]!;
+      if (!sel.length) break;
+    }
   }
   // לא נבחר בלחיצה (מוסתר מאחורי אלמנט אחר) — בחירה דרך החיפוש
   if (ms[0]) { await page.evaluate((id) => (window as any).__ksp.store.select([id]), ms[0].id); return ms[0].id; }

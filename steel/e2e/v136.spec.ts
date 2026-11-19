@@ -40,16 +40,17 @@ test('V136-02: תמונה ריאליסטית ללקוח', async ({ page }) => {
 
 test('V136-03: כל הציר / כל הקו מהסרגל ההקשרי; קושרות גג — צמתים על פטות וקונזולה', async ({ page }) => {
   const errors = await boot(page);
-  await page.evaluate(() => (window as any).__ksp.store.select(['F1.COL.L']));
-  await page.getByTestId('ctx-frame').click();
-  const sel1: string[] = await page.evaluate(() => (window as any).__ksp.store.state.selection);
-  expect(sel1.every((id) => id.startsWith('F1.'))).toBe(true);
-  expect(sel1.length).toBeGreaterThanOrEqual(3);
-  await page.evaluate(() => (window as any).__ksp.store.select(['F1.COL.L']));
-  await page.getByTestId('ctx-line').click();
-  const sel2: string[] = await page.evaluate(() => (window as any).__ksp.store.state.selection);
+  // 1.49: "כל הציר"/"כל הקו" עברו מהסרגל הצף לבחירת ההיקף בחלון האלמנט (בלי כפילות)
+  await page.evaluate(() => { (window as any).__ksp.store.set({ propScope: null }); (window as any).__ksp.store.select(['F1.COL.L']); });
+  await expect(page.getByTestId('ctx-frame')).toHaveCount(0);
+  await page.getByTestId('pscope-frame').click();
+  await expect(page.getByTestId('pscope-applies')).toBeVisible();
+  const hi1: string[] = await page.evaluate(() => (window as any).__ksp.store.state.scopeHi);
+  expect(hi1.every((id) => id.startsWith('F1.'))).toBe(true);
+  await page.getByTestId('pscope-line').click();
+  const hi2: string[] = await page.evaluate(() => (window as any).__ksp.store.state.scopeHi);
   const nf = await page.evaluate(() => (window as any).__ksp.store.state.project.building.frames.length);
-  expect(sel2.length).toBe(nf);
+  expect(hi2.length).toBe(nf);
   await shot(page, 'V136_03_line');
   await page.evaluate(() => (window as any).__ksp.store.select([]));
   await page.getByTestId('nav-b:roof').click();

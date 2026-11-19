@@ -63,21 +63,13 @@ export function ContextBar({ vp, onMore }: { vp: Viewport | null; onMore: (x: nu
     const keys = new Set(ms.map((m) => `${m.kind}|${m.profile}`));
     store.select(d.members.filter((m) => keys.has(`${m.kind}|${m.profile}`)).map((m) => m.id));
   };
-  // ציר (מסגרת) שלם: כל העמודים והקורות הראשיות של המסגרות שנבחרו — לשינוי חתך בפעולה אחת
-  const frames = new Set(ms.filter((m) => m.frameId && (m.kind === 'column' || m.kind === 'rafter')).map((m) => m.frameId!));
-  const wholeFrame = () => store.select(d.members.filter((m) => m.frameId && frames.has(m.frameId) && (m.kind === 'column' || m.kind === 'rafter')).map((m) => m.id));
-  // קו שלם: אותו סוג באותה שורה (קו עמודים / צד הגג) לאורך כל המבנה
-  const lineKey = (m: Member) => (m.kind === 'column' || m.kind === 'rafter') ? `${m.kind}|${m.lineId ?? m.planeId ?? m.side ?? ''}` : '';
-  const lines = new Set(ms.map(lineKey).filter((k) => k && !k.endsWith('|')));
-  const wholeLine = () => store.select(d.members.filter((m) => lines.has(lineKey(m))).map((m) => m.id));
+  // 1.49: הסרגל הצף = פעולות תצוגה בלבד. בחירת היקף (כל הציר / כל המסגרת / כל הדומים) — רק בחלון האלמנט.
   return (
     <div className="ctxbar" ref={ref} role="toolbar" aria-label="סרגל הקשרי" data-testid="ctxbar" style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}>
       <span className="ctx-title">{single ? <><b>{kindLabelOf(single)}</b> <span className="mono">{single.id}</span></> : <b data-testid="ctx-count">{ms.length} נבחרו</b>}</span>
-      <span className="ctx-hint">עריכה בפאנל המאפיינים ←</span>
+      <PickNextHint />
       <span className="ctx-sep" />
       {!single && <button className="ctx-btn" onClick={similar} data-testid="ctx-similar">בחר דומים</button>}
-      {frames.size > 0 && <button className="ctx-btn" onClick={wholeFrame} data-testid="ctx-frame" title="בחר את כל העמודים והקורות של הציר — ואז החלף חתך בפאנל המאפיינים לכולם יחד">כל הציר</button>}
-      {lines.size > 0 && <button className="ctx-btn" onClick={wholeLine} data-testid="ctx-line" title="בחר את כל האלמנטים מאותו סוג באותו קו לאורך המבנה (למשל כל עמודי קו א)">כל הקו</button>}
       {ms.some((m) => m.kind === 'column') && <button className="ctx-btn pri" data-testid="ctx-omit" title="ביטול העמודים שנבחרו והחלפתם בקורה נושאת בין העמודים שנותרו" onClick={() => setOmit(ms.filter((m) => m.kind === 'column').map((m) => m.id))}>בטל עמודים</button>}
       <button className="ctx-btn" onClick={() => store.set({ isolated: [...sel] })}>בודד</button>
       {single && <button className="ctx-btn" data-testid="ctx-isolate-asm" title="הצג רק את המכלול (החלק הראשי והחלקים המרותכים אליו) והברגים שלו" onClick={() => {
@@ -96,6 +88,25 @@ export function ContextBar({ vp, onMore }: { vp: Viewport | null; onMore: (x: nu
         onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); onMore(r.left + r.width / 2, r.bottom + 120); }}><Icon name="more" /></button>
     </div>
   );
+}
+
+/** רמז: מה תבחר לחיצה נוספת באותה נקודה בתלת-ממד (אלמנט מוסתר מאחור / המזחלה שלפניו) */
+export function PickNextHint() {
+  const nx = useStore((s) => s.pickNext ?? null);
+  const d = useStore((s) => s.derived);
+  if (!nx) return null;
+  const m = d.byId.get(nx);
+  const what = nx === 'gutter' ? 'המזחלה' : m ? kindLabelOf(m) : null;
+  if (!what) return null;
+  return <span className="ctx-next" data-testid="pick-next" title="לחיצה נוספת באותה נקודה בוחרת את האלמנט הבא בקו הראייה">לחיצה נוספת: <b>{what}</b></span>;
+}
+
+/** אחרי לחיצה על מזחלה שמסתירה אלמנט — רמז צף (אין בחירה, ולכן אין סרגל הקשרי) */
+export function GutterPickHint() {
+  const g = useStore((s) => s.activeGutter);
+  const nx = useStore((s) => s.pickNext ?? null);
+  if (!g || !nx || nx === 'gutter') return null;
+  return <div className="pick-float" data-testid="pick-float"><PickNextHint /></div>;
 }
 
 // ---------------------------------------------------------------- כרטיס פרט חיבור
@@ -194,13 +205,22 @@ export function CommandPalette({ cmds, onClose, onPickElement }: { cmds: Cmd[]; 
     return toks.length > 0 && toks.every((w) => h.includes(w) || (stem(w).length >= 3 && h.includes(stem(w)))) ? 2 : -1;
   };
   const cmdHits = cmds.map((c, i) => ({ c, r: rank(c), i })).filter((x) => x.r >= 0).sort((a1, b1) => a1.r - b1.r || a1.i - b1.i).map((x) => x.c);
-  const elHits = nq.length >= 2
-    ? d.members.filter((m) => m.kind !== 'bolt' && (norm(m.id).includes(nq) || norm(m.label).includes(nq) || norm(m.profile).includes(nq))).slice(0, 8)
+  // אלמנטים (1.49): ראשיים לפני פחים/ברגים; קבוצות ("כל אגדי B — 4") לפני אלמנט בודד
+  const minor = (m: Member) => m.kind === 'plate' || m.kind === 'cleat' || m.kind === 'anchor' || m.kind === 'bolt';
+  const allHits = nq.length >= 2
+    ? d.members.filter((m) => m.kind !== 'bolt' && (norm(m.id).includes(nq) || norm(m.label).includes(nq) || norm(m.profile).includes(nq) || norm(kindLabelOf(m)).includes(nq)))
     : [];
-  const rows: ({ k: 'cmd'; c: Cmd } | { k: 'el'; m: Member })[] = [...cmdHits.slice(0, 14).map((c) => ({ k: 'cmd' as const, c })), ...elHits.map((m) => ({ k: 'el' as const, m }))];
+  const score = (m: Member) => (minor(m) ? 10 : 0) + (norm(m.label).startsWith(nq) || norm(m.id).startsWith(nq) ? 0 : 1);
+  const elHits = [...allHits].sort((a, b) => score(a) - score(b)).slice(0, 8);
+  const grpKey = (m: Member) => m.label.replace(/\s*[—-]?\s*(ציר|מסגרת|מפתח|קטע|שורה)\s+[^\s—-]+/g, '').replace(/\s+\d+$/, '').trim();
+  const grps = new Map<string, Member[]>();
+  for (const m of allHits) if (!minor(m)) { const k = grpKey(m); if (k) grps.set(k, [...(grps.get(k) ?? []), m]); }
+  const grpHits = [...grps].filter(([, ms]) => ms.length > 1).sort((a, b) => b[1].length - a[1].length).slice(0, 3);
+  type Row = { k: 'cmd'; c: Cmd } | { k: 'el'; m: Member } | { k: 'grp'; label: string; ids: string[] };
+  const rows: Row[] = [...cmdHits.slice(0, 10).map((c) => ({ k: 'cmd' as const, c })), ...grpHits.map(([label, ms]) => ({ k: 'grp' as const, label, ids: ms.map((m) => m.id) })), ...elHits.map((m) => ({ k: 'el' as const, m }))];
   useEffect(() => setI(0), [q]);
   useLayoutEffect(() => { listRef.current?.querySelector('.on')?.scrollIntoView({ block: 'nearest' }); }, [i]);
-  const run = (r: (typeof rows)[number]) => { onClose(); if (r.k === 'cmd') r.c.run(); else onPickElement(r.m.id); };
+  const run = (r: Row) => { onClose(); if (r.k === 'cmd') r.c.run(); else if (r.k === 'grp') { store.select(r.ids); setTimeout(() => (window as any).__ksp?.viewport?.fitSelection?.(), 30); } else onPickElement(r.m.id); };
   let lastGroup = '';
   return (
     <div className="overlay cmdk-ov" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -220,14 +240,15 @@ export function CommandPalette({ cmds, onClose, onPickElement }: { cmds: Cmd[]; 
         <div className="cmdk-list" ref={listRef}>
           {!rows.length && <div className="cmdk-empty">אין תוצאות</div>}
           {rows.map((r, k) => {
-            const g = r.k === 'cmd' ? r.c.group : 'אלמנטים';
+            const g = r.k === 'cmd' ? r.c.group : r.k === 'grp' ? 'קבוצות במודל' : 'אלמנטים';
             const head = g !== lastGroup ? <div className="cmdk-group" key={`g${g}`}>{g}</div> : null;
             lastGroup = g;
             return [head, (
-              <div key={r.k === 'cmd' ? r.c.id : r.m.id} className={`cmdk-row${k === i ? ' on' : ''}`} onMouseEnter={() => setI(k)} onClick={() => run(r)}
-                data-testid={r.k === 'cmd' ? `cmdk-${r.c.id}` : `cmdk-el-${r.m.id}`}>
+              <div key={r.k === 'cmd' ? r.c.id : r.k === 'grp' ? `grp:${r.label}` : r.m.id} className={`cmdk-row${k === i ? ' on' : ''}`} onMouseEnter={() => setI(k)} onClick={() => run(r)}
+                data-testid={r.k === 'cmd' ? `cmdk-${r.c.id}` : r.k === 'grp' ? `cmdk-grp-${k}` : `cmdk-el-${r.m.id}`}>
                 {r.k === 'cmd'
                   ? <><span>{r.c.label}</span>{r.c.keys && <kbd>{r.c.keys}</kbd>}</>
+                  : r.k === 'grp' ? <><span>בחר הכל — {r.label}</span><span className="mono muted">{r.ids.length} אלמנטים</span></>
                   : <><span>{r.m.label}</span><span className="mono muted">{r.m.id} · {r.m.profile}</span></>}
               </div>
             )];

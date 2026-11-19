@@ -727,7 +727,7 @@ function WallsSummary() {
   const br = b.bracing;
   const lines = [...(d.section?.lines ?? [])].sort((p, q) => p.x - q.x);
   const nb = b.frames.length - 1;
-  const TYPE: Record<string, string> = { x: 'X', portal: 'אגד B', truss: 'נעילה' };
+  const TYPE: Record<string, string> = { x: 'X', portal: 'אגד B', truss: 'מסבך נעילה' };
   const rows = wallBays(br, lines.map((l) => l.id)).filter(([, bays]) => bays.length);
   const issues = d.issues.filter((i) => /^(BR\.W|BB\.|LT\.|C\.BB|C\.LT|C\.LTIE|W)/.test(i.elementId ?? '') || ['TIE_PORTAL', 'TIE_TRUSS'].includes(i.code) || /קושרת קיר|אגד B|נעילה/.test(i.message));
   return <>
@@ -750,13 +750,13 @@ export function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> }
       <div className="panel-title">קשיחות לאורך – קירות
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-walls" checked={br.walls.enabled} onChange={(e) => set({ walls: { ...br.walls, enabled: e.target.checked } })} />פעיל</label>
       </div>
-      {!br.walls.enabled && <><OffCard pic="walls" title="קשיחות קירות" desc="אלכסוני X, אגד B או נעילה אופקית בקירות לאורך המבנה" onAdd={() => set({ walls: { ...br.walls, enabled: true } })} testId="off-walls" /><LineTiesEditor /></>}
+      {!br.walls.enabled && <><OffCard pic="walls" title="קשיחות קירות" desc="קושרות X, אגד B או מסבך נעילה בקירות לאורך המבנה" onAdd={() => set({ walls: { ...br.walls, enabled: true } })} testId="off-walls" /><LineTiesEditor /></>}
       {br.walls.enabled && <>
         <WallsSummary />
         <TabbedEditor testId="br-walls-ed" title="" tabs={[
           { key: 'type', label: 'סוג וחתך', render: () => <>
             <div className="choice2 compact" role="radiogroup" aria-label="סוג קשיחות הקיר">
-              {([['x', 'אלכסוני X', 'קושרות X מזוויתנים — עובדות במתיחה', 'brace'], ['portal', 'אגד B', 'קורת RHS בין העמודים + שני אלכסונים קטנים', 'walls'], ['truss', 'נעילה אופקית', 'מסבך RHS במפתחים הנעולים + סיב רציף לכל האורך', 'walls']] as const).map(([k, t, dsc, pic]) => (
+              {([['x', 'קושרות X', 'קושרות X מזוויתנים — עובדות במתיחה', 'brace'], ['portal', 'אגד B', 'קורת RHS בין העמודים + שני אלכסונים קטנים', 'walls'], ['truss', 'מסבך נעילה', 'מסבך RHS במפתחים הנעולים + סיב רציף לכל האורך', 'walls']] as const).map(([k, t, dsc, pic]) => (
                 <button key={k} role="radio" aria-checked={(br.walls.type ?? 'x') === k} className={`choice-tile${(br.walls.type ?? 'x') === k ? ' on' : ''}`} data-testid={`br-walls-${k}`} title={dsc}
                   onClick={() => set({ walls: { ...br.walls, type: k, lineType: undefined, portal: br.walls.portal ?? defaultPortal(), truss: br.walls.truss ?? defaultLockTruss() } })}>
                   <MenuPic name={pic} size={28} /><b>{t}</b>

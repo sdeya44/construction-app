@@ -240,6 +240,11 @@ export class Viewport {
   edgeMat = new THREE.LineBasicMaterial({ color: 0x2b322e, transparent: true, opacity: 0.5 });
   selMat = new THREE.MeshStandardMaterial({ color: 0x2f8a5f, emissive: 0x0e3a24, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
   selEdgeMat = new THREE.LineBasicMaterial({ color: 0x14432d });
+  /** הדגשת ההיקף (1.49): האלמנטים שהשינוי יחול עליהם — כתום, מתחת לשכבת הבחירה */
+  hiMat = new THREE.MeshStandardMaterial({ color: 0xe08a2e, emissive: 0x5a2a00, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -0.5, polygonOffsetUnits: -1 });
+  hiEdgeMat = new THREE.LineBasicMaterial({ color: 0x8a4a10 });
+  hiGroup = new THREE.Group();
+  private lastHi = '';
   helpers = new THREE.Group();
   selGroup = new THREE.Group();
   measureGroup = new THREE.Group();
@@ -266,7 +271,7 @@ export class Viewport {
     const sun = new THREE.DirectionalLight(0xffffff, 1.6);
     sun.position.set(-0.6, -1, 1.4);
     this.scene.add(sun);
-    this.scene.add(this.helpers, this.selGroup, this.measureGroup);
+    this.scene.add(this.helpers, this.hiGroup, this.selGroup, this.measureGroup);
     this.layoutPanes(store.state.view.split);
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(host);
@@ -325,7 +330,7 @@ export class Viewport {
     if (s.derived !== this.lastDerived || visKey !== this.lastVisKey) {
       this.lastDerived = s.derived; this.lastVisKey = visKey;
       this.rebuildModel(s);
-      this.lastSel = '';
+      this.lastSel = ''; this.lastHi = '#';
       if (!this.firstFit && this.model && !this.model.box.isEmpty()) {
         this.firstFit = true;
         for (const p of this.panes) p.fit(this.model.box);
@@ -333,6 +338,14 @@ export class Viewport {
     }
     const selKey = s.selection.join(',');
     if (selKey !== this.lastSel) { this.lastSel = selKey; this.rebuildSelection(s); }
+    const hiKey = (s.scopeHi ?? []).join(',');
+    if (hiKey !== this.lastHi) {
+      this.lastHi = hiKey;
+      for (const c of [...this.hiGroup.children]) { this.hiGroup.remove(c); (c as THREE.Mesh).geometry.dispose(); }
+      const sel = new Set(s.selection);
+      const hs = (s.scopeHi ?? []).filter((id) => !sel.has(id)).map((id) => s.derived.byId.get(id)).filter(Boolean) as NonNullable<ReturnType<typeof s.derived.byId.get>>[];
+      if (hs.length) { const b = buildModel(hs, this.hiMat, this.hiEdgeMat); this.hiGroup.add(b.mesh, b.edges); }
+    }
     if (this.model) {
       this.model.mesh.visible = s.view.render === 'solid';
       this.edgeMat.opacity = s.view.render === 'solid' ? 0.55 : 1;
@@ -384,7 +397,7 @@ export class Viewport {
       // מציג את הצד שבו n·p + d >= 0 ; משאיר את מה שמעבר למישור
       this.clipPlane.set(n, -(c.flip ? -c.pos : c.pos));
     }
-    for (const m of [this.modelMat, this.edgeMat, this.selMat, this.selEdgeMat]) m.clippingPlanes = planes;
+    for (const m of [this.modelMat, this.edgeMat, this.selMat, this.selEdgeMat, this.hiMat, this.hiEdgeMat]) m.clippingPlanes = planes;
   }
 
   private rebuildHelpers(s: AppState) {
@@ -620,9 +633,9 @@ export class Viewport {
     const dist = R / Math.sin(THREE.MathUtils.degToRad(32 / 2)) * (W / H < 1.2 ? 1.25 : 0.95);
     cam.position.copy(ctr).addScaledVector(dir, dist); cam.lookAt(ctr);
     // שמירת מצב
-    const prev = { bg: this.scene.background, fog: this.scene.fog, helpers: this.helpers.visible, sel: this.selGroup.visible, meas: this.measureGroup.visible, edges: this.model.edges.visible, mVis: this.model.mesh.visible, mat: this.model.mesh.material, shadow: r.shadowMap.enabled, pr: r.getPixelRatio(), tm: r.toneMapping };
+    const prev = { bg: this.scene.background, fog: this.scene.fog, helpers: this.helpers.visible, sel: this.selGroup.visible, hi: this.hiGroup.visible, meas: this.measureGroup.visible, edges: this.model.edges.visible, mVis: this.model.mesh.visible, mat: this.model.mesh.material, shadow: r.shadowMap.enabled, pr: r.getPixelRatio(), tm: r.toneMapping };
     try {
-      this.helpers.visible = false; this.selGroup.visible = false; this.measureGroup.visible = false; this.model.edges.visible = false;
+      this.helpers.visible = false; this.selGroup.visible = false; this.hiGroup.visible = false; this.measureGroup.visible = false; this.model.edges.visible = false;
       this.model.mesh.visible = true; this.model.mesh.material = steel; this.model.mesh.castShadow = true; this.model.mesh.receiveShadow = true;
       this.scene.background = sky; this.scene.fog = new THREE.Fog(0xdfe6ea, R * 5, R * 14);
       this.scene.add(tmp);
@@ -633,7 +646,7 @@ export class Viewport {
     } finally {
       this.scene.remove(tmp);
       this.scene.background = prev.bg; this.scene.fog = prev.fog;
-      this.helpers.visible = prev.helpers; this.selGroup.visible = prev.sel; this.measureGroup.visible = prev.meas; this.model.edges.visible = prev.edges;
+      this.helpers.visible = prev.helpers; this.selGroup.visible = prev.sel; this.hiGroup.visible = prev.hi; this.measureGroup.visible = prev.meas; this.model.edges.visible = prev.edges;
       this.model.mesh.visible = prev.mVis; this.model.mesh.material = prev.mat; this.model.mesh.castShadow = false; this.model.mesh.receiveShadow = false;
       r.shadowMap.enabled = prev.shadow; r.toneMapping = prev.tm; r.setPixelRatio(prev.pr);
       sun.shadow.map?.dispose();
@@ -702,7 +715,7 @@ export class Viewport {
     const againAfterGutter = !!lp0?.gutter && Math.hypot(lp0.x - e.clientX, lp0.y - e.clientY) < 5 && r.ids.length > 0;
     if (g && !againAfterGutter && (!r.points.length || g.d < r.points[0]!.distanceTo(p.camera.position) - 1)) {
       store.select([]);
-      store.set({ activeGutter: g.ref, activeConn: null });
+      store.set({ activeGutter: g.ref, activeConn: null, pickNext: r.ids[0] ?? null });
       p.lastPick = { x: e.clientX, y: e.clientY, ids: r.ids, i: -1, gutter: true };
       return;
     }
@@ -718,13 +731,17 @@ export class Viewport {
     if (lp && Math.hypot(lp.x - e.clientX, lp.y - e.clientY) < 5 && lp.ids.join() === r.ids.join()) idx = (lp.i + 1) % r.ids.length;
     // סבב: אחרי האלמנט האחרון בקרן — חזרה למזחלה שלפניהם
     if (g && lp && !lp.gutter && idx === 0 && lp.ids.join() === r.ids.join() && Math.hypot(lp.x - e.clientX, lp.y - e.clientY) < 5 && g.d < r.points[0]!.distanceTo(p.camera.position) - 1) {
-      store.select([]); store.set({ activeGutter: g.ref, activeConn: null });
+      store.select([]); store.set({ activeGutter: g.ref, activeConn: null, pickNext: r.ids[0] ?? null });
       p.lastPick = { x: e.clientX, y: e.clientY, ids: r.ids, i: -1, gutter: true };
       return;
     }
     p.lastPick = { x: e.clientX, y: e.clientY, ids: r.ids, i: idx };
     const id = r.ids[idx];
     store.select([id], e.ctrlKey || e.metaKey ? 'toggle' : e.shiftKey ? 'add' : 'replace');
+    // רמז: מה תבחר לחיצה נוספת באותה נקודה (אלמנט מאחור / המזחלה שלפני)
+    const gFront = !!g && g.d < r.points[0]!.distanceTo(p.camera.position) - 1;
+    const nx = idx + 1 < r.ids.length ? r.ids[idx + 1] : gFront ? 'gutter' : r.ids.length > 1 ? r.ids[0] : null;
+    if (nx) store.set({ pickNext: nx });
   }
 
   /** לחיצה על מידה ניתנת לעריכה בתצוגה: key = 'x:i' (מרווח צירים) / 'y:i' (מרווח מסגרות) / 'w' (רוחב) */

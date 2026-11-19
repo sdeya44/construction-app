@@ -55,6 +55,10 @@ export interface AppState {
   propScope?: 'one' | 'asm' | 'asmall' | 'line' | 'frame' | 'similar' | null;
   /** להציג בתלת-ממד רק את ההיקף שנבחר */
   scopeIsolate?: boolean;
+  /** לחיצה נוספת באותה נקודה בתלת-ממד תבחר את זה (רמז בסרגל הצף); 'gutter' = המזחלה שלפני */
+  pickNext?: string | null;
+  /** הדגשת ההיקף שנבחר בחלון האלמנט (כתום) */
+  scopeHi?: string[] | null;
   scopeIsoOwned?: boolean;
   /** שרטוט לפתיחה במצב שרטוטים */
   drawingFocus?: string | null;
@@ -143,7 +147,7 @@ class Store {
       for (const id of ids) { if (s.has(id)) s.delete(id); else s.add(id); }
       sel = [...s];
     }
-    this.set({ selection: sel });
+    this.set({ selection: sel, pickNext: null });
   }
 
   setView(patch: Partial<ViewState>) { this.set({ view: { ...this.state.view, ...patch } }); }

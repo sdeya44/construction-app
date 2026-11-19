@@ -155,7 +155,7 @@ test.describe('M1 – ליבת מידול', () => {
     const pos = await page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('F1.COL.L').start);
     expect(pos).toEqual({ x: 500, y: 0, z: 0 });
     // שינוי פרמטרי אחרי הזזה ידנית מדווח כהתאמה לא תקפה
-    await page.getByTestId('pscope-asm').click(); // היקף: המכלול (המסגרת) — הגדרות הגיאומטריה
+    await page.getByTestId('pscope-frame').click(); // היקף: כל המסגרת — הגדרות הגיאומטריה (1.49)
     await page.getByTestId('slopeLeft').fill('12'); await page.getByTestId('slopeLeft').press('Enter');
     const stale = await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'STALE_OVERRIDE').map((i: any) => i.elementId));
     expect(stale).toEqual([]); // שינוי שיפוע אינו משנה את מיקום בסיס/ראש העמוד בציר א

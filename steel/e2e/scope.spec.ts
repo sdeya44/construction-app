@@ -12,6 +12,7 @@ test('SCOPE-01: לחיצה על אלמנט — בחירת היקף; האלמנט
   // האלמנט הזה: בידוד, שרטוט חלק, כרטיס חיבור בכל קצה
   await page.getByTestId('pscope-one').click();
   expect((await S()).isolated).toContain('F3.COL.L');
+  await page.getByTestId('psec-part').click(); // שרטוט החלק מקופל (1.49) — החתך קודם
   await expect(page.getByTestId('part-preview')).toBeVisible();
   await expect(page.getByTestId('end-cards')).toContainText('פלטת בסיס');
   await expect(page.getByTestId('end-cards')).toContainText('עמוד-קורה');

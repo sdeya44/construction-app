@@ -18,7 +18,7 @@ import { defaultLockTruss } from '../geometry/lockTruss';
 export type AsmFamily = 'lock' | 'portal' | 'wallx' | 'roofx' | 'knee' | 'gutter' | 'haunch' | 'frame';
 export interface Asm { family: AsmFamily; title: string; ids: string[]; lineId?: string; bay?: number; view: 'yz' | 'xz' | 'xy' }
 
-const FAM_NAME: Record<AsmFamily, string> = { lock: 'נעילה אופקית (מסבך)', portal: 'אגד B', wallx: 'קושרות X בקיר', roofx: 'קושרות X בגג', knee: 'אלכסון עמוד-קורה', gutter: 'תומך מזחלה', haunch: 'מכפל', frame: 'מסגרת' };
+const FAM_NAME: Record<AsmFamily, string> = { lock: 'מסבך נעילה', portal: 'אגד B', wallx: 'קושרות X בקיר', roofx: 'קושרות X בגג', knee: 'אלכסון עמוד-קורה', gutter: 'תומך מזחלה', haunch: 'מכפל', frame: 'מסגרת' };
 
 export function assemblyOf(m: Member, d: DerivedModel): Asm | null {
   const id = m.id, cid = m.connId ?? '';
@@ -124,7 +124,7 @@ function WallTypeSwitch({ asm, scope }: { asm: Asm; scope: 'line' | 'all' }) {
   };
   return (
     <div className="ss-row" role="radiogroup" aria-label="צורת המכלול">
-      {([['x', 'אלכסוני X'], ['portal', 'אגד B'], ['truss', 'מסבך נעילה']] as const).map(([k, t]) => (
+      {([['x', 'קושרות X'], ['portal', 'אגד B'], ['truss', 'מסבך נעילה']] as const).map(([k, t]) => (
         <button key={k} className={`btn small${cur === k ? ' on' : ''}`} data-testid={`asm-type-${k}`} onClick={() => set(k)}>{t}</button>
       ))}
     </div>

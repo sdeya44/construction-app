@@ -51,7 +51,7 @@ export function navStatus(p: Project, d: DerivedModel): Record<string, NavStat> 
     ? { v: `${(br.roof.type ?? 'x') === 'x' ? br.roof.profile : 'סבכת RHS'} · ${resolveBays(br.roof.bays, nb).length} מפתחים${rs ? ` · ${rs} שורות תמוכה` : ''}` }
     : rs ? { v: `${rs} שורות תמוכה בין הקורות` } : { off: true });
 
-  const TYPE: Record<string, string> = { x: 'X', portal: 'אגד B', truss: 'נעילה' };
+  const TYPE: Record<string, string> = { x: 'X', portal: 'אגד B', truss: 'מסבך נעילה' };
   const wl = br.walls.enabled ? wallBays(br, lines.map((l) => l.id)).filter(([, bays]) => bays.length) : [];
   const lab = (id: string) => lines.find((l) => l.id === id)?.label ?? id;
   put('b:walls', br.walls.enabled || br.lineTies?.enabled

@@ -130,7 +130,7 @@ export function ConnLibrary() {
   if (!open) return null;
   const lib = p.connLibrary ?? [];
   const close = () => store.set({ connLibraryOpen: false });
-  const FAM: Record<ConnFamily, string> = { knee: 'אלכסוני עמוד-קורה', strut: 'תמוכות בין הקורות', base: 'בסיסים', eave: 'עמוד-קורה', ridge: 'רכס', side: 'קורה לצד עמוד', roofx: 'קושרות גג', wallx: 'קושרות קיר', portal: 'אגד B', cleat: 'תושבות פטה', psplice: 'חיבורי המשך פטות', bsplice: 'חיבורי המשך קורות/עמודים', tbsup: 'קורה נושאת ↔ עמוד', tbseat: 'קורת גג על קורה נושאת', lock: 'נעילה אופקית' };
+  const FAM: Record<ConnFamily, string> = { knee: 'אלכסוני עמוד-קורה', strut: 'תמוכות בין הקורות', base: 'בסיסים', eave: 'עמוד-קורה', ridge: 'רכס', side: 'קורה לצד עמוד', roofx: 'קושרות גג', wallx: 'קושרות קיר', portal: 'אגד B', cleat: 'תושבות פטה', psplice: 'חיבורי המשך פטות', bsplice: 'חיבורי המשך קורות/עמודים', tbsup: 'קורה נושאת ↔ עמוד', tbseat: 'קורת גג על קורה נושאת', lock: 'מסבך נעילה' };
   const setLib = (l: ConnPreset[], label: string, extra?: (pp: Project) => Project) => store.exec({ label, run: (pp) => { const n = { ...pp, connLibrary: l }; return extra ? extra(n) : n; } });
   const makeDefault = (x: ConnPreset) => {
     const firstConn = d.connections.find((c) => (x.family === 'knee' ? c.id.startsWith('C.KB.') : x.family === 'strut' ? /^C\.RS\d+\./.test(c.id) : c.type === 'base'));

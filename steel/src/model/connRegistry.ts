@@ -178,7 +178,7 @@ function situationBase(p: Project, d: DerivedModel, connId: string): Situation |
   if (f === 'lock') {
     const colId = c.members.find((x) => x.includes('.COL.')) ?? '';
     const line = /\.COL\.([^.]+)$/.exec(colId)?.[1] ?? '';
-    return { family: f, connId, local: line, oneLabel: `ציר ${lab(line)} בלבד`, title: `נעילה אופקית · ציר ${lab(line)}`, key: 'lock', sameCount: d.connections.filter((x) => x.id.startsWith('C.LT.')).length, memberFamily: fam(mB?.profile),
+    return { family: f, connId, local: line, oneLabel: `ציר ${lab(line)} בלבד`, title: `מסבך נעילה · ציר ${lab(line)}`, key: 'lock', sameCount: d.connections.filter((x) => x.id.startsWith('C.LT.')).length, memberFamily: fam(mB?.profile),
       facts: [{ k: 'עמוד', v: d.byId.get(colId)?.profile ?? '?' }, { k: 'ציר', v: lab(line) }, { k: 'מיקום', v: c.label }] };
   }
   if (f === 'psplice' || f === 'bsplice') {

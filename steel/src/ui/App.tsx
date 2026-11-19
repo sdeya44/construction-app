@@ -13,7 +13,7 @@ import { ProfileDatalist } from './StructurePanel';
 import { DrawingsView } from './DrawingsView';
 import { CatalogDialog } from './CatalogDialog';
 import { ProductionView } from './ProductionView';
-import { CommandPalette, ConnCard, ContextBar, MarkingMenu, connectionsOf, type Cmd } from './Overlays';
+import { CommandPalette, ConnCard, ContextBar, GutterPickHint, MarkingMenu, connectionsOf, type Cmd } from './Overlays';
 import { KIND_LABEL } from './TreePanel';
 import { moveLines, setPlaneSlope, shiftRoof, toCustomSection } from '../model/section';
 import { NAV_INDEX, settingsOf } from './navIndex';
@@ -285,7 +285,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.48.2</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.49.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -353,6 +353,7 @@ export function App() {
           </div>
 
           <ContextBar vp={vpObj} onOpenConn={openConn} onMore={(x, y) => setMenu({ x, y })} />
+          <GutterPickHint />
           <ConnCard onOpen={openConn} />
           {quick && (
             <div className="quick-panel" data-testid="quick-panel" role="dialog" aria-label={quick.label}>

@@ -231,7 +231,6 @@ function PropertiesInner() {
       {!scopeNow && <div className="hint" data-testid="pscope-hint">{braceAsm ? 'האלמנט הוא חלק ממכלול — בחר: המכלולים בציר הזה או כל המכלולים במודל, ויוצגו סוג המכלול, מידות, חתך ופרטי חיבור.' : 'בחר על מה לעבוד: האלמנט הזה בלבד, המכלול שלו, כל הציר או כל הדומים — ויוצגו ההגדרות של הבחירה.'}</div>}
       {scopeNow === 'one' && <>
         {manualNote}
-        <PSec id="part" title="שרטוט החלק" testId="psec-part"><PartPreview m={m} mark={mark} /></PSec>
         <PSec id="prof" title={plateLike ? 'חלק וחומר' : 'חתך וחומר — האלמנט הזה'} testId="psec-prof">
           {secCard}
           {m.partDesc && <div className="hint" style={{ marginTop: 0 }}>{m.partDesc}</div>}
@@ -246,11 +245,13 @@ function PropertiesInner() {
           {lengths}
         </PSec>
         {connBlock}
+        <PSec id="part" title="שרטוט החלק" testId="psec-part" closed><PartPreview m={m} mark={mark} /></PSec>
         {advanced}
       </>}
       {braceAsm && fam && scopeNow === 'asmall' && <>
         <AssemblyCard m={m} />
         <div className="hint" data-testid="asm-applies">חל על: <b>{cur?.label}</b> — כל ההגדרות כמו בתפריט הימני: סוג, צירים ומפתחים, חתכים, מידות ופרטים.</div>
+        {plateLike && !custom && <PSec id="asmplate" title="הפלטה הזו — עריכה בסטודיו" testId="psec-plate"><HubSettings m={m} /></PSec>}
         <div data-testid="hub-settings" className="asm-full"><BracingEditor part={fam.family === 'roofx' ? 'roof' : 'walls'} /></div>
       </>}
       {braceAsm && fam && scopeNow === 'asm' && <>
@@ -259,6 +260,7 @@ function PropertiesInner() {
         <PSec id="shape" title={`סוג ומידות — ${fam.title.split(' — ')[0]}`} testId="psec-shape"><div data-testid="hub-settings"><AssemblyShape asm={fam} scope={asmScope} setScope={setScope} fixed /></div></PSec>
         {!plateLike && <PSec id="prof" title="חתך" testId="psec-prof">{secCard}<AsmProfile m={m} scope={asmScope} lineId={fam.lineId} ids={cur?.ids ?? []} /></PSec>}
         <PSec id="conns" title="פרטי חיבור" testId="ptab-conns"><AssemblyConn asm={fam} scope={asmScope} /><MemberConnections memberId={m.id} /></PSec>
+        {plateLike && !custom && <PSec id="asmplate" title="הפלטה הזו — עריכה בסטודיו" testId="psec-plate"><HubSettings m={m} /></PSec>}
       </>}
       {!braceAsm && scopeNow === 'asm' && <>
         <AssemblyCard m={m} />
@@ -268,6 +270,7 @@ function PropertiesInner() {
         {!fam && !tbDef && !inRT && <PSec id="general" title="הגדרות המכלול" testId="psec-general"><EditCtx.Provider value={m.purlin ? { embed: true, part: 'shape' } : { embed: false }}><HubSettings m={m} /></EditCtx.Provider></PSec>}
       </>}
       {cur && (scopeNow === 'line' || scopeNow === 'frame' || scopeNow === 'similar') && <GroupView m={m} ids={cur.ids} label={cur.label} similar={scopeNow === 'similar'} route={route}>
+        {scopeNow === 'frame' && <PSec id="framegeo" title="גיאומטריית המסגרת (לכל המבנה)" testId="psec-general"><EditCtx.Provider value={{ embed: false }}><HubSettings m={m} /></EditCtx.Provider></PSec>}
         {scopeNow === 'similar' && !plateLike && !fam && !tbDef && !inRT && <PSec id="general" title="הגדרות כלליות (לכל המבנה)" testId="psec-general" closed><EditCtx.Provider value={m.purlin ? { embed: true, part: 'shape' } : { embed: false }}><HubSettings m={m} /></EditCtx.Provider></PSec>}
         {scopeNow === 'similar' && famShape}
       </GroupView>}
@@ -278,12 +281,12 @@ function PropertiesInner() {
 
 function PSec({ id, title, testId, closed, children }: { id: string; title: string; testId?: string; closed?: boolean; children: ReactNode }) {
   const key = `ksp-psec-${id}`;
-  let open = !closed;
-  try { const v = localStorage.getItem(key); if (v !== null) open = v === '1'; } catch { /* */ }
+  const [open, setOpen] = useState(() => { let o = !closed; try { const v = localStorage.getItem(key); if (v !== null) o = v === '1'; } catch { /* */ } return o; });
   return (
-    <details className="psec" open={open || undefined} onToggle={(e) => { try { localStorage.setItem(key, (e.currentTarget as HTMLDetailsElement).open ? '1' : '0'); } catch { /* */ } }}>
+    <details className="psec" open={open || undefined} onToggle={(e) => { const o = (e.currentTarget as HTMLDetailsElement).open; setOpen(o); try { localStorage.setItem(key, o ? '1' : '0'); } catch { /* */ } }}>
       <summary data-testid={testId}>{title}</summary>
-      <div className="psec-b">{children}</div>
+      {/* תוכן מקופל לא נבנה (שרטוט החלק כבד) */}
+      {open && <div className="psec-b">{children}</div>}
     </details>
   );
 }
@@ -614,8 +617,9 @@ export function scopeOptions(m: Member, d: DerivedModel): ScopeOpt[] {
     o.push({ key: 'asmall', label: asm.family === 'roofx' ? 'כל קושרות הגג' : 'כל המכלולים במודל', ...pick() });
     return o;
   }
-  const out: ScopeOpt[] = [{ key: 'one', label: 'האלמנט הזה', ids: [m.id], show: [m.id, ...parts([m.id])] }];
-  if (asm && asm.ids.length > 1) out.push({ key: 'asm', label: `המכלול${asm.family === 'frame' ? ' (המסגרת)' : ''}`, ids: asm.ids.filter((x) => d.byId.get(x)?.kind === m.kind), show: asm.ids });
+  const out: ScopeOpt[] = [{ key: 'one', label: 'רק האלמנט הזה', ids: [m.id], show: [m.id, ...parts([m.id])] }];
+  // מסגרת: אפשרות אחת בלבד — "כל המסגרת" (בלי "המכלול (המסגרת)" הכפול). אלכסון עמוד-קורה: "הגדרות האלכסונים"
+  if (asm && asm.ids.length > 1 && asm.family !== 'frame') out.push({ key: 'asm', label: asm.family === 'knee' ? 'הגדרות האלכסונים' : asm.family === 'haunch' ? 'הגדרות המכפל' : 'המכלול', ids: asm.ids.filter((x) => d.byId.get(x)?.kind === m.kind), show: asm.ids });
   else if (/^(TR|TB)\./.test(m.id)) {
     // מסבך גג / קורה או מסבך נושא: המכלול = כל האלמנטים עם אותה תחילית
     const pre = m.id.split('.').slice(0, 2).join('.');
@@ -650,6 +654,7 @@ function ScopeBar({ opts, cur }: { opts: ScopeOpt[]; cur: PropScope | null }) {
       <div className="scope-bar-b">
         {opts.map((o) => <button key={o.key} className={`scope-b${cur === o.key ? ' on' : ''}`} data-testid={`pscope-${o.key}`} onClick={() => { store.set({ propScope: o.key }); try { localStorage.setItem('ksp-prop-scope', o.key); } catch { /* */ } }}>{o.label}<small>{o.ids.length}</small></button>)}
       </div>
+      {cur && cur !== 'one' && (() => { const o = opts.find((x) => x.key === cur); return o ? <div className="scope-applies" data-testid="pscope-applies">השינוי יחול על <b>{o.ids.length || o.show.length}</b> {o.key === 'asm' || o.key === 'asmall' ? 'אלמנטים במכלולים' : 'אלמנטים'} — מודגשים בכתום במודל</div> : null; })()}
       <label className="scope-iso"><input type="checkbox" data-testid="pscope-iso" checked={iso} onChange={(e) => store.set({ scopeIsolate: e.target.checked, ...(e.target.checked ? {} : { isolated: null }) })} />הצג בתלת-ממד רק את הבחירה</label>
     </div>
   );
@@ -659,14 +664,16 @@ function ScopeBar({ opts, cur }: { opts: ScopeOpt[]; cur: PropScope | null }) {
 export function ScopeIsolator() {
   const sel = useStore((s) => s.selection), scope = useStore((s) => s.propScope ?? null), iso = useStore((s) => s.scopeIsolate ?? false);
   const d = useStore((s) => s.derived);
-  const key = `${sel.join(',')}|${scope}|${iso}`;
+  const key = `${sel.join(',')}|${scope}|${iso}|${d.members.length}`;
   useEffect(() => {
     const st = store.state;
-    if (sel.length === 1 && scope && iso) {
-      const m = d.byId.get(sel[0]);
-      const o = m ? scopeOptions(m, d).find((x) => x.key === scope) : null;
-      if (o) { store.set({ isolated: o.show, scopeIsoOwned: true }); setTimeout(() => (scope === 'one' ? window.__ksp?.viewport?.fitSelection?.() : window.__ksp?.viewport?.fitIds?.(o.show)), 40); return; }
-    }
+    const m = sel.length === 1 ? d.byId.get(sel[0]) : undefined;
+    const opts = m ? scopeOptions(m, d) : [];
+    const o = scope ? opts.find((x) => x.key === scope) ?? (opts.length ? opts[0] : null) : null;
+    // הדגשה כתומה של מה שהשינוי יחול עליו (1.49) — תמיד, בלי להעלים את המודל
+    const hi = o && o.key !== 'one' ? (o.key === 'asm' || o.key === 'asmall' ? o.show : o.ids) : null;
+    if ((hi ?? []).join(',') !== (st.scopeHi ?? []).join(',')) store.set({ scopeHi: hi });
+    if (o && iso) { store.set({ isolated: o.show, scopeIsoOwned: true }); setTimeout(() => (o.key === 'one' ? window.__ksp?.viewport?.fitSelection?.() : window.__ksp?.viewport?.fitIds?.(o.show)), 40); return; }
     if (st.scopeIsoOwned) store.set({ isolated: null, scopeIsoOwned: false });
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
