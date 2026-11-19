@@ -85,14 +85,17 @@ test('SCOPE-03 (1.48): אלמנט במכלול קשיחות — רק "המכלו
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), await bbK(b));
   await page.getByTestId('pscope-asmall').click();
   await expect(page.getByTestId('asm-applies')).toContainText('כל המכלולים במודל');
-  await page.getByTestId('asm-type-x').click();
+  // כל המכלולים = העורך המלא כמו בתפריט הימני (סוג, צירים ומפתחים, סיב רציף)
+  const full = page.getByTestId('hub-settings');
+  await expect(full.getByTestId('br-walls-ed-tab-lines')).toBeVisible();
+  await full.getByTestId('br-walls-x').click();
   w = (await S()).project.building.bracing.walls;
   expect(w.type).toBe('x');
   expect(w.lineType).toBeUndefined();
   expect(errors).toEqual([]);
 });
 
-test('SCOPE-04 (1.48): "כל המכלולים במודל" גובר על הגדרה קודמת לציר', async ({ page }) => {
+test('SCOPE-04 (1.48.1): "כל המכלולים במודל" — העורך המלא; גובר על הגדרה קודמת לציר', async ({ page }) => {
   const errors = await boot(page);
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.set({ propScope: null }); k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, bracing: { ...p.building.bracing, walls: { ...p.building.bracing.walls, enabled: true, type: 'portal' } } } }) }); });
   const lines: string[] = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => /^BB\./.test(m.id)).map((m: any) => m.id.split('.')[2]))] as string[]);
@@ -106,7 +109,11 @@ test('SCOPE-04 (1.48): "כל המכלולים במודל" גובר על הגדר
   // מציר b: כל המכלולים — גם ציר a מתעדכן
   await page.evaluate(async (i) => (window as any).__ksp.store.select([i]), (await bbK(b)).id);
   await page.getByTestId('pscope-asmall').click();
-  await pickProfile(page, 'prop-profile', 'SHS120x5', 'SHS');
+  const full = page.getByTestId('hub-settings');
+  await full.getByTestId('pb-brace-open').click();
+  await full.getByTestId('pb-brace-fam-SHS').click();
+  await full.getByTestId('pb-brace-opt-SHS120x5').click();
+  await page.waitForTimeout(150);
   expect((await bbK(a)).profile).toBe('SHS120x5');
   expect((await bbK(b)).profile).toBe('SHS120x5');
   expect(errors).toEqual([]);

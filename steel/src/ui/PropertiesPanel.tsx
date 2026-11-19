@@ -2,6 +2,7 @@ import { settingsOf } from './navIndex';
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { resetOverrides, setBuilding, setKneeBraces, setMemberProps, setTransfers, type Command } from '../commands/commands';
 import { defaultLockTruss } from '../geometry/lockTruss';
+import { BracingEditor } from './StructurePanel';
 import { defaultPortal } from '../geometry/portal';
 import { useFab } from '../fab/useFab';
 import { fromMm } from '../core/units';
@@ -247,7 +248,12 @@ function PropertiesInner() {
         {connBlock}
         {advanced}
       </>}
-      {braceAsm && fam && (scopeNow === 'asm' || scopeNow === 'asmall') && <>
+      {braceAsm && fam && scopeNow === 'asmall' && <>
+        <AssemblyCard m={m} />
+        <div className="hint" data-testid="asm-applies">חל על: <b>{cur?.label}</b> — כל ההגדרות כמו בתפריט הימני: סוג, צירים ומפתחים, חתכים, מידות ופרטים.</div>
+        <div data-testid="hub-settings" className="asm-full"><BracingEditor part={fam.family === 'roofx' ? 'roof' : 'walls'} /></div>
+      </>}
+      {braceAsm && fam && scopeNow === 'asm' && <>
         <AssemblyCard m={m} />
         <div className="hint" data-testid="asm-applies">חל על: <b>{cur?.label}</b> — כל שינוי למטה (צורה, מידות, חתך, פרטים) יחול על כולם.</div>
         <PSec id="shape" title={`סוג ומידות — ${fam.title.split(' — ')[0]}`} testId="psec-shape"><div data-testid="hub-settings"><AssemblyShape asm={fam} scope={asmScope} setScope={setScope} fixed /></div></PSec>

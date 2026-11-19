@@ -117,7 +117,12 @@ test('HUB-03: שינוי חתך מפאנל אלכסון — "רק האלמנט �
   const br = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BR.R'))?.id);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), br);
   await expect(page.getByTestId('pscope-asmall')).toHaveClass(/on/); // קושרות גג = מכלול (1.48): רק "כל קושרות הגג"
-  await pickProfile(page, 'prop-profile', 'L60x6', 'L');
+  const full = page.getByTestId('hub-settings'); // העורך המלא של קושרות הגג (1.48.1)
+  await full.getByTestId('br-roof-ed-tab-sec').click();
+  await full.getByTestId('br-roof-prof-open').click();
+  await full.getByTestId('br-roof-prof-fam-L').click();
+  await full.getByTestId('br-roof-prof-opt-L60x6').click();
+  await page.waitForTimeout(150);
   const roof = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('BR.R')).map((m: any) => m.profile))]);
   expect(roof).toEqual(['L60x6']);
   await shot(page, 'HUB_03_brace_profile');

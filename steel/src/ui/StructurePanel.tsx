@@ -706,7 +706,7 @@ function RoofBracingPanel() {
             <select className="inp" data-testid="br-roof-type" value={br.roof.type ?? 'x'} onChange={(e) => set({ roof: { ...br.roof, type: e.target.value as 'x' | 'rhs', rhs: br.roof.rhs ?? defaultRhsTruss() } })}>
               <option value="x">X מזוויתנים (מתיחה)</option><option value="rhs">סבכה אופקית RHS (מוטות + אלכסונים)</option>
             </select></div>
-          {isX ? <><div className="field prof"><label>חתך</label><ProfilePicker value={br.roof.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ roof: { ...br.roof, profile: v } })} /></div><RoofEndFields />{(br.roof.endDetail ?? 'gusset') === 'gusset' && <XConnFields />}</> : <RhsFields />}
+          {isX ? <><div className="field prof"><label>חתך</label><ProfilePicker testId="br-roof-prof" value={br.roof.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ roof: { ...br.roof, profile: v } })} /></div><RoofEndFields />{(br.roof.endDetail ?? 'gusset') === 'gusset' && <XConnFields />}</> : <RhsFields />}
         </> },
         { key: 'struts', label: `תמוכות בין הקורות${rs ? ` (${rs})` : ''}`, render: () => <RafterStrutsEditor /> },
         { key: 'adv', label: 'מתקדם', render: () => <>
@@ -737,7 +737,7 @@ function WallsSummary() {
   </>;
 }
 
-function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) {
+export function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) {
   const on = (k: Exclude<BraceSection, 'knee'>) => !part || part === k;
   const b = useStore((s) => s.project.building);
   const br = b.bracing;
@@ -758,7 +758,7 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
             <div className="choice2 compact" role="radiogroup" aria-label="סוג קשיחות הקיר">
               {([['x', 'אלכסוני X', 'קושרות X מזוויתנים — עובדות במתיחה', 'brace'], ['portal', 'אגד B', 'קורת RHS בין העמודים + שני אלכסונים קטנים', 'walls'], ['truss', 'נעילה אופקית', 'מסבך RHS במפתחים הנעולים + סיב רציף לכל האורך', 'walls']] as const).map(([k, t, dsc, pic]) => (
                 <button key={k} role="radio" aria-checked={(br.walls.type ?? 'x') === k} className={`choice-tile${(br.walls.type ?? 'x') === k ? ' on' : ''}`} data-testid={`br-walls-${k}`} title={dsc}
-                  onClick={() => set({ walls: { ...br.walls, type: k, portal: br.walls.portal ?? defaultPortal(), truss: br.walls.truss ?? defaultLockTruss() } })}>
+                  onClick={() => set({ walls: { ...br.walls, type: k, lineType: undefined, portal: br.walls.portal ?? defaultPortal(), truss: br.walls.truss ?? defaultLockTruss() } })}>
                   <MenuPic name={pic} size={28} /><b>{t}</b>
                 </button>
               ))}
