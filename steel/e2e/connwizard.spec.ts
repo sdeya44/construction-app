@@ -67,3 +67,21 @@ test('CW-02: מכרטיס הקצה של עמוד — "החלף פרט" לעמו�
   expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.severity === 'error'))).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+test('CW-03: קורה נושאת באשף — תמיכה A2 לקורה הזו; פרט סטודיו עם תנאי התאמה מופיע באשף', async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, transfers: [{ id: 'T1', lineId: 'L', from: 'F1', to: 'F3', removed: ['F2'], profile: 'IPE330', support: 'A1', seat: 'B1' }] } }) }); });
+  const cid = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => c.type === 'tb-support').id);
+  await page.evaluate((i) => (window as any).__ksp.store.set({ connWizard: i }), cid);
+  await expect(page.getByTestId('wiz-c-tbsup.A1')).toContainText('נוכחי');
+  await page.getByTestId('wiz-c-tbsup.A2').click();
+  await page.getByTestId('wiz-apply').click();
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.transfers[0].support)).toBe('A2');
+  // פרט סטודיו עם תנאי (אלכסון RHS)
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, kneeBraces: { ...(p.building.kneeBraces ?? {}), enabled: true, profile: 'RHS80x80x4', drop: 800, reach: 800, angle: 45, plateT: 10, plateW: 150, plateL: 250, bolt: { d: 16, grade: '8.8', standard: 'ISO 4017', clearance: 2 }, gauge: 80, pitch: 200, weldSize: 5, exclude: [] } }, customDetails: [{ id: 'cd-x', name: 'פלטה מוברגת (סטודיו)', family: 'any', vars: [], ops: [], match: { member: ['RHS'], angMin: 20, angMax: 70 } }] }) }); });
+  const kc = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => c.id.startsWith('C.KB.')).id);
+  await page.evaluate((i) => (window as any).__ksp.store.set({ connWizard: i }), kc);
+  await expect(page.getByTestId('wiz-c-custom:cd-x')).toContainText('מסטודיו');
+  await expect(page.getByTestId('wiz-c-custom:cd-x')).toContainText('מתאים לתנאי הפרט');
+  expect(errors).toEqual([]);
+});

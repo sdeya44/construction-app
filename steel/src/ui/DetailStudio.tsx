@@ -9,6 +9,7 @@ import { blankDetail, buildDetail, detailPresets, findSite, parseSiteKey, partsT
 import { assignDetail, saveDetail } from '../commands/commands';
 import type { CustomDetail, DetailOp, DetailRef, Member } from '../model/types';
 import { store, useStore } from '../store';
+import { tryProfile } from '../profiles/library';
 import { Icon } from './icons';
 import { PlateWizard } from './PlateWizard';
 
@@ -239,6 +240,14 @@ function Studio({ siteKey: key }: { siteKey: string }) {
           <input className="inp" value={det.name} onChange={(e) => { const v = e.target.value; setDet((d) => ({ ...d, name: v })); }} aria-label="שם הפרט" data-testid="ds-name" />
           <select className="inp" value={key} onChange={(e) => store.set({ detailStudio: e.target.value })} aria-label="קצה">{ends.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           <span className="muted">{main.label} · {main.profile}{site.host ? ` → ${site.host.profile}` : ''} · {Math.round(site.ang)}°</span>
+        </div>
+        <div className="ds-match" data-testid="ds-match">
+          <label className="row" style={{ gap: 5 }}><input type="checkbox" data-testid="ds-match-on" checked={!!det.match} onChange={(e) => { const on = e.target.checked; setDet((d0) => ({ ...d0, match: on ? { member: [tryProfile(main.profile)?.family ?? ''].filter(Boolean), host: site.host ? [tryProfile(site.host.profile)?.family ?? ''].filter(Boolean) : [], angMin: Math.max(0, Math.round(site.ang) - 15), angMax: Math.min(90, Math.round(site.ang) + 15) } : undefined })); }} />להציע באשף החיבורים במצבים דומים</label>
+          {det.match && <span className="ds-match-f">
+            אלמנט <input className="inp" style={{ width: 80 }} data-testid="ds-match-member" value={(det.match.member ?? []).join(',')} onChange={(e) => { const v = e.target.value.split(/[,\s]+/).filter(Boolean); setDet((d0) => ({ ...d0, match: { ...d0.match, member: v } })); }} />
+            מארח <input className="inp" style={{ width: 80 }} data-testid="ds-match-host" value={(det.match.host ?? []).join(',')} onChange={(e) => { const v = e.target.value.split(/[,\s]+/).filter(Boolean); setDet((d0) => ({ ...d0, match: { ...d0.match, host: v } })); }} />
+            זווית <input className="inp num" style={{ width: 52 }} type="number" data-testid="ds-match-a0" value={det.match.angMin ?? 0} onChange={(e) => { const v = Number(e.target.value); setDet((d0) => ({ ...d0, match: { ...d0.match, angMin: v } })); }} />–<input className="inp num" style={{ width: 52 }} type="number" data-testid="ds-match-a1" value={det.match.angMax ?? 90} onChange={(e) => { const v = Number(e.target.value); setDet((d0) => ({ ...d0, match: { ...d0.match, angMax: v } })); }} />°
+          </span>}
         </div>
         <div className="studio-actions">
           <button className="btn" onClick={undo} title="ביטול פעולה אחרונה"><Icon name="undo" /> בטל</button>

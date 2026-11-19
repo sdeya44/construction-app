@@ -11,7 +11,7 @@ import { pickFile } from '../persist/files';
 
 /** בדיקה חיה של פרט מועמד: בונים את המודל עם הפרט ובודקים התנגשויות ושגיאות (גיאומטריה בלבד) */
 function evalCandidate(p: Project, next: Project, family: ConnFamily) {
-  const PRE: Record<ConnFamily, RegExp> = { knee: /^C\.KB\.|^KB\./, strut: /^C\.RS\d|^RS\d/, base: /^C\.BASE\./, eave: /^C\.EAVE\./, ridge: /^C\.RIDGE/, side: /^C\.SIDE/, roofx: /^(C\.)?BR\.R/, wallx: /^(C\.)?BR\.W/, portal: /^(C\.)?BB\./, cleat: /^C\.PC\.|^CL\./, psplice: /^C\.PS|^PL\./, bsplice: /SPL|splice/i };
+  const PRE: Record<ConnFamily, RegExp> = { knee: /^C\.KB\.|^KB\./, strut: /^C\.RS\d|^RS\d/, base: /^C\.BASE\./, eave: /^C\.EAVE\./, ridge: /^C\.RIDGE/, side: /^C\.SIDE/, roofx: /^(C\.)?BR\.R/, wallx: /^(C\.)?BR\.W/, portal: /^(C\.)?BB\./, cleat: /^C\.PC\.|^CL\./, psplice: /^C\.PS|^PL\./, bsplice: /SPL|splice/i, tbsup: /^(C\.)?TB|^C\.KT/, tbseat: /^(C\.)?TB/, lock: /^(C\.)?LT\./ };
   const pre = PRE[family];
   const d = generate(next);
   const rel = d.issues.filter((i) => (i.severity !== 'info') && (pre.test(i.elementId ?? '') || /אלכסון|תמוכה|בסיס|בורג|שפה|התנגשות/.test(i.message)) && (i.code !== 'CLASH' || pre.test(i.elementId ?? '') || pre.test(i.message.split(' ')[1] ?? '')));
@@ -82,7 +82,7 @@ function WizardBody({ connId }: { connId: string }) {
             {vis.map((c) => (
               <button key={c.id} className={`wiz-card${c.id === pick?.id ? ' on' : ''}${c.fit.status === 'no' ? ' no' : ''}`} data-testid={`wiz-c-${c.id}`} onClick={() => c.fit.status !== 'no' && setSel(c.id)}>
                 <span className="wiz-pic">{PIC[c.pic as keyof typeof PIC]}</span>
-                <span className="wiz-txt"><b>{c.title} {c.preset ? <span className="sum-pill">{c.isDefault ? 'ברירת מחדל ★' : 'שמור'}</span> : <span className="sum-pill muted">מובנה</span>}{c.detail === cur.detail && !c.preset && <span className="sum-pill">נוכחי</span>}</b>
+                <span className="wiz-txt"><b>{c.title} {c.studio ? <span className="sum-pill" style={{ background: '#f1e9f7', color: '#6b3f8a' }}>מסטודיו</span> : c.preset ? <span className="sum-pill">{c.isDefault ? 'ברירת מחדל ★' : 'שמור'}</span> : <span className="sum-pill muted">מובנה</span>}{c.detail === cur.detail && !c.preset && <span className="sum-pill">נוכחי</span>}</b>
                   <small>{c.desc}</small><small className={`fit-${c.fit.status}`}>{c.fit.status === 'ok' ? '✓' : c.fit.status === 'warn' ? '⚠' : '✗'} {c.fit.reason}</small></span>
                 <span className={`sum-pill ${c.fit.status === 'ok' ? '' : c.fit.status === 'warn' ? 'warn' : 'bad'}`}>{TAG[c.fit.status]}</span>
               </button>
@@ -97,6 +97,7 @@ function WizardBody({ connId }: { connId: string }) {
                   : <input className="inp num" data-testid={`wiz-p-${q.key}`} type="number" defaultValue={String(params[q.key] ?? '')} key={`${sel}-${q.key}`} onBlur={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) setParams({ ...params, [q.key]: Math.max(q.min ?? -Infinity, v) }); }} />}
               </div>))}
             {dt && !dt.params.length && <div className="hint">לפרט הזה אין פרמטרים.</div>}
+            {pick?.studio && <div className="hint" data-testid="wiz-studio-note">פרט מהסטודיו — המידות והברגים מוגדרים בפרט עצמו. {scope === 'all' ? `יוחל על ${sit.site?.similar.length ?? 0} קצוות דומים.` : 'יוחל על הקצה הזה.'} לעריכה: "פתח בסטודיו".</div>}
             <div className="wiz-check" data-testid="wiz-check">
               {busy ? <div className="hint">בודק…</div> : check && <>
                 <div className={check.clash ? 'fit-no' : 'fit-ok'}>● התנגשויות: {check.clash}</div>
@@ -129,7 +130,7 @@ export function ConnLibrary() {
   if (!open) return null;
   const lib = p.connLibrary ?? [];
   const close = () => store.set({ connLibraryOpen: false });
-  const FAM: Record<ConnFamily, string> = { knee: 'אלכסוני עמוד-קורה', strut: 'תמוכות בין הקורות', base: 'בסיסים', eave: 'עמוד-קורה', ridge: 'רכס', side: 'קורה לצד עמוד', roofx: 'קושרות גג', wallx: 'קושרות קיר', portal: 'אגד B', cleat: 'תושבות פטה', psplice: 'חיבורי המשך פטות', bsplice: 'חיבורי המשך קורות/עמודים' };
+  const FAM: Record<ConnFamily, string> = { knee: 'אלכסוני עמוד-קורה', strut: 'תמוכות בין הקורות', base: 'בסיסים', eave: 'עמוד-קורה', ridge: 'רכס', side: 'קורה לצד עמוד', roofx: 'קושרות גג', wallx: 'קושרות קיר', portal: 'אגד B', cleat: 'תושבות פטה', psplice: 'חיבורי המשך פטות', bsplice: 'חיבורי המשך קורות/עמודים', tbsup: 'קורה נושאת ↔ עמוד', tbseat: 'קורת גג על קורה נושאת', lock: 'נעילה אופקית' };
   const setLib = (l: ConnPreset[], label: string, extra?: (pp: Project) => Project) => store.exec({ label, run: (pp) => { const n = { ...pp, connLibrary: l }; return extra ? extra(n) : n; } });
   const makeDefault = (x: ConnPreset) => {
     const firstConn = d.connections.find((c) => (x.family === 'knee' ? c.id.startsWith('C.KB.') : x.family === 'strut' ? /^C\.RS\d+\./.test(c.id) : c.type === 'base'));

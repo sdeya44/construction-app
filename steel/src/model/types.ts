@@ -848,6 +848,8 @@ export interface CustomDetail {
   ops: DetailOp[];
   /** סוג האתר שעליו נבנה (לסינון ולהצעה): "brace>column" וכד' */
   family?: string;
+  /** תנאי התאמה לאשף החיבורים (1.47): משפחות חתך של האלמנט ושל המארח, טווח זווית (מעלות) */
+  match?: { member?: string[]; host?: string[]; angMin?: number; angMax?: number };
 }
 
 export interface SpliceInfo {

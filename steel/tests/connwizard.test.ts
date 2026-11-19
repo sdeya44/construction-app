@@ -84,3 +84,52 @@ describe('אשף חיבורים — כל סוגי החיבורים (1.46)', () =
     expect([...seen].sort()).toEqual(expect.arrayContaining(['base', 'bsplice', 'cleat', 'eave', 'portal', 'psplice', 'ridge', 'roofx', 'side', 'wallx']));
   });
 });
+
+describe('אשף חיבורים — קורה נושאת, נעילה, פרטי סטודיו (1.47)', () => {
+  it('CW-5: קורה נושאת (תמיכה / מושב) ונעילה אופקית — מצב, התאמה, החלה לקורה / לציר', async () => {
+    const { planOmissions, setTransfers } = await import('../src/commands/commands');
+    let p = newProject('t', defaultBuilding());
+    p = setTransfers(planOmissions(p, ['F3.COL.L']).defs.map((x) => ({ ...x, profile: 'IPE330' }))).run(p);
+    let d = generate(p);
+    const cs = d.connections.find((x) => x.type === 'tb-support')!;
+    const s = situationOf(p, d, cs.id)!;
+    expect(s.family).toBe('tbsup');
+    expect(readCurrent(p, s).detail).toBe('tbsup.A1');
+    const n = applyDetail(p, s, 'tbsup.A2', {}, 'one');
+    expect(n.building.transfers![0].support).toBe('A2');
+    expect(generate(n).issues.filter((i) => i.severity === 'error')).toEqual([]);
+    const seat = situationOf(n, generate(n), generate(n).connections.find((x) => x.type === 'tb-seat')!.id)!;
+    expect(candidates(n, seat).find((c) => c.detail === 'tbseat.B4')!.fit.status).toBe('no'); // B4 רק עם A1
+    // נעילה אופקית
+    const b = defaultBuilding(); b.bracing.walls = { ...b.bracing.walls, enabled: true, type: 'truss' };
+    p = newProject('l', b); d = generate(p);
+    const lc = d.connections.find((x) => x.id.startsWith('C.LT.') && x.members.some((m) => m.includes('.COL.')))!;
+    const sl = situationOf(p, d, lc.id)!;
+    expect(sl.family).toBe('lock');
+    const cur = readCurrent(p, sl).detail;
+    const alt = cur === 'lock.plate' ? 'lock.tongue' : 'lock.plate';
+    const nl = applyDetail(p, sl, alt, readCurrent(p, sl).params, 'one');
+    expect(nl.building.bracing.walls.lineTruss?.[sl.local]?.conn).toBe(alt.split('.')[1]);
+    expect(generate(nl).issues.filter((i) => i.severity === 'error')).toEqual([]);
+  });
+  it('CW-6: פרט סטודיו עם תנאי התאמה — מוצע רק במצב מתאים; החלה לקצה / לקצוות הדומים', async () => {
+    const { detailPresets } = await import('../src/geometry/detail');
+    const p0 = proj('RHS80x80x4'), d0 = generate(p0);
+    const det = { ...structuredClone(detailPresets()[0]), id: 'cd-t', name: 'פלטה מוברגת (בדיקה)', match: { member: ['RHS'], angMin: 20, angMax: 70 } };
+    const p = { ...p0, customDetails: [det] };
+    const cid = d0.connections.find((x) => x.id.startsWith('C.KB.'))!.id;
+    const s = situationOf(p, d0, cid)!;
+    expect(s.site).toBeTruthy();
+    const c = candidates(p, s).find((x) => x.studio)!;
+    expect(c.fit.status).toBe('ok');
+    const one = applyDetail(p, s, c.detail, {}, 'one');
+    expect(Object.keys(one.detailAssign ?? {})).toEqual([s.site!.key]);
+    const all = applyDetail(p, s, c.detail, {}, 'all');
+    expect(Object.keys(all.detailAssign ?? {}).length).toBe(s.site!.similar.length);
+    expect(readCurrent(all, situationOf(all, generate(all), cid) ?? s).detail).toBe('custom:cd-t');
+    // אלמנט זוויתן — לא מתאים לתנאי
+    const pL = { ...proj('L50x5'), customDetails: [det] }, dL = generate(pL);
+    const sL = situationOf(pL, dL, dL.connections.find((x) => x.id.startsWith('C.KB.'))!.id)!;
+    expect(candidates(pL, sL).find((x) => x.studio)!.fit.status).toBe('no');
+  });
+});

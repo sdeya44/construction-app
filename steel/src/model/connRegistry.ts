@@ -1,15 +1,19 @@
-import type { Connection, DerivedModel, Project } from './types';
+import type { Connection, CustomDetail, DerivedModel, Member, Project } from './types';
+import { findSite, similarSites } from '../geometry/detail';
+import { assignDetail } from '../commands/commands';
 import { tryProfile } from '../profiles/library';
 import { defaultKneeBraces, kneeDetail } from '../geometry/knee';
 import { defaultRafterStruts } from '../geometry/rafterStruts';
 import { defaultRodEnd } from '../geometry/bracing';
 import { defaultPortal } from '../geometry/portal';
+import { SEAT_HE, SUPPORT_HE } from '../geometry/transfer';
+import { defaultLockTruss } from '../geometry/lockTruss';
 
 /**
  * רישום סוגי פרט (1.42): לכל משפחת חיבור — זיהוי מצב מהמודל, סוגי פרט עם התאמה ("מתאים / עם הערה / לא מתאים" + סיבה),
  * סכמת פרמטרים, קריאה והחלה בהיקף (חיבור זה / כל החיבורים באותו מצב). הספרייה: הגדרות שמורות בפרויקט הפתוח.
  */
-export type ConnFamily = 'knee' | 'strut' | 'base' | 'eave' | 'ridge' | 'side' | 'roofx' | 'wallx' | 'portal' | 'cleat' | 'psplice' | 'bsplice';
+export type ConnFamily = 'knee' | 'strut' | 'base' | 'eave' | 'ridge' | 'side' | 'roofx' | 'wallx' | 'portal' | 'cleat' | 'psplice' | 'bsplice' | 'tbsup' | 'tbseat' | 'lock';
 export type Fit = { status: 'ok' | 'warn' | 'no'; reason: string };
 export interface ParamDef { key: string; label: string; unit?: string; options?: { v: string | number; t: string }[]; min?: number }
 export type Params = Record<string, string | number>;
@@ -25,6 +29,8 @@ export interface Situation {
   oneLabel?: string | null;
   /** צד הפטות (לתושבות) */
   side?: string;
+  /** אתר הפרט המותאם (קצה האלמנט בחיבור) — לפרטי סטודיו: מפתח, זווית, משפחות, אתרים דומים */
+  site?: { key: string; ang: number; mainFam: string; hostFam: string; similar: string[] };
 }
 export interface DetailType {
   id: string; family: ConnFamily; title: string; desc: string; pic: string;
@@ -36,6 +42,8 @@ export interface ConnPreset { id: string; family: ConnFamily; detail: string; na
 const HOLLOW = ['RHS', 'SHS', 'CHS'];
 const fam = (name?: string) => (name ? tryProfile(name)?.family ?? '' : '');
 
+const SUP_DESC: Record<string, string> = { A1: 'הקורה על ראש העמוד; העמוד מתקצר', A2: 'פלטת קצה מרותכת לקורה, מוברגת לפלטת סגירה בין אגפי העמוד', A3: 'פלטה מרותכת לווב העמוד; ווב הקורה מוברג', A4: '2 זוויתנים מוברגים לעמוד ולווב הקורה', A5: 'תושבת מוקשחת; הקורה מונחת ומוברגת' };
+const SEAT_DESC: Record<string, string> = { B1: 'כיסא משופע + פלטה על הקורה + 4 ברגים', B2: 'טריז מרותך לקורת הגג, ברגים דרך אגף הקורה הנושאת', B3: 'עמוד קצר עם ראש משופע — לפער גובה', B4: 'קורת הגג ממוסגרת לווב הקורה הנושאת' };
 const BOLTS = (ds: number[]) => ds.map((d) => ({ v: d, t: `M${d}` }));
 const PLATE_P: ParamDef[] = [{ key: 't', label: 'עובי פלטה', unit: 'מ"מ', min: 6 }, { key: 'boltD', label: 'קוטר בורג', options: BOLTS([16, 20, 24, 27]) }];
 const BRACE_P: ParamDef[] = [{ key: 'gussetT', label: 'עובי פח', unit: 'מ"מ', min: 5 }, { key: 'boltsPerEnd', label: 'ברגים בקצה', options: [1, 2, 3].map((n) => ({ v: n, t: String(n) })) }, { key: 'boltD', label: 'קוטר בורג', options: BOLTS([12, 16, 20]) }];
@@ -89,6 +97,14 @@ export const DETAIL_TYPES: DetailType[] = [
   { id: 'psplice.plate', family: 'psplice', title: 'פלטת המשך בווב', desc: 'פלטה בצד הפנימי של הווב, 2 ברגים בכל פטה', pic: 'splicePlate', fit: () => ({ status: 'ok', reason: 'פרט סטנדרטי' }), params: [{ key: 'plateT', label: 'עובי פלטה', unit: 'מ"מ', min: 3 }, { key: 'boltD', label: 'קוטר בורג', options: [10, 12, 16].map((d) => ({ v: d, t: `M${d}` })) }] },
   { id: 'bsplice.bolted', family: 'bsplice', title: 'מוברג בשטח — פלטות קצה', desc: 'פלטות קצה בשני החלקים, מוברגות בשטח', pic: 'flange', fit: () => ({ status: 'ok', reason: 'מתאים להובלה בחלקים' }), params: [] },
   { id: 'bsplice.welded', family: 'bsplice', title: 'מרותך במסגריה — פלטות כיסוי', desc: 'החלקים מרותכים במסגריה; האלמנט יוצא כחלק אחד', pic: 'weld', fit: () => ({ status: 'warn', reason: 'אלמנט ארוך בהובלה' }), params: [] },
+  // ---- קורה נושאת (דילול): חריג = הקורה הזו
+  ...(['A1', 'A2', 'A3', 'A4', 'A5'] as const).map((k): DetailType => ({ id: `tbsup.${k}`, family: 'tbsup', title: `${k} · ${SUPPORT_HE[k]}`, desc: SUP_DESC[k], pic: k === 'A1' ? 'eaveSingle' : k === 'A3' ? 'fin' : k === 'A4' ? 'angle' : 'flange',
+    fit: (s) => (s.memberFamily === 'truss' && k !== 'A1' ? { status: 'no', reason: 'מסבך נושא — על ראש העמוד (A1) בלבד' } : k === 'A3' ? { status: 'warn', reason: 'הכי זול — למפתחים קטנים' } : { status: 'ok', reason: k === 'A1' ? 'פשוט וחזק — מומלץ' : 'הקורה בין העמודים' }), params: [] })),
+  ...(['B1', 'B2', 'B3', 'B4'] as const).map((k): DetailType => ({ id: `tbseat.${k}`, family: 'tbseat', title: `${k} · ${SEAT_HE[k]}`, desc: SEAT_DESC[k], pic: k === 'B4' ? 'fin' : 'eaveSplit',
+    fit: (s) => (k === 'B4' && s.memberFamily === 'truss' ? { status: 'no', reason: 'לא אפשרי במסבך נושא' } : k === 'B4' && s.hostFamily !== 'A1' ? { status: 'no', reason: 'רק עם תמיכה A1' } : k === 'B3' ? { status: 'warn', reason: 'לקצה קורה בלבד' } : { status: 'ok', reason: k === 'B1' ? 'פרט סטנדרטי' : 'גובה מינימלי' }), params: [] })),
+  // ---- נעילה אופקית: חריג = הציר הזה
+  { id: 'lock.plate', family: 'lock', title: 'פלטה + פלטת קצה, 4 ברגים', desc: 'פלטה מרותכת לעמוד ופלטת קצה בסיב, 4 ברגים ארוכים דרך העמוד', pic: 'flange', fit: () => ({ status: 'ok', reason: 'מחבר את שני המפתחים דרך העמוד' }), params: [{ key: 'plateT', label: 'עובי פלטה', unit: 'מ"מ', min: 6 }, { key: 'boltD', label: 'קוטר בורג', options: BOLTS([16, 20, 24]) }] },
+  { id: 'lock.tongue', family: 'lock', title: 'פח + לשונית', desc: 'כמו פרט האלכסון: פח מרותך לעמוד, לשונית בחריץ הסיב', pic: 'fin', fit: () => ({ status: 'ok', reason: 'פרט הלקוח' }), params: [{ key: 'plateT', label: 'עובי פח ולשונית', unit: 'מ"מ', min: 6 }, { key: 'boltD', label: 'קוטר בורג', options: BOLTS([16, 20]) }] },
 ];
 export const detailById = (id: string) => DETAIL_TYPES.find((t) => t.id === id);
 
@@ -99,12 +115,13 @@ export function familyOf(c: Pick<Connection, 'id' | 'type'>): ConnFamily | null 
   if (c.id.startsWith('C.BR.R')) return 'roofx';
   if (c.id.startsWith('C.BR.W')) return 'wallx';
   if (c.id.startsWith('C.BB.')) return 'portal';
-  const byType: Partial<Record<Connection['type'], ConnFamily>> = { base: 'base', eave: 'eave', ridge: 'ridge', 'rafter-side': 'side', 'purlin-cleat': 'cleat', 'purlin-splice': 'psplice', 'beam-splice': 'bsplice' };
+  if (c.id.startsWith('C.LT.')) return 'lock';
+  const byType: Partial<Record<Connection['type'], ConnFamily>> = { 'tb-support': 'tbsup', 'tb-seat': 'tbseat', base: 'base', eave: 'eave', ridge: 'ridge', 'rafter-side': 'side', 'purlin-cleat': 'cleat', 'purlin-splice': 'psplice', 'beam-splice': 'bsplice' };
   return byType[c.type] ?? null;
 }
 
 /** זיהוי המצב של חיבור מהמודל */
-export function situationOf(p: Project, d: DerivedModel, connId: string): Situation | null {
+function situationBase(p: Project, d: DerivedModel, connId: string): Situation | null {
   const c = d.connById.get(connId);
   if (!c) return null;
   const f = familyOf(c);
@@ -151,6 +168,19 @@ export function situationOf(p: Project, d: DerivedModel, connId: string): Situat
     return { family: f, connId, local: c.parts[0], side, oneLabel: 'התושבת הזו', title: 'תושבת פטה', key: `cleat|${side}`, sameCount: d.connections.filter((x) => x.type === 'purlin-cleat').length, memberFamily: fam(pur?.profile),
       facts: [{ k: 'פטה', v: `${pur?.profile ?? '?'}` }, { k: 'קורה', v: `${mB?.profile ?? '?'}` }, { k: 'שיפוע', v: pur?.purlin?.side ?? '' }] };
   }
+  if (f === 'tbsup' || f === 'tbseat') {
+    const tbId = c.members.find((x) => x.startsWith('TB.')) ?? '';
+    const def = (p.building.transfers ?? []).find((t) => t.id === tbId.split('.')[1]);
+    return { family: f, connId, local: def?.id ?? '', oneLabel: 'הקורה הנושאת הזו', title: f === 'tbsup' ? 'קורה נושאת ↔ עמוד' : 'קורת גג על קורה נושאת', key: f, sameCount: sameT,
+      memberFamily: def?.kind === 'truss' ? 'truss' : 'beam', hostFamily: def?.support,
+      facts: [{ k: 'קורה נושאת', v: def ? `${def.kind === 'truss' ? 'מסבך' : def.profile} · ציר ${lab(def.lineId)}` : '?' }, { k: 'תמיכה נוכחית', v: def ? `${def.support} · ${SUPPORT_HE[def.support]}` : '' }, { k: 'מושב נוכחי', v: def ? `${def.seat} · ${SEAT_HE[def.seat]}` : '' }] };
+  }
+  if (f === 'lock') {
+    const colId = c.members.find((x) => x.includes('.COL.')) ?? '';
+    const line = /\.COL\.([^.]+)$/.exec(colId)?.[1] ?? '';
+    return { family: f, connId, local: line, oneLabel: `ציר ${lab(line)} בלבד`, title: `נעילה אופקית · ציר ${lab(line)}`, key: 'lock', sameCount: d.connections.filter((x) => x.id.startsWith('C.LT.')).length, memberFamily: fam(mB?.profile),
+      facts: [{ k: 'עמוד', v: d.byId.get(colId)?.profile ?? '?' }, { k: 'ציר', v: lab(line) }, { k: 'מיקום', v: c.label }] };
+  }
   if (f === 'psplice' || f === 'bsplice') {
     return { family: f, connId, local: connId, oneLabel: null, title: f === 'psplice' ? 'חיבור המשך פטה' : 'חיבור המשך קורה / עמוד', key: f, sameCount: sameT, memberFamily: fam(mA?.profile),
       facts: [{ k: 'אלמנט', v: `${mA?.profile ?? '?'}` }, { k: 'מיקום', v: c.label }] };
@@ -163,6 +193,8 @@ export function situationOf(p: Project, d: DerivedModel, connId: string): Situat
 /** הפרט הנוכחי והפרמטרים (כלליים, או של המיקום אם יש חריג) */
 export function readCurrent(p: Project, s: Situation): { detail: string; params: Params; local: boolean } {
   const b = p.building;
+  const asg = s.site ? p.detailAssign?.[s.site.key] : undefined;
+  if (asg && (p.customDetails ?? []).some((x) => x.id === asg)) return { detail: `custom:${asg}`, local: true, params: {} };
   if (s.family === 'knee') {
     const kb = b.kneeBraces ?? defaultKneeBraces();
     const ov = kb.sides?.[s.local];
@@ -194,6 +226,14 @@ export function readCurrent(p: Project, s: Situation): { detail: string; params:
     const cl = { ...base0, ...ov };
     return { detail: `cleat.${cl.style ?? 'run'}`, local: !!ov.style, params: { thickness: cl.thickness, width: cl.width, boltD: (ov.bolt?.d ?? base0.bolt.d) } };
   }
+  if (s.family === 'tbsup' || s.family === 'tbseat') {
+    const def = (b.transfers ?? []).find((t) => t.id === s.local);
+    return { detail: s.family === 'tbsup' ? `tbsup.${def?.support ?? 'A1'}` : `tbseat.${def?.seat ?? 'B1'}`, local: false, params: {} };
+  }
+  if (s.family === 'lock') {
+    const lt = { ...(b.bracing.walls.truss ?? defaultLockTruss()), ...(b.bracing.walls.lineTruss?.[s.local] ?? {}) };
+    return { detail: `lock.${lt.conn}`, local: !!b.bracing.walls.lineTruss?.[s.local]?.conn, params: { plateT: lt.plateT, boltD: lt.bolt.d } };
+  }
   if (s.family === 'psplice') return { detail: 'psplice.plate', local: false, params: { plateT: b.purlins.splice.plateT, boltD: b.purlins.splice.bolt.d } };
   if (s.family === 'bsplice') { const k = d0kind(s) ; return { detail: `bsplice.${p.settings.spliceJoint?.[k] ?? 'bolted'}`, local: false, params: {} }; }
   const base = { ...p.connectionDefaults.base, ...(p.connectionOverrides[s.connId] ?? {}) };
@@ -202,6 +242,13 @@ export function readCurrent(p: Project, s: Situation): { detail: string; params:
 
 /** החלה: scope 'all' = כל החיבורים באותו מצב (ההגדרה הכללית; חריגים נשמרים), 'one' = המיקום הזה בלבד */
 export function applyDetail(p: Project, s: Situation, detail: string, params: Params, scope: 'all' | 'one'): Project {
+  // פרט סטודיו: שיוך לקצה הזה / לכל הקצוות הדומים; מעבר לפרט מובנה מבטל שיוך קיים באותם קצוות
+  const keys = s.site ? (scope === 'one' ? [s.site.key] : s.site.similar) : [];
+  if (detail.startsWith('custom:')) {
+    const det = (p.customDetails ?? []).find((x) => x.id === detail.slice(7));
+    return det && keys.length ? assignDetail(keys, det).run(p) : p;
+  }
+  if (keys.some((k) => p.detailAssign?.[k])) p = assignDetail(keys.filter((k) => p.detailAssign?.[k]), null).run(p);
   const n: Project = structuredClone(p);
   const kind = detail.split('.')[1];
   const num = (k: string, dflt: number) => (params[k] === undefined || params[k] === '' ? dflt : Number(params[k]));
@@ -246,6 +293,16 @@ export function applyDetail(p: Project, s: Situation, detail: string, params: Pa
       const key = pu[s.side ?? 'left'] ? (s.side ?? 'left') : 'left';
       pu[key].cleat = { ...pu[key].cleat, ...patch, bolt: { ...pu[key].cleat.bolt, d: num('boltD', pu[key].cleat.bolt.d) } };
     }
+  } else if (s.family === 'tbsup' || s.family === 'tbseat') {
+    const defs = n.building.transfers ?? [];
+    const patch = s.family === 'tbsup' ? { support: kind as 'A1' } : { seat: kind as 'B1' };
+    n.building.transfers = defs.map((t) => (scope === 'all' || t.id === s.local ? { ...t, ...patch } : t));
+  } else if (s.family === 'lock') {
+    const w = n.building.bracing.walls;
+    const base0 = w.truss ?? defaultLockTruss();
+    const patch = { conn: kind as 'plate' | 'tongue', connA: undefined, connB: undefined, plateT: num('plateT', base0.plateT) };
+    if (scope === 'one') w.lineTruss = { ...(w.lineTruss ?? {}), [s.local]: { ...(w.lineTruss?.[s.local] ?? {}), ...patch } };
+    else w.truss = { ...base0, ...patch, bolt: { ...base0.bolt, d: num('boltD', base0.bolt.d) } };
   } else if (s.family === 'psplice') {
     const sp = n.building.purlins.splice;
     n.building.purlins.splice = { ...sp, plateT: num('plateT', sp.plateT), bolt: { ...sp.bolt, d: num('boltD', sp.bolt.d) } };
@@ -261,12 +318,13 @@ export function applyDetail(p: Project, s: Situation, detail: string, params: Pa
 }
 
 /** פרטים מוצעים: סוגי הפרט של המשפחה + הגדרות שמורות בספרייה, מדורגים (מתאים ← עם הערה ← לא מתאים) */
-export function candidates(p: Project, s: Situation): { id: string; detail: string; title: string; desc: string; pic: string; fit: Fit; preset?: ConnPreset; isDefault?: boolean }[] {
+export function candidates(p: Project, s: Situation): { id: string; detail: string; title: string; desc: string; pic: string; fit: Fit; preset?: ConnPreset; isDefault?: boolean; studio?: boolean }[] {
   const lib = (p.connLibrary ?? []).filter((x) => x.family === s.family);
-  type Cand = { id: string; detail: string; title: string; desc: string; pic: string; fit: Fit; preset?: ConnPreset; isDefault?: boolean };
+  type Cand = { id: string; detail: string; title: string; desc: string; pic: string; fit: Fit; preset?: ConnPreset; isDefault?: boolean; studio?: boolean };
   const out: Cand[] = [
     ...DETAIL_TYPES.filter((t) => t.family === s.family).map((t) => ({ id: t.id, detail: t.id, title: t.title, desc: t.desc, pic: t.pic, fit: t.fit(s) })),
     ...lib.map((x) => { const t = detailById(x.detail)!; return { id: x.id, detail: x.detail, title: x.name, desc: `הגדרה שמורה של "${t.title}"`, pic: t.pic, fit: t.fit(s), preset: x, isDefault: p.connDefaults?.[s.family] === x.id }; }),
+    ...(s.site ? (p.customDetails ?? []).filter((x) => x.family !== 'cleat').map((x) => ({ id: `custom:${x.id}`, detail: `custom:${x.id}`, title: x.name, desc: x.note || 'פרט שנבנה בסטודיו', pic: 'flange', fit: studioFit(x, s), studio: true })) : []),
   ];
   const rank = { ok: 0, warn: 1, no: 2 } as const;
   return out.sort((a, c) => rank[a.fit.status] - rank[c.fit.status] || (c.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0) || (a.preset ? 1 : 0) - (c.preset ? 1 : 0));
@@ -275,3 +333,37 @@ export function candidates(p: Project, s: Situation): { id: string; detail: stri
 /** חיבור המשך: קורה או עמוד (לפי משפחת האלמנט במצב) */
 function d0kind(s: Situation): 'beams' | 'columns' { return /עמוד/.test(s.facts.map((f) => f.v).join(' ')) || /COL/.test(s.connId) ? 'columns' : 'beams'; }
 const CONN_HE: Partial<Record<Connection['type'], string>> = { 'brace-end': 'פח חיבור קושרת', 'brace-cross': 'הצטלבות קושרות', brace: 'קושרות' };
+
+/** זיהוי המצב + אתר הקצה לפרטי סטודיו */
+export function situationOf(p: Project, d: DerivedModel, connId: string): Situation | null {
+  const s = situationBase(p, d, connId);
+  if (!s || s.family === 'cleat') return s;
+  const c = d.connById.get(connId)!;
+  // האלמנט המחובר: אלכסון ← קורה ← קורת גג ← עמוד; הקצה הקרוב למרכז החיבור
+  const RANK: Record<string, number> = { brace: 0, beam: 1, rafter: 2, purlin: 3, column: 4 };
+  const ms = [...c.parts, ...c.members].map((x) => d.byId.get(x)).filter((x): x is Member => !!x && x.kind in RANK).sort((a, b2) => RANK[a.kind] - RANK[b2.kind]);
+  const m = ms[0];
+  if (!m) return s;
+  const pts = [...c.parts, ...c.bolts.map((b2) => b2.id)].map((x) => d.byId.get(x)).filter((x): x is Member => !!x && (x.kind === 'plate' || x.kind === 'bolt'));
+  const P = pts.length ? { x: pts.reduce((a, q) => a + q.start.x, 0) / pts.length, y: pts.reduce((a, q) => a + q.start.y, 0) / pts.length, z: pts.reduce((a, q) => a + q.start.z, 0) / pts.length } : m.end;
+  const dd = (q: { x: number; y: number; z: number }) => Math.hypot(q.x - P.x, q.y - P.y, q.z - P.z);
+  // קצה שכבר יש בו פרט סטודיו — מועדף (אחרי ההחלה הפלטות זזות ומרכז החיבור משתנה)
+  const asg = (e: 'start' | 'end') => !!p.detailAssign?.[`${m.id}|${e}`];
+  const end = asg('start') !== asg('end') ? (asg('start') ? 'start' : 'end') : dd(m.start) <= dd(m.end) ? 'start' : 'end';
+  const site = findSite(d.members, m, end);
+  if (!site) return s;
+  return { ...s, site: { key: site.key, ang: site.ang, mainFam: fam(m.profile), hostFam: fam(site.host?.profile), similar: similarSites(d.members, site.key, true, d.connections) } };
+}
+
+/** התאמת פרט סטודיו למצב לפי תנאי ההתאמה שלו */
+export function studioFit(det: CustomDetail, s: Situation): Fit {
+  if (!s.site) return { status: 'no', reason: 'אין קצה אלמנט בחיבור הזה' };
+  if (det.family === 'cleat') return { status: 'no', reason: 'פרט תושבת פטה' };
+  const mt = det.match;
+  if (!mt) return { status: 'warn', reason: 'אין לפרט תנאי התאמה — לבדוק התאמה (ניתן להגדיר בסטודיו)' };
+  if (mt.member?.length && !mt.member.includes(s.site.mainFam)) return { status: 'no', reason: `לאלמנט ${mt.member.join('/')} — כאן ${s.site.mainFam || '?'}` };
+  if (mt.host?.length && !mt.host.includes(s.site.hostFam)) return { status: 'no', reason: `למארח ${mt.host.join('/')} — כאן ${s.site.hostFam || '?'}` };
+  const a = Math.round(s.site.ang);
+  if ((mt.angMin !== undefined && a < mt.angMin) || (mt.angMax !== undefined && a > mt.angMax)) return { status: 'no', reason: `זווית ${a}° מחוץ לטווח ${mt.angMin ?? 0}°–${mt.angMax ?? 90}°` };
+  return { status: 'ok', reason: `מתאים לתנאי הפרט (${a}°)` };
+}
