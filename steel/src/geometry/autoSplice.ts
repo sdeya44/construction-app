@@ -56,10 +56,13 @@ export function effectiveSplices(project: Project, members: Member[], supports: 
       const halfOf = (z: number) => zoneList.find((q) => q[0] === z)?.[1] ?? 160;
       const HALF = 160; void HALF;
       ts = [];
-      let s = tMin;
+      // חיבור המשך בפלטות קצה (מוברג): כל חלק מסתיים בפני הפלטה שלו (BEAM_SPLICE_T) — התפר בין שתי הפלטות.
+      // מוט מלא: החלק = בדיוק אורך חומר הגלם (בלי לחתוך 12 מ"מ מהמוט), והתפר זז בעובי הפלטה (החלטת משתמש 19.11.2026)
+      const T = m.kind !== 'purlin' && !isTie(m) && !weldedJ ? BEAM_SPLICE_T : 0;
+      let s = tMin; // תחילת החלק הבא (פני הפלטה / קצה האלמנט)
       // מצב חלוקה: stock = מוט מלא + השלמה (ברירת מחדל); equal = חלקים שווים
       const nEq = Math.ceil((tMax - tMin) / (stock - allow));
-      const step = project.settings.spliceMode === 'equal' ? (tMax - tMin) / nEq : stock - allow;
+      const step = project.settings.spliceMode === 'equal' ? (tMax - tMin) / nEq : stock + T;
       while (tMax - s > stock + 0.5) {
         let t = s + step;
         for (let it = 0; it < 20; it++) {
@@ -70,8 +73,10 @@ export function effectiveSplices(project: Project, members: Member[], supports: 
         if (t - s < 1000) { t = s + step; } // לא נמצא מקום — נשאר במוט מלא (אזהרה בבדיקת ההתנגשות)
         // שארית קצרה בסוף (פחות מ-500): התפר זז אחורה — אין חלק קצר מדי ואין תפר בקצה האלמנט
         if (tMax - t < 500 && t - 500 - s >= 1000) t = tMax - 500;
-        ts.push(Math.round(t));
-        s = t;
+        // עיגול כלפי מטה — החלק לא יעלה על חומר הגלם
+        const tr = Math.floor(t + 1e-6);
+        ts.push(tr);
+        s = tr + T;
       }
     }
     if (ts.length) { splices[m.id] = ts; auto.add(m.id); }

@@ -63,3 +63,19 @@ describe('1.38.2: עמוד נחתך לפי קורת הגג בפועל', () => {
     }
   });
 });
+
+describe('1.39.1: חיבור המשך — מוט מלא בלי חיתוך', () => {
+  it('קורה ועמוד ארוכים: החלק הראשון = בדיוק אורך חומר הגלם, החלקים לא עולים עליו', () => {
+    const p = proj(); const b = p.building;
+    b.width = 30000; b.ridgeX = 15000; b.eaveLeft = 13000; b.eaveRight = 13000;
+    const d = generate(p);
+    const stock = p.settings.stockLength;
+    for (const id of ['F2.RAF.L', 'F2.COL.L']) {
+      const ps = d.parts.filter((x) => x.memberId === id).sort((a, c) => a.index - c.index);
+      expect(ps.length).toBeGreaterThan(1);
+      expect(ps.every((x) => x.length <= stock + 0.01)).toBe(true);
+      // עמוד: מוט מלא בדיוק (בקורה — התפר זז לאחור אם נפל על תומך פטה/עמוד, ואז החלק קצר יותר)
+      if (id.includes('COL')) expect(Math.abs(ps[0].length - stock)).toBeLessThan(1);
+    }
+  });
+});
