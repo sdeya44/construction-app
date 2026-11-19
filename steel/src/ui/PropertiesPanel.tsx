@@ -557,7 +557,7 @@ export function scopeOptions(m: Member, d: DerivedModel): ScopeOpt[] {
 function assemblyOfCache(x: Member, _d: DerivedModel): string | undefined { void _d; const mm = /\.COL\.([^.]+)$/.exec(x.id); return mm?.[1]; }
 
 function ScopeBar({ opts, cur }: { opts: ScopeOpt[]; cur: PropScope | null }) {
-  const iso = useStore((s) => s.scopeIsolate ?? true);
+  const iso = useStore((s) => s.scopeIsolate ?? false);
   return (
     <div className="scope-bar" data-testid="pscope">
       <div className="scope-bar-h">לעבוד על:</div>
@@ -571,7 +571,7 @@ function ScopeBar({ opts, cur }: { opts: ScopeOpt[]; cur: PropScope | null }) {
 
 /** בידוד התלת-ממד לפי ההיקף שנבחר (מורכב באפליקציה) */
 export function ScopeIsolator() {
-  const sel = useStore((s) => s.selection), scope = useStore((s) => s.propScope ?? null), iso = useStore((s) => s.scopeIsolate ?? true);
+  const sel = useStore((s) => s.selection), scope = useStore((s) => s.propScope ?? null), iso = useStore((s) => s.scopeIsolate ?? false);
   const d = useStore((s) => s.derived);
   const key = `${sel.join(',')}|${scope}|${iso}`;
   useEffect(() => {

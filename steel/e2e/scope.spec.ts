@@ -39,3 +39,19 @@ test('SCOPE-01: לחיצה על אלמנט — בחירת היקף; האלמנט
   expect((await S()).isolated).toBeNull();
   expect(errors).toEqual([]);
 });
+
+test('SCOPE-02 (1.47.1): ברירת מחדל — לחיצה על אלמנט ובחירת היקף לא מעלימה את המודל', async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.set({ propScope: null, scopeIsolate: undefined }); localStorage.removeItem('ksp-prop-scope'); });
+  await page.evaluate(() => (window as any).__ksp.store.select(['F3.COL.L']));
+  await expect(page.getByTestId('pscope-iso')).not.toBeChecked();
+  await page.getByTestId('pscope-one').click();
+  await page.getByTestId('pscope-line').click();
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.isolated)).toBeNull();
+  // בידוד — רק לפי בחירה מפורשת
+  await page.getByTestId('pscope-iso').check();
+  await page.waitForTimeout(100);
+  expect((await page.evaluate(() => (window as any).__ksp.store.state.isolated))?.length).toBeGreaterThan(1);
+  expect(errors).toEqual([]);
+});
