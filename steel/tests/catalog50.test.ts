@@ -8,6 +8,7 @@ import { defaultTrussSpec } from '../src/geometry/truss';
 import { defaultWing } from '../src/geometry/wing';
 import { suggestEavePlate } from '../src/geometry/eavePlate';
 import { SECTION_TEMPLATES } from '../src/model/section';
+import { auditContacts } from '../src/geometry/audit';
 import { computeFabrication } from '../src/fab/marks';
 import { computeBom } from '../src/fab/bom';
 import { projectToIfc } from '../src/fab/ifc';
@@ -140,6 +141,9 @@ describe('50 סככות — יכולת ייצור מלאה', () => {
       const kg = fab.parts.reduce((s, x) => s + x.weight, 0);
       results.push({ n: c.n, cat: c.cat, name: c.name, src: c.src, fit: c.fit, missing: c.missing ?? '', cols: p.building.columnProfile, raf: p.building.rafterProfile, members: d.members.length, errors: errs.length, errMsgs: [...new Set(errs.map((e) => `${e.code}: ${e.message.slice(0, 80)}`))].slice(0, 3), warnings: [...new Set(warns.map((w) => w.code))], sheets, sheetFail, nc, assemblies: fab.assemblies.length, kg: Math.round(kg), kgm2: Math.round(kg / area), ms: Date.now() - t0, stage });
       expect(sheetFail).toEqual([]);
+      // בקרת אורכים ומגעים: כל ריתוך — החלקים נוגעים; כל בורג — עובר בכל החלקים ברשימת החורים
+      const audit = auditContacts(d);
+      expect(audit.slice(0, 5).map((a) => a.message)).toEqual([]);
     }, 300000);
   }
   it('דוח', () => {

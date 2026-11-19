@@ -241,7 +241,7 @@ export function generateBase(project: Project): DerivedModel {
     connections.push(...bs.connections);
     issues.push(...bs.issues);
     if (eff.auto.size) issues.push({ code: 'AUTO_SPLICE', severity: 'info', message: `חיבורי המשך אוטומטיים ב-${eff.auto.size} אלמנטים ארוכים מחומר הגלם (${(project.settings.stockLength / 1000).toFixed(1)} מ') — לשינוי: בחר אלמנט ← "חיבורי המשך"` });
-    const bb = buildBracing(b, topo, out.filter((m) => m.purlin), bEff, project.settings.stockLength, (id) => byId.get(id)?.profile);
+    const bb = buildBracing(b, topo, out.filter((m) => m.purlin), bEff, project.settings.stockLength, (id) => byId.get(id)?.profile, (id) => { const c = byId.get(id); return c && /מקוצר/.test(c.label) ? Math.max(c.start.z, c.end.z) : undefined; });
     roofSegments = bb.segments;
     out.push(...bb.members.filter((m) => !hidden.has(m.id)));
     // חלוקה אוטומטית גם לשורות הקשירה הארוכות

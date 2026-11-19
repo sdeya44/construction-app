@@ -116,8 +116,10 @@ export function ProfilePicker({ value, onCommit, families, testId, placeholder, 
   const cur = value ? fam(value) : '';
   const [f, setF] = useState<string>(cur || groups[0]?.family || '');
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
   const ref = React.useRef<HTMLDivElement>(null);
   useEffect(() => { if (cur) setF(cur); }, [cur]);
+  useEffect(() => { setQ(''); }, [f]);
   useEffect(() => {
     if (!open) return;
     const down = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
@@ -129,6 +131,18 @@ export function ProfilePicker({ value, onCommit, families, testId, placeholder, 
   const sizes = [...new Set([...(g?.names ?? []), ...user.filter((n) => fam(n) === f), ...(value && fam(value) === f ? [value] : [])])];
   const num = (n: string) => n.replace(/^[A-Z]+/, '').split(/x/i).map(Number);
   sizes.sort((a, b) => { const A = num(a), B = num(b); for (let i = 0; i < Math.max(A.length, B.length); i++) { const d = (A[i] ?? 0) - (B[i] ?? 0); if (d) return d; } return 0; });
+  // סינון לפי מידה: כל מספר שהוקלד חייב להופיע במידות החתך (גובה/רוחב/עובי); "100x50" — לפי הסדר
+  const qNums = q.trim() ? q.replace(',', '.').split(/[^0-9.]+/).filter(Boolean).map(Number) : [];
+  const ordered = /x|×|\*/i.test(q);
+  const match = (n: string) => {
+    if (!qNums.length) return true;
+    const ds = num(n);
+    if (ordered) return qNums.every((v, i) => Math.abs((ds[i] ?? NaN) - v) < 0.01);
+    const pool = [...ds];
+    return qNums.every((v) => { const i = pool.findIndex((x) => Math.abs(x - v) < 0.01); if (i < 0) return false; pool.splice(i, 1); return true; });
+  };
+  const shown = sizes.filter(match);
+  const heads = [...new Set(sizes.map((n) => num(n)[0]).filter((x) => Number.isFinite(x)))];
   const sz = useMemo(() => {
     const m = new Map<string, SizeStatus>();
     if (role && open) for (const n of sizes) { try { m.set(n, assessCandidate(project, derived, role, n).status); } catch { /* פרופיל לא מוכר */ } }
@@ -157,8 +171,14 @@ export function ProfilePicker({ value, onCommit, families, testId, placeholder, 
             ))}
           </div>
           {role && <div className="pp-legend"><span className="sz-small">▼ קטן</span><span className="sz-ok">● מתאים</span><span className="sz-big">▲ גדול</span> — הערכת כללי אצבע</div>}
+          {sizes.length > 12 && <div className="pp-filter">
+            <input className="inp num" dir="ltr" placeholder="סינון לפי מידה — למשל 100 או 100x50 או 100 5" value={q} onChange={(e) => setQ(e.target.value)} data-testid={testId ? `${testId}-q` : undefined} autoFocus />
+            {heads.length > 1 && heads.length <= 40 && <div className="pp-chips">{heads.map((h) => <button key={h} type="button" className={`pp-chip${qNums.length === 1 && qNums[0] === h && ordered ? ' on' : ''}`} onClick={() => setQ(qNums.length === 1 && qNums[0] === h && ordered ? '' : `${h}x`)} data-testid={testId ? `${testId}-chip-${h}` : undefined}>{h}</button>)}</div>}
+            {q && <div className="pp-count">{shown.length} מתוך {sizes.length}</div>}
+          </div>}
           <div className="pp-grid">
-            {sizes.map((n) => {
+            {shown.length === 0 && <div className="hint">אין חתך עם המידה הזו בסוג {f}</div>}
+            {shown.map((n) => {
               const st = sz.get(n) ?? 'na', kg = kgm(n);
               return (
                 <button key={n} type="button" className={`pp-opt${n === value ? ' on' : ''}${st !== 'na' ? ` sz-${st}` : ''}`} data-testid={testId ? `${testId}-opt-${n}` : undefined} onClick={() => pick(n)} title={n}>

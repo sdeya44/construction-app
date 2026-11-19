@@ -43,7 +43,7 @@ const mk = (id: string, label: string, profile: string, start: Vec3, end: Vec3, 
  * קושרות X בגג ובקירות ושורות קשירה לפטות. קושרות X עובדות במתיחה בלבד (לפי תוכנית K-02).
  * חיבור: פח מרותך במסגריה, זוויתן מוברג בשטח (M16), בורג בהצטלבות — החלטת משתמש 15.11.2026.
  */
-export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: Member[], eff: BuildingParams, stockLen = 12000, profOf?: (id: string) => string | undefined): BracingResult {
+export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: Member[], eff: BuildingParams, stockLen = 12000, profOf?: (id: string) => string | undefined, colTopOf?: (id: string) => number | undefined): BracingResult {
   const res: BracingResult = { members: [], connections: [], issues: [] };
   const br = b.bracing;
   const frames = b.frames;
@@ -260,7 +260,9 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
       }
       for (const bay of resolveBays(bays, nb)) {
         const f0 = frames[bay], f1 = frames[bay + 1];
-        const z0 = (b.lineBase?.[l.id] ?? b.baseElevation) + 300, z1 = eave - rafV - 60 - 150;
+        // עמוד מקוצר (קורה נושאת על ראשו): הקושרת מתחת לראש העמוד בפועל
+        const cTop = Math.min(...[f0, f1].map((f) => colTopOf?.(`${f.id}.COL.${l.id}`) ?? Infinity));
+        const z0 = (b.lineBase?.[l.id] ?? b.baseElevation) + 300, z1 = Math.min(eave - rafV - 60 - 150, cTop - 60 - 150);
         if (z1 - z0 < 1000) { res.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `קושרת קיר ציר ${l.label} מפתח ${bay + 1}: גובה קטן מדי` }); continue; }
         // עמוד גבוה: האלכסון ארוך מחומר הגלם — חלוקה לכמה פנלי X לגובה (כמו בגג)
         const H = z1 - z0, bayW = Math.abs(f1.y - f0.y);

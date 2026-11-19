@@ -5,6 +5,7 @@ import { useFab } from '../fab/useFab';
 import { fromMm } from '../core/units';
 import { dist } from '../core/vec';
 import { cutLength } from '../geometry/solid';
+import { lengthBreakdown } from '../geometry/lengthWhy';
 import { massPerMeter, tryProfile } from '../profiles/library';
 import { getMaterial, MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
@@ -157,10 +158,11 @@ function PropertiesInner() {
         <dl className="kv" style={{ marginTop: 10 }}>
           <dt>אורך קו ייחוס</dt><dd data-testid="prop-len">{L(dist(m.start, m.end))}</dd>
           <dt>אורך חיתוך מרבי</dt><dd>{L(cl.max)}</dd>
-          {m.kind === 'column' && (() => { const br = columnCutBreakdown(m, cl.max); return br ? <><dt>פירוט</dt><dd data-testid="prop-cut-why" style={{ fontSize: 11, lineHeight: 1.35 }}>{br}</dd></> : null; })()}
+
           <dt>משקל</dt><dd data-testid="prop-weight">{f1((kgm * cl.max) / 1000)} ק"ג</dd>
           <dt>סימון חלק</dt><dd>{mark ?? '—'}</dd>
         </dl>
+        <LengthTable m={m} />
         {m.purlin && <PurlinInfoBlock id={m.id} />}
       </PSec>
       {/* 3 — צורה ומידות של המכלול */}
@@ -466,29 +468,21 @@ function PurlinInfoBlock({ id }: { id: string }) {
 }
 
 
-/**
- * פירוט אורך החיתוך של עמוד: קו הייחוס (מפלס הבסיס עד פני עליון קורת הגג בציר) פחות מה שמעליו ומתחתיו —
- * עומק קורת הגג (אנכי, לפי השיפוע), פלטות ראש העמוד, ופלטת הבסיס כשהיא מרותכת לעמוד (במצב מבוטן — העמוד על הפלטה).
- */
-function columnCutBreakdown(m: Member, cut: number): string | null {
-  const st = store.state, d = st.derived, p = st.project;
-  const L0 = dist(m.start, m.end);
-  const eave = d.connections.find((c) => c.type === 'eave' && c.members.includes(m.id));
-  const raf = eave ? d.byId.get(eave.members.find((x) => x !== m.id) ?? '') : undefined;
-  const parts: string[] = [`קו ייחוס ${Math.round(L0)}`];
-  let rest = L0 - cut;
-  if (raf) {
-    const pr = tryProfile(raf.profile);
-    const dx = Math.hypot(raf.end.x - raf.start.x, raf.end.y - raf.start.y), dz = raf.end.z - raf.start.z;
-    const k = Math.sqrt(1 + (dz / (dx || 1)) ** 2);
-    const hv = (pr?.props.h ?? 0) * k;
-    parts.push(`קורת גג ${raf.profile} ${Math.round(hv)}${k > 1.001 ? ' (בשיפוע)' : ''}`); rest -= hv;
-    const plates = (eave?.parts ?? []).map((id) => d.byId.get(id)).filter((q): q is Member => !!q && q.kind === 'plate');
-    const pt = plates.reduce((s, q) => s + (tryProfile(q.profile)?.dims.t ?? Number(/x(\d+)/.exec(q.profile)?.[1] ?? 0)), 0);
-    if (pt) { parts.push(`פלטות ראש ${plates.length}×${Math.round(pt / plates.length)}`); rest -= pt; }
-  }
-  const base = p.connectionDefaults.base;
-  if (base.enabled && (base.mode ?? 'embedded') === 'bolted') { parts.push(`פלטת בסיס ${base.t}`); rest -= base.t; }
-  if (rest > 1) parts.push(`מכפל / מרווח ${Math.round(rest)}`);
-  return `${parts.join(' − ')}${rest < -1 ? ` + ${Math.round(-rest)} (הצד הגבוה של ראש בשיפוע)` : ''} = ${Math.round(cut)}`;
+/** טבלת פירוט אורך: קו ייחוס, הורדות/תוספות בכל קצה ומה גורם להן, אורך נקי ואורך חיתוך */
+function LengthTable({ m }: { m: Member }) {
+  const p = useStore((s) => s.project), d = useStore((s) => s.derived);
+  const rows = lengthBreakdown(p, d, m);
+  if (!rows) return null;
+  const f = (v: number) => (Math.round(v * 10) / 10).toLocaleString('en-US', { maximumFractionDigits: 1 });
+  return (
+    <table className="tbl len-tbl" data-testid="prop-len-tbl">
+      <thead><tr><th>פירוט אורך</th><th className="n">מ"מ</th></tr></thead>
+      <tbody>{rows.map((r, i) => (
+        <tr key={i} className={`len-${r.kind}`}>
+          <td>{r.label}{r.note && <small>{r.note}</small>}</td>
+          <td className="n" dir="ltr">{r.kind === 'minus' ? '−' : r.kind === 'plus' ? '+' : ''}{f(Math.abs(r.value))}</td>
+        </tr>
+      ))}</tbody>
+    </table>
+  );
 }

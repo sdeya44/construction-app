@@ -14,6 +14,7 @@ import { clientQuoteSheet, DEFAULT_TERMS } from '../fab/clientQuote';
 import { sheetsToPdf } from '../drawing/pdf';
 import { setMeta } from '../commands/commands';
 import { boltGroups, partGroups } from '../fab/unify';
+import { auditContacts, type AuditFinding } from '../geometry/audit';
 
 export function ProductionView() {
   const p = useStore((s) => s.project);
@@ -72,6 +73,9 @@ export function ProductionView() {
           {fab.changed.length > 0 && <div className="issue warning"><span className="ic">!</span>{fab.changed.length} חלקים ישנו סימון במספור הבא (שינוי גיאומטרי).</div>}
           <button className="btn primary" data-testid="run-numbering" onClick={() => { if (store.exec(numberParts())) store.toast('ok', 'המספור עודכן'); }}>הרץ מספור</button>
           <div className="hint">חלקים זהים (חתך, חומר, אורך, חיתוכים, חורים) מקבלים אותו סימון. סימון קיים נשמר; שינוי בחלק יוצר סימון חדש ונרשם בהיסטוריה.</div>
+
+          <div className="panel-title">בקרת אורכים ומגעים</div>
+          <AuditPanel />
 
           <div className="panel-title">הצעות האחדה</div>
           <UnifyPanel />
@@ -191,5 +195,19 @@ function UnifyPanel() {
       ? <ul className="unify-list" data-testid="unify-parts">{pg.slice(0, 12).map((g, i) => <li key={i} title={g.note}><b className="en">{g.marks.map((m) => `${m.mark}×${m.qty}`).join(' ≈ ')}</b> <span className="en">{g.profile} · {g.marks.map((m) => m.length).join('/')}</span><br /><small>{g.note}</small></li>)}</ul>
       : <div className="hint" data-testid="unify-parts-none">לא נמצאו חלקים כמעט־זהים.</div>}
     <div className="hint">ברגים: כל בורג בקבוצה מקבל את האורך הארוך — משפיע על כתב הכמויות ועל השרטוטים. חלקים: עם סבולת מספור, חלקים שאורכם ומיקום חוריהם שונים עד הסבולת מקבלים סימון אחד ומיוצרים כמו החלק הנפוץ בקבוצה (ההפרש נבלע במרווח החור — לכן הסבולת מוגבלת ל-5 מ"מ). אחרי הפעלה — "הרץ מספור".</div>
+  </div>;
+}
+
+/** בקרת ייצור: כל ריתוך — החלקים נוגעים; כל בורג — עובר בכל החלקים ובתוך השפה. אורך שגוי מתגלה כקצה שלא מגיע */
+function AuditPanel() {
+  const d = useStore((s) => s.derived);
+  const [res, setRes] = useState<{ d: unknown; f: AuditFinding[] } | null>(null);
+  const cur = res && res.d === d ? res.f : null;
+  return <div data-testid="audit-panel">
+    <button className="btn small" data-testid="audit-run" onClick={() => setRes({ d, f: auditContacts(d) })}>הרץ בקרה</button>
+    {cur && (cur.length === 0
+      ? <div className="issue info" data-testid="audit-ok"><span className="ic">✓</span>כל {d.connections.reduce((s, c) => s + c.welds.length, 0)} הריתוכים נוגעים וכל {d.connections.reduce((s, c) => s + c.bolts.length, 0)} הברגים עוברים בחלקים — לא נמצאו קצוות קצרים/ארוכים</div>
+      : <ul className="unify-list" data-testid="audit-list">{cur.slice(0, 40).map((f, i) => <li key={i} style={{ cursor: 'pointer' }} onClick={() => store.select([f.a, ...(f.b ? [f.b] : [])].filter((x) => d.byId.has(x)))}>{f.message}</li>)}{cur.length > 40 && <li>…ועוד {cur.length - 40}</li>}</ul>)}
+    <div className="hint">בודק כל ריתוך (שני החלקים נוגעים) וכל בורג (עובר דרך כל החלקים, החור בתוך השפה). אלמנט קצר או ארוך מדי מתגלה כקצה שלא מגיע לפלטה/לחלק שלו. בדיקה גיאומטרית — לא חוזק.</div>
   </div>;
 }

@@ -164,8 +164,9 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
       finFace = webFacing ? ctw / 2 : halfY;
       if (finMode) endGap = finFace; // החגורות מתחילות אחרי הסנפיר — המיקום הסופי נקבע מהפרט
     }
-    let ys = side ? y0 + endGap : y0 - cb / 2;
-    let ye = side ? y1 - endGap : y1 + cb / 2;
+    // על ראש העמוד (A1): הקורה ממשיכה עד קצה פלטת הראש (cb/2 + 80) — כל הברגים (משני צדי העמוד) עוברים בה
+    let ys = side ? y0 + endGap : y0 - (cb / 2 + 80);
+    let ye = side ? y1 - endGap : y1 + (cb / 2 + 80);
     // סנפיר: פרט לכל חגורה בכל קצה; קצה החגורה = סוף הלשונית
     const finJ = new Map<string, ReturnType<typeof finJoint>>();
     if (finMode && tr0) {
@@ -285,7 +286,8 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
           parts.push(...j.members.map((m) => m.id)); bolts.push(...j.bolts); welds.push(...j.welds);
         }
       } else if (def.support === 'A2' || def.support === 'A4' || def.support === 'A5') {
-        const yC = fy + sgn * (cb / 2 + 7.5), ch2 = cp.props.h;
+        // רוחב הפלטה: עומק העמוד, ולפחות רוחב אגף ה-TB + שפה (הברגים ב-±(tb/2 − 30)) — TB רחב מהעמוד
+        const yC = fy + sgn * (cb / 2 + 7.5), ch2 = Math.max(cp.props.h, (def.support === 'A2' && !tr ? tb : 0) + 10, def.support === 'A4' ? 2 * (tw / 2 + 60) + 70 : 0, def.support === 'A2' && tr ? Math.max(tb, getProfile(tr.profiles.bottom).props.b, 120) : 0);
         const zc0 = (def.support === 'A5' ? zB - 200 : zB - 40), zc1 = Math.min(zTop + 40, Math.max(c.start.z, c.end.z) - 60);
         close = plate(`${id}.CL`, `פלטת סגירה בין אגפי העמוד PL15×${Math.round(ch2)}×${Math.round(zc1 - zc0)}`, v3(x, yC, zc0), v3(x, yC, zc1), ch2, 15, Y, 'center', id);
         res.members.push(close); parts.push(close.id); welds.push(weld(id, 9, c.id, close.id, 2 * (zc1 - zc0), v3(x, yC, (zc0 + zc1) / 2)));
@@ -359,7 +361,8 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
       let k = 0;
       if (pl.seat === 'B1' || pl.seat === 'B2') {
         const b1 = pl.seat === 'B1';
-        const lenY = rb + 120, lenX = b1 ? 300 : Math.max(160, tb);
+        // B1: הברגים מחוץ לאגף ה-TB (tb/2 + 30) — הפלטה רחבה מספיק למרחק שפה 35 מעבר לחור
+        const lenY = rb + 120, lenX = b1 ? Math.max(300, Math.ceil((tb + 60 + 2 * (BOLT.d + BOLT.clearance) / 2 + 70) / 10) * 10) : Math.max(160, tb);
         const zP = b1 ? zTop + 40 : zTop + 20;
         if (b1) { const pA = plate(`${id}.PA`, `פלטה א PL20×${lenX}×${lenY}`, v3(x - lenX / 2, y, zTop + 20), v3(x + lenX / 2, y, zTop + 20), lenY, 20, Z, 'top', id); res.members.push(pA); parts.push(pA.id); welds.push(weld(id, 1, tbId, pA.id, 2 * lenX, v3(x, y, zTop))); }
         const pB = plate(`${id}.PB`, `פלטה ${b1 ? 'ב' : 'תחתונה'} PL20×${lenX}×${lenY}`, v3(x - lenX / 2, y, zP), v3(x + lenX / 2, y, zP), lenY, 20, Z, 'top', id);
@@ -415,7 +418,7 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
           const z = zu + 50 + (i * (zt - zu - 100)) / Math.max(1, rows - 1);
           bolts.push(makeBolt(`${id}.B${++k}`, id, v3(x - sgnX * tw / 2, y + dy, z), scale(X, sgnX), BOLT, tw + 15, 'site', [tbId, ep.id], Z, res.members));
         }
-        if (zTop < zt + 1) res.issues.push({ code: 'TB_B4', severity: 'info', elementId: id, message: `חיבור צד (B4) מסגרת ${f.id}: יש לבדוק את מיקום הפטה הקיצונית מעל ה-TB` });
+        if (zTop < zt + 1) res.issues.push({ code: 'TB_B4', severity: 'warning', elementId: id, message: `חיבור צד (B4) מסגרת ${f.id}: יש לבדוק את מיקום הפטה הקיצונית מעל ה-TB` });
       }
       res.connections.push({ id, type: 'tb-seat', label: `קורת גג מסגרת ${frames.indexOf(f) >= 0 ? f.id : ''} על קורה נושאת ציר ${line.label} — ${SEAT_HE[pl.seat]}`, members: [tbId, ...rs.map((r) => r.id)], parts: [...parts, ...bolts.map((q) => q.id)], bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: false });
     }

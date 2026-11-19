@@ -68,7 +68,34 @@ test('V138-01: מפלס ייחוס לגבהים בשרטוט החתך; פירו�
   await page.getByTestId('isec-datum').selectOption('tos');
   await shot(page, 'V138_01_datum');
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
-  await expect(page.getByTestId('prop-cut-why')).toContainText('קורת גג');
+  await expect(page.getByTestId('prop-len-tbl')).toContainText('קורת גג');
+  await expect(page.getByTestId('prop-len-tbl')).toContainText('אורך חיתוך מרבי');
   await shot(page, 'V138_01_cut');
+  expect(errors).toEqual([]);
+});
+
+test('V139-01: סינון חתכים לפי מידה, טבלת פירוט אורך, בקרת אורכים', async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
+  await page.getByTestId('prop-profile-open').click();
+  await page.getByTestId('prop-profile-fam-RHS').click();
+  const all = await page.locator('[data-testid^="prop-profile-opt-"]').count();
+  await page.getByTestId('prop-profile-q').fill('100x50');
+  const names = await page.locator('[data-testid^="prop-profile-opt-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')!.replace('prop-profile-opt-', '')));
+  expect(names.length).toBeGreaterThan(0); expect(names.length).toBeLessThan(all);
+  expect(names.every((n) => /^RHS100x50x/.test(n))).toBe(true);
+  await page.getByTestId('prop-profile-q').fill('5');
+  const n5 = await page.locator('[data-testid^="prop-profile-opt-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')!.replace('prop-profile-opt-', '')));
+  expect(n5.every((n) => n.replace(/^RHS/, '').split('x').map(Number).includes(5))).toBe(true);
+  await shot(page, 'V139_01_filter');
+  await page.keyboard.press('Escape');
+  // טבלת פירוט לפטה
+  const pid = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.purlin).id);
+  await page.evaluate((id) => (window as any).__ksp.store.select([id]), pid);
+  await expect(page.getByTestId('prop-len-tbl')).toContainText('אורך קו ייחוס');
+  await page.getByTestId('mode-production').click();
+  await page.getByTestId('audit-run').click();
+  await expect(page.getByTestId('audit-ok')).toBeVisible();
+  await shot(page, 'V139_01_audit');
   expect(errors).toEqual([]);
 });
