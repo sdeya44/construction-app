@@ -11,7 +11,8 @@ import { pickFile } from '../persist/files';
 
 /** בדיקה חיה של פרט מועמד: בונים את המודל עם הפרט ובודקים התנגשויות ושגיאות (גיאומטריה בלבד) */
 function evalCandidate(p: Project, next: Project, family: ConnFamily) {
-  const pre = family === 'knee' ? /^C\.KB\.|^KB\./ : family === 'strut' ? /^C\.RS\d|^RS\d/ : /^C\.BASE\./;
+  const PRE: Record<ConnFamily, RegExp> = { knee: /^C\.KB\.|^KB\./, strut: /^C\.RS\d|^RS\d/, base: /^C\.BASE\./, eave: /^C\.EAVE\./, ridge: /^C\.RIDGE/, side: /^C\.SIDE/, roofx: /^(C\.)?BR\.R/, wallx: /^(C\.)?BR\.W/, portal: /^(C\.)?BB\./, cleat: /^C\.PC\.|^CL\./, psplice: /^C\.PS|^PL\./, bsplice: /SPL|splice/i };
+  const pre = PRE[family];
   const d = generate(next);
   const rel = d.issues.filter((i) => (i.severity !== 'info') && (pre.test(i.elementId ?? '') || /אלכסון|תמוכה|בסיס|בורג|שפה|התנגשות/.test(i.message)) && (i.code !== 'CLASH' || pre.test(i.elementId ?? '') || pre.test(i.message.split(' ')[1] ?? '')));
   const clash = d.issues.filter((i) => i.code === 'CLASH' && (pre.test(i.message.split(' ')[1] ?? '') || pre.test(i.message.split(' ')[3] ?? '') || pre.test(i.elementId ?? ''))).length;
@@ -39,7 +40,7 @@ function WizardBody({ connId }: { connId: string }) {
   const [sel, setSel] = useState<string>(() => cands.find((c) => c.detail === cur?.detail && !c.preset)?.id ?? cands[0]?.id);
   const pick = cands.find((c) => c.id === sel) ?? cands[0];
   const [params, setParams] = useState<Params>(() => ({ ...(cur?.params ?? {}) }));
-  const [scope, setScope] = useState<'all' | 'one'>(cur?.local ? 'one' : 'all');
+  const [scope, setScope] = useState<'all' | 'one'>(cur?.local && sit?.oneLabel !== null ? 'one' : 'all');
   const [check, setCheck] = useState<ReturnType<typeof evalCandidate> | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (pick?.preset) setParams({ ...(cur?.params ?? {}), ...pick.preset.params }); }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -50,7 +51,7 @@ function WizardBody({ connId }: { connId: string }) {
     const t = setTimeout(() => { try { setCheck(evalCandidate(p, next, sit.family)); } finally { setBusy(false); } }, 30);
     return () => clearTimeout(t);
   }, [next]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!sit || !cur) return <Dialog title="אשף חיבורים" onClose={close}><div className="hint">לחיבור הזה עדיין אין אשף (אלכסוני עמוד-קורה, תמוכות בין הקורות ובסיסים).</div></Dialog>;
+  if (!sit || !cur) return <Dialog title="אשף חיבורים" onClose={close}><div className="hint">לסוג החיבור הזה אין עדיין סוגי פרט באשף — פתחו את עורך החיבור.</div></Dialog>;
   const dt = detailById(pick?.detail ?? '');
   const vis = showAll ? cands : cands.filter((c) => c.fit.status !== 'no');
   const apply = () => { if (!next) return; store.exec({ label: `אשף חיבורים: ${pick!.title}${scope === 'one' ? ' (מיקום זה)' : ''}`, run: () => next }); close(); };
@@ -108,7 +109,7 @@ function WizardBody({ connId }: { connId: string }) {
         </div>
         <footer>
           <b>החל על:</b>
-          <label className="ss-radio"><input type="radio" data-testid="wiz-scope-one" checked={scope === 'one'} onChange={() => setScope('one')} />{sit.family === 'knee' ? 'המיקום הזה (כל המסגרות)' : sit.family === 'strut' ? 'שורת התמוכות הזו' : 'הבסיס הזה'}</label>
+          {sit.oneLabel !== null && <label className="ss-radio"><input type="radio" data-testid="wiz-scope-one" checked={scope === 'one'} onChange={() => setScope('one')} />{sit.family === 'knee' ? 'המיקום הזה (כל המסגרות)' : sit.family === 'strut' ? 'שורת התמוכות הזו' : sit.oneLabel ?? 'החיבור הזה'}</label>}
           <label className="ss-radio"><input type="radio" data-testid="wiz-scope-all" checked={scope === 'all'} onChange={() => setScope('all')} />כל החיבורים באותו מצב ({sit.sameCount})</label>
           <span className="hint" style={{ margin: 0 }}>{scope === 'all' ? 'חריגים קיימים נשמרים' : ''}</span>
           <span style={{ marginInlineStart: 'auto' }} />
@@ -128,7 +129,7 @@ export function ConnLibrary() {
   if (!open) return null;
   const lib = p.connLibrary ?? [];
   const close = () => store.set({ connLibraryOpen: false });
-  const FAM: Record<ConnFamily, string> = { knee: 'אלכסוני עמוד-קורה', strut: 'תמוכות בין הקורות', base: 'בסיסים' };
+  const FAM: Record<ConnFamily, string> = { knee: 'אלכסוני עמוד-קורה', strut: 'תמוכות בין הקורות', base: 'בסיסים', eave: 'עמוד-קורה', ridge: 'רכס', side: 'קורה לצד עמוד', roofx: 'קושרות גג', wallx: 'קושרות קיר', portal: 'אגד B', cleat: 'תושבות פטה', psplice: 'חיבורי המשך פטות', bsplice: 'חיבורי המשך קורות/עמודים' };
   const setLib = (l: ConnPreset[], label: string, extra?: (pp: Project) => Project) => store.exec({ label, run: (pp) => { const n = { ...pp, connLibrary: l }; return extra ? extra(n) : n; } });
   const makeDefault = (x: ConnPreset) => {
     const firstConn = d.connections.find((c) => (x.family === 'knee' ? c.id.startsWith('C.KB.') : x.family === 'strut' ? /^C\.RS\d+\./.test(c.id) : c.type === 'base'));

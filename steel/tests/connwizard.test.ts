@@ -48,3 +48,39 @@ describe('אשף חיבורים — רישום סוגי פרט (1.42)', () => {
     expect(candidates(withLib, sk).some((x) => x.preset?.id === 'CP1' && x.isDefault)).toBe(true);
   });
 });
+
+describe('אשף חיבורים — כל סוגי החיבורים (1.46)', () => {
+  it('CW-4: לכל משפחה — מצב, מועמדים, החלה (כולם / חיבור זה) ללא שגיאות', async () => {
+    const { familyOf, DETAIL_TYPES } = await import('../src/model/connRegistry');
+    const { SECTION_TEMPLATES } = await import('../src/model/section');
+    const b = defaultBuilding(); b.width = 30000; b.ridgeX = 15000;
+    b.bracing.walls = { ...b.bracing.walls, enabled: true, type: 'x' };
+    const p0 = newProject('t', b);
+    const bp = defaultBuilding(); bp.bracing.walls = { ...bp.bracing.walls, enabled: true, type: 'portal' };
+    const bs = defaultBuilding(); bs.section = SECTION_TEMPLATES.find((t) => t.id === 'stepped')!.make();
+    const seen = new Set<string>();
+    for (const p of [p0, newProject('p', bp), newProject('s', bs)]) {
+      const d = generate(p);
+      const byFam = new Map<string, string>();
+      for (const c of d.connections) { const f = familyOf(c); if (f && !byFam.has(f)) byFam.set(f, c.id); }
+      for (const [f, cid] of byFam) {
+        if (seen.has(f)) continue;
+        const s = situationOf(p, d, cid)!;
+        expect(s, f).toBeTruthy();
+        const cs = candidates(p, s);
+        expect(cs.length, f).toBeGreaterThan(0);
+        const cur = readCurrent(p, s);
+        expect(DETAIL_TYPES.some((t) => t.id === cur.detail), `${f}: ${cur.detail}`).toBe(true);
+        const alt = cs.find((c) => c.detail !== cur.detail && c.fit.status !== 'no') ?? cs[0];
+        for (const scope of (s.oneLabel === null ? ['all'] : ['all', 'one']) as ('all' | 'one')[]) {
+          const n = applyDetail(p, s, alt.detail, { ...cur.params }, scope);
+          const dn = generate(n);
+          expect(dn.issues.filter((i) => i.severity === 'error').map((i) => `${f}/${scope}: ${i.message}`)).toEqual([]);
+          expect(readCurrent(n, situationOf(n, dn, dn.connById.has(cid) ? cid : dn.connections.find((x) => familyOf(x) === f)!.id)!).detail, `${f}/${scope}`).toBe(alt.detail);
+        }
+        seen.add(f);
+      }
+    }
+    expect([...seen].sort()).toEqual(expect.arrayContaining(['base', 'bsplice', 'cleat', 'eave', 'portal', 'psplice', 'ridge', 'roofx', 'side', 'wallx']));
+  });
+});

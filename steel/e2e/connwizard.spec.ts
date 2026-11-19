@@ -43,3 +43,27 @@ test('CW-01: אשף חיבורים — מעורך החיבור: מצב, הצעו
   expect((await S(page)).derived.issues.filter((i: any) => i.severity === 'error')).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+test('CW-02: מכרטיס הקצה של עמוד — "החלף פרט" לעמוד-קורה: פלטה אחת לחיבור הזה בלבד; קושרת גג — רק "כולם"', async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => (window as any).__ksp.store.select(['F3.COL.L']));
+  await page.getByTestId('endc-wiz-C.EAVE.F3.L').click();
+  await expect(page.getByTestId('conn-wizard')).toBeVisible();
+  await expect(page.getByTestId('wiz-c-eave.split')).toContainText('נוכחי');
+  await page.getByTestId('wiz-c-eave.single').click();
+  await page.getByTestId('wiz-scope-one').check();
+  await page.getByTestId('wiz-apply').click();
+  const ov = await page.evaluate(() => (window as any).__ksp.store.state.project.connectionOverrides['C.EAVE.F3.L']);
+  expect(ov.split).toBe(false);
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.connectionDefaults.eave.split)).not.toBe(false);
+  // קושרת גג: הגדרה כללית אחת — אין "החיבור הזה"
+  const rc = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => c.id.startsWith('C.BR.R')).id);
+  await page.evaluate((i) => (window as any).__ksp.store.set({ connWizard: i }), rc);
+  await expect(page.getByTestId('wiz-scope-one')).toHaveCount(0);
+  await expect(page.getByTestId('wiz-c-roofx.rod')).toBeVisible();
+  await page.getByTestId('wiz-c-roofx.rod').click();
+  await page.getByTestId('wiz-apply').click();
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.roof.endDetail)).toBe('rod');
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.severity === 'error'))).toEqual([]);
+  expect(errors).toEqual([]);
+});
