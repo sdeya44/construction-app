@@ -648,6 +648,9 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
 }
 
 /** בדיקת התנגשויות מקומית: זוויתן מול פטה/קורה, פטה מול קורה, אזור הרכס, פלטות מול עמוד/קורה. */
+/** פרופיל חלול (RHS/SHS/CHS — בכל כתיב: "SHS 80x80x4 CF" וכו') — לשונית בחריץ מותרת */
+const isHollow = (name: string) => ['RHS', 'SHS', 'CHS'].includes(tryProfile(name)?.family ?? '');
+
 export function checkClashes(conns: Connection[], byId: Map<string, Member>): ValidationIssue[] {
   const out: ValidationIssue[] = [];
   const seen = new Set<string>();
@@ -696,7 +699,7 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
       // לשונית (".T") בחריץ ה-RHS של האלמנט המחובר — מותר; מול המארח — נבדקת
       for (const part of c.parts.filter((x) => ['plate', 'beam'].includes(byId.get(x)?.kind ?? ''))) for (const mid of c.members) {
         const m = byId.get(mid);
-        if (/\.T$/.test(part) && m && (m.kind === 'brace' || m.kind === 'beam') && m.profile.startsWith('RHS')) continue;
+        if (/\.T$/.test(part) && m && (m.kind === 'brace' || m.kind === 'beam') && isHollow(m.profile)) continue;
         test(byId.get(part), m);
       }
     }

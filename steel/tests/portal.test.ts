@@ -73,3 +73,16 @@ describe('אגד B — קשיחות לאורך בקיר', () => {
     expect(di.issues.filter((i) => i.severity === 'error')).toEqual([]);
   });
 });
+
+describe('אגד B — חתך בשם קטלוגי SHS (1.40.2)', () => {
+  it('PB-SHS: "SHS 80x80x4 CF" — לשונית בחריץ אינה מדווחת כהתנגשות', async () => {
+    const { defaultBuilding, newProject } = await import('../src/model/defaults');
+    const { generate } = await import('../src/geometry/generate');
+    const { defaultPortal } = await import('../src/geometry/portal');
+    const b = defaultBuilding();
+    b.bracing.walls = { ...b.bracing.walls, enabled: true, type: 'portal', portal: { ...defaultPortal(), beam: 'SHS 80x80x4 CF', brace: 'SHS 80x80x4 CF' } };
+    const d = generate(newProject('t', b));
+    expect(d.members.some((m) => m.id.startsWith('BB.'))).toBe(true);
+    expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
+  });
+});
