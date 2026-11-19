@@ -1044,3 +1044,10 @@ details.adv .adv-body { padding-bottom: 6px; }
 .choice3 .choice-tile b { font-size: 13px; }
 .choice-tile, .pic-tile { min-width: 0; }
 .choice-tile svg, .pic-tile svg { max-width: 100%; height: auto; }
+
+.conn-prev { display: grid; gap: 6px; margin-top: 6px; }
+.part-prev.compact { max-height: 240px; overflow: hidden; }
+
+.kb-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 6px 0; }
+.kb-quick .inp.num { width: 54px; }
+.kb-quick .sep { width: 1px; height: 20px; background: var(--line); margin: 0 3px; }

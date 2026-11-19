@@ -1,3 +1,4 @@
+import { ConnPreview } from './ConnPreview';
 import { useState } from 'react';
 import {
   applyIssueFixes, applyTemplate, resetCleat, resetConnection, saveTemplate, setCleat, setCleatAll, setConnection, setConnectionDefault,
@@ -73,6 +74,7 @@ export function ConnectionEditor() {
         <dt>מזהה</dt><dd data-testid="conn-id">{c.id}</dd>
         <dt>מחבר</dt><dd>{c.members.join(' ↔ ')}</dd>
       </dl>
+      <details className="psec" open><summary data-testid="conn-prev-sum">פרט טיפוסי</summary><div className="psec-b"><ConnPreview connId={c.id} /></div></details>
       <div className="row" style={{ margin: '6px 0' }}>
         <button className="btn small" data-testid="conn-show3d" onClick={() => {
           store.set({ isolated: [...c.members, ...c.parts.flatMap((x) => [x, `${x}.H`, `${x}.S`, `${x}.N`])], selection: [c.parts[0]] });

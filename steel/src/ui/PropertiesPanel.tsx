@@ -24,6 +24,7 @@ import { RoofTrussPanel, TransferShape } from './TransferPanel';
 import { CleatHubCtx, CleatTypePicker, EndTypePicker } from './ConnTypePicker';
 import type { Connection, DerivedModel, Member, Project, TransferDef, TrussSpec } from '../model/types';
 import { buildSheet } from '../drawing/views';
+import { ConnPreview } from './ConnPreview';
 import { sheetToSvg } from '../drawing/svg';
 import { CONN_TYPE } from './ConnectionEditor';
 import { familyOf } from '../model/connRegistry';
@@ -710,6 +711,7 @@ function PartPreview({ m, mark }: { m: Member; mark?: string }) {
 /** כרטיס חיבור לכל קצה: מה הפרט (פלטות, ברגים, סטטוס) + החלפת פרט באשף + עורך החיבור */
 function EndCards({ m }: { m: Member }) {
   const d = useStore((s) => s.derived);
+  const [drawOpen, setDrawOpen] = useState<string | null>(null);
   const own = d.connections.filter((c) => c.type !== 'custom' && (c.members.includes(m.id) || c.parts.includes(m.id)));
   const centroid = (c: Connection) => { const ps = [...c.parts, ...c.bolts.map((b) => b.id)].map((x) => d.byId.get(x)).filter((x): x is Member => !!x); if (!ps.length) return null; return { x: ps.reduce((a, q) => a + q.start.x, 0) / ps.length, y: ps.reduce((a, q) => a + q.start.y, 0) / ps.length, z: ps.reduce((a, q) => a + q.start.z, 0) / ps.length }; };
   const dd = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -730,7 +732,9 @@ function EndCards({ m }: { m: Member }) {
       <div className="row" style={{ gap: 4, marginTop: 4 }}>
         {familyOf(c) && <button className="btn small primary" data-testid={`endc-wiz-${c.id}`} onClick={() => store.set({ connWizard: c.id })}>החלף פרט ✎</button>}
         <button className="btn small" data-testid={`endc-open-${c.id}`} onClick={() => store.set({ activeConn: c.id })}>עורך החיבור</button>
+        <button className={`btn small${drawOpen === c.id ? ' on' : ''}`} data-testid={`endc-draw-${c.id}`} onClick={() => setDrawOpen(drawOpen === c.id ? null : c.id)}>פרט ▾</button>
       </div>
+      {drawOpen === c.id && <ConnPreview connId={c.id} compact />}
     </div>
   );
   if (!own.length) return null;

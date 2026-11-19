@@ -369,6 +369,13 @@ function KneeSides() {
   const keysOf = (q: { left?: string; right?: string }) => [q.left, q.right].filter((k): k is string => !!k);
   const allKeys = cols.flatMap(keysOf);
   const toggleKeys = (ks: string[]) => { const any = frames.some((f) => ks.some((k) => isOn(f.id, k))); setCells(frames.filter((f) => !truss.has(f.id)).flatMap((f) => ks.map((k) => [f.id, k] as [string, string])), !any); };
+  // 1.52: בחירה מהירה — טווח מסגרות / מסגרות הקצה / הכל (הטבלה מתעדכנת בהתאם)
+  const setFrames = (want: (idx: number) => boolean) => {
+    const nOff = new Set(off); const sides = { ...(kb.sides ?? {}) };
+    for (const k of allKeys) { if (sides[k]?.on === false) { const o = { ...sides[k] }; delete o.on; sides[k] = o; if (!Object.keys(o).length) delete sides[k]; } }
+    frames.forEach((f, i) => { for (const k of allKeys) { if (want(i)) nOff.delete(`${f.id}|${k}`); else nOff.add(`${f.id}|${k}`); } });
+    commit(nOff, sides);
+  };
   const toggleFrame = (fid: string) => { const any = allKeys.some((k) => isOn(fid, k)); setCells(allKeys.map((k) => [fid, k] as [string, string]), !any); };
   // מידות לכל מפתח — כותבות לשני הצדדים
   const setSpan = (q: (typeof spans)[number], patch: Partial<KneeSideOverride> | null) => {
@@ -387,6 +394,16 @@ function KneeSides() {
   return (
     <div className="op-card" data-testid="kb-sides">
       <b>איפה יש אלכסונים ({total})</b>
+      <div className="kb-quick" data-testid="kb-quick">
+        <span className="muted">מסגרות</span>
+        <input className="inp num" type="number" min={1} max={frames.length} defaultValue={1} data-testid="kb-from" aria-label="ממסגרת" />
+        <span>–</span>
+        <input className="inp num" type="number" min={1} max={frames.length} defaultValue={frames.length} data-testid="kb-to" aria-label="עד מסגרת" />
+        <button className="btn small" data-testid="kb-range" onClick={(e) => { const box = (e.currentTarget.parentElement!); const a = Number((box.querySelector('[data-testid=kb-from]') as HTMLInputElement).value) - 1, b = Number((box.querySelector('[data-testid=kb-to]') as HTMLInputElement).value) - 1; setFrames((i) => i >= Math.min(a, b) && i <= Math.max(a, b)); }}>רק בטווח</button>
+        <span className="sep" />
+        <button className="btn small" data-testid="kb-ends" onClick={() => setFrames((i) => i === 0 || i === frames.length - 1)}>מסגרות הקצה</button>
+        <button className="btn small" data-testid="kb-all" onClick={() => setFrames(() => true)}>כל המסגרות</button>
+      </div>
       <div className="hint">לכל עמוד שני צדדים (גם צד הקונזולה). לחיצה על אלכסון בתא — הדלקה/כיבוי במסגרת הזו · על שם העמוד — שני צדדיו בכל המסגרות · על מספר מסגרת — כל המסגרת.</div>
       <div className="schem" data-testid="kb-grid">
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="אלכסוני עמוד-קורה — תוכנית לפי עמודים" style={{ maxWidth: `${Math.round(W * 3)}px`, margin: '0 auto', display: 'block' }}>

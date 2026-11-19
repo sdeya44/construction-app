@@ -1,3 +1,4 @@
+import { ConnPreview } from './ConnPreview';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { store, useStore } from '../store';
 import { generate } from '../geometry/generate';
@@ -75,6 +76,8 @@ function WizardBody({ connId }: { connId: string }) {
             <dl className="kv">{sit.facts.map((f) => <Fragment key={f.k}><dt>{f.k}</dt><dd>{f.v}</dd></Fragment>)}</dl>
             <div className="sum-pills"><span className="sum-pill muted" data-testid="wiz-same">אותו מצב בפרויקט: {sit.sameCount} חיבורים</span>{cur.local && <span className="sum-pill warn">למיקום הזה יש חריג</span>}</div>
             <div className="hint">המצב נקבע מהמודל: סוג המארח, האלמנט והזווית — לא בוחרים סוג חיבור ידנית.</div>
+            <h3 style={{ marginTop: 10 }}>הפרט כפי שהוא עכשיו</h3>
+            <ConnPreview connId={connId} compact />
           </section>
           <section className="wiz-col mid">
             <div className="row" style={{ justifyContent: 'space-between' }}><h3 style={{ margin: 0 }}>פרטים מוצעים</h3>

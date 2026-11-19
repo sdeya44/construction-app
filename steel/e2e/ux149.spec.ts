@@ -94,3 +94,31 @@ test('UX151-01: עריכת חיבור — המבט מתקרב לצומת; "חז�
   expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.roof.type)).toBe('rhs');
   expect(errors).toEqual([]);
 });
+
+test('UX152-01: פרט טיפוסי בכרטיס החיבור / בעורך / באשף; בחירה מהירה של מסגרות לאלכסונים', async ({ page }) => {
+  const errors = await boot(page);
+  // פרט טיפוסי: כרטיס קצה של עמוד
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.set({ propScope: 'one' }); k.store.select(['F2.COL.L']); });
+  const cid = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => c.type === 'base' && c.members.includes('F2.COL.L'))?.id);
+  await page.getByTestId(`endc-draw-${cid}`).click();
+  await expect(page.getByTestId(`conn-prev-${cid}`).locator('svg')).toBeVisible();
+  // עורך החיבור
+  await page.getByTestId(`endc-open-${cid}`).click();
+  await expect(page.getByTestId('conn-editor').getByTestId(`conn-prev-${cid}`)).toBeVisible();
+  await page.evaluate(() => (window as any).__ksp.store.set({ activeConn: null }));
+  // אלכסונים: רק במסגרות הקצה, ואז טווח 2–3
+  await page.evaluate(() => (window as any).__ksp.store.select([]));
+  await page.getByTestId('nav-b:knee').click();
+  if (await page.getByTestId('kb-on').count()) await page.getByTestId('kb-on').check();
+  await page.getByTestId('kb-ed-tab-plan').click();
+  await page.getByTestId('kb-ends').click();
+  const frs = () => page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('KB.')).map((m: any) => m.id.split('.')[1]))].sort());
+  const nf = await page.evaluate(() => (window as any).__ksp.store.state.project.building.frames.length);
+  expect(await frs()).toEqual(['F1', `F${nf}`].sort());
+  await page.getByTestId('kb-from').fill('2'); await page.getByTestId('kb-to').fill('3');
+  await page.getByTestId('kb-range').click();
+  expect(await frs()).toEqual(['F2', 'F3']);
+  await page.getByTestId('kb-all').click();
+  expect((await frs()).length).toBe(nf);
+  expect(errors).toEqual([]);
+});
