@@ -259,9 +259,21 @@ export function KneeEditor() {
 }
 
 /**
- * אלכסוני עמוד-קורה — איפה יש ואיפה אין: תוכנית לחיצה (עמודות = מפתחים, שורות = מסגרות), בכל תא שני אלכסונים
- * (ליד העמוד השמאלי וליד הימני). מתחת — מידות לכל מפתח (שורה אחת למפתח; חלה על שני הצדדים).
+ * אלכסוני עמוד-קורה — איפה יש ואיפה אין: תוכנית לחיצה (עמודות = עמודים, שורות = מסגרות), בכל תא העמוד ושני צדדיו
+ * (אלכסון שמאלי וימני — כולל צד הקונזולה בעמודי הקצה). מתחת — מידות לכל מפתח/קונזולה (חלה על שני הצדדים).
  */
+export function kneeKeyParts(key: string) { const a = key.split('.'); return { lid: a[0], sd: a[a.length - 1] as 'L' | 'R' }; }
+/** קיבוץ מפתחות "קו.מישור.צד" לפי עמוד (שני צדדים) ולפי מפתח (−1 = קונזולה שמאל, n = קונזולה ימין) */
+export function kneeLayout(keys: string[], lineIds: string[]) {
+  const li = (k: string) => lineIds.indexOf(kneeKeyParts(k).lid);
+  const cols = lineIds.map((_id, i) => ({ i, left: keys.find((k) => li(k) === i && kneeKeyParts(k).sd === 'L'), right: keys.find((k) => li(k) === i && kneeKeyParts(k).sd === 'R') })).filter((c) => c.left || c.right);
+  // מפתח של כל מפתח-צד: צד ימין של ציר i ⇒ מפתח i; צד שמאל של ציר i ⇒ מפתח i-1
+  const spanOf = (k: string) => (kneeKeyParts(k).sd === 'R' ? li(k) : li(k) - 1);
+  const nSpan = Math.max(1, lineIds.length - 1);
+  const spans = Array.from({ length: nSpan + 2 }, (_, j) => j - 1).map((i) => ({ i, console: i < 0 || i >= nSpan, left: keys.find((k) => spanOf(k) === i && kneeKeyParts(k).sd === 'R'), right: keys.find((k) => spanOf(k) === i && kneeKeyParts(k).sd === 'L') })).filter((q) => q.left || q.right);
+  return { cols, spans, nSpan };
+}
+
 function KneeSides() {
   const kb = useStore((s) => s.project.building.kneeBraces) ?? defaultKneeBraces();
   const p = useStore((s) => s.project);
@@ -271,10 +283,7 @@ function KneeSides() {
   const truss = new Set(p.building.roofTruss?.enabled ? (p.building.roofTruss.frames === 'all' ? frames.map((f) => f.id) : p.building.roofTruss.frames) : []);
   const keys = [...new Set([...d.connections.filter((c) => c.type === 'knee').map((c) => c.id.split('.').slice(3).join('.')), ...Object.keys(kb.sides ?? {}), ...(kb.offCells ?? []).map((x) => x.split('|')[1])])];
   if (!keys.length) return null;
-  // מפתח (0..) של כל מפתח-צד: צד ימין של ציר i ⇒ מפתח i; צד שמאל של ציר i ⇒ מפתח i-1
-  const spanOf = (key: string) => { const [lid, , sd] = key.split('.'); const li = lines.findIndex((l) => l.id === lid); return sd === 'R' ? li : li - 1; };
-  const nSpan = Math.max(1, lines.length - 1);
-  const spans = Array.from({ length: nSpan }, (_, i) => ({ i, left: keys.find((k) => spanOf(k) === i && k.endsWith('.R')), right: keys.find((k) => spanOf(k) === i && k.endsWith('.L')) })).filter((q) => q.left || q.right);
+  const { cols, spans, nSpan } = kneeLayout(keys, lines.map((l) => l.id));
   const off = new Set(kb.offCells ?? []);
   const globalOff = (k: string) => kb.sides?.[k]?.on === false || kb.exclude.includes(k);
   const isOn = (fid: string, k: string) => !truss.has(fid) && !globalOff(k) && !off.has(`${fid}|${k}`);
@@ -300,46 +309,50 @@ function KneeSides() {
     commit(nOff, sides);
   };
   const toggle = (fid: string, k: string) => setCells([[fid, k]], !isOn(fid, k));
-  const colKeys = (q: (typeof spans)[number]) => [q.left, q.right].filter((k): k is string => !!k);
-  const toggleSpan = (q: (typeof spans)[number]) => { const ks = colKeys(q); const any = frames.some((f) => ks.some((k) => isOn(f.id, k))); setCells(frames.filter((f) => !truss.has(f.id)).flatMap((f) => ks.map((k) => [f.id, k] as [string, string])), !any); };
-  const toggleFrame = (fid: string) => { const ks = spans.flatMap(colKeys); const any = ks.some((k) => isOn(fid, k)); setCells(ks.map((k) => [fid, k] as [string, string]), !any); };
+  const keysOf = (q: { left?: string; right?: string }) => [q.left, q.right].filter((k): k is string => !!k);
+  const allKeys = cols.flatMap(keysOf);
+  const toggleKeys = (ks: string[]) => { const any = frames.some((f) => ks.some((k) => isOn(f.id, k))); setCells(frames.filter((f) => !truss.has(f.id)).flatMap((f) => ks.map((k) => [f.id, k] as [string, string])), !any); };
+  const toggleFrame = (fid: string) => { const any = allKeys.some((k) => isOn(fid, k)); setCells(allKeys.map((k) => [fid, k] as [string, string]), !any); };
   // מידות לכל מפתח — כותבות לשני הצדדים
   const setSpan = (q: (typeof spans)[number], patch: Partial<KneeSideOverride> | null) => {
     const sides = { ...(kb.sides ?? {}) };
-    for (const k of colKeys(q)) { if (patch === null) { const on = sides[k]?.on; delete sides[k]; if (on === false) sides[k] = { on: false }; } else sides[k] = { ...(sides[k] ?? {}), ...patch }; }
+    for (const k of keysOf(q)) { if (patch === null) { const on = sides[k]?.on; delete sides[k]; if (on === false) sides[k] = { on: false }; } else sides[k] = { ...(sides[k] ?? {}), ...patch }; }
     store.exec(setKneeBraces({ sides }));
   };
+  const spanLabel = (q: (typeof spans)[number]) => (q.i < 0 ? `קונזולה ${lines[0]?.label ?? ''}` : q.i >= nSpan ? `קונזולה ${lines[lines.length - 1]?.label ?? ''}` : `${lines[q.i]?.label ?? ''}–${lines[q.i + 1]?.label ?? ''}`);
+  const spanTid = (q: (typeof spans)[number]) => (q.i < 0 ? 'cL' : q.i >= nSpan ? 'cR' : String(q.i));
   const lenOf = (key: string) => { const m = d.members.find((x) => x.id.startsWith('KB.') && x.id.endsWith(`.${key}`)); return m ? Math.round(Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y, m.end.z - m.start.z)) : null; };
   const angleMode = (kb.mode ?? 'angle') === 'angle';
-  const total = frames.reduce((a, f) => a + spans.flatMap(colKeys).filter((k) => isOn(f.id, k)).length, 0);
-  // שרטוט
-  const X0 = 22, cw = Math.max(34, Math.min(60, 230 / spans.length)), rh = Math.max(11, Math.min(18, 170 / frames.length)), Y0 = 16;
-  const W = X0 + cw * spans.length + 4, H = Y0 + rh * frames.length + 4;
+  const total = frames.reduce((a, f) => a + allKeys.filter((k) => isOn(f.id, k)).length, 0);
+  // שרטוט: עמודה לכל עמוד — קו העמוד באמצע, אלכסון לכל צד
+  const X0 = 22, cw = Math.max(34, Math.min(60, 260 / cols.length)), rh = Math.max(11, Math.min(18, 170 / frames.length)), Y0 = 16;
+  const W = X0 + cw * cols.length + 4, H = Y0 + rh * frames.length + 4;
   return (
     <div className="op-card" data-testid="kb-sides">
       <b>איפה יש אלכסונים ({total})</b>
-      <div className="hint">לחיצה על אלכסון בתא — הדלקה/כיבוי במסגרת הזו · על כותרת מפתח — בכל המסגרות · על מספר מסגרת — כל המסגרת.</div>
+      <div className="hint">לכל עמוד שני צדדים (גם צד הקונזולה). לחיצה על אלכסון בתא — הדלקה/כיבוי במסגרת הזו · על שם העמוד — שני צדדיו בכל המסגרות · על מספר מסגרת — כל המסגרת.</div>
       <div className="schem" data-testid="kb-grid">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="אלכסוני עמוד-קורה — תוכנית" style={{ maxWidth: `${Math.round(W * 3)}px`, margin: '0 auto', display: 'block' }}>
-          {spans.map((q, c) => {
-            const a = X0 + c * cw;
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="אלכסוני עמוד-קורה — תוכנית לפי עמודים" style={{ maxWidth: `${Math.round(W * 3)}px`, margin: '0 auto', display: 'block' }}>
+          {cols.map((q, c) => {
+            const a = X0 + c * cw, xm = a + cw / 2;
             return <g key={q.i}>
-              <text x={a + cw / 2} y={9} className="sm-lbl-s kb-hd" textAnchor="middle" data-testid={`kb-span-${q.i}`} onClick={() => toggleSpan(q)} style={{ cursor: 'pointer' }}>{`${lines[q.i]?.label ?? ''}–${lines[q.i + 1]?.label ?? ''}`}</text>
+              <text x={xm} y={9} className="sm-lbl-s kb-hd" textAnchor="middle" data-testid={`kb-col-${q.i}`} onClick={() => toggleKeys(keysOf(q))} style={{ cursor: 'pointer' }}>{lines[q.i]?.label ?? ''}</text>
               {frames.map((f, r) => {
                 const y = Y0 + r * rh, tr = truss.has(f.id);
                 const dia = (k: string | undefined, leftSide: boolean) => {
                   if (!k) return null;
                   const on = isOn(f.id, k);
-                  const xA = leftSide ? a + 2 : a + cw - 2, xB = leftSide ? a + cw * 0.36 : a + cw * 0.64;
+                  const xA = leftSide ? xm - 2 : xm + 2, xB = leftSide ? a + cw * 0.12 : a + cw * 0.88;
                   return <g className="bay-cell" data-testid={`kb-cell-${r}-${k}`} onClick={() => !tr && toggle(f.id, k)}>
-                    <rect x={leftSide ? a : a + cw / 2} y={y} width={cw / 2} height={rh} fill="transparent" />
+                    <rect x={leftSide ? a : xm} y={y} width={cw / 2} height={rh} fill="transparent" />
                     <line x1={xA} y1={y + rh - 2} x2={xB} y2={y + 2.5} className={on ? 'kb-on' : 'kb-off'} />
                   </g>;
                 };
                 return <g key={f.id}>
                   <rect x={a} y={y} width={cw} height={rh} className={tr ? 'bay' : 'bay on'} />
                   <line x1={a + 1} y1={y + 2} x2={a + cw - 1} y2={y + 2} className="sm-main" strokeWidth={0.8} />
-                  {tr ? <text x={a + cw / 2} y={y + rh / 2 + 2} className="sm-lbl-s" textAnchor="middle">מסבך</text> : <>{dia(q.left, true)}{dia(q.right, false)}</>}
+                  <line x1={xm} y1={y + 2} x2={xm} y2={y + rh} className="sm-main" strokeWidth={1.4} />
+                  {tr ? <text x={xm} y={y + rh / 2 + 2} className="sm-lbl-s" textAnchor="middle">מסבך</text> : <>{dia(q.left, true)}{dia(q.right, false)}</>}
                 </g>;
               })}
             </g>;
@@ -347,19 +360,19 @@ function KneeSides() {
           {frames.map((f, r) => <text key={f.id} x={X0 - 4} y={Y0 + r * rh + rh / 2 + 2} className="sm-lbl-s" textAnchor="end" data-testid={`kb-frame-${r}`} onClick={() => toggleFrame(f.id)} style={{ cursor: 'pointer' }}>{r + 1}</text>)}
         </svg>
       </div>
-      <Adv id="kb-spans" label="ערך שונה לכל מפתח (ירידה, זווית, אורך)">
+      <Adv id="kb-spans" label="ערך שונה לכל מפתח / קונזולה (ירידה, זווית, אורך)">
       <table className="mini-table"><thead><tr><th>מפתח</th><th>ירידה</th><th>{angleMode ? 'זווית' : 'מרחק'}</th><th>אורך</th><th /></tr></thead>
         <tbody>{spans.map((q) => {
-          const k0 = (q.left ?? q.right)!, ov = kb.sides?.[k0] ?? {};
-          const Ls = colKeys(q).map(lenOf).filter((x): x is number => x !== null);
-          const custom = colKeys(q).some((k) => { const o = kb.sides?.[k]; return o && Object.keys(o).some((x) => x !== 'on'); });
+          const k0 = (q.left ?? q.right)!, ov = kb.sides?.[k0] ?? {}, t = spanTid(q);
+          const Ls = keysOf(q).map(lenOf).filter((x): x is number => x !== null);
+          const custom = keysOf(q).some((k) => { const o = kb.sides?.[k]; return o && Object.keys(o).some((x) => x !== 'on'); });
           return (
-            <tr key={q.i} data-testid={`kb-spanrow-${q.i}`}>
-              <td>{lines[q.i]?.label}–{lines[q.i + 1]?.label}</td>
-              <td><NumField testId={`kb-span-drop-${q.i}`} value={ov.drop ?? kb.drop} suffix="" onCommit={(v) => setSpan(q, { drop: v })} /></td>
+            <tr key={q.i} data-testid={`kb-spanrow-${t}`}>
+              <td>{spanLabel(q)}</td>
+              <td><NumField testId={`kb-span-drop-${t}`} value={ov.drop ?? kb.drop} suffix="" onCommit={(v) => setSpan(q, { drop: v })} /></td>
               <td>{angleMode
-                ? <NumField testId={`kb-span-angle-${q.i}`} value={ov.angle ?? kb.angle ?? 45} suffix="°" onCommit={(v) => setSpan(q, { angle: Math.max(15, Math.min(75, v)) })} />
-                : <NumField testId={`kb-span-reach-${q.i}`} value={ov.reach ?? kb.reach} suffix="" onCommit={(v) => setSpan(q, { reach: v })} />}</td>
+                ? <NumField testId={`kb-span-angle-${t}`} value={ov.angle ?? kb.angle ?? 45} suffix="°" onCommit={(v) => setSpan(q, { angle: Math.max(15, Math.min(75, v)) })} />
+                : <NumField testId={`kb-span-reach-${t}`} value={ov.reach ?? kb.reach} suffix="" onCommit={(v) => setSpan(q, { reach: v })} />}</td>
               <td className="num">{Ls.length ? [...new Set(Ls)].join('/') : '—'}</td>
               <td>{custom && <button className="btn small" title="חזרה להגדרה הכללית" onClick={() => setSpan(q, null)}>↺</button>}</td>
             </tr>

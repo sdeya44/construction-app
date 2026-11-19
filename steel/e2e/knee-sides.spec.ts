@@ -17,10 +17,12 @@ test('KB-02: אלכסוני עמוד-קורה — תוכנית איפה יש: ת
   await page.getByTestId('kb-frame-1').click();
   expect(await n()).toBe(n0 - 3);
   await shot(page, 'KB_02_grid');
-  // כותרת המפתח: כבוי בכל המסגרות, ושוב — דלוק בכולן
-  await page.getByTestId('kb-span-0').click();
+  // כותרת עמוד (שני צדדיו): שני העמודים כבויים בכל המסגרות, ושוב — דלוק בכולן
+  await page.getByTestId('kb-col-0').click();
+  await page.getByTestId('kb-col-1').click();
   expect(await n()).toBe(0);
-  await page.getByTestId('kb-span-0').click();
+  await page.getByTestId('kb-col-0').click();
+  await page.getByTestId('kb-col-1').click();
   expect(await n()).toBe(n0);
   // מידה למפתח — חלה על שני הצדדים
   const inp = page.getByTestId('kb-span-drop-0');
@@ -28,6 +30,30 @@ test('KB-02: אלכסוני עמוד-קורה — תוכנית איפה יש: ת
   const ov = await page.evaluate(() => (window as any).__ksp.store.state.project.building.kneeBraces.sides);
   expect(ov['L.L.R'].drop).toBe(1200);
   expect(ov['R.R.L'].drop).toBe(1200);
+  expect(errors).toEqual([]);
+});
+
+test('KB-03: קונזולה — עמוד הקצה מופיע עם שני צדדיו; פרט חיבור ניתן לשינוי בעורך החיבור', async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, rafterOverhangLeft: 1500, rafterOverhangRight: 1500 } }) }); });
+  await page.getByTestId('nav-b:knee').click();
+  await page.getByTestId('kb-on').check();
+  await expect(page.getByTestId('kb-cell-0-L.L.L')).toBeVisible();
+  await expect(page.getByTestId('kb-cell-0-L.L.R')).toBeVisible();
+  await expect(page.getByTestId('kb-cell-0-R.R.R')).toBeVisible();
+  const n = () => page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('KB.')).length);
+  const n0 = await n();
+  await page.getByTestId('kb-cell-0-L.L.L').click(); // צד הקונזולה בלבד
+  expect(await n()).toBe(n0 - 1);
+  await page.getByTestId('kb-cell-0-L.L.L').click();
+  expect(await n()).toBe(n0);
+  await shot(page, 'KB_03_console');
+  // עורך החיבור: פרט חיבור — בחירה (לא קבוע)
+  const cid = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => c.type === 'knee').id);
+  await page.evaluate((i) => (window as any).__ksp.store.set({ activeConn: i }), cid);
+  await page.getByTestId('pw-kb-detail').selectOption('flange');
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.kneeBraces.detail)).toBe('flange');
+  await expect(page.getByTestId('pw-kb-n')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
