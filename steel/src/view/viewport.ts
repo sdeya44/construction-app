@@ -35,7 +35,7 @@ class Pane {
   orthoHalfH = 10000;
   labelPool: HTMLDivElement[] = [];
   down?: { x: number; y: number; t: number; b: number };
-  lastPick?: { x: number; y: number; ids: string[]; i: number };
+  lastPick?: { x: number; y: number; ids: string[]; i: number; /** הלחיצה הקודמת פגעה במזחלה שלפני האלמנטים */ gutter?: boolean };
 
   constructor(public vp: Viewport, public view: ViewName, projection: 'ortho' | 'persp') {
     this.projection = projection;
@@ -697,10 +697,13 @@ export class Viewport {
     }
     // מזחלה/ירידה לפני כל אלמנט אחר בקרן — פתיחת אשף המזחלה
     const g = this.pickGutter(p, e.clientX, e.clientY);
-    if (g && (!r.points.length || g.d < r.points[0]!.distanceTo(p.camera.position) - 1)) {
+    const lp0 = p.lastPick;
+    // לחיצה חוזרת באותה נקודה אחרי מזחלה — עוברים לאלמנט שמאחוריה (1.48.2; קודם המזחלה "תפסה" כל לחיצה)
+    const againAfterGutter = !!lp0?.gutter && Math.hypot(lp0.x - e.clientX, lp0.y - e.clientY) < 5 && r.ids.length > 0;
+    if (g && !againAfterGutter && (!r.points.length || g.d < r.points[0]!.distanceTo(p.camera.position) - 1)) {
       store.select([]);
       store.set({ activeGutter: g.ref, activeConn: null });
-      p.lastPick = undefined;
+      p.lastPick = { x: e.clientX, y: e.clientY, ids: r.ids, i: -1, gutter: true };
       return;
     }
     if (s.activeGutter) store.set({ activeGutter: null });
@@ -713,6 +716,12 @@ export class Viewport {
     let idx = 0;
     const lp = p.lastPick;
     if (lp && Math.hypot(lp.x - e.clientX, lp.y - e.clientY) < 5 && lp.ids.join() === r.ids.join()) idx = (lp.i + 1) % r.ids.length;
+    // סבב: אחרי האלמנט האחרון בקרן — חזרה למזחלה שלפניהם
+    if (g && lp && !lp.gutter && idx === 0 && lp.ids.join() === r.ids.join() && Math.hypot(lp.x - e.clientX, lp.y - e.clientY) < 5 && g.d < r.points[0]!.distanceTo(p.camera.position) - 1) {
+      store.select([]); store.set({ activeGutter: g.ref, activeConn: null });
+      p.lastPick = { x: e.clientX, y: e.clientY, ids: r.ids, i: -1, gutter: true };
+      return;
+    }
     p.lastPick = { x: e.clientX, y: e.clientY, ids: r.ids, i: idx };
     const id = r.ids[idx];
     store.select([id], e.ctrlKey || e.metaKey ? 'toggle' : e.shiftKey ? 'add' : 'replace');
