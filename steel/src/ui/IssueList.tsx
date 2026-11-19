@@ -23,6 +23,8 @@ export function IssueList({ issues, testId }: { issues: ValidationIssue[]; testI
   const hidden = useStore((s) => s.derived.hiddenIssues) ?? [];
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [showHidden, setShowHidden] = useState(false);
+  /** 1.44: הודעות "לידיעה" בסעיף מקופל — שגיאות ואזהרות למעלה */
+  const [showInfo, setShowInfo] = useState(false);
   const groups = new Map<string, ValidationIssue[]>();
   for (const i of issues) {
     const k = `${i.severity}|${i.code}`;
@@ -40,12 +42,19 @@ export function IssueList({ issues, testId }: { issues: ValidationIssue[]; testI
         </div>
       )}
       {!issues.length && <div className="hint" data-testid="no-issues">אין הודעות פתוחות.</div>}
-      {sorted.map(([k, list]) => {
+      {issues.length > 0 && <div className="sev-sum" data-testid="sev-sum">
+        {(['error', 'warning'] as Severity[]).map((sv) => { const n = issues.filter((i) => i.severity === sv).length; return <span key={sv} className={`sum-pill ${n ? (sv === 'error' ? 'bad' : 'warn') : ''}`}>{sv === 'error' ? 'שגיאות' : 'אזהרות'}: {n}</span>; })}
+        {!issues.some((i) => i.severity !== 'info') && <span className="sum-pill">✓ אין שגיאות ואזהרות</span>}
+      </div>}
+      {sorted.map(([k, list], gi) => {
         const [sev, code] = k.split('|') as [Severity, string];
+        const infoHead = sev === 'info' && (gi === 0 || sorted[gi - 1][0].split('|')[0] !== 'info');
+        if (sev === 'info' && !showInfo) return infoHead ? <button key="info-toggle" className="info-toggle" data-testid="info-toggle" onClick={() => setShowInfo(true)}>▸ לידיעה ({issues.filter((i) => i.severity === 'info').length}) — הודעות שאינן דורשות פעולה</button> : null;
         const isOpen = open[k] ?? list.length <= 3;
         const fx = list.filter(hasFix);
         return (
-          <div key={k} className={`igroup ${sev}`} data-testid={`igroup-${code}`}>
+          <div key={k}>{infoHead && <button className="info-toggle" onClick={() => setShowInfo(false)}>▾ לידיעה — קפל</button>}
+          <div className={`igroup ${sev}`} data-testid={`igroup-${code}`}>
             <div className="igroup-h" onClick={() => setOpen({ ...open, [k]: !isOpen })}>
               <span className="ic">{ic(sev)}</span>
               <b>{ISSUE_LABEL[code] ?? code}</b>
@@ -69,7 +78,7 @@ export function IssueList({ issues, testId }: { issues: ValidationIssue[]; testI
               </div>
             ))}
             {isOpen && list.length > 200 && <div className="hint">ועוד {list.length - 200}…</div>}
-          </div>
+          </div></div>
         );
       })}
       {hidden.length > 0 && (

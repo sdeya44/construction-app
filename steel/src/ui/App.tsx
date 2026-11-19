@@ -16,7 +16,7 @@ import { ProductionView } from './ProductionView';
 import { CommandPalette, ConnCard, ContextBar, MarkingMenu, connectionsOf, type Cmd } from './Overlays';
 import { KIND_LABEL } from './TreePanel';
 import { moveLines, setPlaneSlope, shiftRoof, toCustomSection } from '../model/section';
-import { NAV_INDEX } from './navIndex';
+import { NAV_INDEX, settingsOf } from './navIndex';
 import { NavContent, NavCrumb, SideNav, NAV_INDEX_LABEL, navGroupOf, type NavKey } from './SideNav';
 import { EaveCheckDialog } from './EaveCheckDialog';
 import { ConnLibrary, ConnWizard } from './ConnWizard';
@@ -43,7 +43,7 @@ export function App() {
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [showDeleted, setShowDeleted] = useState(false);
   const [nav, setNavRaw] = useState<NavKey>('structure');
-  const tab = navGroup(nav);
+  void navGroup;
   // מסך רחב: העץ מימין משמש לניווט בלבד; פאנל אחד משמאל מציג או את הגדרות העץ או את מאפייני הבחירה
   const [wide, setWide] = useState(() => !window.matchMedia('(max-width: 860px)').matches);
   useEffect(() => { const mq = window.matchMedia('(max-width: 860px)'); const on = () => setWide(!mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on); }, []);
@@ -55,7 +55,12 @@ export function App() {
   const selNow = useStore((x) => x.selection), connNow = useStore((x) => x.activeConn), gutNow = useStore((x) => x.activeGutter);
   // בחירה חדשה / חיבור פתוח ← הפאנל עובר למאפיינים; ניקוי הבחירה ← חזרה להגדרות
   const selSig = `${selNow.join(',')}|${connNow ?? ''}`;
-  useEffect(() => { setLp(selNow.length || connNow || gutNow ? 'sel' : 'nav'); }, [selSig, gutNow]);
+  useEffect(() => {
+    setLp(selNow.length || connNow || gutNow ? 'sel' : 'nav');
+    // 1.44: הרכיב של הבחירה מסומן בעץ — ובחזרה להגדרות נפתח אותו כרטיס (סיכום + לשוניות) של הרכיב
+    const id = connNow ?? selNow[0];
+    if (id) { const k = settingsOf(id, store.state.derived.byId.get(id)?.kind ?? ''); if (k) setNavRaw(k[0] as NavKey); }
+  }, [selSig, gutNow]);
   const navShown = !wide || lp === 'nav';
   useEffect(() => { const k = navShown ? nav : undefined; if (store.state.navKey !== k) store.set({ navKey: k }); }, [nav, navShown]);
   const setTab = (t: SideTab) => setNav(t);
@@ -270,17 +275,15 @@ export function App() {
       <ProfileDatalist />
       <nav className="rail" aria-label="מצבי עבודה">
         <div className="rail-logo" aria-hidden="true">K</div>
-        {railBtn('model', 'cube', 'מודל', mode === 'model' && tab !== 'conns' && tab !== 'issues', () => { setMode('model'); if (tab === 'conns' || tab === 'issues') setTab('structure'); }, 'mode-model')}
-        {railBtn('conns', 'link', 'חיבורים', mode === 'model' && tab === 'conns', () => goTab('conns'), 'rail-conns')}
+        {railBtn('model', 'cube', 'מודל', mode === 'model', () => setMode('model'), 'mode-model', errs + warns)}
         {railBtn('dwg', 'sheet', 'שרטוטים', mode === 'drawings', () => setMode('drawings'), 'mode-drawings')}
         {railBtn('prod', 'factory', 'ייצור', mode === 'production', () => setMode('production'), 'mode-production')}
-        {railBtn('chk', 'alert', 'בדיקות', mode === 'model' && tab === 'issues', () => goTab('issues'), 'rail-issues', errs + warns)}
         <div className="rail-sp" />
         {railBtn('cat', 'tree', 'קטלוג', false, () => setDialog('catalog'), 'btn-catalog')}
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.43.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.44.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -412,7 +415,9 @@ export function App() {
             </div>
           )}
           {wide && lp === 'nav'
-            ? <div className="nav-content" data-testid="lp-nav-content"><NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div>
+            ? <div className="nav-content" data-testid="lp-nav-content">
+                {(sel.length > 0 || s.activeConn) && <div className="sel-strip" data-testid="sel-strip"><span>נבחר: <b className="mono">{s.activeConn ?? (sel.length === 1 ? sel[0] : `${sel.length} אלמנטים`)}</b> — ההגדרות כאן חלות על כל הרכיב</span><button className="btn small" data-testid="sel-strip-props" onClick={() => setLp('sel')}>{s.activeConn ? 'עורך החיבור' : 'רק האלמנט הזה'} ←</button></div>}
+                <NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div>
             : <PropertiesPanel />}
         </aside>
       </main>

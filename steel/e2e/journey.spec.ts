@@ -49,7 +49,7 @@ test('SIM-01/02: בניית סככה מאפס ושינויים — מספר פע
     await click('nav-b:knee'); await click('sch-kb-drop'); await fill('sch-kb-drop-inp', '700');
   });
   await task('בדיקות: תיקון כל ההצעות', 'בדיקות ← תקן הכל', async () => {
-    await click('rail-issues');
+    await click('tab-issues');
     if (await page.getByTestId('fix-all').count()) await click('fix-all');
   });
   await shot(page, 'SIM_01_built');
@@ -79,7 +79,7 @@ test('SIM-01/02: בניית סככה מאפס ושינויים — מספר פע
     await expect(page.getByTestId('psec-shape')).toContainText('אלכסון עמוד-קורה'); // סעיף "צורה ומידות" של המכלול
   });
   await task('הסתרת הודעות "לידיעה"', 'בדיקות ← הסתר סוג', async () => {
-    await click('rail-issues');
+    await click('tab-issues');
     if (await page.getByTestId('ghide-RAFTER_EXT').count()) await click('ghide-RAFTER_EXT');
   });
   await shot(page, 'SIM_02_changed');

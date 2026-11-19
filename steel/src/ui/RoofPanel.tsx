@@ -13,7 +13,7 @@ import { tryProfile } from '../profiles/library';
 
 const OPENING: Record<'up' | 'down', string> = { up: 'לכיוון הרכס / הצד הגבוה', down: 'לכיוון המרזב / הצד הנמוך' };
 
-function SideEditor({ side, title, items, freeStart, part }: { side: string; title: string; items: Member[]; freeStart?: boolean; part?: 'layout' | 'cleat' }) {
+function SideEditor({ side, title, items, freeStart, part }: { side: string; title: string; items: Member[]; freeStart?: boolean; part?: 'layout' | 'cleat' | 'positions' }) {
   const p = useStore((s) => s.project);
   const prm = purlinParams(p.building.purlins, side);
   const u = p.displayUnit;
@@ -30,7 +30,7 @@ function SideEditor({ side, title, items, freeStart, part }: { side: string; tit
         </label>
       </div>}
       {prm.enabled && <>
-        {part !== 'cleat' && <>
+        {(!part || part === 'layout') && <>
         {ed.showProfile && <div className="field prof"><label>חתך הפטה</label><ProfilePicker testId={tid('profile')} role="purlin" value={prm.profile} families={['C', 'Z', 'RHS', 'IPE', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>}
         <PurlinSlopeSchematic side={side} items={items} mono={mono} />
         <div className="field"><label>חלוקה</label>
@@ -56,7 +56,9 @@ function SideEditor({ side, title, items, freeStart, part }: { side: string; tit
         </div>
         </Adv>
         {prm.measure === 'horizontal' && <div className="issue warning"><span className="ic">!</span>המרחקים נמדדים בהיטל אופקי ולא לאורך השיפוע.</div>}
-        <Adv id="ptbl" label={`טבלת מיקומי הפטות (${items.length})`}>
+        </>}
+        {(!part || part === 'positions') && <>
+        <Adv id="ptbl" label={`טבלת מיקומי הפטות (${items.length})`} open={part === 'positions' ? true : undefined}>
         <table className="tbl" data-testid={tid('layout')}>
           <thead><tr><th>#</th><th>לאורך שיפוע</th><th>אופקי</th><th>מרווח</th></tr></thead>
           <tbody>
@@ -117,7 +119,7 @@ function SideEditor({ side, title, items, freeStart, part }: { side: string; tit
           <div className="hint">מרותך לקורה במסגריה, מוברג לווב הפטה בשטח. הרגל הניצבת צמודה לווב (0 מ"מ), רגל הבסיס פונה הרחק מהאגף התחתון.</div>
         </>}
         </>}
-        {prm.manualPositions && part !== 'cleat' && (
+        {prm.manualPositions && (!part || part === 'positions') && (
           <div style={{ marginTop: 6 }}>
             {prm.manualPositions.map((v, i) => (
               <div className="field" key={i}><label>פטה {i + 1}</label>
@@ -191,6 +193,7 @@ export function RoofPanel({ section }: { section?: RoofSection } = {}) {
         <TabbedEditor testId="purl-ed" title="" initial={(() => { const sel = store.state.selection[0]; return sel && d.byId.get(sel)?.kind === 'cleat' ? 'cleat' : undefined; })()} tabs={[
           { key: 'layout', label: 'חתך ופריסה', render: () => <>{mine.map((q) => <div key={q.key}>{q.planeId && <PlaneStart planeId={q.planeId} />}<SideEditor side={q.side} title={q.title} freeStart={q.free} items={q.items} part="layout" /></div>)}</> },
           { key: 'cleat', label: 'תושבות', render: () => <>{mine.map((q) => <SideEditor key={q.key} side={q.side} title={q.title} freeStart={q.free} items={q.items} part="cleat" />)}</> },
+          { key: 'positions', label: 'מיקומים', render: () => <>{mine.map((q) => <SideEditor key={q.key} side={q.side} title={q.title} freeStart={q.free} items={q.items} part="positions" />)}</> },
           { key: 'system', label: 'חומר וצד התחלה', render: () => <>
             <div className="field"><label>חומר</label>
               <select className="inp" value={pu.material} onChange={(e) => exec(setPurlinSystem({ material: e.target.value }))}>

@@ -34,6 +34,9 @@ export function settingsOf(id: string, kind: string, side?: string): [string, st
   if (id.startsWith('TR.') || /\.BC\.\d+$/.test(id) || id.startsWith('C.TR')) return ['b:truss', 'מסבכי גג — אשף המסבך'];
   if (id.startsWith('BB.') || id.startsWith('C.BB.') || id.startsWith('BR.W')) return ['b:walls', 'הגדרות קשיחות קירות / אגד B'];
   if (/^(C\.)?RS\d+\./.test(id)) return ['b:roof', 'הגדרות תמוכות בין הקורות'];
+  if (/^(C\.)?(SR|FB)\./.test(id)) return ['b:ties', 'הגדרות מוטות תלייה / תמיכה צידית'];
+  if (/^(C\.)?LTIE\./.test(id)) return ['b:walls', 'הגדרות סיב רציף'];
+  if (/^(C\.)?KT\./.test(id)) return ['b:tb', 'קורה נושאת — אלכסוני Y'];
   if (id.startsWith('BR.R') || id.startsWith('HB.') || id.startsWith('C.HB.')) return ['b:roof', 'הגדרות קושרות גג'];
   if (id.startsWith('BR.T')) return ['b:ties', 'הגדרות שורות קשירה'];
   if (id.startsWith('C.RIDGE') || id.startsWith('RT.')) return ['b:ridge', 'הגדרות חיזוק רכס'];

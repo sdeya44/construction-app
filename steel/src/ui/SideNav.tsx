@@ -18,6 +18,7 @@ import { RoofTrussPanel, TransferPanel } from './TransferPanel';
 import { IssuesPanel, KIND_LABEL, TreePanel } from './TreePanel';
 import { Adv } from './fields';
 import { connPlace } from './connPlace';
+import { ADD_LABEL, navStatus } from './navStatus';
 
 /**
  * עץ תפריטים (החלטת משתמש 15.11.2026): בוחרים צומת בעץ ומקבלים מתחתיו את הטופס/הטבלה הרלוונטיים.
@@ -54,10 +55,16 @@ export function SideNav({ nav, setNav, onOpenConn, treeOnly }: { nav: NavKey; se
 
   type Item = { key: NavKey; label: string; n?: number; cls?: string; pic: string };
   const labels = new Map<string, string>();
+  const proj = useStore((s) => s.project);
+  const stat = useMemo(() => navStatus(proj, d), [proj, d]);
+  /** רכיבים שלא קיימים בפרויקט — לשורת "+ הוסף רכיב" (הפריט הפתוח כרגע נשאר בעץ) */
+  const hiddenKey = (k: string) => !!stat[k]?.off && nav !== k;
+  const addKeys: string[] = [];
   const group = (key: NavKey, label: string, testId: string, pic: string, children: Item[], badge?: ReactNode) => {
     for (const c of children) labels.set(c.key, c.label);
     const isOpen = open[key] ?? false;
     const on = nav === key;
+    if (children.length && children.every((c) => hiddenKey(c.key)) && nav !== key) { addKeys.push(...children.map((c) => c.key)); return null; }
     return (
       <div className={`nav-group${isOpen ? ' open' : ''}`} key={key}>
         <div className={`nav-head${on ? ' on' : ''}`}>
@@ -65,11 +72,16 @@ export function SideNav({ nav, setNav, onOpenConn, treeOnly }: { nav: NavKey; se
           <button className="nav-lbl" data-testid={testId} onClick={() => { setNav(key); setOpen({ ...open, [key]: true }); }}><MenuPic name={pic} size={26} /><span>{label}</span></button>
           {badge}
         </div>
-        {isOpen && children.map((c) => (
-          <button key={c.key} className={`nav-item${nav === c.key ? ' on' : ''}`} onClick={() => setNav(c.key)} data-testid={`nav-${c.key}`} title={c.label}>
-            <MenuPic name={c.pic} /><span className="nav-t">{c.label}</span>{c.n !== undefined && <span className={`nav-n${c.cls ? ` ${c.cls}` : ''}`}>{c.n}</span>}
+        {isOpen && children.map((c) => {
+          if (hiddenKey(c.key)) { addKeys.push(c.key); return null; }
+          const st = stat[c.key];
+          const n = c.n ?? st?.n;
+          return (
+          <button key={c.key} className={`nav-item${nav === c.key ? ' on' : ''}${st?.v ? ' two' : ''}`} onClick={() => setNav(c.key)} data-testid={`nav-${c.key}`} title={st?.v ? `${c.label} — ${st.v}` : c.label}>
+            <MenuPic name={c.pic} /><span className="nav-t">{c.label}{st?.v && <small className="nav-v" data-testid={`nav-v-${c.key}`}>{st.v}</small>}</span>
+            {st?.err ? <span className="nav-n err">⚠ {st.err}</span> : st?.warn ? <span className="nav-n warn">⚠ {st.warn}</span> : n !== undefined ? <span className={`nav-n${c.cls ? ` ${c.cls}` : ''}`}>{n}</span> : null}
           </button>
-        ))}
+        ); })}
       </div>
     );
   };
@@ -91,10 +103,10 @@ export function SideNav({ nav, setNav, onOpenConn, treeOnly }: { nav: NavKey; se
           { key: 'r:splices', label: 'חיבורי המשך פטות', n: d.splices.filter((x) => x.memberId.startsWith('PL.')).length, pic: 'splice' },
         ])}
         {group('brace', '3 · חיזוקים', 'tab-brace', 'brace0', [
-          { key: 'b:knee', label: 'אלכסוני עמוד-קורה ומכפל', n: connCount.get('knee') ? d.connections.filter((c) => c.id.startsWith('C.KB.')).length : undefined, pic: 'knee' },
+          { key: 'b:knee', label: 'אלכסוני עמוד-קורה', n: connCount.get('knee') ? d.connections.filter((c) => c.id.startsWith('C.KB.')).length : undefined, pic: 'knee' },
           { key: 'b:roof', label: 'קושרות גג', pic: 'roofX' },
-          { key: 'b:walls', label: 'קשיחות קירות / אגד B / נעילה אופקית', pic: 'walls' },
-          { key: 'b:ties', label: 'שורות קשירה לפטות', pic: 'ties' },
+          { key: 'b:walls', label: 'קשיחות קירות', pic: 'walls' },
+          { key: 'b:ties', label: 'פטות: קשירה, מוטות, תמיכה', pic: 'ties' },
           { key: 'b:ridge', label: 'חיזוק רכס', pic: 'ridge' },
         ])}
         {group('clad', '4 · קירות וחיפוי', 'tab-clad', 'walls', [
@@ -108,6 +120,10 @@ export function SideNav({ nav, setNav, onOpenConn, treeOnly }: { nav: NavKey; se
           { key: 'b:wing', label: 'כנף — סככת L', n: store.state.project.building.wing?.enabled ? 1 : undefined, pic: 'geometry' },
           { key: 'b:truss', label: 'מסבכי גג', n: store.state.project.building.roofTruss?.enabled ? d.connections.filter((c) => c.type === 'truss' && c.id.startsWith('C.TR.')).length : undefined, pic: 'roofX' },
         ])}
+        {(() => { const keys = [...new Set(addKeys)].filter((k) => k !== 'w:walls' && k !== 'w:openings' && k !== 'w:takeoff'); return keys.length > 0 && (
+          <div className="nav-add" data-testid="nav-add"><span className="nav-add-t">+ הוסף רכיב</span>
+            {keys.map((k) => <button key={k} className="nav-add-b" data-testid={`nav-${k}`} onClick={() => { setNav(k as NavKey); const g = navGroupOf(k as NavKey); setOpen((o) => ({ ...o, [g]: true })); }}>{ADD_LABEL[k] ?? k}</button>)}
+          </div>); })()}
         <div className="nav-sep">רשימות ובדיקה</div>
         {group('tree', 'אלמנטים', 'tab-tree', 'elements', KINDS.filter((k) => kindCount.get(k)).map((k) => ({ key: `k:${k}` as NavKey, label: KIND_LABEL[k], n: kindCount.get(k), pic: k })))}
         {group('conns', 'חיבורים', 'tab-conns', 'conns', [

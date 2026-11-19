@@ -70,6 +70,7 @@ function ModularTables({ sec, unit: u, apply, part }: { sec: CustomSection; unit
   const pair = gablePair(sec);
   const [joint, setJoint] = useState<boolean | null>(null);
   const together = !!pair && (joint ?? pair.symmetric);
+  const [bigSec, setBigSec] = useState(false);
   return (
     <>
       {part !== 'planes' && <>
@@ -79,7 +80,7 @@ function ModularTables({ sec, unit: u, apply, part }: { sec: CustomSection; unit
         <div className="hint" style={{ margin: 0 }}>הצירים מחולקים שווה; אחר כך אפשר לשנות כל מפתח בשרטוט (לחיצה על המידה) או לגרור ציר.</div>
       </div>
       </>}
-      <div className="sec-prev"><InteractiveSection sec={sec} apply={apply} base={baseEl} onBase={(v) => store.exec(setBuilding({ baseElevation: v }))} calcOf={(id) => calcOf(together ? 'gable' : id)} setCalc={(id, c) => setCalc({ ...calc, [together ? 'gable' : id]: c })} together={together} /></div>
+      <div className={`sec-prev${bigSec ? ' big' : ''}`}><button className="btn small sec-prev-x" data-testid="sec-enlarge" title={bigSec ? 'הקטנה' : 'הגדלת השרטוט'} onClick={() => setBigSec(!bigSec)}>{bigSec ? '⤡' : '⤢'}</button><InteractiveSection sec={sec} apply={apply} base={baseEl} onBase={(v) => store.exec(setBuilding({ baseElevation: v }))} calcOf={(id) => calcOf(together ? 'gable' : id)} setCalc={(id, c) => setCalc({ ...calc, [together ? 'gable' : id]: c })} together={together} /></div>
       {part !== 'planes' && <>
       <div className="panel-title">צירי עמודים ({lines.length})
         <button className="btn small" data-testid="sec-add-line" onClick={() => {

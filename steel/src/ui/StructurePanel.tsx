@@ -180,7 +180,7 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
 
       </>}
       {show('bracing') && <BracingEditor />}
-      {show('frames') && section !== 'geometry' && framesJsx()}
+      {section === 'frames' && framesJsx()}
     </div>
   );
 }
@@ -750,14 +750,15 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
         <WallsSummary />
         <TabbedEditor testId="br-walls-ed" title="" tabs={[
           { key: 'type', label: 'סוג וחתך', render: () => <>
-            <div className="choice2" role="radiogroup" aria-label="סוג קשיחות הקיר">
+            <div className="choice2 compact" role="radiogroup" aria-label="סוג קשיחות הקיר">
               {([['x', 'אלכסוני X', 'קושרות X מזוויתנים — עובדות במתיחה', 'brace'], ['portal', 'אגד B', 'קורת RHS בין העמודים + שני אלכסונים קטנים', 'walls'], ['truss', 'נעילה אופקית', 'מסבך RHS במפתחים הנעולים + סיב רציף לכל האורך', 'walls']] as const).map(([k, t, dsc, pic]) => (
-                <button key={k} role="radio" aria-checked={(br.walls.type ?? 'x') === k} className={`choice-tile${(br.walls.type ?? 'x') === k ? ' on' : ''}`} data-testid={`br-walls-${k}`}
+                <button key={k} role="radio" aria-checked={(br.walls.type ?? 'x') === k} className={`choice-tile${(br.walls.type ?? 'x') === k ? ' on' : ''}`} data-testid={`br-walls-${k}`} title={dsc}
                   onClick={() => set({ walls: { ...br.walls, type: k, portal: br.walls.portal ?? defaultPortal(), truss: br.walls.truss ?? defaultLockTruss() } })}>
-                  <MenuPic name={pic} size={44} /><b>{t}</b><span>{dsc}</span>
+                  <MenuPic name={pic} size={28} /><b>{t}</b>
                 </button>
               ))}
             </div>
+            <div className="hint" style={{ marginTop: -4 }}>{({ x: 'קושרות X מזוויתנים — עובדות במתיחה', portal: 'קורת RHS בין העמודים + שני אלכסונים קטנים', truss: 'מסבך RHS במפתחים הנעולים + סיב רציף לכל האורך' } as Record<string, string>)[br.walls.type ?? 'x']}</div>
             {(br.walls.type ?? 'x') === 'x'
               ? <><div className="field prof"><label>חתך</label><ProfilePicker value={br.walls.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ walls: { ...br.walls, profile: v } })} /></div><XConnFields /></>
               : br.walls.type === 'truss' ? <LockTrussFields /> : <PortalFields />}

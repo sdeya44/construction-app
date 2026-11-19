@@ -89,7 +89,7 @@ test('UX-03: תפריט מעגלי בלחיצה ימנית ולוח פקודות
 
 test('UX-04: לשונית חיבורים — חיבורי המשך ופחי קושרות ברשימה; פתיחה בעורך', async ({ page }) => {
   await boot(page);
-  await page.getByTestId('rail-conns').click();
+  await page.getByTestId('tab-conns').click();
   await expect(page.getByTestId('conns-panel')).toBeVisible();
   await expect(page.getByTestId('conns-brace-end')).toContainText('32');
   await expect(page.getByTestId('conns-brace-cross')).toContainText('8');
