@@ -7,6 +7,7 @@ import { defaultRhsTruss, rhsTruss } from './hbrace';
 import { buildPortalLine, defaultPortal } from './portal';
 import { buildLockTrussLine, defaultLockTruss } from './lockTruss';
 import { localFrame } from './frame';
+import { buildRafterStruts, defaultRafterStruts, strutCutsIn, strutLines, strutPlateHalf } from './rafterStruts';
 import { bolt } from '../model/defaults';
 
 /** פרט מוט הברגה (תוכנית 110): M18 L=250 מרותך בחפיפה 100, זוויתן דסקית L50/50/5 L=100, בורג הצטלבות M12 */
@@ -97,6 +98,9 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
   };
 
   const skipTie = new Set<string>();
+  // ---- תמוכות בין הקורות (1.40): נבנות תמיד כשהוגדרו; בקושרות הגג הן גבולות הפנלים
+  const sLines = strutLines(b, topo);
+  { const rs = buildRafterStruts(b, topo, profOf); res.members.push(...rs.members); res.connections.push(...rs.connections); res.issues.push(...rs.issues); }
   // ---- קושרות גג: במישור אמצע גובה קורת הגג, פח חיבור מרותך לווב הקורה בכל קצה
   if (br.roof.enabled) {
     const slopes: { side: string; pid: string; a: { x: number; z: number }; c: { x: number; z: number }; rid: (f: string) => string }[] = [];
@@ -167,6 +171,8 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         const narrow = br.roof.type === 'rhs' && L / Math.max(1, Math.abs(f1.y - f0.y)) < 0.58 && (br.roof.rhs?.panels ?? 0) <= 1;
         if (narrow && !res.issues.some((i) => i.code === 'HB_NARROW' && i.elementId === sl.side)) res.issues.push({ code: 'HB_NARROW', severity: 'info', elementId: sl.side, message: `סבכה אופקית: מישור ${sl.side} צר (${(L / 1000).toFixed(2)} מ' לעומת מפתח ${(Math.abs(f1.y - f0.y) / 1000).toFixed(2)} מ') — ללא סבכה במישור זה (הצמתים היו מתנגשים); המישור נתמך דרך הסבכה במישור הסמוך` });
         if (narrow) continue;
+        const sCuts = strutCutsIn(sLines, bay, sl.pid, sl.a, dir, L, 300);
+        if (sCuts.length && br.roof.type === 'rhs' && !res.issues.some((i) => i.code === 'RS_RHS')) res.issues.push({ code: 'RS_RHS', severity: 'warning', message: `סבכה אופקית RHS מפתח ${bay + 1}: יש תמוכות בין הקורות בתוך הסבכה — הסבכה אינה מחולקת לפיהן; לבדוק התנגשות או לעבור לקושרות X` });
         if (br.roof.type === 'rhs') rhsTruss({ res, mat: b.material }, br.roof.rhs ?? defaultRhsTruss(), `R${bay + 1}.${sl.side}`, `סבכה אופקית מפתח ${bay + 1}`, o, n, dir, L,
           f0.y, f1.y, f0.y + rtw(rid(f0.id)) / 2, f1.y - rtw(rid(f1.id)) / 2, rid(f0.id), rid(f1.id));
         else {
@@ -191,6 +197,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
           const kUser = br.roof.segCount?.[`${bay}|${sl.side}`];
           if (kUser && kUser > k) k = Math.min(8, Math.round(kUser));
           if (kUser && kUser < k && !res.issues.some((i) => i.code === 'X_COUNT' && i.elementId === `${bay}|${sl.side}`)) res.issues.push({ code: 'X_COUNT', severity: 'info', elementId: `${bay}|${sl.side}`, message: `קטע ${sl.side} מפתח ${bay + 1}: נדרשים לפחות ${k} פנלי X (אורך האלכסון מוגבל לחומר הגלם)` });
+          if (sCuts.length && nY > 1 && !res.issues.some((i) => i.code === 'RS_YSPLIT' && i.elementId === `R${bay}`)) res.issues.push({ code: 'RS_YSPLIT', severity: 'warning', elementId: `R${bay}`, message: `קושרות גג מפתח ${bay + 1}: המפתח מחולק לאורך המבנה (תמוכות לאורך השיפוע) וגם יש תמוכות בין הקורות — הן חוצות זו את זו. לבטל את החלוקה לאורך המבנה במפתח הזה` });
           const gap = k > 1 ? (br.roof.sameGap ?? 200) / 2 : 0; // שני פנלים סמוכים: קצוות זה ליד זה (מרווח sameGap)
           const rod = (br.roof.endDetail ?? 'gusset') === 'rod' && getProfile(br.roof.profile).family === 'L';
           if ((br.roof.endDetail ?? 'gusset') === 'rod' && !rod && !res.issues.some((i) => i.code === 'ROD_PROFILE')) res.issues.push({ code: 'ROD_PROFILE', severity: 'warning', message: `פרט מוט הברגה דורש זוויתן (החתך ${br.roof.profile}) — נבנה פרט פח חיבור` });
@@ -204,14 +211,36 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
             if (ok) cuts.splice(0, cuts.length, ...trial);
             else if (!res.issues.some((i) => i.code === 'X_SNAP' && i.elementId === `${bay}|${sl.side}`)) res.issues.push({ code: 'X_SNAP', severity: 'info', elementId: `${bay}|${sl.side}`, message: `קטע ${sl.side} מפתח ${bay + 1}: לא ניתן להעמיד את צמתי ה-X על פטות (אורך חומר הגלם / מרווח) — פנלים שווים` });
           }
+          // פנלים לאורך השיפוע [w0, w1]: לפי החלוקה (k), או — כשיש תמוכות בין הקורות — לפי התמוכות: האלכסונים מגיעים
+          // עד לפני פלטת התמוכה, וחלוקה אחרת מבוטלת (אחרת צומת X נופל על התמוכה)
+          let panels: [number, number][] = Array.from({ length: k }, (_, j) => [cuts[j] + (j > 0 ? gap : 0), cuts[j + 1] - (j < k - 1 ? gap : 0)]);
+          if (sCuts.length) {
+            const rsP = br.rafterStruts ?? defaultRafterStruts();
+            if ((kUser && kUser > 1) || k > 1 || (br.roof.split === 'purlins' && k > 1)) {
+              if (!res.issues.some((i) => i.code === 'X_STRUT' && i.elementId === `${bay}|${sl.side}`)) res.issues.push({ code: 'X_STRUT', severity: 'warning', elementId: `${bay}|${sl.side}`, message: `קטע ${sl.side} מפתח ${bay + 1}: יש תמוכות בין הקורות — החלוקה ל-${k} פנלי X בוטלה כדי שלא תהיה התנגשות; הפנלים נקבעים לפי התמוכות` });
+            }
+            const half = (w: string) => strutPlateHalf(rsP, w) + bc.gussetEdge + 20;
+            const B = [{ w: 0, h: 0 }, ...sCuts.map((c) => ({ w: c.w, h: half(c.profile) })), { w: L, h: 0 }];
+            panels = [];
+            for (let j = 0; j < B.length - 1; j++) {
+              const a0 = B[j].w + B[j].h, a1 = B[j + 1].w - B[j + 1].h;
+              if (a1 - a0 < 600) { res.issues.push({ code: 'X_STRUT_SHORT', severity: 'warning', elementId: `${bay}|${sl.side}`, message: `קטע ${sl.side} מפתח ${bay + 1}: פנל בין תמוכות קצר מדי (${Math.round(a1 - a0)} מ"מ) — ללא X בפנל` }); continue; }
+              // פנל בין תמוכות שעדיין ארוך מחומר הגלם: חלוקה שווה בתוכו
+              let kk = 1;
+              if (bayW <= stock - 300) while (kk < 6 && Math.hypot((a1 - a0) / kk, bayW) > stock - 100) kk++;
+              const g2 = kk > 1 ? (br.roof.sameGap ?? 200) / 2 : 0;
+              for (let i = 0; i < kk; i++) panels.push([a0 + ((a1 - a0) * i) / kk + (i > 0 ? g2 : 0), a0 + ((a1 - a0) * (i + 1)) / kk - (i < kk - 1 ? g2 : 0)]);
+            }
+          }
+          const np = panels.length;
           for (let q = 0; q < nY; q++) {
             const ya = yB[q], yb = yB[q + 1];
             const h0 = q === 0 ? rid(f0.id) : strutId(q), h1 = q === nY - 1 ? rid(f1.id) : strutId(q + 1);
             const face0 = q === 0 ? f0.y + sgn * rtw(rid(f0.id)) / 2 : ya + sgn * sb / 2, face1 = q === nY - 1 ? f1.y - sgn * rtw(rid(f1.id)) / 2 : yb - sgn * sb / 2;
             const sub = nY > 1 ? `.Y${q + 1}` : '', subL = nY > 1 ? ` תת־מפתח ${q + 1}/${nY}` : '';
-            for (let j = 0; j < k; j++) {
-              const w0 = cuts[j] + (j > 0 ? gap : 0), w1 = cuts[j + 1] - (j < k - 1 ? gap : 0);
-              const key = `R${bay + 1}.${sl.side}${sub}${k > 1 ? `.${j + 1}` : ''}`, lab = `קושרת גג מפתח ${bay + 1}${subL}${k > 1 ? ` פנל ${j + 1}` : ''}`;
+            for (let j = 0; j < np; j++) {
+              const [w0, w1] = panels[j];
+              const key = `R${bay + 1}.${sl.side}${sub}${np > 1 ? `.${j + 1}` : ''}`, lab = `קושרת גג מפתח ${bay + 1}${subL}${np > 1 ? ` פנל ${j + 1}` : ''}`;
               if (rod && nY === 1) {
                 xBraceRod(res, b, br.roof.rod ?? defaultRodEnd(), bc.crossBolt, key, lab, br.roof.profile, o, n, dir,
                   { y: f0.y, w: w0 }, { y: f1.y, w: w1 }, rtw(rid(f0.id)), rtw(rid(f1.id)), rid(f0.id), rid(f1.id));

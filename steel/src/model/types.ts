@@ -137,8 +137,19 @@ export interface BracingParams {
   };
   /** שורת קשירה לאגף התחתון של הפטות, באמצע כל מפתח */
   purlinTies: { enabled: boolean; profile: string };
+  /** תמוכות בין הקורות (1.40): RHS לאורך המבנה בין קורות גג סמוכות, מחובר לווב הקורות. מחלק את פנלי קושרות הגג */
+  rafterStruts?: RafterStrutParams;
   /** חיבורי קושרות X: פח חיבור מרותך לקורה/עמוד במסגריה, הזוויתן מוברג בשטח; בורג בהצטלבות עם פח מילוי */
   conn: BraceConnParams;
+}
+
+/** שורת תמוכות בין הקורות: מיקום = מרחק אופקי מציר from לכיוון ציר toward; מפתחים חסר = כל המפתחים */
+export interface RafterStrutRow { id: string; from: string; toward: string; dist: Mm; bays?: number[]; profile?: string }
+export interface RafterStrutParams {
+  rows: RafterStrutRow[];
+  profile: string;
+  /** פלטת קצה מרותכת לתמוכה (מסגריה), מוברגת לווב הקורה (שטח); בשני צדי הווב — אותם ברגים */
+  plateT: Mm; bolt: BoltSpec;
 }
 
 /**

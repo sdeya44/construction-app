@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { addFrame, removeFrame, respaceFrames, setBuilding, setFrameY, setMeta, setSettings } from '../commands/commands';
-import type { BuildingParams, LockTrussParams, PortalBraceParams, RhsTrussParams, RidgeReinfParams } from '../model/types';
+import type { BuildingParams, RafterStrutRow, LockTrussParams, PortalBraceParams, RhsTrussParams, RidgeReinfParams } from '../model/types';
 import { defaultPortal } from '../geometry/portal';
 import { defaultLockTruss } from '../geometry/lockTruss';
 import { defaultRhsTruss } from '../geometry/hbrace';
 import { defaultRidgeReinf } from '../model/defaults';
 import { defaultRodEnd, resolveBays, wallBays } from '../geometry/bracing';
+import { defaultRafterStruts } from '../geometry/rafterStruts';
+import { uid } from '../core/ids';
 import { catalogNames } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
@@ -365,6 +367,9 @@ function RoofXGrid() {
     store.exec(setBuilding({ bracing: { ...br, roof: { ...br.roof, bays: [...nBays].sort((p, q) => p - q), segOff: [...nOff], segCount: nCnt } } }));
   };
   const lineLab = (x: number) => d.section?.lines.find((l) => Math.abs(l.x - x) < 700)?.label ?? '';
+  // תמוכות בין הקורות: קו כתום בתא (מיקום יחסי לאורך הקטע) — הן קובעות את חלוקת הפנלים
+  const rsBeams = d.members.filter((m) => m.kind === 'beam' && /^RS\d+\.\d+$/.test(m.id));
+  const rsIn = (bay: number, q: { x0: number; x1: number }) => rsBeams.filter((m) => Number(m.id.split('.')[1]) - 1 === bay).map((m) => (m.start.x - q.x0) / (q.x1 - q.x0)).filter((t) => t > 0.02 && t < 0.98);
   const W = 210, X0 = 30, X1 = 204, Y0 = 16, rowH = Math.max(10, Math.min(22, 120 / segs.length)), bw = (X1 - X0) / nb;
   const H = Y0 + rowH * segs.length + 14;
   return (
@@ -377,9 +382,13 @@ function RoofXGrid() {
             <text x={X0 - 2} y={y + rowH / 2 + 2} className="sm-lbl-s" textAnchor="end" direction="ltr" style={{ unicodeBidi: 'plaintext' }}>{`${lineLab(q.x0)}–${lineLab(q.x1)}`.replace(/^–|–$/g, '') || q.id}</text>
             {Array.from({ length: nb }, (_, i) => {
               const a = X0 + i * bw, st = state(i, q.id);
-              const xs = Array.from({ length: st }, (_, j) => [y + (rowH * j) / st, y + (rowH * (j + 1)) / st] as const);
+              // תא עם תמוכה: הפנלים לפי התמוכות (החלוקה הידנית בוטלה בגיאומטריה)
+              const ts = st ? rsIn(i, q).sort((p, r) => p - r) : [];
+              const bnd = ts.length ? [0, ...ts, 1] : Array.from({ length: st + 1 }, (_, j) => j / Math.max(1, st));
+              const xs = st ? bnd.slice(0, -1).map((t0, j) => [y + rowH * t0 + (j > 0 ? 1 : 0), y + rowH * bnd[j + 1] - (j < bnd.length - 2 ? 1 : 0)] as const) : [];
               return <g key={i} className="bay-cell" data-testid={`br-grid-${i}-${q.id}`} onClick={() => click(i, q.id)}>
                 <rect x={a} y={y} width={bw} height={rowH} className={st ? 'bay on' : 'bay'} />
+                {rsIn(i, q).map((t, j) => <line key={`rs${j}`} data-testid={`br-grid-rs-${i}-${q.id}`} x1={a + 0.5} x2={a + bw - 0.5} y1={y + rowH * t} y2={y + rowH * t} stroke="#c2721c" strokeWidth={1.6} />)}
                 {xs.map(([u0, u1], j) => <g key={j}><line x1={a + 1} y1={u0 + 0.6} x2={a + bw - 1} y2={u1 - 0.6} className="sm-hi" strokeWidth={1.1} /><line x1={a + 1} y1={u1 - 0.6} x2={a + bw - 1} y2={u0 + 0.6} className="sm-hi" strokeWidth={1.1} /></g>)}
               </g>;
             })}
@@ -469,6 +478,7 @@ export function RoofXShape() {
       </select></div>
     <RoofXGrid />
     <RoofXSplit />
+    <RafterStrutsEditor />
     <Adv id="roofgaps-e" label="מרווחים בקצוות הקושרות">
       <div className="field"><label>שני קצוות באותה נקודה, אותו מפתח</label><NumField value={br.roof.sameGap ?? 200} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, sameGap: Math.max(0, v) } })} /></div>
       {br.roof.endDetail === 'rod' && <div className="field"><label>מפתחים סמוכים — מוטות זה מעל זה</label><NumField value={br.roof.adjGap ?? 40} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, adjGap: Math.max(0, v) } })} /></div>}
@@ -488,6 +498,66 @@ export function RoofXConn() {
 export function WallXShape() {
   const nb = useStore((s) => s.project.building.frames.length - 1);
   return <WallLines nb={nb} />;
+}
+
+/**
+ * תמוכות בין הקורות (1.40): שורות RHS לאורך המבנה בין קורות גג סמוכות, מחוברות לווב הקורות.
+ * מיקום = מרחק אופקי מציר לכיוון ציר אחר; מפתחים: הכל / מפתחי הקושרות / בחירה. בקושרות גג — גבולות הפנלים.
+ */
+export function RafterStrutsEditor() {
+  const b = useStore((s) => s.project.building);
+  const d = useStore((s) => s.derived);
+  const br = b.bracing;
+  const rs = br.rafterStruts ?? defaultRafterStruts();
+  const nb = b.frames.length - 1;
+  const lines = [...(d.section?.lines ?? [])].sort((p, q) => p.x - q.x);
+  const save = (patch: Partial<typeof rs>) => store.exec(setBuilding({ bracing: { ...br, rafterStruts: { ...rs, ...patch } } }));
+  const setRow = (id: string, patch: Partial<RafterStrutRow>) => save({ rows: rs.rows.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
+  const add = () => {
+    if (lines.length < 2) return;
+    const a = lines[0], c = lines[1];
+    save({ rows: [...rs.rows, { id: uid('RS'), from: a.id, toward: c.id, dist: Math.round(Math.abs(c.x - a.x) / 2 / 100) * 100 }] });
+  };
+  const roofBays = br.roof.enabled ? resolveBays(br.roof.bays, nb) : [];
+  const issues = d.issues.filter((i) => ['X_STRUT', 'RS_OUT', 'RS_LINE', 'RS_DEEP', 'RS_YSPLIT', 'RS_RHS', 'X_STRUT_SHORT'].includes(i.code));
+  return (
+    <div data-testid="rs-editor">
+      <div className="panel-title">תמוכות בין הקורות
+        <button className="btn small" data-testid="rs-add" onClick={add} disabled={lines.length < 2}>+ שורה</button>
+      </div>
+      {!rs.rows.length && <div className="hint">קורת חיזוק (RHS) בין קורות גג סמוכות, מחוברת לווב הקורות — במקום שהמתכנן קובע (מרחק מציר). בקושרות גג האלכסונים נעצרים לפני התמוכה והיא מחלקת את המפתח.</div>}
+      {rs.rows.map((r, i) => {
+        const mode = !r.bays ? 'all' : roofBays.length && r.bays.length === roofBays.length && r.bays.every((x) => roofBays.includes(x)) ? 'roof' : 'pick';
+        const sel = new Set(r.bays ?? Array.from({ length: nb }, (_, k) => k));
+        return (
+          <div className="op-card" key={r.id} data-testid={`rs-row-${i}`}>
+            <div className="row" style={{ justifyContent: 'space-between' }}><b>שורה {i + 1}</b>
+              <button className="icon-btn" title="מחיקת השורה" data-testid={`rs-del-${i}`} onClick={() => save({ rows: rs.rows.filter((x) => x.id !== r.id) })}><Icon name="x" /></button></div>
+            <div className="field"><label>מציר</label>
+              <select className="inp" data-testid={`rs-from-${i}`} value={r.from} onChange={(e) => setRow(r.id, { from: e.target.value })}>{lines.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}</select></div>
+            <div className="field"><label>לכיוון ציר</label>
+              <select className="inp" data-testid={`rs-toward-${i}`} value={r.toward} onChange={(e) => setRow(r.id, { toward: e.target.value })}>{lines.filter((l) => l.id !== r.from).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}</select></div>
+            <div className="field"><label>מרחק מהציר (אופקי)</label><NumField testId={`rs-dist-${i}`} value={r.dist} suffix='מ"מ' onCommit={(v) => setRow(r.id, { dist: Math.max(0, v) })} /></div>
+            <div className="field"><label>מפתחים</label>
+              <select className="inp" data-testid={`rs-bays-${i}`} value={mode} onChange={(e) => setRow(r.id, { bays: e.target.value === 'all' ? undefined : e.target.value === 'roof' ? [...roofBays] : [...sel].sort((p, q) => p - q) })}>
+                <option value="all">כל המפתחים</option>{roofBays.length > 0 && <option value="roof">מפתחי קושרות הגג</option>}<option value="pick">בחירה</option>
+              </select></div>
+            {mode === 'pick' && <div className="row" style={{ flexWrap: 'wrap', gap: 4 }}>
+              {Array.from({ length: nb }, (_, k) => <button key={k} className={`tbtn${sel.has(k) ? ' on' : ''}`} data-testid={`rs-bay-${i}-${k}`} onClick={() => { const n2 = new Set(sel); if (n2.has(k)) n2.delete(k); else n2.add(k); setRow(r.id, { bays: [...n2].sort((p, q) => p - q) }); }}>{k + 1}–{k + 2}</button>)}
+            </div>}
+            <div className="field prof"><label>חתך (חריג לשורה)</label><ProfilePicker value={r.profile ?? rs.profile} families={['RHS', 'SHS']} onCommit={(v) => setRow(r.id, { profile: v === rs.profile ? undefined : v })} /></div>
+          </div>
+        );
+      })}
+      {rs.rows.length > 0 && <Adv id="rs-conn" label="חתך ופרט חיבור — כל התמוכות">
+        <div className="field prof"><label>חתך</label><ProfilePicker testId="rs-profile" value={rs.profile} families={['RHS', 'SHS']} onCommit={(v) => save({ profile: v })} /></div>
+        <div className="field"><label>עובי פלטת קצה</label><NumField testId="rs-t" value={rs.plateT} suffix='מ"מ' onCommit={(v) => save({ plateT: Math.max(6, v) })} /></div>
+        <div className="field"><label>ברגים (2 בכל קצה)</label><BoltSelect d={rs.bolt.d} onChange={(x) => save({ bolt: { ...rs.bolt, d: x } })} /></div>
+      </Adv>}
+      {issues.length > 0 && <div data-testid="rs-issues">{issues.slice(0, 6).map((q, k) => <div key={k} className={`issue ${q.severity}`}><span className="ic">!</span>{q.message}</div>)}</div>}
+      {rs.rows.length > 0 && <Help>פלטת קצה מרותכת לתמוכה (מסגריה) ומוברגת לווב הקורה בשטח — 2 ברגים מחוץ לחתך. תמוכות משני צדי אותה קורה — אותם ברגים דרך הווב. בקושרות גג X: האלכסונים נעצרים לפני הפלטה, וחלוקה אחרת של הפנלים (מספר X בתא / צמתים על פטות) מבוטלת עם התראה. אין בדיקת חוזק.</Help>}
+    </div>
+  );
 }
 
 function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) {
@@ -524,6 +594,7 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
         </Adv>
         <Help>כל שיפוע מחולק לקטעים בכל ציר עמודים פנימי. בתוכנית — בחירה איפה יש X ובכמה פנלים לאורך השיפוע (קטע ארוך מקבל לפחות את מה שנדרש לאורך חומר הגלם). שני קצוות שמגיעים לאותה נקודה באותו מפתח — זה ליד זה; ממפתחים סמוכים (מוט הברגה) — זה מעל זה.</Help>
       </>}
+      <RafterStrutsEditor />
       </>}
       {on('walls') && <>
       <div className="panel-title">קשיחות לאורך – קירות
