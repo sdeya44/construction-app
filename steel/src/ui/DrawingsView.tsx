@@ -11,11 +11,12 @@ import { store, useStore } from '../store';
 import { Icon } from './icons';
 
 const GROUPS: [DrawingDef['type'][], string][] = [
-  [['cover', 'ga', 'roof-plan', 'anchor-plan', 'frame', 'side', 'cladding', 'gutter'], 'תוכניות, חזיתות וחתכים'],
+  [['cover', 'ga', 'erection', 'roof-plan', 'anchor-plan', 'frame', 'side', 'cladding', 'gutter'], 'תוכניות, חזיתות וחתכים'],
   [['connection'], 'פרטי חיבור'],
   [['assembly'], 'שרטוטי מכלול'],
   [['part'], 'שרטוטי חלק'],
   [['plates'], 'גיליונות פלטות'],
+  [['labels'], 'תוויות סימון להדפסה'],
 ];
 const ST: Record<DrawingRecord['status'], string> = { draft: 'טיוטה', 'for-review': 'לבדיקה', approved: 'מאושר' };
 

@@ -1,4 +1,6 @@
 import { zipSync, strToU8 } from 'fflate';
+import type { DerivedModel, Project } from '../model/types';
+import { memberLocation } from './location';
 import type { Bom, CutPlan } from './bom';
 
 export interface Table { name: string; headers: string[]; rows: (string | number)[][] }
@@ -105,4 +107,20 @@ export function toXlsx(tables: Table[], title: string): Uint8Array {
   };
   tables.forEach((t, i) => { files[`xl/worksheets/sheet${i + 1}.xml`] = strToU8(sheetXml(t)); });
   return zipSync(files, { level: 6 });
+}
+
+/** ברגי שטח לפי צומת (1.36): לכל חיבור — מיקום הרכבה, סוג, וברגים מקובצים (כמות × קוטר × אורך) */
+export function boltsByNodeTable(p: Project, d: DerivedModel): Table {
+  const rows: (string | number)[][] = [];
+  for (const c of d.connections) {
+    const site = c.bolts.filter((b) => b.location === 'site');
+    if (!site.length) continue;
+    const m = d.byId.get(c.members[0]);
+    const where = m ? memberLocation(m, p, d) : c.label;
+    const g = new Map<string, number>();
+    for (const b of site) { const k = `M${b.d}×${b.length} ${b.grade}`; g.set(k, (g.get(k) ?? 0) + 1); }
+    rows.push([where, c.label, [...g].map(([k, n]) => `${n}× ${k}`).join(', '), site.length]);
+  }
+  rows.sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'he', { numeric: true }));
+  return { name: 'ברגים לפי צומת', headers: ['מיקום', 'חיבור', 'ברגים', 'סה"כ'], rows };
 }

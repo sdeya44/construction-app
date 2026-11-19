@@ -271,3 +271,38 @@ function compactTitle(s: Sheet, x0: number, y0: number, x1: number) {
   T(x0 + 1, y0 + H + 1.2, 'KAYAN STEEL PRO', 1.6, 'left');
   if (t.note) T(x1, y0 + H + 1.2, t.note, 1.8, 'right');
 }
+
+/** תיבת טקסט משוערת על הנייר (מ"מ): רוחב לפי מספר התווים, גובה לפי h; תומך בסיבוב 0/±90 */
+export function textBox(e: Extract<Ent, { k: 'text' }>): { x0: number; y0: number; x1: number; y1: number } {
+  const w = [...e.s].reduce((t, ch) => t + (/[0-9.,\-+×]/.test(ch) ? 0.56 : ch === ' ' ? 0.32 : 0.74), 0) * e.h, a = e.align === 'center' ? -w / 2 : e.align === 'right' ? -w : 0;
+  const r = Math.round(((e.rot ?? 0) % 360 + 360) % 360);
+  if (r === 90) return { x0: e.p.x - e.h * 0.85, x1: e.p.x + e.h * 0.1, y0: e.p.y + a, y1: e.p.y + a + w };
+  if (r === 270) return { x0: e.p.x - e.h * 0.1, x1: e.p.x + e.h * 0.85, y0: e.p.y - a - w, y1: e.p.y - a };
+  return { x0: e.p.x + a, x1: e.p.x + a + w, y0: e.p.y - e.h * 0.1, y1: e.p.y + e.h * 0.85 };
+}
+
+/**
+ * ניקוי מידות חופפות: טקסט מידה (שכבת DIM) שחופף טקסט אחר מוזז בניצב לקו הבסיס שלו למקום הפנוי הקרוב
+ * (לסירוגין מעל/מתחת, עד שלוש קומות). טקסטים אחרים (כותרות, סימונים) אינם זזים. מחזיר את מספר ההזזות.
+ */
+export function declutterDims(sh: Sheet): number {
+  const texts = sh.ents.filter((e): e is Extract<Ent, { k: 'text' }> => e.k === 'text' && !!e.s.trim());
+  const placed = texts.filter((e) => e.layer !== 'DIM').map(textBox);
+  const hit = (b: ReturnType<typeof textBox>) => placed.some((q) => b.x0 < q.x1 + 0.3 && b.x1 > q.x0 - 0.3 && b.y0 < q.y1 + 0.3 && b.y1 > q.y0 - 0.3);
+  let moved = 0;
+  for (const e of texts.filter((t) => t.layer === 'DIM')) {
+    let b = textBox(e);
+    if (hit(b)) {
+      const r = Math.round(((e.rot ?? 0) % 360 + 360) % 360), vert = r === 90 || r === 270;
+      const step = e.h * 1.05;
+      // אופקי: מעלה צעד אחד, או מטה אל מתחת לקו המידה (הטקסט יושב ~1 מ"מ מעל הקו)
+      for (const k of [1, -1.7, 2, -2.7, 3, -3.7]) {
+        const p = vert ? { x: e.p.x - Math.sign(k) * Math.ceil(Math.abs(k)) * step, y: e.p.y } : { x: e.p.x, y: e.p.y + k * step };
+        const nb = textBox({ ...e, p });
+        if (!hit(nb)) { e.p = p; b = nb; moved++; break; }
+      }
+    }
+    placed.push(b);
+  }
+  return moved;
+}

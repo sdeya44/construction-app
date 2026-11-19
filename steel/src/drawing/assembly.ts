@@ -235,8 +235,18 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     let stag = 0;
     line({ x: PF(pts[0], 0).x, y }, { x: PF(pts[pts.length - 1], 0).x, y }, 'DIM');
     for (let i = 0; i < pts.length; i++) { const x = PF(pts[i], 0).x; line({ x: x - 0.8, y: y - 1.2 }, { x: x + 0.8, y: y + 1.2 }, 'DIM'); }
-    for (let i = 1; i < pts.length; i++) {
-      const xa = PF(pts[i - 1], 0).x, xb = PF(pts[i], 0).x, lab = String(pts[i] - pts[i - 1]);
+    // קטעים שווים רצופים (≥3, או 2 צרים): תווית אחת n×פסיעה=סה"כ על פני כל הרצף (מונע ערימת מספרים זהים באזור השבירה)
+    const segs: [number, number, string][] = [];
+    for (let i = 1; i < pts.length;) {
+      const len = pts[i] - pts[i - 1];
+      let j = i;
+      while (j + 1 < pts.length && Math.abs(pts[j + 1] - pts[j] - len) <= 1) j++;
+      const n = j - i + 1, narrow = PF(pts[i], 0).x - PF(pts[i - 1], 0).x < 2 * String(len).length + 1;
+      if (n >= 3 || (n === 2 && narrow)) { segs.push([pts[i - 1], pts[j], `${n}×${len}=${pts[j] - pts[i - 1]}`]); i = j + 1; }
+      else { segs.push([pts[i - 1], pts[i], String(len)]); i++; }
+    }
+    for (const [ta, tb, lab] of segs) {
+      const xa = PF(ta, 0).x, xb = PF(tb, 0).x;
       if (xb - xa >= 2 * lab.length + 1) { text({ x: (xa + xb) / 2, y: y + 1.1 }, lab, 2, 'center', 'DIM'); stag = 0; continue; }
       const yl = y + 3.6 + (stag++ % 2) * 2.8, xm = (xa + xb) / 2;
       line({ x: xm, y: y + 0.3 }, { x: xm, y: yl - 0.4 }, 'DIM');

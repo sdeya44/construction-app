@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { approveRevision, numberParts, openNewRevision, setSettings } from '../commands/commands';
-import { bomTables, toCsv, toXlsx } from '../fab/export';
+import { boltsByNodeTable, bomTables, toCsv, toXlsx } from '../fab/export';
 import { dstvZip } from '../fab/dstv';
 import { useFab } from '../fab/useFab';
 import { downloadText, safeFileName } from '../persist/files';
@@ -13,6 +13,7 @@ import { projectToIfc } from '../fab/ifc';
 import { clientQuoteSheet, DEFAULT_TERMS } from '../fab/clientQuote';
 import { sheetsToPdf } from '../drawing/pdf';
 import { setMeta } from '../commands/commands';
+import { boltGroups, partGroups } from '../fab/unify';
 
 export function ProductionView() {
   const p = useStore((s) => s.project);
@@ -44,7 +45,7 @@ export function ProductionView() {
       ['סה"כ גג', '', '', Math.round(clad.roofArea * 10) / 10, 'מ"ר'], ['סה"כ קירות (נטו)', '', '', Math.round(clad.wallArea * 10) / 10, 'מ"ר'],
     ],
   } : null;
-  const tables = [...bomTables(bom, plans), ...(cladTable ? [cladTable] : []), quoteTable];
+  const tables = [...bomTables(bom, plans), boltsByNodeTable(p, store.state.derived), ...(cladTable ? [cladTable] : []), quoteTable];
   const isQuote = (i: number) => i === tables.length - 1;
   const setPrice = (k: keyof Pricing, v: number) => store.exec(setSettings({ pricing: { ...(p.settings.pricing ?? {}), [k]: v } }));
   const PRICE_FIELDS: [keyof Pricing, string][] = [
@@ -71,6 +72,9 @@ export function ProductionView() {
           {fab.changed.length > 0 && <div className="issue warning"><span className="ic">!</span>{fab.changed.length} חלקים ישנו סימון במספור הבא (שינוי גיאומטרי).</div>}
           <button className="btn primary" data-testid="run-numbering" onClick={() => { if (store.exec(numberParts())) store.toast('ok', 'המספור עודכן'); }}>הרץ מספור</button>
           <div className="hint">חלקים זהים (חתך, חומר, אורך, חיתוכים, חורים) מקבלים אותו סימון. סימון קיים נשמר; שינוי בחלק יוצר סימון חדש ונרשם בהיסטוריה.</div>
+
+          <div className="panel-title">הצעות האחדה</div>
+          <UnifyPanel />
 
           <div className="panel-title">חומר גלם וחיתוך</div>
           <div className="field"><label>אורכי מלאי (מ')</label><TextField ltr testId="stock-lengths" value={p.settings.stockLengths.map((x) => x / 1000).join(', ')} onCommit={(v) => {
@@ -141,7 +145,7 @@ export function ProductionView() {
                 if (ws) ws.style.display = '';
                 const vp = (window as any).__ksp?.viewport;
                 let png: Uint8Array | null = null;
-                if (vp) { vp.resize(); vp.fitAll('iso'); await new Promise((r) => requestAnimationFrame(r)); const url: string = vp.snapshot(); png = Uint8Array.from(atob(url.split(',')[1]), (c) => c.charCodeAt(0)); }
+                if (vp) { vp.resize(); vp.fitAll('iso'); await new Promise((r) => requestAnimationFrame(r)); const url: string = vp.presentationShot ? vp.presentationShot(1600, 1000, true) : vp.snapshot(); png = Uint8Array.from(atob(url.split(',')[1]), (c) => c.charCodeAt(0)); }
                 if (ws) ws.style.display = prev;
                 const { sheet, imageBox } = clientQuoteSheet(p, store.state.derived, q, clad, pricing.vatPct, (p.settings.quoteTerms ?? DEFAULT_TERMS.join('\n')).split('\n'), p.settings.company ?? 'כיאן הנדסה');
                 const bytes = await sheetsToPdf([sheet], { title: `הצעת מחיר — ${p.meta.name}`, author: p.settings.company ?? '', images: png ? [{ page: 0, ...imageBox, png }] : [] });
@@ -163,4 +167,27 @@ export function ProductionView() {
       </section>
     </div>
   );
+}
+
+/** הצעות האחדה: ברגים באורכים קרובים (ניתן להחיל) וחלקים כמעט־זהים (המלצה לבדיקה) */
+function UnifyPanel() {
+  const p = useStore((s) => s.project);
+  const d = useStore((s) => s.derived);
+  const { fab } = useFab();
+  const [tol, setTol] = useState(10);
+  const on = (p.settings.boltUnify ?? 0) > 0;
+  const bg = on ? [] : boltGroups(d, tol);
+  const pg = partGroups(fab, tol);
+  return <div data-testid="unify-panel">
+    <div className="field"><label>סף הפרש (מ"מ)</label><NumField testId="unify-tol" value={tol} step={5} onCommit={(v) => setTol(Math.max(0, v))} /></div>
+    <label className="row"><input type="checkbox" data-testid="bolt-unify" checked={on} onChange={(e) => store.exec(setSettings({ boltUnify: e.target.checked ? tol : 0 }))} /> האחד אורכי ברגים {on ? `(עד ${p.settings.boltUnify} מ"מ — פעיל)` : ''}</label>
+    {!on && (bg.length
+      ? <ul className="unify-list" data-testid="unify-bolts">{bg.map((g, i) => <li key={i}><span className="en">M{g.d}×{g.lengths.map((l) => `${l.length}(${l.qty})`).join(' / ')}</span> ← <b className="en">M{g.d}×{g.to}</b></li>)}</ul>
+      : <div className="hint">אין אורכי ברגים קרובים לאיחוד.</div>)}
+    <div className="hint" style={{ marginTop: 6 }}>חלקים כמעט־זהים (אותו חתך ומספר חורים):</div>
+    {pg.length
+      ? <ul className="unify-list" data-testid="unify-parts">{pg.slice(0, 12).map((g, i) => <li key={i} title={g.note}><b className="en">{g.marks.map((m) => `${m.mark}×${m.qty}`).join(' ≈ ')}</b> <span className="en">{g.profile} · {g.marks.map((m) => m.length).join('/')}</span><br /><small>{g.note}</small></li>)}</ul>
+      : <div className="hint" data-testid="unify-parts-none">לא נמצאו חלקים כמעט־זהים.</div>}
+    <div className="hint">ברגים: כל בורג בקבוצה מקבל את האורך הארוך — משפיע על כתב הכמויות ועל השרטוטים. חלקים: המלצה בלבד — שנה את הגיאומטריה או פרט החיבור כדי שיקבלו סימון אחד.</div>
+  </div>;
 }

@@ -11,6 +11,7 @@ import { buildBeamSplices, effectiveSplices } from './autoSplice';
 import { buildPurlins } from './purlins';
 import type { Connection, SupportPoint } from '../model/types';
 import { buildConnections, checkClashes } from './connections';
+import { unifyBolts } from '../fab/unify';
 import { buildWallFraming } from './cladding';
 import { buildGutterBrackets } from './gutter';
 import { generateWithWing } from './wing';
@@ -36,6 +37,9 @@ const Z = v3(0, 0, 1), X = v3(1, 0, 0);
  */
 /** בניית המודל: סככה ראשית, ואם הוגדרה — כנף (צורת L) שמחוברת אליה */
 export function generate(project: Project): DerivedModel {
+  return unifyBolts(generateAny(project), project.settings.boltUnify);
+}
+function generateAny(project: Project): DerivedModel {
   if (project.building.wing?.enabled) return generateWithWing(project, generateBase);
   const pl = project.building.plan;
   if (pl && pl.shape !== 'rect') {

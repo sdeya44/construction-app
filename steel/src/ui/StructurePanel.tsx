@@ -392,6 +392,19 @@ function RoofXGrid() {
   );
 }
 
+/** חלוקת פנלי X (שווים / על הפטות) וקושרות ברצועת הקונזולה */
+function RoofXSplit() {
+  const br = useStore((s) => s.project.building.bracing);
+  const set = (roof: Partial<BuildingParams['bracing']['roof']>) => store.exec(setBuilding({ bracing: { ...br, roof: { ...br.roof, ...roof } } }));
+  return <>
+    {(br.roof.type ?? 'x') === 'x' && <div className="field"><label>חלוקת פנלים לאורך השיפוע</label>
+      <select className="inp" data-testid="br-split" value={br.roof.split ?? 'equal'} onChange={(e) => set({ split: e.target.value as 'equal' | 'purlins' })}>
+        <option value="equal">שווים</option><option value="purlins">צמתים על הפטות (פנלים לא שווים)</option>
+      </select></div>}
+    <label className="row"><input type="checkbox" data-testid="br-toeave" checked={!!br.roof.toEave} onChange={(e) => set({ toEave: e.target.checked })} />קושרות גם ברצועת הקונזולה (מהעמוד הקיצוני עד קצה הגג)</label>
+  </>;
+}
+
 /** פרט קצה לקושרות X בגג (פח חיבור / מוט הברגה) ושדות המוט */
 export function RoofEndFields() {
   const br = useStore((s) => s.project.building.bracing);
@@ -437,6 +450,7 @@ export function RoofXShape() {
         <option value="x">X מזוויתנים (מתיחה)</option><option value="rhs">סבכה אופקית RHS (מוטות + אלכסונים)</option>
       </select></div>
     <RoofXGrid />
+    <RoofXSplit />
     <Adv id="roofgaps-e" label="מרווחים בקצוות הקושרות">
       <div className="field"><label>שני קצוות באותה נקודה, אותו מפתח</label><NumField value={br.roof.sameGap ?? 200} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, sameGap: Math.max(0, v) } })} /></div>
       {br.roof.endDetail === 'rod' && <div className="field"><label>מפתחים סמוכים — מוטות זה מעל זה</label><NumField value={br.roof.adjGap ?? 40} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, adjGap: Math.max(0, v) } })} /></div>}
@@ -481,6 +495,7 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
           ? <div className="field prof"><label>חתך</label><ProfilePicker value={br.roof.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ roof: { ...br.roof, profile: v } })} /></div>
           : <RhsFields />}
         <RoofXGrid />
+        <RoofXSplit />
         {(br.roof.type ?? 'x') === 'x' && <>
           <RoofEndFields />
         </>}

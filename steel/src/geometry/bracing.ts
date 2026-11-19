@@ -78,7 +78,8 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
       // קצה חופשי (מרזב/קונזולה): מהעמוד הקרוב; קצה מחובר (רכס/צד עמוד): מהקצה פחות מרווח
       const endX = (e: 'a' | 'b') => {
         const E = pl[e], toward = E.x < (lo + hi) / 2 ? 1 : -1;
-        if (!isJoined(e) && inside.length) return toward > 0 ? inside[0] : inside[inside.length - 1];
+        // קונזולה: עם toEave — עד קצה הגג (העמוד הקיצוני הופך לגבול קטע); אחרת מהעמוד הקיצוני
+        if (!isJoined(e) && inside.length && !(br.roof.toEave && Math.abs(E.x - (toward > 0 ? inside[0] : inside[inside.length - 1])) > 1200)) return toward > 0 ? inside[0] : inside[inside.length - 1];
         // סבכת RHS בקצה שמחובר לצד עמוד שממשיך למעלה: צומת הסבכה (פח + לשוניות) רחב — מתרחקים גם בחצי עומק העמוד
         const side = topo.junctions.some((j) => j.plane === pl && j.kind === 'side' && j.end === e);
         // צד עמוד שממשיך מעל הגג: מרחק מפני העמוד (ניתן לשינוי) — אחרת הפח/המוט חודרים לעמוד
@@ -147,8 +148,18 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
           const gap = k > 1 ? (br.roof.sameGap ?? 200) / 2 : 0; // שני פנלים סמוכים: קצוות זה ליד זה (מרווח sameGap)
           const rod = (br.roof.endDetail ?? 'gusset') === 'rod' && getProfile(br.roof.profile).family === 'L';
           if ((br.roof.endDetail ?? 'gusset') === 'rod' && !rod && !res.issues.some((i) => i.code === 'ROD_PROFILE')) res.issues.push({ code: 'ROD_PROFILE', severity: 'warning', message: `פרט מוט הברגה דורש זוויתן (החתך ${br.roof.profile}) — נבנה פרט פח חיבור` });
+          // גבולות הפנלים: שווים, או על הפטה הקרובה לכל גבול (צמתי X בפטות) — בתנאי שהאלכסון עדיין באורך חומר הגלם
+          const cuts = Array.from({ length: k + 1 }, (_, j) => (L * j) / k);
+          if (br.roof.split === 'purlins' && k > 1) {
+            const ws = purlins.filter((m) => m.purlin?.side === sl.pid).map((m) => (m.start.x - sl.a.x) * dir.x + (m.start.z - sl.a.z) * dir.z).filter((w) => w > 300 && w < L - 300).sort((p, q) => p - q);
+            const trial = [...cuts];
+            for (let j = 1; j < k; j++) { const near = ws.filter((w) => w > trial[j - 1] + 500).sort((p, q) => Math.abs(p - cuts[j]) - Math.abs(q - cuts[j]))[0]; if (near !== undefined) trial[j] = near; }
+            const ok = trial.every((w, j) => j === 0 || (w > trial[j - 1] + 500 && Math.hypot(w - trial[j - 1], bayW) <= stock - 100));
+            if (ok) cuts.splice(0, cuts.length, ...trial);
+            else if (!res.issues.some((i) => i.code === 'X_SNAP' && i.elementId === `${bay}|${sl.side}`)) res.issues.push({ code: 'X_SNAP', severity: 'info', elementId: `${bay}|${sl.side}`, message: `קטע ${sl.side} מפתח ${bay + 1}: לא ניתן להעמיד את צמתי ה-X על פטות (אורך חומר הגלם / מרווח) — פנלים שווים` });
+          }
           for (let j = 0; j < k; j++) {
-            const w0 = (L * j) / k + (j > 0 ? gap : 0), w1 = (L * (j + 1)) / k - (j < k - 1 ? gap : 0);
+            const w0 = cuts[j] + (j > 0 ? gap : 0), w1 = cuts[j + 1] - (j < k - 1 ? gap : 0);
             if (rod) {
               xBraceRod(res, b, br.roof.rod ?? defaultRodEnd(), bc.crossBolt, `R${bay + 1}.${sl.side}${k > 1 ? `.${j + 1}` : ''}`, `קושרת גג מפתח ${bay + 1}${k > 1 ? ` פנל ${j + 1}` : ''}`, br.roof.profile, o, n, dir,
                 { y: f0.y, w: w0 }, { y: f1.y, w: w1 }, rtw(rid(f0.id)), rtw(rid(f1.id)), rid(f0.id), rid(f1.id));

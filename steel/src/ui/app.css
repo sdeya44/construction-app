@@ -913,3 +913,6 @@ details.adv .adv-body { padding-bottom: 6px; }
 .tb-tag.warn { background: #fff6dc; border-color: #ecd27a; }
 .tb-tag.bad { background: #fde7e7; border-color: #e9a3a3; color: #9b1c1c; }
 .tb-tag.muted { color: var(--muted); }
+.unify-list { margin: 4px 0; padding-inline-start: 16px; font-size: 12px; max-height: 220px; overflow: auto; }
+.unify-list li { margin-bottom: 4px; }
+.unify-list small { color: var(--muted, #667); }

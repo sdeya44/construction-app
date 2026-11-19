@@ -568,6 +568,81 @@ export class Viewport {
     return url;
   }
 
+  /**
+   * תמונה ריאליסטית ללקוח: חיפוי אטום בצבעי הפנלים, קרקע, שמיים, שמש עם צללים, פלדה צבועה.
+   * מרונדר מחוץ למסך בגודל W×H מכיוון המבט הנוכחי (פרספקטיבה), בלי רשת/מידות/בחירה. מחזיר data-URL של PNG.
+   */
+  presentationShot(W = 2400, H = 1500, withClad = true): string {
+    if (!this.model) return '';
+    const s = store.state, b = s.project.building, r = this.renderer;
+    const box = this.model.box.clone();
+    const ctr = box.getCenter(new THREE.Vector3()), R = Math.max(1000, box.getSize(new THREE.Vector3()).length() / 2);
+    const tmp = new THREE.Group();
+    const disp: { dispose(): void }[] = [];
+    const std = (color: number, o: Partial<THREE.MeshStandardMaterialParameters> = {}) => { const m = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.2, side: THREE.DoubleSide, ...o }); disp.push(m); return m; };
+    // קרקע: חצץ/אדמה, ומשטח בטון מתחת למבנה
+    const zG = b.baseElevation;
+    const gG = new THREE.PlaneGeometry(R * 16, R * 16); disp.push(gG);
+    const ground = new THREE.Mesh(gG, std(0xa9a48f, { roughness: 1, metalness: 0 })); ground.position.set(ctr.x, ctr.y, zG - 30); ground.receiveShadow = true; tmp.add(ground);
+    const slabG = new THREE.PlaneGeometry(box.max.x - box.min.x + 3000, box.max.y - box.min.y + 3000); disp.push(slabG);
+    const slab = new THREE.Mesh(slabG, std(0xc9c6bd, { roughness: 0.95, metalness: 0 })); slab.position.set(ctr.x, ctr.y, zG - 10); slab.receiveShadow = true; tmp.add(slab);
+    // חיפוי אטום
+    if (withClad && b.cladding) {
+      const t = claddingTakeoff(s.project, s.derived);
+      const col = { roof: 0x8e9ba5, wall: 0xdad6cb, gutter: 0x9aa5ad, pipe: 0x8f9aa2 } as const;
+      if (t) for (const sf of t.surfaces) {
+        const pos: number[] = [];
+        for (let i = 1; i < sf.pts.length - 1; i++) for (const q of [sf.pts[0], sf.pts[i], sf.pts[i + 1]]) pos.push(q.x, q.y, q.z);
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); disp.push(g);
+        const m = new THREE.Mesh(g, std(col[sf.kind], { metalness: sf.kind === 'wall' ? 0.1 : 0.35, roughness: 0.55 }));
+        m.castShadow = true; m.receiveShadow = true; tmp.add(m);
+      }
+    }
+    // שמש עם צללים
+    const sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
+    sun.position.set(ctr.x - R * 1.3, ctr.y - R * 1.7, ctr.z + R * 2.4); sun.target.position.copy(ctr);
+    sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
+    const sc = sun.shadow.camera; sc.left = -R * 1.6; sc.right = R * 1.6; sc.top = R * 1.6; sc.bottom = -R * 1.6; sc.near = 10; sc.far = R * 8; sc.updateProjectionMatrix();
+    sun.shadow.bias = -0.0004; sun.shadow.normalBias = R * 0.0006;
+    tmp.add(sun, sun.target);
+    // שמיים: מעבר צבע
+    const cv = document.createElement('canvas'); cv.width = 4; cv.height = 256;
+    const cx = cv.getContext('2d')!; const gr = cx.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, '#7fa6c9'); gr.addColorStop(0.65, '#cfdde8'); gr.addColorStop(1, '#ece6d8');
+    cx.fillStyle = gr; cx.fillRect(0, 0, 4, 256);
+    const sky = new THREE.CanvasTexture(cv); sky.colorSpace = THREE.SRGBColorSpace; disp.push(sky);
+    // פלדה צבועה אחידה
+    const steel = std(0x5d6b77, { metalness: 0.45, roughness: 0.45 });
+    // מצלמה: אותו כיוון מבט כמו החלונית הראשית, פרספקטיבה
+    const p0 = this.panes[0];
+    const dir = p0.camera.position.clone().sub(p0.controls.target).normalize();
+    { const h = Math.hypot(dir.x, dir.y) || 1; const z = Math.min(0.42, Math.max(0.2, dir.z)); const k = Math.sqrt(1 - z * z) / h; dir.set(dir.x * k, dir.y * k, z); }
+    const cam = new THREE.PerspectiveCamera(32, W / H, 10, R * 40); cam.up.set(0, 0, 1);
+    const dist = R / Math.sin(THREE.MathUtils.degToRad(32 / 2)) * (W / H < 1.2 ? 1.25 : 0.95);
+    cam.position.copy(ctr).addScaledVector(dir, dist); cam.lookAt(ctr);
+    // שמירת מצב
+    const prev = { bg: this.scene.background, fog: this.scene.fog, helpers: this.helpers.visible, sel: this.selGroup.visible, meas: this.measureGroup.visible, edges: this.model.edges.visible, mVis: this.model.mesh.visible, mat: this.model.mesh.material, shadow: r.shadowMap.enabled, pr: r.getPixelRatio(), tm: r.toneMapping };
+    try {
+      this.helpers.visible = false; this.selGroup.visible = false; this.measureGroup.visible = false; this.model.edges.visible = false;
+      this.model.mesh.visible = true; this.model.mesh.material = steel; this.model.mesh.castShadow = true; this.model.mesh.receiveShadow = true;
+      this.scene.background = sky; this.scene.fog = new THREE.Fog(0xdfe6ea, R * 5, R * 14);
+      this.scene.add(tmp);
+      r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; r.toneMapping = THREE.ACESFilmicToneMapping;
+      r.setPixelRatio(1); r.setSize(W, H, false); r.setScissorTest(false); r.setViewport(0, 0, W, H);
+      r.render(this.scene, cam);
+      return r.domElement.toDataURL('image/png');
+    } finally {
+      this.scene.remove(tmp);
+      this.scene.background = prev.bg; this.scene.fog = prev.fog;
+      this.helpers.visible = prev.helpers; this.selGroup.visible = prev.sel; this.measureGroup.visible = prev.meas; this.model.edges.visible = prev.edges;
+      this.model.mesh.visible = prev.mVis; this.model.mesh.material = prev.mat; this.model.mesh.castShadow = false; this.model.mesh.receiveShadow = false;
+      r.shadowMap.enabled = prev.shadow; r.toneMapping = prev.tm; r.setPixelRatio(prev.pr);
+      sun.shadow.map?.dispose();
+      for (const x of disp) x.dispose();
+      this.modelMat.needsUpdate = true;
+      this.resize(); this.render(); this.requestRender();
+    }
+  }
+
   worldPerPixel(p: Pane): number {
     if (p.projection === 'ortho') return (2 * p.orthoHalfH) / p.ortho.zoom / p.rect.h;
     const d = p.persp.position.distanceTo(p.controls.target);

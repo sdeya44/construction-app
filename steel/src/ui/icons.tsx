@@ -29,6 +29,7 @@ const ICONS: Record<string, ReactElement> = {
   save: <>{P('M5 3h12l4 4v14H5z')}{P('M8 3v5h8V3M8 21v-7h8v7')}</>,
   folder: P('M3 6h7l2 2h9v11H3z'),
   download: <>{P('M12 3v12M7 10l5 5 5-5M4 20h16')}</>,
+  camera: <>{P('M4 8h3l2-3h6l2 3h3v11H4z')}{P('M12 10.5a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 1 0 0-6.4')}</>,
   upload: <>{P('M12 21V9M7 14l5-5 5 5M4 4h16')}</>,
   plus: P('M12 5v14M5 12h14'),
   x: P('M6 6l12 12M18 6L6 18'),

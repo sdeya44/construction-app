@@ -1,3 +1,4 @@
+import { safeFileName } from '../persist/files';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { deleteMembers, restoreDeleted, setBuilding, setPurlinSide, setSection } from '../commands/commands';
 import { fromMm } from '../core/units';
@@ -165,6 +166,13 @@ export function App() {
   }, [dialog, palette, menu]);
 
   const setView = (name: ViewName) => vp.current?.fitAll(name);
+  const clientImage = () => {
+    const url = vp.current?.presentationShot(2400, 1500, true);
+    if (!url) { store.toast('error', 'אין מודל להצגה'); return; }
+    const bin = atob(url.split(',')[1]); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u8], { type: 'image/png' })); a.download = `${safeFileName(store.state.project.meta.name)}_הדמיה.png`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    store.toast('ok', 'נשמרה תמונה ללקוח');
+  };
   const hide = () => { if (store.state.selection.length) store.set({ hidden: [...new Set([...store.state.hidden, ...store.state.selection])], selection: [] }); };
   const isolate = () => { if (store.state.selection.length) store.set({ isolated: [...store.state.selection] }); };
   const showAll = () => store.set({ hidden: [], isolated: null, filter: { column: true, rafter: true, beam: true, brace: true, purlin: true, girt: true, cleat: true, plate: true, bolt: true, anchor: true } });
@@ -223,6 +231,7 @@ export function App() {
     { id: 'wire', group: 'מבט', label: v.render === 'solid' ? 'קווי מתאר' : 'מוצק', run: () => store.setView({ render: v.render === 'solid' ? 'wire' : 'solid' }) },
     { id: 'clip', group: 'מבט', label: 'חתך מישורי', run: () => store.setView({ clip: { ...v.clip, enabled: !v.clip.enabled } }) },
     { id: 'split', group: 'מבט', label: 'ארבעה מבטים', run: () => store.setView({ split: !v.split }) },
+    { id: 'client-image', group: 'מבט', label: 'תמונה ריאליסטית ללקוח (PNG)', run: () => { setMode('model'); setTimeout(clientImage, 60); } },
     { id: 'dims', group: 'מבט', label: v.dims ? 'הסתר מידות' : 'הצג מידות', run: () => store.setView({ dims: !v.dims }) },
     { id: 'new', group: 'קובץ', label: 'פרויקט חדש', run: () => setDialog('new') },
     { id: 'open', group: 'קובץ', label: 'פתיחת פרויקט', run: () => setDialog('open') },
@@ -270,7 +279,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.35.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.36.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -329,6 +338,7 @@ export function App() {
             <TB icon="dims" title="מידות" on={v.dims} onClick={() => store.setView({ dims: !v.dims })} testId="toggle-dims" />
             <TB icon="tag" title="תוויות בחירה" on={v.labels} onClick={() => store.setView({ labels: !v.labels })} desk />
             <TB icon="split" title="ארבעה מבטים" on={v.split} onClick={() => store.setView({ split: !v.split })} testId="toggle-split" desk />
+            <TB icon="camera" title="תמונה ריאליסטית ללקוח (PNG) — מהמבט הנוכחי, עם חיפוי, קרקע וצללים" onClick={() => clientImage()} testId="client-image" />
             <span className="vb-sep" />
             <LayersMenu />
             <TB icon="eyeOff" title="הסתר בחירה (H)" disabled={!sel.length} onClick={hide} testId="hide" />

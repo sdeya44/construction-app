@@ -44,7 +44,9 @@ export function ContextBar({ vp, onMore }: { vp: Viewport | null; onMore: (x: nu
       const w = ref.current?.offsetWidth ?? 360;
       let x = (b.x0 + b.x1) / 2 - w / 2;
       x = Math.max(8, Math.min(W - w - 8, x));
-      const y = W < 700 ? H - 120 : 58;
+      // מתחת לסרגל המבט (שעשוי להשתרע על שתי שורות) — כדי לא להסתיר את כפתוריו
+      const vb = document.querySelector('.viewbar')?.getBoundingClientRect(), hr = vp.host.getBoundingClientRect();
+      const y = W < 700 ? H - 120 : Math.max(58, vb ? Math.round(vb.bottom - hr.top + 6) : 58);
       void H;
       setPos((p) => (p && Math.abs(p.x - x) < 0.5 && Math.abs(p.y - y) < 0.5 ? p : { x, y }));
     };
@@ -61,12 +63,21 @@ export function ContextBar({ vp, onMore }: { vp: Viewport | null; onMore: (x: nu
     const keys = new Set(ms.map((m) => `${m.kind}|${m.profile}`));
     store.select(d.members.filter((m) => keys.has(`${m.kind}|${m.profile}`)).map((m) => m.id));
   };
+  // ציר (מסגרת) שלם: כל העמודים והקורות הראשיות של המסגרות שנבחרו — לשינוי חתך בפעולה אחת
+  const frames = new Set(ms.filter((m) => m.frameId && (m.kind === 'column' || m.kind === 'rafter')).map((m) => m.frameId!));
+  const wholeFrame = () => store.select(d.members.filter((m) => m.frameId && frames.has(m.frameId) && (m.kind === 'column' || m.kind === 'rafter')).map((m) => m.id));
+  // קו שלם: אותו סוג באותה שורה (קו עמודים / צד הגג) לאורך כל המבנה
+  const lineKey = (m: Member) => (m.kind === 'column' || m.kind === 'rafter') ? `${m.kind}|${m.lineId ?? m.planeId ?? m.side ?? ''}` : '';
+  const lines = new Set(ms.map(lineKey).filter((k) => k && !k.endsWith('|')));
+  const wholeLine = () => store.select(d.members.filter((m) => lines.has(lineKey(m))).map((m) => m.id));
   return (
     <div className="ctxbar" ref={ref} role="toolbar" aria-label="סרגל הקשרי" data-testid="ctxbar" style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}>
       <span className="ctx-title">{single ? <><b>{kindLabelOf(single)}</b> <span className="mono">{single.id}</span></> : <b data-testid="ctx-count">{ms.length} נבחרו</b>}</span>
       <span className="ctx-hint">עריכה בפאנל המאפיינים ←</span>
       <span className="ctx-sep" />
       {!single && <button className="ctx-btn" onClick={similar} data-testid="ctx-similar">בחר דומים</button>}
+      {frames.size > 0 && <button className="ctx-btn" onClick={wholeFrame} data-testid="ctx-frame" title="בחר את כל העמודים והקורות של הציר — ואז החלף חתך בפאנל המאפיינים לכולם יחד">כל הציר</button>}
+      {lines.size > 0 && <button className="ctx-btn" onClick={wholeLine} data-testid="ctx-line" title="בחר את כל האלמנטים מאותו סוג באותו קו לאורך המבנה (למשל כל עמודי קו א)">כל הקו</button>}
       {ms.some((m) => m.kind === 'column') && <button className="ctx-btn pri" data-testid="ctx-omit" title="ביטול העמודים שנבחרו והחלפתם בקורה נושאת בין העמודים שנותרו" onClick={() => setOmit(ms.filter((m) => m.kind === 'column').map((m) => m.id))}>בטל עמודים</button>}
       <button className="ctx-btn" onClick={() => store.set({ isolated: [...sel] })}>בודד</button>
       {single && <button className="ctx-btn" data-testid="ctx-isolate-asm" title="הצג רק את המכלול (החלק הראשי והחלקים המרותכים אליו) והברגים שלו" onClick={() => {
