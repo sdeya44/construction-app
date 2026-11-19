@@ -51,3 +51,24 @@ test('UX149-02: חיפוש — קבוצה "בחר הכל" לפני פחים; ח�
   expect(await page.evaluate(() => (window as any).__ksp.store.state.scopeHi)).toBeNull();
   expect(errors).toEqual([]);
 });
+
+test('UX150-01: פאנל בלי לשוניות — שביל מהאלמנט לרכיב וחזרה', async ({ page }) => {
+  const errors = await boot(page);
+  await expect(page.getByTestId('lp-nav')).toHaveCount(0);
+  await expect(page.getByTestId('lp-sel')).toHaveCount(0);
+  await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
+  await expect(page.getByTestId('props-single')).toBeVisible();
+  await expect(page.getByTestId('lp-crumb')).toContainText('חתכים');
+  await expect(page.getByTestId('lp-here')).toContainText('עמוד');
+  // שביל ← הגדרות הרכיב כולו; "חזרה לאלמנט" ← חלון האלמנט
+  await page.getByTestId('lp-crumb').click();
+  await expect(page.getByTestId('lp-nav-content')).toBeVisible();
+  await expect(page.getByTestId('sel-strip')).toContainText('הגדרות הרכיב כולו');
+  await page.getByTestId('sel-strip-props').click();
+  await expect(page.getByTestId('props-single')).toBeVisible();
+  // ביטול בחירה ← חזרה להגדרות הרכיב
+  await page.evaluate(() => (window as any).__ksp.store.select([]));
+  await expect(page.getByTestId('lp-nav-content')).toBeVisible();
+  await expect(page.getByTestId('lp-crumb')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

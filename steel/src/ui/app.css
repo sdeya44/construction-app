@@ -1027,3 +1027,11 @@ details.adv .adv-body { padding-bottom: 6px; }
 
 .scope-applies { font-size: 12px; color: #9a5a14; margin: 6px 2px 0; }
 .scope-applies b { font-weight: 700; }
+
+/* 1.50: ראש הפאנל — שביל במקום לשוניות */
+.lp-head { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-bottom: 1px solid var(--line); background: var(--panel); flex: none; min-height: 38px; }
+.lp-path { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.lp-crumb { background: none; border: 0; padding: 2px 4px; color: var(--brand); font-weight: 700; cursor: pointer; white-space: nowrap; border-radius: 6px; }
+.lp-crumb:hover { background: var(--brand-soft); }
+.lp-sep { color: var(--muted); }
+.lp-here { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }

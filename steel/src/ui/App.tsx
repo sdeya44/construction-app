@@ -285,7 +285,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.49.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.50.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -411,15 +411,17 @@ export function App() {
         <aside className={`side side-end${propsOpen ? ' open' : ''}`} data-testid="props">
           <button className="props-pin desk-only" data-testid="props-pin" title={propsPinned ? 'כיווץ הפאנל — יותר מקום לתלת־ממד; בבחירה הפאנל נפתח כשכבה' : 'קיבוע הפאנל'} onClick={() => setPropsPinned(!propsPinned)}>{propsPinned ? '▸ כיווץ פאנל' : '◂ הגדרות ומאפיינים'}</button>
           {wide && (
-            <div className="lp-tabs" role="tablist" aria-label="תוכן הפאנל">
-              <button role="tab" aria-selected={lp === 'nav'} className={`lp-tab${lp === 'nav' ? ' on' : ''}`} onClick={() => setLp('nav')} data-testid="lp-nav" title="ההגדרות של הסעיף שנבחר בעץ">⚙ {NAV_INDEX_LABEL(nav)}</button>
-              <button role="tab" aria-selected={lp === 'sel'} className={`lp-tab${lp === 'sel' ? ' on' : ''}`} onClick={() => setLp('sel')} data-testid="lp-sel" title="מאפייני האלמנטים שנבחרו במודל">{s.activeConn ? 'חיבור' : s.activeGutter ? 'מזחלה' : 'מאפיינים'}{sel.length ? ` (${sel.length})` : ''}</button>
+            // 1.50: בלי לשוניות — תצוגה אחת: מה שנבחר אחרון. מחלון האלמנט — שביל לרכיב כולו; מהרכיב — "נבחר: … ←" חזרה לאלמנט
+            <div className="lp-head" data-testid="lp-head">
+              {lp === 'sel'
+                ? <span className="lp-path"><button className="lp-crumb" data-testid="lp-crumb" title="הגדרות הרכיב כולו (כמו בעץ)" onClick={() => setLp('nav')}>→ {NAV_INDEX_LABEL(nav)}</button><span className="lp-sep">·</span><b className="lp-here" data-testid="lp-here">{s.activeConn ? 'חיבור' : s.activeGutter ? 'מזחלה' : ms.length === 1 ? ms[0]!.label : `${sel.length} אלמנטים`}</b></span>
+                : <span className="lp-path muted">הגדרות הרכיב</span>}
               <button className="lp-full-btn" onClick={() => { setLpFull(!lpFull); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }} title={lpFull ? 'חזרה לגודל רגיל (Esc)' : 'פאנל במסך מלא — לעריכה של טבלאות ופרטים גדולים'} data-testid="lp-full">{lpFull ? '⤡' : '⤢'}</button>
             </div>
           )}
           {wide && lp === 'nav'
             ? <div className="nav-content" data-testid="lp-nav-content">
-                {(sel.length > 0 || s.activeConn) && <div className="sel-strip" data-testid="sel-strip"><span>נבחר: <b className="mono">{s.activeConn ?? (sel.length === 1 ? sel[0] : `${sel.length} אלמנטים`)}</b> — ההגדרות כאן חלות על כל הרכיב</span><button className="btn small" data-testid="sel-strip-props" onClick={() => setLp('sel')}>{s.activeConn ? 'עורך החיבור' : 'רק האלמנט הזה'} ←</button></div>}
+                {(sel.length > 0 || s.activeConn) && <div className="sel-strip" data-testid="sel-strip"><span>נבחר: <b>{s.activeConn ?? (ms.length === 1 ? ms[0]!.label : `${sel.length} אלמנטים`)}</b> — כאן: הגדרות הרכיב כולו</span><button className="btn small" data-testid="sel-strip-props" onClick={() => setLp('sel')}>{s.activeConn ? 'חזרה לעורך החיבור' : 'חזרה לאלמנט'} ←</button></div>}
                 <NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div>
             : <PropertiesPanel />}
         </aside>
