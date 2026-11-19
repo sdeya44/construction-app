@@ -2,7 +2,8 @@ import { setBuilding } from '../commands/commands';
 import { defaultWing } from '../geometry/wing';
 import type { WingDef } from '../model/types';
 import { store, useStore } from '../store';
-import { LenField, NumField, ProfilePicker } from './fields';
+import { Help, LenField, NumField, ProfilePicker } from './fields';
+import { LSvg } from './Dialogs';
 
 /** כנף (סככת L): סככה נמוכה שמחוברת לקיר הצד של הסככה הראשית */
 export function WingPanel() {
@@ -17,14 +18,14 @@ export function WingPanel() {
   return (
     <div className="panel-body" data-testid="wing-panel">
       <div className="panel-title">כנף — סככת L</div>
-      <div className="hint" style={{ marginTop: 0 }}>
+      <Help>
         כנף נמוכה שמחוברת לקיר הצד של הסככה. <b>דו-שיפועית:</b> הרכס ניצב לסככה הראשית; המסגרת הראשונה של הכנף יושבת על עמודי הסככה הראשית (כיסא מרותך + 2×M16).
         <b> חד-שיפועית:</b> הקורות מקבילות למסגרות הראשיות, נשענות על העמודים הראשיים ויורדות החוצה. בצד החיבור מוסרים חיפוי הקיר והקושרות במפתחי הכנף.
-      </div>
+      </Help>
       {!w?.enabled ? (
-        <div className="ss-row">
-          <button className="btn primary" onClick={() => store.exec(setBuilding({ wing: defaultWing(b, 'gable') }))} data-testid="wing-add-gable">＋ כנף דו-שיפועית</button>
-          <button className="btn" onClick={() => store.exec(setBuilding({ wing: defaultWing(b, 'mono') }))} data-testid="wing-add-mono">＋ כנף חד-שיפועית</button>
+        <div className="tpl-grid wing-pick">
+          <button className="tpl" onClick={() => store.exec(setBuilding({ wing: defaultWing(b, 'gable') }))} data-testid="wing-add-gable" title="הרכס ניצב לסככה הראשית"><LSvg gable /><span>＋ כנף דו-שיפועית</span><small>רכס ניצב לסככה</small></button>
+          <button className="tpl" onClick={() => store.exec(setBuilding({ wing: defaultWing(b, 'mono') }))} data-testid="wing-add-mono" title="יורדת החוצה מהקיר"><LSvg /><span>＋ כנף חד-שיפועית</span><small>יורדת החוצה מהקיר</small></button>
         </div>
       ) : <>
         <label className="row"><input type="checkbox" checked={w.enabled} onChange={(e) => set({ enabled: e.target.checked })} data-testid="wing-on" />כנף פעילה</label>

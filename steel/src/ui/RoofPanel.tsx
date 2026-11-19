@@ -7,7 +7,8 @@ import { MATERIALS } from '../profiles/materials';
 import { purlinParams } from '../geometry/purlins';
 import { store, useStore } from '../store';
 import { LenField, ProfilePicker, useEdit } from './fields';
-import { CleatSchematic, PurlinSlopeSchematic } from './schematics';
+import { CleatSchematic, PurlinSlopeSchematic, PurlinSpliceSchematic } from './schematics';
+import { tryProfile } from '../profiles/library';
 
 const OPENING: Record<'up' | 'down', string> = { up: 'לכיוון הרכס / הצד הגבוה', down: 'לכיוון המרזב / הצד הנמוך' };
 
@@ -196,9 +197,8 @@ export function RoofPanel({ section }: { section?: RoofSection } = {}) {
       {show('splices') && <>
       <div className="panel-title">חלוקה לחלקי ייצור</div>
       <Help>אורך חומר גלם: {(p.settings.stockLength / 1000).toFixed(2)} מ'. ההצעה ממקמת חיבורי המשך מעל מסגרות, רק במקום הנדרש — לא בכל מסגרת. חיבור המשך בפטת C/Z: פלטה בצד הפנימי של הווב ו-4 ברגים, 2 בכל פטה.</Help>
-      <div className="field"><label>עובי פלטת המשך</label><NumField testId="ps-t" value={pu.splice.plateT} suffix='מ"מ' onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, plateT: v } }))} /></div>
-      <div className="field"><label>קוטר בורג</label><NumField testId="ps-d" value={pu.splice.bolt.d} suffix="M" onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, bolt: { ...pu.splice.bolt, d: Math.round(v) } } }))} /></div>
-      <div className="field"><label>מרחק ברגים מהתפר</label><NumField value={pu.splice.jointOffset} suffix='מ"מ' onCommit={(v) => exec(setPurlinSystem({ splice: { ...pu.splice, jointOffset: v } }))} /></div>
+      <PurlinSpliceSchematic sp={pu.splice} purlinH={tryProfile(purlinParams(pu, 'left').profile)?.props.h ?? 200} onSet={(patch) => exec(setPurlinSystem({ splice: { ...pu.splice, ...patch } }))} />
+      <div className="field"><label>קוטר בורג</label><BoltSelect testId="ps-d" d={pu.splice.bolt.d} onChange={(d) => exec(setPurlinSystem({ splice: { ...pu.splice, bolt: { ...pu.splice.bolt, d } } }))} /></div>
       <div className="field"><label>אורך קטע פטה</label>
         <select className="inp" data-testid="piece-bays" value={pu.pieceBays ?? 0} onChange={(e) => exec(setPurlinSystem({ pieceBays: Number(e.target.value) }))}>
           <option value={0}>אוטומטי לפי חומר גלם ({(p.settings.stockLength / 1000).toFixed(1)} מ')</option>

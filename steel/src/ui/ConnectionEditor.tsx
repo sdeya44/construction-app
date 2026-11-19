@@ -43,6 +43,7 @@ export function ConnectionEditor() {
   const d = useStore((s) => s.derived);
   const p = useStore((s) => s.project);
   const [tplName, setTplName] = useState('');
+  const [tab, setTab] = useState<'plate' | 'bolts' | 'admin'>('plate');
   if (!id) return null;
   const c = d.connById.get(id);
   if (!c) return (
@@ -78,8 +79,17 @@ export function ConnectionEditor() {
         }}><Icon name="isolate" />הצג בתלת־ממד</button>
         {store.state.isolated && <button className="btn small" onClick={() => store.set({ isolated: null })}>הצג הכל</button>}
       </div>
+      {/* לשוניות (1.35): פלטה · ברגים וריתוכים · ניהול — במקום עמוד אחד ארוך */}
+      <div className="conn-tabs" role="tablist">
+        {([['plate', isCleat ? 'תומך' : 'פלטה'], ['bolts', `ברגים וריתוכים${issues.length ? ` · ${issues.length} !` : ''}`], ['admin', 'ניהול']] as const).map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={tab === k} className={`conn-tab${tab === k ? ' on' : ''}`} data-testid={`conn-tab-${k}`} onClick={() => setTab(k)}>{l}</button>
+        ))}
+      </div>
+      {tab === 'plate' && <>
       <PlateWizard c={c} />
       <SectionSvg c={c} />
+      </>}
+      {tab === 'admin' && <>
       <div className="field"><label>סטטוס</label>
         <select className="inp" data-testid="conn-status" value={c.status} onChange={(e) => {
           const st = e.target.value as ApprovalStatus;
@@ -96,6 +106,8 @@ export function ConnectionEditor() {
           </select>
         </div>
       )}
+      </>}
+      {tab === 'plate' && <>
 
       {c.type === 'eave' && eff?.split !== false && <div className="hint">שתי הפלטות מרותכות במסגריה (לעמוד ולתחתית הקורה) ומוברגות זו לזו בשטח. הברגים בפינות: מחוץ לרוחב אגף הקורה ומחוץ להיטל העמוד, לגישת מפתח.</div>}
       {c.type === 'brace' && <div className="issue warning"><span className="ic">!</span>{c.label}. החלקים: {c.parts.join(', ')}.</div>}
@@ -168,7 +180,9 @@ export function ConnectionEditor() {
           <button className="btn primary small" data-testid="cl-apply-all" onClick={() => confirm('להחיל את מידות התומך הזה על כל תומכי הפטות בכל השיפועים? התאמות בודדות יבוטלו.') && store.exec(setCleatAll(cl))}>החל על כל התומכים ({d.connections.filter((x) => x.type === 'purlin-cleat').length})</button>
         </div>
       </>}
+      </>}
 
+      {tab === 'bolts' && <>
       <div className="panel-title">ברגים ({c.bolts.length})</div>
       <table className="tbl" data-testid="conn-bolts">
         <thead><tr><th>בורג</th><th>חור</th><th>אחיזה</th><th>מקום</th></tr></thead>
@@ -188,7 +202,9 @@ export function ConnectionEditor() {
       <div className="panel-title">בדיקות ({issues.length})</div>
       {issues.length ? issues.map((i, k) => <div key={k} className={`issue ${i.severity}`}><span className="ic">{i.severity === 'error' ? '✕' : '!'}</span>{i.message}</div>)
         : <div className="hint" data-testid="conn-no-issues">לא נמצאו התנגשויות או חריגות מרחקי קצה. זו בדיקה גיאומטרית בלבד — אין בדיקת חוזק.</div>}
+      </>}
 
+      {tab === 'admin' && <>
       <div className="panel-title">ניהול</div>
       <div className="row">
         <button className="btn small" disabled={!c.overridden} onClick={() => store.exec(isCleat ? resetCleat(cleatId) : resetConnection(id))}>איפוס לברירת מחדל</button>
@@ -209,6 +225,7 @@ export function ConnectionEditor() {
             <button className="btn small" onClick={() => { if (confirm(`להחיל את "${t.name}" על ${sameType.length} חיבורים?`)) store.exec(applyTemplate(t.id, sameType)); }}>על כולם</button>
           </div>
         ))}
+      </>}
       </>}
     </div>
   );

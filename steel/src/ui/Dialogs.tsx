@@ -41,7 +41,7 @@ export function Dialog({ title, onClose, children, footer, wide, testId }: { tit
 }
 
 const GableSvg = () => <svg viewBox="0 0 100 40"><path d="M10 38V18L50 4l40 14v20" fill="none" stroke="currentColor" strokeWidth="2.5" /></svg>;
-const LSvg = ({ gable }: { gable?: boolean }) => <svg viewBox="0 0 100 40"><path d={gable ? 'M8 38V20L30 10l22 10v18M52 26l20-6 20 6v12H52z' : 'M8 38V18L52 12v26M52 24l40 4v10H52z'} fill="none" stroke="currentColor" strokeWidth="2.5" /></svg>;
+export const LSvg = ({ gable }: { gable?: boolean }) => <svg viewBox="0 0 100 40"><path d={gable ? 'M8 38V20L30 10l22 10v18M52 26l20-6 20 6v12H52z' : 'M8 38V18L52 12v26M52 24l40 4v10H52z'} fill="none" stroke="currentColor" strokeWidth="2.5" /></svg>;
 const MonoSvg = () => <svg viewBox="0 0 100 40"><path d="M10 38V20L90 6v32" fill="none" stroke="currentColor" strokeWidth="2.5" /></svg>;
 
 /** אשף מבנה חדש. ערכי ברירת מחדל = מבנה GEO-01. */

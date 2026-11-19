@@ -94,11 +94,14 @@ function SchemBody({ w, h, children, dims, testId, caption, onZoom }: { w: numbe
         })}
       </svg>
       {edit && editPos && (
-        <input className="inp num schem-inp" autoFocus value={edit.v} data-testid={dims[edit.i].testId ? `${dims[edit.i].testId}-inp` : undefined}
-          style={{ left: `${(editPos[0] / w) * 100}%`, top: `${(editPos[1] / h) * 100}%` }}
-          onChange={(e) => setEdit({ ...edit, v: e.target.value })}
-          onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEdit(null); }}
-          onBlur={commit} />
+        <span className="schem-inp-w" style={{ left: `${(editPos[0] / w) * 100}%`, top: `${(editPos[1] / h) * 100}%` }}>
+          <input className="inp num schem-inp" autoFocus value={edit.v} data-testid={dims[edit.i].testId ? `${dims[edit.i].testId}-inp` : undefined}
+            onChange={(e) => setEdit({ ...edit, v: e.target.value })}
+            onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEdit(null); }}
+            onBlur={commit} />
+          {/* יחידה ליד שדה ההקלדה (1.35): מידות בשרטוט — מ"מ, אלא אם נקבע אחרת */}
+          <span className="schem-unit">{dims[edit.i].unit === '°' ? '°' : dims[edit.i].unit === '%' ? '%' : (dims[edit.i].unit ?? '') === '' && /אלכסונים/.test(dims[edit.i].text ?? '') ? '' : 'מ"מ'}</span>
+        </span>
       )}
       {caption && <div className="schem-cap">{caption}</div>}
     </div>

@@ -9,6 +9,7 @@ import { store, useStore } from '../store';
 import { Dialog } from './Dialogs';
 import { ProfilePicker, useEdit, Help } from './fields';
 import { OffCard } from './pics';
+import { FramePickStrip } from './schematics';
 
 const SUPPORTS: TbSupport[] = ['A1', 'A2', 'A3', 'A4', 'A5'];
 const SEATS: TbSeat[] = ['B1', 'B2', 'B3', 'B4'];
@@ -87,7 +88,15 @@ function TransferRow({ t, onChange, onRemove, embed }: { t: TransferDef; onChang
             note={t.trussFit === 'between' ? 'בין העמודים; קורות הגג על הצמתים העליונים. חיבור המשך בחגורה חלולה — בפלנץ.' : 'נתמך על ראש העמוד (A1); קורות הגג על הצמתים העליונים. חגורה חלולה (RHS/SHS): פלטת תמיכה מרותכת וברגים מחוץ לצינור, חיבור המשך בפלנץ.'} />
         : <>
           {!embed && <div className="field prof"><label>קורה נושאת</label><ProfilePicker testId={`tb-prof-${t.id}`} value={t.profile} families={['IPE', 'HEA', 'HEB']} onCommit={(v) => onChange({ profile: v })} /></div>}
-          {u && <div className={`sz-note sz-${st}`} style={{ margin: '2px 0 6px' }}>{SIZE_LABEL[st]} — {u.text}</div>}
+          {u && (u.tags
+            ? <div className={`tb-tags sz-${st}`} title={u.text} data-testid={`tb-tags-${t.id}`}>
+                <span className="tb-tag main">{SIZE_LABEL[st]}</span>
+                <span className="tb-tag">מפתח {(u.tags.span / 1000).toFixed(2)} מ'</span>
+                <span className={`tb-tag${u.tags.uM > 1 ? ' bad' : u.tags.uM > 0.85 ? ' warn' : ''}`}>כפיפה {Math.round(u.tags.uM * 100)}%</span>
+                <span className={`tb-tag${u.tags.dl > u.tags.dlLim ? ' bad' : ''}`}>שקיעה {u.tags.dl.toFixed(0)} / {u.tags.dlLim.toFixed(0)} מ"מ</span>
+                <span className="tb-tag muted">עומס מקורה ≈{u.tags.P.toFixed(1)} kN</span>
+              </div>
+            : <div className={`sz-note sz-${st}`} style={{ margin: '2px 0 6px' }}>{SIZE_LABEL[st]} — {u.text}</div>)}
         </>}
       {t.kind !== 'truss' && <>
         <div className="tb-lbl">תמיכה בעמוד</div>
@@ -176,8 +185,7 @@ export function RoofTrussPanel() {
       {ed.showTitle && <Help>קורת הגג היא החגורה העליונה; חגורה תחתונה, אנכיים ואלכסונים מרותכים במסגריה; חיבורי המשך וחיבור החגורה לעמודים — ברגים בשטח. לחתך עם שני עמודים (מפתח אחד).</Help>}
       {!rt?.enabled && ed.showTitle && <OffCard pic="roofX" title="מסבכי גג" desc="קורת הגג הופכת לחגורה עליונה של מסבך — למפתחים גדולים" onAdd={() => set({ enabled: true })} testId="off-rt" />}
       {rt?.enabled && <>
-        <div className="field"><label>מסגרות</label>
-          <div className="bay-pick">{fr.map((f, i) => <button key={f.id} className={`tbtn${sel.includes(f.id) ? ' on' : ''}`} data-testid={`rt-f-${i + 1}`} onClick={() => toggleFrame(f.id)}>{i + 1}</button>)}</div></div>
+        <FramePickStrip frames={fr} sel={sel} onToggle={toggleFrame} testPre="rt-f-" label={`מסגרות עם מסבך: ${sel.length} מתוך ${fr.length} — לחיצה על מסגרת מוסיפה/מסירה`} />
         <div className="field"><label>צורה</label>
           <select className="inp" data-testid="rt-shape" value={rt.shape} onChange={(e) => set({ shape: e.target.value as 'flat' | 'parallel' | 'scissor', rise: rt.rise ?? 1000 })}>
             <option value="flat">חגורה תחתונה אופקית</option><option value="parallel">חגורה תחתונה מקבילה לגג</option><option value="scissor">"מספריים" — מוגבהת ברכס</option>

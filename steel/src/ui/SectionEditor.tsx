@@ -72,13 +72,14 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
         <div className="field"><label>רוחב בין הצירים הקיצוניים</label><LenField testId="axis-w" mm={Math.max(...sec.lines.map((l) => l.x)) - Math.min(...sec.lines.map((l) => l.x))} unit={u} onCommit={(v) => apply(setAxisCount(sec, sec.lines.length, v), 'רוחב כולל')} /></div>
         <div className="hint" style={{ margin: 0 }}>הצירים מחולקים שווה; אחר כך אפשר לשנות כל מפתח בשרטוט (לחיצה על המידה) או לגרור ציר.</div>
       </div>
-      <div className="sec-prev"><InteractiveSection sec={sec} apply={apply} calcOf={(id) => calcOf(together ? 'gable' : id)} setCalc={(id, c) => setCalc({ ...calc, [together ? 'gable' : id]: c })} together={together} /></div>
+      <div className="sec-prev"><InteractiveSection sec={sec} apply={apply} base={baseEl} onBase={(v) => store.exec(setBuilding({ baseElevation: v }))} calcOf={(id) => calcOf(together ? 'gable' : id)} setCalc={(id, c) => setCalc({ ...calc, [together ? 'gable' : id]: c })} together={together} /></div>
       <div className="panel-title">צירי עמודים ({lines.length})
         <button className="btn small" data-testid="sec-add-line" onClick={() => {
           const last = lines[lines.length - 1];
           apply({ ...sec, lines: [...sec.lines, { id: newId('C', sec.lines.map((l) => l.id)), x: last.x + 6000 }] }, 'הוספת ציר');
         }}><Icon name="plus" />ציר</button>
       </div>
+      <Adv id="sec-lines-tbl" label="טבלת צירים — מיקום, תחתית עמוד, קיר קיים">
       <table className="tbl" data-testid="sec-lines">
         <thead><tr><th>ציר</th><th>מיקום X</th><th>מפתח</th><th title="מפלס תחתית העמוד: פני חגורה / יסוד, ביחס ל-±0.00">תחתית עמוד</th><th title="קיר קיים: אין עמוד — הקורות מעוגנות לקיר">קיר</th><th /></tr></thead>
         <tbody>
@@ -97,6 +98,7 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
           ))}
         </tbody>
       </table>
+      </Adv>
       {Object.values(lineBase).some((z) => Math.abs(z - baseEl) > 1) && <div className="hint">תחתית עמוד מעל ±0.00 (חגורה / יסוד מוגבה): העמוד בציר מתקצר, גובה הגג לא משתנה. במסגרות ובתוכנית העיגון מופיע מפלס לכל ציר.</div>}
       <Overhangs sec={sec} unit={u} apply={apply} />
       <div className="panel-title">מישורי גג ({sec.planes.length})
@@ -156,10 +158,6 @@ function planeLabels(pd: NonNullable<ReturnType<typeof planeDims>>) {
 
 /** קונזולות שמאל/ימין: מעבר קורות הגג מעבר לציר העמודים הקיצוני (שינוי מזיז את קצה המישור לאורך השיפוע) */
 function Overhangs({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' | 'mm'; apply: (s: CustomSection, label?: string) => void }) {
-  const xs = sec.lines.map((l) => l.x);
-  const xa = Math.min(...xs), xb = Math.max(...xs);
-  const left = sec.planes.reduce((p, q) => (q.x0 < p.x0 ? q : p));
-  const right = sec.planes.reduce((p, q) => (q.x1 > p.x1 ? q : p));
   const setEnd = (pl: RoofPlaneDef, end: 'x0' | 'x1', x: number) => {
     const s = (pl.z1 - pl.z0) / (pl.x1 - pl.x0);
     const patch = end === 'x0' ? { x0: x, z0: pl.z1 - s * (pl.x1 - x) } : { x1: x, z1: pl.z0 + s * (x - pl.x0) };
@@ -186,9 +184,7 @@ function Overhangs({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' | 'm
   });
   return (
     <>
-      <div className="panel-title">קונזולות</div>
-      <div className="field"><label>קונזולה שמאל (מציר {lineLabel(0)})</label><LenField testId="ovh-left" mm={Math.max(0, xa - left.x0)} unit={u} onCommit={(v) => setEnd(left, 'x0', xa - v)} /></div>
-      <div className="field"><label>קונזולה ימין (מציר {lineLabel(xs.length - 1)})</label><LenField testId="ovh-right" mm={Math.max(0, right.x1 - xb)} unit={u} onCommit={(v) => setEnd(right, 'x1', xb + v)} /></div>
+      {steps.length > 0 && <div className="panel-title">זיזים בדירוג</div>}
       {steps.map((st) => (
         <div className="field" key={`${st.pl.id}-${st.end}`}><label>זיז קורה עליונה בדירוג — ציר {lineLabel(st.li)} ({st.end === 'x0' ? 'שמאלה' : 'ימינה'}, מעבר לעמוד)</label>
           <LenField testId={`ovh-step-${st.li}`} mm={st.v} unit={u} onCommit={(v) => setEnd(st.pl, st.end, st.end === 'x0' ? st.x - Math.max(0, v) : st.x + Math.max(0, v))} /></div>
@@ -350,6 +346,7 @@ function KneeSides() {
           {frames.map((f, r) => <text key={f.id} x={X0 - 4} y={Y0 + r * rh + rh / 2 + 2} className="sm-lbl-s" textAnchor="end" data-testid={`kb-frame-${r}`} onClick={() => toggleFrame(f.id)} style={{ cursor: 'pointer' }}>{r + 1}</text>)}
         </svg>
       </div>
+      <Adv id="kb-spans" label="ערך שונה לכל מפתח (ירידה, זווית, אורך)">
       <table className="mini-table"><thead><tr><th>מפתח</th><th>ירידה</th><th>{angleMode ? 'זווית' : 'מרחק'}</th><th>אורך</th><th /></tr></thead>
         <tbody>{spans.map((q) => {
           const k0 = (q.left ?? q.right)!, ov = kb.sides?.[k0] ?? {};
@@ -367,6 +364,7 @@ function KneeSides() {
             </tr>
           );
         })}</tbody></table>
+      </Adv>
     </div>
   );
 }
@@ -394,14 +392,16 @@ export function SectionPreview({ section, small }: { section: CustomSection; sma
  * עורך חתך אינטראקטיבי: גרירת צירים (הצמדה ל-100 מ"מ, Shift = 10 מ"מ), מידות בין צירים, קונזולות וגבהים —
  * לחיצה על מידה פותחת שדה להקלדה. שינוי נשמר כפקודה אחת (ביטול אחד).
  */
-export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc = () => undefined, together }: {
+export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc = () => undefined, together, base, onBase }: {
   sec: CustomSection; apply: (s: CustomSection, label?: string) => void;
   calcOf?: (planeId: string) => TriCalc; setCalc?: (planeId: string, c: TriCalc) => void; together?: boolean;
+  /** מפלס בסיס (מ"מ) — מידה לחיצה בקו הקרקע */
+  base?: number; onBase?: (v: number) => void;
 }) {
   const W = 300, H = 170, padX = 18, padTop = 26, padBot = 40;
   const [drag, setDrag] = useState<{ id: string; x: number } | null>(null);
   const [selPl, setSelPl] = useState<string | null>(null);
-  const [edit, setEdit] = useState<{ kind: 'span' | 'ovl' | 'ovr' | 'z'; key: string; at: { x: number; y: number }; value: number } | null>(null);
+  const [edit, setEdit] = useState<{ kind: 'span' | 'ovl' | 'ovr' | 'z' | 'base'; key: string; at: { x: number; y: number }; value: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const lines0 = [...sec.lines].sort((a, b) => a.x - b.x);
   const lines = lines0.map((l) => (drag && l.id === drag.id ? { ...l, x: drag.x } : l));
@@ -429,9 +429,10 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
     setDrag(null);
   };
   const svgPt = (sx: number, sy: number) => ({ x: (sx / W) * 100, y: (sy / H) * 100 });
-  const openEdit = (kind: 'span' | 'ovl' | 'ovr' | 'z', key: string, sx: number, sy: number, value: number) => setEdit({ kind, key, at: svgPt(sx, sy), value });
+  const openEdit = (kind: 'span' | 'ovl' | 'ovr' | 'z' | 'base', key: string, sx: number, sy: number, value: number) => setEdit({ kind, key, at: svgPt(sx, sy), value });
   const commitEdit = (v: number) => {
     if (!edit) return;
+    if (edit.kind === 'base') { onBase?.(v); setEdit(null); return; }
     if (edit.kind === 'span') {
       // מרווח בין ציר i לציר i+1: מזיז את כל הצירים שמימין
       const i = Number(edit.key);
@@ -491,10 +492,14 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
             </g>
           );
         }))}
+        {onBase && <g className="isec-dim" onClick={() => openEdit('base', '', 12, Y(0) - 6, base ?? 0)} data-testid="isec-base">
+          <text x={4} y={Y(0) - 3} className="t en">{`מפלס ${(base ?? 0) >= 0 ? '+' : ''}${m(base ?? 0)}`}</text></g>}
+        {(() => { const L0 = Math.min(...sec.planes.map((p) => p.x0)); return <text x={(X(L0) + X(lines[0].x)) / 2} y={yOv + 8} className="t sm">קונזולה</text>; })()}
+        {(() => { const R1 = Math.max(...sec.planes.map((p) => p.x1)); return <text x={(X(R1) + X(lines[lines.length - 1].x)) / 2} y={yOv + 8} className="t sm">קונזולה</text>; })()}
         {drag && <text x={X(drag.x)} y={padTop - 10} className="t b">{m(drag.x)}</text>}
       </svg>
       {edit && (
-        <input className="inp num isec-inp" autoFocus defaultValue={(edit.value / 1000).toFixed(3)} style={{ left: `${edit.at.x}%`, top: `${edit.at.y}%` }} data-testid="isec-input"
+        <input className="inp num isec-inp" autoFocus defaultValue={(edit.value / 1000).toFixed(3)} style={{ left: `${edit.at.x}%`, top: `${edit.at.y}%` }} data-testid="isec-input" title="מטר" placeholder="מ'"
           onKeyDown={(e) => { if (e.key === 'Enter') { const v = Number((e.target as HTMLInputElement).value.replace(',', '.')); if (Number.isFinite(v)) commitEdit(v * 1000); else setEdit(null); } if (e.key === 'Escape') setEdit(null); }}
           onBlur={(e) => { const v = Number(e.target.value.replace(',', '.')); if (Number.isFinite(v) && Math.abs(v * 1000 - edit.value) > 0.5) commitEdit(v * 1000); else setEdit(null); }} />
       )}
@@ -513,7 +518,7 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
           </div>
         );
       })()}
-      <div className="hint" style={{ margin: '2px 4px' }}>לחץ על קו גג לשינוי גובה עמוד / רכס / שיפוע · גרור ציר להזזה (Shift = דיוק 10 מ"מ) · לחץ על מידה כדי להקליד ערך (מטר)</div>
+      <div className="hint" style={{ margin: '2px 4px' }}>לחץ על קו גג לשינוי גובה עמוד / רכס / שיפוע · גרור ציר להזזה (Shift = דיוק 10 מ"מ) · לחץ על מידה כדי להקליד ערך — בחתך הזה במטר (בשאר השרטוטים במ"מ)</div>
     </div>
   );
 }

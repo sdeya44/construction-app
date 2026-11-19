@@ -13,12 +13,14 @@ test.describe('M3 – תומכים וחיבורים', () => {
     await expect(page.getByTestId('conn-type')).toContainText('זוויתן');
     // החתך נגזר מהמודל: חתך ממולא לפטה ולזוויתן
     expect(await page.locator('[data-testid=conn-section] polygon').count()).toBeGreaterThanOrEqual(2);
+    await page.getByTestId('conn-tab-bolts').click();
     await expect(page.getByTestId('conn-bolts')).toContainText('2× M12×35 8.8');
     await expect(page.getByTestId('conn-no-issues')).toBeVisible();
     await page.getByTestId('conn-show3d').click();
     await page.waitForTimeout(500);
     await shot(page, 'CLEAT_editor_3d');
     // גובה ידני לתומך זה בלבד
+    await page.getByTestId('conn-tab-plate').click();
     await page.getByTestId('cl-h').fill('150'); await page.getByTestId('cl-h').press('Enter');
     const issues = await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'CLEAT_MANUAL').map((i: any) => i.elementId));
     expect(issues).toEqual(['CL.PL.L.02.F2']);
@@ -55,6 +57,7 @@ test.describe('M3 – תומכים וחיבורים', () => {
     await expect(page.getByTestId('eave-check')).toBeVisible();
     await page.getByTestId('eave-keep').click();
     await page.getByTestId('cp-w').fill('260'); await page.getByTestId('cp-w').press('Enter');
+    await page.getByTestId('conn-tab-admin').click();
     await page.getByTestId('conn-status').selectOption('for-review');
     let c = await conn(page, 'C.EAVE.F2.L');
     expect(c.bolts).toBe(6); expect(c.status).toBe('for-review'); expect(c.overridden).toBe(true);
@@ -81,6 +84,7 @@ test.describe('M3 – תומכים וחיבורים', () => {
     await page.evaluate(() => (window as any).__ksp.store.set({ activeConn: 'C.BASE.F1.L', isolated: null }));
     await page.getByTestId('cp-t').fill('30'); await page.getByTestId('cp-t').press('Enter');
     await expect(page.getByTestId('cp-mode')).toHaveValue('embedded');
+    await page.getByTestId('conn-tab-admin').click();
     await page.getByTestId('tpl-name').fill('בסיס 30');
     await page.getByTestId('tpl-save').click();
     await page.evaluate(() => (window as any).__ksp.store.set({ activeConn: 'C.BASE.F6.R' }));

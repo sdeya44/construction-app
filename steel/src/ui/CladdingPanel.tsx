@@ -1,6 +1,6 @@
 import { GUTTER_DEVS, gutterDev, gutterRuns, gutterSpec } from '../geometry/gutter';
 import type { GutterSpec } from '../model/types';
-import { OpeningsSchematic, WallCladSchematic } from './schematics';
+import { OpeningsSchematic, RoofPanelSchematic, WallCladSchematic } from './schematics';
 import { Schematic, type SDim } from './Schematic';
 import { useState } from 'react';
 import { useMemo } from 'react';
@@ -50,9 +50,7 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
             {(Object.keys(ROOF_KINDS) as (keyof typeof ROOF_KINDS)[]).map((k) => <option key={k} value={k}>{ROOF_KINDS[k].label}</option>)}
           </select></div>
         <div className="field"><label>תיאור פנל</label><TextField testId="clad-roof-panel" value={cl.roof.panel} onCommit={(v) => set({ roof: { ...cl.roof, panel: v } })} /></div>
-        <div className="field"><label>עובי</label><LenField testId="clad-roof-thk" mm={cl.roof.thickness ?? 0} unit="mm" onCommit={(v) => set({ roof: { ...cl.roof, thickness: Math.max(0, v) } })} /></div>
-        <div className="field"><label>רוחב כיסוי</label><LenField mm={cl.roof.cover} unit="mm" onCommit={(v) => set({ roof: { ...cl.roof, cover: v } })} /></div>
-        <div className="field"><label>בליטה לתוך המזחלה</label><LenField mm={cl.roof.eaveExt} unit="mm" onCommit={(v) => set({ roof: { ...cl.roof, eaveExt: v } })} /></div>
+        <RoofPanelSchematic cover={cl.roof.cover} thickness={cl.roof.thickness ?? 0} eaveExt={cl.roof.eaveExt} onSet={(patch) => set({ roof: { ...cl.roof, ...patch, ...(patch.cover !== undefined || patch.thickness !== undefined ? { kind: undefined } : {}) } })} />
         <label className="row"><input type="checkbox" checked={cl.gutter.enabled} data-testid="clad-gutter" onChange={(e) => set({ gutter: { ...cl.gutter, enabled: e.target.checked } })} />מזחלות ומרזבים</label>
         <div className="field"><label>מרזב כל</label><LenField mm={cl.gutter.downpipeSpacing} unit={unit} onCommit={(v) => set({ gutter: { ...cl.gutter, downpipeSpacing: v } })} /></div>
         {cl.gutter.enabled && <GutterSchematic pre="gsch-c" />}
@@ -82,7 +80,10 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
             <div className="op-card" data-testid={`clad-wall-${w}`}>
               <label className="row"><input type="checkbox" checked={cl.walls.sides[w]} data-testid={`clad-side-${w}`} onChange={(e) => set({ walls: { ...cl.walls, sides: { ...cl.walls.sides, [w]: e.target.checked } } })} /><b>{WALL_HE[w]} — מחופה</b></label>
               {cl.walls.sides[w] && <WallCladSchematic n={n} bays={bays} bottom={pw.bottom ?? cl.walls.bottom} top={pw.top ?? null} eave={eaveOf(w)} testId={`sch-clad-${w}`} labelOf={lab}
-                onBays={(b) => setW({ bays: b })} onBottom={(v) => setW({ bottom: v })} onTop={(v) => setW({ top: v })} />}
+                onBays={(b) => setW({ bays: b })} onBottom={(v) => setW({ bottom: v })} onTop={(v) => setW({ top: v })}
+                girts={cl.girts.enabled ? cl.girts : undefined} onGirts={(g) => set({ girts: { ...cl.girts, ...g } })}
+                posts={cl.posts.enabled && (w === 'F' || w === 'B') ? { bayW: Array.from({ length: n }, (_, i) => { const ls = [...(d.section?.lines ?? [])].sort((a, c) => a.x - c.x); return ls.length > i + 1 ? ls[i + 1].x - ls[i].x : p.building.width; }), maxSpacing: cl.posts.maxSpacing } : undefined}
+                onPosts={(v) => set({ posts: { ...cl.posts, maxSpacing: v } })} />}
             </div>
           );
         })()}
@@ -96,12 +97,11 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
         <div className="panel-title">פטות קיר</div>
         <label className="row"><input type="checkbox" checked={cl.girts.enabled} onChange={(e) => set({ girts: { ...cl.girts, enabled: e.target.checked } })} />פטות קיר</label>
         <div className="field prof"><label>חתך</label><ProfilePicker testId="clad-girt" value={cl.girts.profile} families={['C', 'Z', 'RHS', 'UPN']} onCommit={(v) => set({ girts: { ...cl.girts, profile: v } })} /></div>
-        <div className="field"><label>פטה ראשונה מעל ±0.00</label><LenField mm={cl.girts.first} unit="mm" onCommit={(v) => set({ girts: { ...cl.girts, first: v } })} /></div>
-        <div className="field"><label>מרווח</label><LenField mm={cl.girts.spacing} unit={unit} testId="clad-girt-spacing" onCommit={(v) => set({ girts: { ...cl.girts, spacing: v } })} /></div>
+        {cl.girts.enabled && <div className="hint" style={{ marginTop: 0 }}>פטה ראשונה ומרווח — על שרטוט החזית למעלה (קווים חומים).</div>}
         <div className="panel-title">עמודי רוח בקירות הקצה</div>
         <label className="row"><input type="checkbox" checked={cl.posts.enabled} onChange={(e) => set({ posts: { ...cl.posts, enabled: e.target.checked } })} />עמודי רוח</label>
         <div className="field prof"><label>חתך</label><ProfilePicker testId="clad-post" value={cl.posts.profile} families={['IPE', 'HEA', 'RHS', 'SHS']} onCommit={(v) => set({ posts: { ...cl.posts, profile: v } })} /></div>
-        <div className="field"><label>מרווח מרבי</label><LenField mm={cl.posts.maxSpacing} unit={unit} onCommit={(v) => set({ posts: { ...cl.posts, maxSpacing: v } })} /></div>
+        {cl.posts.enabled && <div className="hint" style={{ marginTop: 0 }}>מרווח מרבי — על שרטוט חזית הקצה (לשונית "קיר קצה קדמי/אחורי", קווים סגולים).</div>}
         <div className="field prof"><label>עמודי פתח</label><ProfilePicker value={cl.jambProfile} families={['RHS', 'SHS', 'UPN', 'C']} onCommit={(v) => set({ jambProfile: v })} /></div>
       </>}
       {show('openings') && <>
@@ -143,8 +143,20 @@ export function CladdingPanel({ section }: { section?: CladSection } = {}) {
           <dt>פתחים</dt><dd>{m2(t.openingArea)} מ"ר</dd>
           <dt>ברגים</dt><dd>{t.screws.toLocaleString('en-US')}</dd>
         </dl>
-        <table className="tbl"><thead><tr><th>מיקום</th><th>כמות</th><th>אורך (מ')</th></tr></thead>
-          <tbody>{[...t.roofSheets, ...t.wallSheets].map((r, i) => <tr key={i}><td>{r.where}</td><td className="n">{r.count}</td><td className="n">{m(r.length)}</td></tr>)}</tbody></table>
+        {/* שורה לכל מישור/קיר עם סכום (1.35); פירוט לפי אורך — מקופל */}
+        {(() => {
+          const rows = [...t.roofSheets, ...t.wallSheets];
+          const groups = new Map<string, { count: number; total: number; min: number; max: number }>();
+          for (const r of rows) { const g = groups.get(r.where) ?? { count: 0, total: 0, min: Infinity, max: 0 }; g.count += r.count; g.total += r.count * r.length; g.min = Math.min(g.min, r.length); g.max = Math.max(g.max, r.length); groups.set(r.where, g); }
+          return <>
+            <table className="tbl" data-testid="clad-sheets"><thead><tr><th>מיקום</th><th>פחים</th><th>אורך פח (מ')</th><th>סה"כ (מ"א)</th></tr></thead>
+              <tbody>{[...groups].map(([w, g]) => <tr key={w}><td>{w}</td><td className="n">{g.count}</td><td className="n">{Math.abs(g.max - g.min) < 1 ? m(g.min) : `${m(g.min)}–${m(g.max)}`}</td><td className="n">{m(g.total)}</td></tr>)}</tbody></table>
+            {rows.length > groups.size && <Adv id="clad-sheets-all" label={`פירוט לפי אורך פח (${rows.length} שורות)`}>
+              <table className="tbl"><thead><tr><th>מיקום</th><th>כמות</th><th>אורך (מ')</th></tr></thead>
+                <tbody>{rows.map((r, i) => <tr key={i}><td>{r.where}</td><td className="n">{r.count}</td><td className="n">{m(r.length)}</td></tr>)}</tbody></table>
+            </Adv>}
+          </>;
+        })()}
         <table className="tbl" style={{ marginTop: 6 }}><thead><tr><th>פחים ומזחלות</th><th>אורך (מ')</th></tr></thead>
           <tbody>
             {t.flashings.map((f, i) => <tr key={i}><td>{f.name}</td><td className="n">{m(f.length)}</td></tr>)}
@@ -162,8 +174,8 @@ function GutterStrip({ label, pid, bays, frames, dp, onBay, onDp }: { label: str
   const W = 300, x0 = 16, x1 = 284, y = 22, nb = bays.length, bw = (x1 - x0) / Math.max(nb, 1);
   return (
     <div className="schem" data-testid={`gut-strip-${pid}`}>
+      <div className="strip-h">{label}</div>
       <svg viewBox={`0 0 ${W} 52`} role="img" aria-label={label}>
-        <text x={W / 2} y={9} className="sm-lbl-s" textAnchor="middle">{label}</text>
         {bays.map((on, i) => (
           <g key={i} className="bay-cell" data-testid={`gut-bay-${pid}-${i}`} onClick={() => onBay(i)}>
             <rect x={x0 + i * bw + 1} y={y - 5} width={bw - 2} height={10} rx={2} className={on ? 'gut-on' : 'gut-off'} />

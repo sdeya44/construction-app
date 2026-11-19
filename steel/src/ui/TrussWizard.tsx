@@ -75,7 +75,7 @@ export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId
   ];
   return (
     <div className="truss-wiz" data-testid={testId}>
-      <Schematic w={W} h={H} dims={dims} testId={`${testId}-sch`} caption="לחיצה על שדה: ╱ ╲ X ריק · על צומת תחתון: אנך · על ✂ בחגורה: חיבור המשך · על הגובה / אורך שדה ✎ (* = שדה קבוע)">
+      <Schematic w={W} h={H} dims={dims} testId={`${testId}-sch`} caption="לחיצה על שדה: ╱ ╲ X ריק · על צומת תחתון: אנך · על ✂ בחגורה: חיבור המשך · על ■/□ מתחת לשדה: קבוע/חופשי · על הגובה / אורך שדה ✎">
         {/* שדות לחיצה */}
         {Array.from({ length: n }, (_, i) => (
           <polygon key={`c${i}`} points={`${px(i) + 1},${yTop(i) + 1} ${px(i + 1) - 1},${yTop(i + 1) + 1} ${px(i + 1) - 1},${yBot(i + 1) - 1} ${px(i) + 1},${yBot(i) - 1}`} className="tw-cell" data-testid={`${testId}-cell-${i}`} onClick={() => setCell(i)} />
@@ -109,6 +109,16 @@ export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId
             </g>
           );
         })}
+        {/* קביעת שדה על השרטוט (1.35): ■ = קבוע, □ = מתחלק אוטומטית — לחיצה מחליפה */}
+        {n <= 16 && lens.map((L, i) => {
+          const xm = (px(i) + px(i + 1)) / 2;
+          return (
+            <g key={`k${i}`} className={`tw-pin${locks[i] ? ' on' : ''}`} data-testid={`${testId}-lock-${i}`} aria-pressed={locks[i]} role="button" onClick={() => toggleLock(i)}>
+              <title>{locks[i] ? `שדה ${i + 1} קבוע (${Math.round(L)}) — לחיצה לשחרור` : `שדה ${i + 1} מתחלק אוטומטית — לחיצה לקיבוע`}</title>
+              <rect x={xm - 3} y={yB + 4.5} width={6} height={5} rx={1} />
+            </g>
+          );
+        })}
         <polygon points={`${x0},${yBot(0)} ${x0 - 4},${yBot(0) + 6} ${x0 + 4},${yBot(0) + 6}`} className="sm-host" />
         <polygon points={`${x1},${yBot(n)} ${x1 - 4},${yBot(n) + 6} ${x1 + 4},${yBot(n) + 6}`} className="sm-host" />
       </Schematic>
@@ -124,11 +134,7 @@ export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId
         <button className={`tbtn${!hasPanelLens(spec) ? ' on' : ''}`} data-testid={`${testId}-eq`} title="כל השדות באורך שווה" onClick={() => set({ panelLens: undefined, lockedLens: undefined })}>שדות שווים</button>
         {frames && frames.length > 0 && <button className="tbtn" data-testid={`${testId}-onframes`} title="חלוקה כך שכל קורת גג יושבת על צומת" onClick={() => onChange(panelsOnFrames(spec, span, frames))}>צמתים על המסגרות</button>}
       </div>
-      <div className="tw-row" data-testid={`${testId}-locks`}>
-        <span className="tw-lbl">שדות קבועים:</span>
-        {lens.map((L, i) => <button key={i} className={`tbtn tw-lock${locks[i] ? ' on' : ''}`} data-testid={`${testId}-lock-${i}`} aria-pressed={locks[i]} title={locks[i] ? `שדה ${i + 1} קבוע (${Math.round(L)}) — לחיצה לשחרור` : `שדה ${i + 1} מתחלק אוטומטית — לחיצה לקיבוע באורך הנוכחי`} onClick={() => toggleLock(i)}>{i + 1}</button>)}
-      </div>
-      <div className="hint" style={{ margin: '0 0 4px' }}>אורך שדה שמוזן נקבע (מסומן); השדות שלא נקבעו מתחלקים שווה במה שנשאר. "שדות שווים" — מבטל את כל הקביעות.</div>
+      <div className="hint" style={{ margin: '0 0 4px' }} data-testid={`${testId}-locks`}>אורך שדה שמוזן נקבע (■ מתחת לשדה, * במידה); השדות שלא נקבעו (□) מתחלקים שווה במה שנשאר. לחיצה על ■/□ מקבעת או משחררת. "שדות שווים" — מבטל את כל הקביעות.</div>
       <div className="tw-row">
         <span className="tw-lbl">חלוקה להובלה:</span>
         <select className="inp" data-testid={`${testId}-splice`} value={Array.isArray(spec.splice) ? 'manual' : spec.splice} onChange={(e) => set({ splice: e.target.value === 'manual' ? [] : (e.target.value as 'auto' | 'none') })}>

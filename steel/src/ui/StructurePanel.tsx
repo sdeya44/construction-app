@@ -95,13 +95,6 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
       <div className="hint" data-testid="height-ref-hint" style={{ marginTop: 0 }}>{b.heightRef === 'TOS'
         ? 'כל גובה שמוזן (ובמידות על המודל) = פני עליון קורת הגג בציר העמוד. גובה העמוד עצמו נמוך ממנו: פחות עומק הקורה האנכי ופחות שתי פלטות ראש העמוד; ראש העמוד חתוך בשיפוע — בשרטוט החלק: אורך בצד העליון, בצד התחתון ובציר.'
         : 'כל גובה שמוזן = ציר קורת הגג בציר העמוד. גובה העמוד = הגובה פחות חצי עומק הקורה האנכי ופחות שתי פלטות ראש העמוד.'}</div>
-      {!b.section && <>
-      <div className="field"><label>קונזולת קורה שמאל</label><LenField mm={b.rafterOverhangLeft} unit={u} onCommit={(v) => set({ rafterOverhangLeft: v })} /></div>
-      <div className="field"><label>קונזולת קורה ימין</label><LenField mm={b.rafterOverhangRight} unit={u} onCommit={(v) => set({ rafterOverhangRight: v })} /></div>
-      </>}
-      <div className="field"><label>קונזולת פטות – התחלה (Y)</label><LenField mm={b.purlinOverhangStart} unit={u} onCommit={(v) => set({ purlinOverhangStart: v })} /></div>
-      <div className="field"><label>קונזולת פטות – סוף (Y)</label><LenField mm={b.purlinOverhangEnd} unit={u} onCommit={(v) => set({ purlinOverhangEnd: v })} /></div>
-      <div className="field"><label>מפלס בסיס</label><LenField mm={b.baseElevation} unit={u} onCommit={(v) => set({ baseElevation: v })} /></div>
 
       </>}
       {show('profiles') && <>
@@ -129,7 +122,7 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
           store.exec(addFrame(last.y + (prev ? last.y - prev.y : 6000)));
         }}><Icon name="plus" />מסגרת</button>
       </div>
-      <FramesStrip frames={frames} onTotal={(v) => store.exec(respaceFrames(frames.length, v / (frames.length - 1)))}
+      <FramesStrip frames={frames} po={{ start: b.purlinOverhangStart, end: b.purlinOverhangEnd }} onPo={(k, v) => set(k === 'start' ? { purlinOverhangStart: Math.max(0, v) } : { purlinOverhangEnd: Math.max(0, v) })} onTotal={(v) => store.exec(respaceFrames(frames.length, v / (frames.length - 1)))}
         onBay={(i, v) => { const delta = v - (frames[i + 1].y - frames[i].y); store.exec(setBuilding({ frames: frames.map((g, j) => (j > i ? { ...g, y: g.y + delta } : g)) })); }} />
       <Adv id="frames-tbl" label="טבלת מסגרות — מיקומים, מחיקה, חלוקה מחדש">
       <table className="tbl" data-testid="frames-table">

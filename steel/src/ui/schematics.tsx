@@ -2,7 +2,7 @@ import { setBuilding, setCleat, setKneeBraces, setPurlinSide } from '../commands
 import { purlinParams } from '../geometry/purlins';
 import { defaultKneeBraces } from '../geometry/knee';
 import { defaultPortal } from '../geometry/portal';
-import type { BraceConnParams, CleatParams, LockTrussParams, Member, OpeningDef, PortalBraceParams, PurlinSideParams, RidgeReinfParams } from '../model/types';
+import type { BraceConnParams, CleatParams, LockTrussParams, Member, OpeningDef, PortalBraceParams, PurlinSideParams, PurlinSpliceParams, RidgeReinfParams } from '../model/types';
 import { tryProfile } from '../profiles/library';
 import { store, useStore } from '../store';
 import { S, Schematic, type SDim } from './Schematic';
@@ -306,11 +306,15 @@ export function BaysSchematic({ count, bays, onChange, label, testId }: { count:
 }
 
 // ======================================================================== חיפוי קיר
-export function WallCladSchematic({ n, bays, bottom, top, eave, onBays, onBottom, onTop, testId, labelOf }: {
+export function WallCladSchematic({ n, bays, bottom, top, eave, onBays, onBottom, onTop, testId, labelOf, girts, onGirts, posts, onPosts }: {
   n: number; bays: boolean[]; bottom: number; top: number | null; eave: number;
   onBays: (b: boolean[]) => void; onBottom: (v: number) => void; onTop: (v: number | null) => void; testId: string; labelOf: (i: number) => string;
+  /** פטות קיר (1.35): קווים בחזית, מידות ראשונה ומרווח */
+  girts?: { first: number; spacing: number }; onGirts?: (patch: { first?: number; spacing?: number }) => void;
+  /** עמודי רוח בקיר קצה: רוחב כל מפתח (מ"מ) ומרווח מרבי */
+  posts?: { bayW: number[]; maxSpacing: number }; onPosts?: (maxSpacing: number) => void;
 }) {
-  const x0 = 26, x1 = 190, yG = 84, yE = 14;
+  const x0 = 34, x1 = 186, yG = 88, yE = 24;
   const k = (yG - yE) / Math.max(eave, 1);
   const Y = (z: number) => yG - z * k;
   const bw = (x1 - x0) / Math.max(n, 1);
@@ -321,8 +325,30 @@ export function WallCladSchematic({ n, bays, bottom, top, eave, onBays, onBottom
       ? { a: [x1 + 3, yG], b: [x1 + 3, Y(eave)], off: -6, value: eave, derived: true, text: `${Math.round(eave)} (עד הגג)` }
       : { a: [x1 + 3, yG], b: [x1 + 3, Y(zt)], off: -6, value: zt, testId: `${testId}-top`, onCommit: (v) => onTop(v) },
   ];
+  const gz: number[] = [];
+  if (girts && girts.spacing > 50) for (let z = girts.first; z <= zt - 50 && gz.length < 40; z += girts.spacing) gz.push(z);
+  if (girts && onGirts && gz.length) {
+    dims.push({ a: [x0 - 17, yG], b: [x0 - 17, Y(gz[0])], off: 0, value: girts.first, text: `${Math.round(girts.first)}`, testId: `${testId}-g-first`, min: 0, onCommit: (v) => onGirts({ first: Math.max(0, v) }) });
+    if (gz.length > 1) dims.push({ a: [x0 - 17, Y(gz[0])], b: [x0 - 17, Y(gz[1])], off: 0, value: girts.spacing, text: `${Math.round(girts.spacing)}`, testId: `${testId}-g-sp`, min: 300, onCommit: (v) => onGirts({ spacing: Math.max(300, v) }) });
+  }
+  // עמודי רוח: בכל מפתח ⌈w/max⌉−1 עמודים במרווחים שווים
+  const bw0 = (x1 - x0) / Math.max(n, 1);
+  const postX: number[] = [];
+  let firstGap: { a: number; b: number; v: number } | null = null;
+  if (posts) posts.bayW.forEach((w, i) => {
+    if (!bays[i]) return;
+    const k = Math.max(0, Math.ceil(w / Math.max(500, posts.maxSpacing)) - 1);
+    for (let j = 1; j <= k; j++) postX.push(x0 + i * bw0 + (bw0 * j) / (k + 1));
+    if (k > 0 && !firstGap) firstGap = { a: x0 + i * bw0, b: x0 + i * bw0 + bw0 / (k + 1), v: w / (k + 1) };
+  });
+  if (posts && onPosts) {
+    const fg = firstGap as { a: number; b: number; v: number } | null;
+    dims.push(fg
+      ? { a: [fg.a, Y(zt) - 5], b: [fg.b, Y(zt) - 5], off: 0, value: posts.maxSpacing, text: `${Math.round(fg.v)} (≤${Math.round(posts.maxSpacing)})`, testId: `${testId}-p-max`, min: 1000, onCommit: (v) => onPosts(Math.max(1000, v)) }
+      : { a: [0, 0], b: [0, 0], off: 0, value: posts.maxSpacing, labelOnly: true, at: [(x0 + x1) / 2, yE - 6], text: `עמודי רוח: מרווח מרבי ${Math.round(posts.maxSpacing)}`, testId: `${testId}-p-max`, min: 1000, onCommit: (v) => onPosts(Math.max(1000, v)) });
+  }
   return (
-    <Schematic w={210} h={100} dims={dims} testId={testId} caption="לחיצה על מפתח — מחופה/פתוח · מידות ✎ תחתית וראש החיפוי">
+    <Schematic w={210} h={112} dims={dims} testId={testId} caption={`לחיצה על מפתח — מחופה/פתוח · מידות ✎ תחתית וראש החיפוי${girts ? ', פטה ראשונה ומרווח פטות' : ''}${posts ? ', מרווח עמודי רוח' : ''}`}>
       <line x1={x0 - 6} y1={yG} x2={x1 + 6} y2={yG} className="sm-main" strokeWidth={1} />
       {Array.from({ length: n }, (_, i) => {
         const a = x0 + i * bw;
@@ -335,7 +361,10 @@ export function WallCladSchematic({ n, bays, bottom, top, eave, onBays, onBottom
       })}
       {Array.from({ length: n + 1 }, (_, i) => <line key={i} x1={x0 + i * bw} y1={yE} x2={x0 + i * bw} y2={yG} className="sm-main" strokeWidth={2} />)}
       <line x1={x0} y1={yE} x2={x1} y2={yE} className="sm-main" strokeWidth={2} />
-      <g className="bay-cell" onClick={() => onTop(top === null ? Math.round(eave * 0.6) : null)}><text x={x0 + 2} y={yE - 4} className="sm-lbl-s">{top === null ? 'עד הגג (לחץ לגובה חלקי)' : 'גובה חלקי (לחץ עד הגג)'}</text></g>
+      {gz.map((z, i) => <line key={`g${i}`} x1={x0} y1={Y(z)} x2={x1} y2={Y(z)} className="sm-sec" strokeWidth={0.9} pointerEvents="none" />)}
+      {postX.map((x, i) => <line key={`p${i}`} x1={x} y1={Y(zt)} x2={x} y2={yG} className="sm-hi" strokeWidth={1.4} pointerEvents="none" />)}
+      {(gz.length > 0 || postX.length > 0) && <text x={x1} y={yG + 15} className="sm-lbl-s" textAnchor="end">{gz.length ? `${gz.length} פטות קיר` : ''}{postX.length ? ` · ${postX.length} עמודי רוח` : ''}</text>}
+      <g className="bay-cell" onClick={() => onTop(top === null ? Math.round(eave * 0.6) : null)}><text x={x0 + 2} y={yE - 14} className="sm-lbl-s">{top === null ? 'עד הגג (לחץ לגובה חלקי)' : 'גובה חלקי (לחץ עד הגג)'}</text></g>
     </Schematic>
   );
 }
@@ -376,11 +405,13 @@ const WALL_HE_S: Record<string, string> = { L: 'קיר שמאל', R: 'קיר י�
  * תוכנית מסגרות לאורך המבנה (1.34): קו לכל מסגרת עם מספר, מידה לכל מפתח — לחיצה ✎ ושינוי (מזיז את כל המסגרות שאחריו),
  * ואורך כולל. מחליף את טבלת המיקומים כעריכה הראשית; הטבלה נשארת מקופלת.
  */
-export function FramesStrip({ frames, onBay, onTotal }: { frames: { id: string; y: number }[]; onBay: (i: number, v: number) => void; onTotal: (v: number) => void }) {
+export function FramesStrip({ frames, onBay, onTotal, po, onPo }: { frames: { id: string; y: number }[]; onBay: (i: number, v: number) => void; onTotal: (v: number) => void;
+  /** קונזולת פטות לפני המסגרת הראשונה / אחרי האחרונה (1.35) */
+  po?: { start: number; end: number }; onPo?: (k: 'start' | 'end', v: number) => void }) {
   const fr = [...frames].sort((a, b) => a.y - b.y);
   const n = fr.length;
   const L = fr[n - 1].y - fr[0].y || 1;
-  const W = 300, x0 = 34, x1 = 286, yT = 26, yB = 54;
+  const W = 300, x0 = 40, x1 = 270, yT = 26, yB = 54;
   const X = (y: number) => x0 + ((y - fr[0].y) / L) * (x1 - x0);
   const many = n > 13;
   const dims: SDim[] = [
@@ -388,10 +419,16 @@ export function FramesStrip({ frames, onBay, onTotal }: { frames: { id: string; 
       text: many ? `${((f.y - fr[i].y) / 1000).toFixed(1)}` : `${Math.round(f.y - fr[i].y)}`, unit: '', testId: `fs-bay-${i}`, min: 100,
       onCommit: (v: number) => onBay(i, v) }) as SDim),
     { a: [x0, yB + 24], b: [x1, yB + 24], off: 0, value: L, text: `${Math.round(L)} (אורך)`, testId: 'fs-total', min: 1000, onCommit: (v: number) => onTotal(v) },
+    ...(po && onPo ? [
+      { a: [x0 - 22, yT + 6], b: [x0, yT + 6], off: 0, value: po.start, text: `${Math.round(po.start)}`, testId: 'fs-po-start', min: 0, onCommit: (v: number) => onPo('start', v) } as SDim,
+      { a: [x1, yT + 6], b: [x1 + 22, yT + 6], off: 0, value: po.end, text: `${Math.round(po.end)}`, testId: 'fs-po-end', min: 0, onCommit: (v: number) => onPo('end', v) } as SDim,
+    ] : []),
   ];
   return (
     <Schematic w={W} h={92} dims={dims} testId="frames-strip" caption={`תוכנית מסגרות (מ"מ${many ? ', מרווחים במטר' : ''}) — לחיצה על מרווח ✎ משנה אותו ומזיזה את כל מה שאחריו · לחיצה על האורך — חלוקה שווה מחדש`}>
       <rect x={x0} y={yT} width={x1 - x0} height={yB - yT} className="sm-plate" opacity={0.35} />
+      {po && <><line x1={x0 - 22} y1={yT + 14} x2={x1 + 22} y2={yT + 14} className="sm-thin" />
+        {S.text([x0 - 11, yB + 2], 'קונזולת פטות', 'sm-lbl-s')}{S.text([x1 + 11, yB + 2], 'קונזולת פטות', 'sm-lbl-s')}</>}
       {fr.map((f, i) => (
         <g key={f.id}>
           {S.bar([X(f.y), yT - 2], [X(f.y), yB + 2], 'sm-main', 2.2)}
@@ -444,5 +481,96 @@ export function WallsPlan({ lines, nb, bays, kind, onToggle }: {
           {(nb <= 24 || i % 2 === 0) && <text x={X0 + i * bw} y={H - 3} className="sm-lbl-s" textAnchor="middle">{i + 1}</text>}</g>)}
       </svg>
     </div>
+  );
+}
+
+/**
+ * חיבור המשך פטה (1.35): חזית ווב הפטה בתפר — פלטה בצד הפנימי, 2 ברגים בכל צד.
+ * מידות לעריכה: מרחק הבורג מהתפר, מרחק לקצה הפלטה, גובה הפלטה (אוטו׳ לפי הפטה), עובי.
+ */
+export function PurlinSpliceSchematic({ sp, purlinH, onSet }: { sp: PurlinSpliceParams; purlinH: number; onSet: (patch: Partial<PurlinSpliceParams>) => void }) {
+  const h = Math.max(100, purlinH);
+  const H = sp.plateH ?? Math.floor((h - 4 * 2.5 - 20) / 10) * 10;
+  const L = 2 * (sp.jointOffset + sp.edge);
+  const k = 150 / Math.max(L + 120, h * 1.3);
+  const cx = 110, cy = 62;
+  const X = (u: number) => cx + u * k, Y = (v: number) => cy - v * k; // u לאורך, v לגובה (0 = מרכז)
+  const bolts: [number, number][] = [];
+  for (const sg of [-1, 1]) for (const zz of [-1, 1]) bolts.push([sg * sp.jointOffset, zz * (H / 2 - sp.edge)]);
+  const dims: SDim[] = [
+    { a: [X(0), Y(-H / 2) + 8], b: [X(sp.jointOffset), Y(-H / 2) + 8], off: 0, value: sp.jointOffset, testId: 'sch-ps-off', min: 20, onCommit: (v) => onSet({ jointOffset: Math.max(20, v) }) },
+    { a: [X(sp.jointOffset), Y(-H / 2) + 8], b: [X(sp.jointOffset + sp.edge), Y(-H / 2) + 8], off: 0, value: sp.edge, testId: 'sch-ps-edge', min: 15, onCommit: (v) => onSet({ edge: Math.max(15, v) }) },
+    { a: [X(-L / 2) - 6, Y(-H / 2)], b: [X(-L / 2) - 6, Y(H / 2)], off: 0, value: H, text: `${Math.round(H)}${sp.plateH == null ? ' (אוטו׳)' : ''}`, testId: 'sch-ps-h', min: 40, onCommit: (v) => onSet({ plateH: Math.max(40, Math.min(h - 20, v)) }) },
+    { a: [0, 0], b: [0, 0], off: 0, value: sp.plateT, labelOnly: true, at: [X(-L / 4), Y(0)], text: `t=${sp.plateT}`, testId: 'sch-ps-t', min: 3, onCommit: (v) => onSet({ plateT: Math.max(3, v) }) },
+    { a: [X(-L / 2), Y(-H / 2) + 20], b: [X(L / 2), Y(-H / 2) + 20], off: 0, value: L, derived: true, text: `${Math.round(L)} (אורך פלטה)` },
+  ];
+  return (
+    <Schematic w={220} h={140} dims={dims} testId="sch-psplice" caption="חזית ווב הפטה בתפר · לחיצה על מידה ✎ — מרחק מהתפר, מרחק לקצה, גובה ועובי הפלטה">
+      <rect x={X(-L / 2 - 60)} y={Y(h / 2)} width={(L / 2 + 60) * k - 1} height={h * k} className="sm-host" />
+      <rect x={X(0) + 1} y={Y(h / 2)} width={(L / 2 + 60) * k} height={h * k} className="sm-host" />
+      <line x1={X(0)} y1={Y(h / 2) - 4} x2={X(0)} y2={Y(-h / 2) + 4} className="sm-hi" strokeDasharray="3 2" strokeWidth={1} />
+      <rect x={X(-L / 2)} y={Y(H / 2)} width={L * k} height={H * k} className="sm-plate" />
+      {bolts.map(([u, v], i) => <circle key={i} cx={X(u)} cy={Y(v)} r={Math.max(2.2, (sp.bolt.d / 2) * k)} className="sm-bolt" />)}
+      {S.text([X(0), Y(h / 2) - 7], 'תפר', 'sm-lbl-s')}
+      {S.text([X(-L / 2 - 30), Y(h / 2) + 9], 'פטה', 'sm-lbl-s')}{S.text([X(L / 2 + 30), Y(h / 2) + 9], 'פטה', 'sm-lbl-s')}
+      {S.text([X(L / 4), Y(0) + 3], `2×M${sp.bolt.d} בכל צד`, 'sm-lbl-s')}
+    </Schematic>
+  );
+}
+
+/** בחירת מסגרות בתוכנית (1.35): קו לכל מסגרת לאורך המבנה, לחיצה מסמנת/מבטלת; מסומנת = סמל מסבך */
+export function FramePickStrip({ frames, sel, onToggle, testPre, label }: { frames: { id: string; y: number }[]; sel: string[]; onToggle: (id: string) => void; testPre: string; label: string }) {
+  const fr = [...frames].sort((a, b) => a.y - b.y);
+  const L = (fr[fr.length - 1]?.y ?? 0) - (fr[0]?.y ?? 0) || 1;
+  const W = 300, x0 = 16, x1 = 284, yT = 14, yB = 44;
+  const X = (y: number) => x0 + ((y - fr[0].y) / L) * (x1 - x0);
+  return (
+    <div className="schem" data-testid={`${testPre}strip`}>
+      <svg viewBox={`0 0 ${W} 62`} role="img" aria-label={label}>
+        <rect x={x0} y={yT} width={x1 - x0} height={yB - yT} className="sm-plate" opacity={0.3} />
+        {fr.map((f, i) => {
+          const on = sel.includes(f.id), x = X(f.y);
+          return (
+            <g key={f.id} className="bay-cell" data-testid={`${testPre}${i + 1}`} onClick={() => onToggle(f.id)}>
+              <rect x={x - 7} y={yT - 4} width={14} height={yB - yT + 18} fill="transparent" />
+              {on
+                ? <>{S.bar([x, yT], [x, yB], 'sm-hi', 3.2)}<path d={`M${x - 4} ${yT + 4} L${x + 4} ${yT + 10} L${x - 4} ${yT + 16} L${x + 4} ${yT + 22}`} className="sm-hi" strokeWidth={1} fill="none" /></>
+                : S.bar([x, yT], [x, yB], 'sm-main', 1.6)}
+              <circle cx={x} cy={yB + 9} r={5.5} className={on ? 'sm-bub on' : 'sm-bub'} />
+              {S.text([x, yB + 9.4], String(i + 1), 'sm-lbl-s')}
+            </g>
+          );
+        })}
+      </svg>
+      <div className="schem-cap">{label}</div>
+    </div>
+  );
+}
+
+/** חתך פנל גג (1.35): גלי הפח לאורך רוחב הכיסוי, עובי (פנל מבודד) ובליטה לתוך המזחלה — מידות לעריכה */
+export function RoofPanelSchematic({ cover, thickness, eaveExt, onSet }: { cover: number; thickness: number; eaveExt: number; onSet: (patch: { cover?: number; thickness?: number; eaveExt?: number }) => void }) {
+  const x0 = 20, x1 = 150, y = 34;
+  const ribs = 5, rw = (x1 - x0) / ribs;
+  const tV = thickness > 0 ? Math.max(3, Math.min(14, thickness / 6)) : 0;
+  const pts: string[] = [];
+  for (let i = 0; i < ribs; i++) { const a = x0 + i * rw; pts.push(`${a},${y}`, `${a + rw * 0.2},${y}`, `${a + rw * 0.3},${y - 7}`, `${a + rw * 0.5},${y - 7}`, `${a + rw * 0.6},${y}`); }
+  pts.push(`${x1},${y}`);
+  const ex0 = 168, ex1 = 206, ey = 40;
+  const extV = Math.max(4, Math.min(30, eaveExt / 6));
+  const dims: SDim[] = [
+    { a: [x0, y + tV + 8], b: [x1, y + tV + 8], off: 0, value: cover, testId: 'sch-rp-cover', min: 300, onCommit: (v) => onSet({ cover: Math.max(300, v) }) },
+    { a: [0, 0], b: [0, 0], off: 0, value: thickness, labelOnly: true, at: [(x0 + x1) / 2, y - 13], text: thickness > 0 ? `עובי ${Math.round(thickness)}` : 'פח בודד (עובי 0)', testId: 'sch-rp-t', min: 0, onCommit: (v) => onSet({ thickness: Math.max(0, v) }) },
+    { a: [ex1 - extV, ey + 18], b: [ex1, ey + 18], off: 0, value: eaveExt, testId: 'sch-rp-ext', min: 0, onCommit: (v) => onSet({ eaveExt: Math.max(0, v) }) },
+  ];
+  return (
+    <Schematic w={220} h={72} dims={dims} testId="sch-roofpanel" caption="חתך פנל הגג · לחיצה על מידה ✎ — רוחב כיסוי, עובי, בליטה לתוך המזחלה">
+      <polyline points={pts.join(' ')} className="sm-hi" strokeWidth={1.4} fill="none" />
+      {tV > 0 && <><rect x={x0} y={y} width={x1 - x0} height={tV} className="sm-plate" /><line x1={x0} y1={y + tV} x2={x1} y2={y + tV} className="sm-main" strokeWidth={0.8} /></>}
+      {/* קצה הגג: פנל בולט מעבר לקורה לתוך המזחלה */}
+      <line x1={ex0} y1={ey} x2={ex1} y2={ey} className="sm-hi" strokeWidth={1.4} />
+      <rect x={ex0} y={ey + 2} width={ex1 - ex0 - extV} height={5} className="sm-host" />
+      <path d={`M${ex1 - extV - 4} ${ey + 6} v10 h${extV + 10} v-12`} className="sm-main" strokeWidth={0.8} fill="none" />
+      {S.text([ex0 + 8, ey - 4], 'קצה הגג', 'sm-lbl-s')}{S.text([ex1 + 4, ey + 13], 'מזחלה', 'sm-lbl-s')}
+    </Schematic>
   );
 }

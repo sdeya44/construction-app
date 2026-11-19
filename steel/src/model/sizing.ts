@@ -256,7 +256,7 @@ export function suggestSize(p: Project, d: DerivedModel, role: 'column' | 'rafte
  * קורה נושאת: עומסים נקודתיים מקורות הגג במסגרות ללא עמוד (תגובת קורת גג ≈ עומס גג × רוחב העמסה × חצי האורך האופקי),
  * קורה פשוטה בין העמודים הנותרים; ניצולת = max(מומנט / (W·fy), שקיעה / (L/300)).
  */
-export function transferUtil(p: Project, d: DerivedModel, def: NonNullable<Project['building']['transfers']>[number], profName: string): { util: number; text: string } {
+export function transferUtil(p: Project, d: DerivedModel, def: NonNullable<Project['building']['transfers']>[number], profName: string): { util: number; text: string; tags?: { span: number; P: number; uM: number; dl: number; dlLim: number } } {
   const cfg = sizingCfg(p);
   const pr = tryProfile(profName); if (!pr) return { util: 9, text: 'חתך לא מוכר' };
   const fr = [...p.building.frames].sort((a, b) => a.y - b.y);
@@ -280,7 +280,7 @@ export function transferUtil(p: Project, d: DerivedModel, def: NonNullable<Proje
   const dl = loads.reduce((s2, q) => { const a = Math.min(q.a, L - q.a); return s2 + ((q.P / cfg.gamma) * 1000 * a * (3 * L * L - 4 * a * a)) / (48 * E2 * I); }, 0);
   const uM = (M * 1e6) / ((pr.props.Wy ?? 1) * fy), uD = dl / (L / 300);
   const util = Math.max(uM, uD);
-  return { util, text: `קורה נושאת · מפתח ${(L / 1000).toFixed(2)} מ' · ${loads.length} קורות גג (P≈${loads.length ? Math.max(...loads.map((q) => q.P)).toFixed(1) : 0} kN) · M≈${M.toFixed(1)} kNm · ניצולת כפיפה ${uM.toFixed(2)} · שקיעה ${dl.toFixed(1)} מ"מ (L/300=${(L / 300).toFixed(1)})` };
+  return { util, tags: { span: L, P: loads.length ? Math.max(...loads.map((q) => q.P)) : 0, uM, dl, dlLim: L / 300 }, text: `קורה נושאת · מפתח ${(L / 1000).toFixed(2)} מ' · ${loads.length} קורות גג (P≈${loads.length ? Math.max(...loads.map((q) => q.P)).toFixed(1) : 0} kN) · M≈${M.toFixed(1)} kNm · ניצולת כפיפה ${uM.toFixed(2)} · שקיעה ${dl.toFixed(1)} מ"מ (L/300=${(L / 300).toFixed(1)})` };
 }
 
 /** עומסים נקודתיים על קורה/מסבך נושא (קנ"ט, מרחק מהתמיכה הראשונה במ"מ) */

@@ -270,7 +270,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.34.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.35.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
