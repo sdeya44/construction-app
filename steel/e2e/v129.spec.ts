@@ -106,6 +106,7 @@ test('V129-05 חלון מכלול: נעילה אופקית — צורה לציר
   const chord = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => /^LT\.\d+\.L\.S$/.test(m.id))?.id);
   expect(chord).toBeTruthy();
   await page.evaluate((id) => (window as any).__ksp.store.select([id]), chord);
+  await page.getByTestId('pscope-asm').click();
   await expect(page.getByTestId('asm-card')).toBeVisible();
   await expect(page.getByTestId('asm-title')).toContainText('נעילה');
   await expect(page.getByTestId('asm-pic')).toBeVisible();

@@ -8,7 +8,7 @@ import { duplicateProject, exportProject, NewProjectDialog, OpenDialog, Transfor
 import { Icon } from './icons';
 import { SizingPanel } from './SizingPanel';
 import { backupDownload, fsSupported, linkedName, linkToFile, needsBackup } from '../persist/fileLink';
-import { PropertiesPanel } from './PropertiesPanel';
+import { PropertiesPanel, ScopeIsolator } from './PropertiesPanel';
 import { ProfileDatalist } from './StructurePanel';
 import { DrawingsView } from './DrawingsView';
 import { CatalogDialog } from './CatalogDialog';
@@ -120,8 +120,10 @@ export function App() {
     viewport.onDimEdit = (key, value, x, y) => setDimEdit({ key, value, x, y });
     window.__ksp = { store, viewport };
     const onNav = (e: Event) => { setMode('model'); setNav((e as CustomEvent).detail as NavKey); };
+    const onMode = (e: Event) => setMode((e as CustomEvent).detail as typeof mode);
+    window.addEventListener('ksp-mode', onMode);
     window.addEventListener('ksp-nav', onNav);
-    return () => { viewport.dispose(); window.removeEventListener('ksp-nav', onNav); };
+    return () => { viewport.dispose(); window.removeEventListener('ksp-nav', onNav); window.removeEventListener('ksp-mode', onMode); };
   }, []);
 
   // מנגנון בדיקה: שינוי פרופיל שגורם להתנגשות בפלטת ראש העמוד — חלון קופץ עם הצעה
@@ -283,7 +285,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.44.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.45.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -447,6 +449,7 @@ export function App() {
       {menu && ms.length > 0 && <MarkingMenu x={menu.x} y={menu.y} title={ms.length === 1 ? (ms[0]!.id.length > 12 ? KIND_LABEL[ms[0]!.kind] : ms[0]!.id) : String(ms.length)} items={menuItems()} onClose={() => setMenu(null)} />}
       <EaveCheckDialog />
       <ConnWizard />
+      <ScopeIsolator />
       <ConnLibrary />
       <DetailStudio />
       {dimEdit && (

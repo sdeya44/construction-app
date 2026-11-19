@@ -72,10 +72,10 @@ test('KB-03: קונזולה — עמוד הקצה מופיע עם שני צדד�
 test('HUB-01: לחיצה על עמוד — חתך (סוג ← מידה) עם היקף "כל העמודים" + הגדרות הגיאומטריה באותו פאנל', async ({ page }) => {
   await boot(page);
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
+  await page.getByTestId('pscope-similar').click(); // היקף: כל הדומים
   await page.getByTestId('psec-general').click(); // הגדרות הגיאומטריה — סעיף מקופל באותו פאנל
   await expect(page.getByTestId('hub-settings')).toBeVisible();
-  await page.getByTestId('scope-all').click();
-  await pickProfile(page, 'prop-profile', 'HEB200', 'HEB');
+  await pickProfile(page, 'grp-profile', 'HEB200', 'HEB');
   await shot(page, 'HUB_01_column');
   const p = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind === 'column').map((m: any) => m.profile))]);
   expect(p).toEqual(['HEB200']);
@@ -88,6 +88,7 @@ test('HUB-02: לחיצה על אלכסון אגד B — שרטוט סכמטי ע
   await page.getByTestId('nav-b:knee').click(); // תפריט אחר פתוח — ההגדרות של האגד בפאנל האלמנט
   const id = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BB.'))?.id);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), id);
+  await page.getByTestId('pscope-asm').click(); // היקף: כל המכלול (האגד)
   await expect(page.getByTestId('hub-settings')).toBeVisible();
   await page.getByTestId('asm-scope-all').check(); // חלון המכלול: שינוי לכל הצירים
   await page.getByTestId('hub-settings').getByTestId('sch-pb-drop').click();
@@ -105,19 +106,18 @@ test('HUB-03: שינוי חתך מפאנל אלכסון — "רק האלמנט �
   await page.getByTestId('kb-on').check();
   const prof = (id: string) => page.evaluate((i) => (window as any).__ksp.store.state.derived.byId.get(i)?.profile, id);
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
-  await page.getByTestId('scope-one').click();
-  await pickProfile(page, 'prop-profile', 'SHS100x5', 'SHS');
+  await pickProfile(page, 'prop-profile', 'SHS100x5', 'SHS'); // היקף "האלמנט הזה"
   expect(await prof('KB.F2.L.L.R')).toBe('SHS100x5');
   expect(await prof('KB.F3.L.L.R')).toBe('RHS80x80x4');
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F3.L.L.R']));
-  await page.getByTestId('scope-all').click();
-  await pickProfile(page, 'prop-profile', 'SHS90x4', 'SHS');
+  await page.getByTestId('pscope-similar').click();
+  await pickProfile(page, 'grp-profile', 'SHS90x4', 'SHS');
   const all = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('KB.')).map((m: any) => m.profile))]);
   expect(all).toEqual(['SHS90x4']);
   // קושרת גג
   const br = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BR.R'))?.id);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), br);
-  await pickProfile(page, 'prop-profile', 'L60x6', 'L');
+  await pickProfile(page, 'grp-profile', 'L60x6', 'L'); // היקף "כל הדומים" נשמר מהבחירה הקודמת
   const roof = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('BR.R')).map((m: any) => m.profile))]);
   expect(roof).toEqual(['L60x6']);
   await shot(page, 'HUB_03_brace_profile');

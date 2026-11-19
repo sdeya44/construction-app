@@ -996,3 +996,18 @@ details.adv .adv-body { padding-bottom: 6px; }
 .sec-prev-x { position: absolute; top: 6px; inset-inline-start: 6px; z-index: 2; }
 .sec-prev { position: relative; }
 .sec-prev:not(.big) svg { max-height: 230px; width: auto; max-width: 100%; margin: 0 auto; display: block; }
+
+/* ---- היקף קודם בלחיצה על אלמנט (1.45) */
+.scope-bar { background: var(--brand-soft); border-radius: 10px; padding: 8px 10px; margin: 6px 0 8px; }
+.scope-bar-h { font-weight: 700; color: var(--brand); font-size: 12.5px; margin-bottom: 5px; }
+.scope-bar-b { display: flex; flex-wrap: wrap; gap: 5px; }
+.scope-b { border: 1.5px solid var(--line); background: var(--panel); border-radius: 18px; padding: 4px 11px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 12.5px; color: var(--text); display: inline-flex; gap: 6px; align-items: center; }
+.scope-b small { background: var(--brand-soft); color: var(--brand); border-radius: 9px; padding: 0 6px; font-size: 11px; }
+.scope-b.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.scope-b.on small { background: rgba(255,255,255,.22); color: #fff; }
+.scope-iso { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.part-prev { background: #fff; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; overflow: hidden; }
+.part-prev svg { width: 100%; height: auto; display: block; }
+.end-block + .end-block { margin-top: 8px; }
+.end-conn { background: #fff; border: 1px solid var(--line); border-radius: 9px; padding: 7px 9px; margin-top: 4px; }
+.end-conn-t { display: flex; gap: 6px; align-items: center; justify-content: space-between; }

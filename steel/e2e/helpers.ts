@@ -13,6 +13,8 @@ export async function boot(page: Page) {
   await page.addInitScript(() => { const g = Storage.prototype.getItem; Storage.prototype.getItem = function (k: string) { return k.startsWith('ksp-adv-') ? '1' : g.call(this, k); }; });
   await page.goto('/');
   await page.waitForFunction(() => !!(window as any).__ksp?.viewport?.model);
+  // 1.45: היקף ברירת מחדל בבדיקות — "האלמנט הזה", בלי בידוד תלת-ממד (בדיקות של היקף אחר בוחרות אותו במפורש)
+  await page.evaluate(() => { (window as any).__ksp.store.set({ propScope: 'one', scopeIsolate: false }); localStorage.setItem('ksp-prop-scope', 'one'); });
   await page.waitForTimeout(300);
   return errors;
 }

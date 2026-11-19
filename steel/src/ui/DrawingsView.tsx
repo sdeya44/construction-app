@@ -33,7 +33,9 @@ export function DrawingsView() {
   const d = useStore((s) => s.derived);
   const { fab, bom } = useFab();
   const cat = useMemo(() => drawingCatalog(p, d, fab), [p, d, fab]);
-  const [cur, setCur] = useState<string>('D-ROOF');
+  const focus = useStore((s) => s.drawingFocus ?? null);
+  const [cur, setCur] = useState<string>(() => store.state.drawingFocus ?? 'D-ROOF');
+  useEffect(() => { if (focus) { setCur(focus); store.set({ drawingFocus: null }); } }, [focus]);
   const [zoom, setZoom] = useState(1);
   const [busy, setBusy] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());

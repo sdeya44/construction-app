@@ -807,10 +807,13 @@ export class Viewport {
     this.panes[0].fit(box, undefined, new THREE.Vector3(dir.x, dir.y, dir.z));
   }
 
-  fitSelection() {
+  /** התמקדות באוסף אלמנטים (היקף שנבחר בפאנל — מכלול / ציר / כל הדומים) */
+  fitIds(ids: string[]) { this.fitSelection(ids); }
+
+  fitSelection(only?: string[]) {
     const s = store.state;
     const box = new THREE.Box3();
-    for (const id of s.selection) {
+    for (const id of only ?? s.selection) {
       const m = s.derived.byId.get(id);
       if (!m) continue;
       const sol = cachedSolid(m);

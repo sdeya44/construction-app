@@ -141,7 +141,6 @@ test.describe('M1 – ליבת מידול', () => {
     await page.mouse.click(c.x, c.y);
     await page.getByTestId('prop-profile').fill('HEB200');
     await page.getByTestId('prop-profile').press('Enter');
-    await page.getByTestId('scope-ask-one').click(); // שאלת היקף: רק העמוד הזה
     const prof = () => page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('F1.COL.L').profile);
     expect(await prof()).toBe('HEB200');
     await page.getByTestId('btn-undo').click();
@@ -156,7 +155,7 @@ test.describe('M1 – ליבת מידול', () => {
     const pos = await page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('F1.COL.L').start);
     expect(pos).toEqual({ x: 500, y: 0, z: 0 });
     // שינוי פרמטרי אחרי הזזה ידנית מדווח כהתאמה לא תקפה
-    await page.getByTestId('psec-general').click(); // הגדרות כלליות של המבנה — מקופל בפאנל האלמנט
+    await page.getByTestId('pscope-asm').click(); // היקף: המכלול (המסגרת) — הגדרות הגיאומטריה
     await page.getByTestId('slopeLeft').fill('12'); await page.getByTestId('slopeLeft').press('Enter');
     const stale = await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'STALE_OVERRIDE').map((i: any) => i.elementId));
     expect(stale).toEqual([]); // שינוי שיפוע אינו משנה את מיקום בסיס/ראש העמוד בציר א
@@ -182,7 +181,6 @@ test.describe('M1 – ליבת מידול', () => {
     const c = await screenOf(page, { x: 0, y: 0, z: 3000 });
     await page.mouse.click(c.x, c.y);
     await page.getByTestId('prop-profile').fill('SHS160x6'); await page.getByTestId('prop-profile').press('Enter');
-    await page.getByTestId('scope-ask-one').click();
     await expect(page.getByTestId('save-state')).toHaveText('נשמר במחשב', { timeout: 5000 });
     const before = await page.evaluate(() => JSON.stringify((window as any).__ksp.store.state.derived.members));
     const proj = await page.evaluate(() => JSON.stringify((window as any).__ksp.store.state.project));

@@ -51,6 +51,13 @@ export interface AppState {
   connWizard?: string | null;
   /** ספריית החיבורים פתוחה */
   connLibraryOpen?: boolean;
+  /** היקף העבודה בלחיצה על אלמנט (1.45): one / asm / line / frame / similar */
+  propScope?: 'one' | 'asm' | 'line' | 'frame' | 'similar' | null;
+  /** להציג בתלת-ממד רק את ההיקף שנבחר */
+  scopeIsolate?: boolean;
+  scopeIsoOwned?: boolean;
+  /** שרטוט לפתיחה במצב שרטוטים */
+  drawingFocus?: string | null;
   /** מזחלה שנבחרה בלחיצה (מזהה המישור) — פותח את אשף המזחלה */
   activeGutter?: string | null;
   measure: { a?: { x: number; y: number; z: number }; b?: { x: number; y: number; z: number } };
@@ -78,7 +85,7 @@ class Store {
         projection: 'persp', render: 'solid', grid: true, dims: true, labels: true, split: false, cladding: true,
         clip: { enabled: false, axis: 'Y', pos: 0, flip: false },
       },
-      toasts: [], saveState: 'saved', canUndo: false, canRedo: false, measure: {}, revision: 0, activeConn: null, eaveCheck: null, detailStudio: null, colorMode: 'kind',
+      toasts: [], saveState: 'saved', canUndo: false, canRedo: false, measure: {}, revision: 0, activeConn: null, eaveCheck: null, detailStudio: null, colorMode: 'kind', propScope: (() => { try { const v = localStorage.getItem('ksp-prop-scope'); return v === 'one' || v === 'asm' || v === 'line' || v === 'frame' || v === 'similar' ? v : null; } catch { return null; } })(),
     };
   }
 

@@ -1,5 +1,5 @@
 import { settingsOf } from './navIndex';
-import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { resetOverrides, setBuilding, setKneeBraces, setMemberProps, setTransfers, type Command } from '../commands/commands';
 import { useFab } from '../fab/useFab';
 import { fromMm } from '../core/units';
@@ -19,7 +19,12 @@ import { GutterWizard } from './CladdingPanel';
 import { trussFrames, TRUSS_GROUP_HE } from '../geometry/truss';
 import { RoofTrussPanel, TransferShape } from './TransferPanel';
 import { CleatHubCtx, CleatTypePicker, EndTypePicker } from './ConnTypePicker';
-import type { Connection, Member, Project, TransferDef, TrussSpec } from '../model/types';
+import type { Connection, DerivedModel, Member, Project, TransferDef, TrussSpec } from '../model/types';
+import { buildSheet } from '../drawing/views';
+import { sheetToSvg } from '../drawing/svg';
+import { CONN_TYPE } from './ConnectionEditor';
+import { familyOf } from '../model/connRegistry';
+import { Collapsed } from './summary';
 
 const f1 = (n: number, d = 1) => n.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
 
@@ -33,6 +38,7 @@ export function PropertiesPanel() {
 
 function PropertiesInner() {
   const [scope, setScope] = useState<AsmScope>('line');
+  const scopeSel = useStore((s) => s.propScope ?? null);
   const fab = useFab().fab;
   const sel = useStore((s) => s.selection);
   const d = useStore((s) => s.derived);
@@ -105,122 +111,154 @@ function PropertiesInner() {
   const inRT = !!p.building.roofTruss?.enabled && !plateLike && (/^TR\./.test(m.id) || /^F[^.]+\.BC\.\d+$/.test(m.id) || (m.kind === 'rafter' && !!m.frameId && trussFrames(p).includes(m.frameId)));
   const tbDef = /^TB\./.test(m.id) && !plateLike ? (p.building.transfers ?? []).find((t) => t.id === m.id.split('.')[1]) ?? null : null;
   const custom = plateLike && m.connId?.startsWith('C.CD.') ? d.connById.get(m.connId)?.custom : undefined;
+  const opts = scopeOptions(m, d);
+  // היקף שנבחר קודם ואינו זמין לאלמנט הזה (למשל "כל הציר" לפלטה) — חוזרים ל"האלמנט הזה"
+  const scopeNow = scopeSel ? (opts.some((o) => o.key === scopeSel) ? scopeSel : 'one') : null;
+  const route = profileRoute(m, p);
+  const head = (
+    <div className="el-head">
+      <div className="k">{kindLabelOf(m)}{frameNo > 0 ? ` · מסגרת ${frameNo}` : ''}{m.side ? ` · ${m.side === 'L' ? 'שמאל' : 'ימין'}` : ''} <span className={`badge ${m.source === 'manual' ? 'warn' : 'blue'}`}>{m.source === 'manual' ? 'ידני' : 'פרמטרי'}</span></div>
+      <div className="t"><b>{mark ?? m.label}</b><span className="mono" data-testid="prop-id">{m.id}</span></div>
+    </div>
+  );
+  const manualNote = m.manualPlacement && m.source === 'generated' && (
+    <div className={`issue ${stale ? 'warning' : ''}`} style={{ marginTop: 6 }}>
+      <span className="ic">!</span>
+      <div>{stale ? 'מיקום ידני שאינו תקף עוד לאחר שינוי פרמטרי.' : 'האלמנט הוזז ידנית ואינו עוקב אחר הפרמטרים.'}
+        <div><button className="btn small" style={{ marginTop: 4 }} onClick={() => store.exec(resetOverrides([m.id]))}>החזר לפרמטרי</button></div></div>
+    </div>
+  );
+  const secCard = pr && !plateLike && (
+    <div className="sec-card">
+      <SectionShape outline={pr.outline.outer} />
+      <div style={{ minWidth: 0 }}>
+        <div className="nm">{m.profile}</div>
+        <div className="dm">h {f1(pr.props.h)} · b {f1(pr.props.b)}</div>
+        {pr.verified ? <span className="badge ok" title={pr.source} data-testid="prof-verified">✓ מאומת מקטלוג</span> : <span className="badge warn" title={pr.source}>לא מאומת</span>}
+      </div>
+    </div>
+  );
+  const matField = (ids: string[]) => (
+    <div className="field"><label>חומר</label>
+      <select className="inp" value={m.material} onChange={(e) => store.exec(setMemberProps(ids, { material: e.target.value }))}>
+        {MATERIALS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+      </select>
+    </div>
+  );
+  const flipField = m.purlin ? (
+    <div className="field"><label>היפוך חתך (פטה זו)</label>
+      <select className="inp" data-testid="prop-flip" value={p.memberOverrides[m.id]?.mirror ? '1' : '0'} onChange={(e) => store.exec(setMemberProps([m.id], { mirror: e.target.value === '1' }))}>
+        <option value="0">לפי הגדרת הצד</option><option value="1">הפוך מהגדרת הצד</option>
+      </select>
+    </div>
+  ) : !plateLike && (
+    <div className="field"><label>היפוך חתך</label>
+      <select className="inp" value={m.mirror ? '1' : '0'} onChange={(e) => store.exec(setMemberProps([m.id], { mirror: e.target.value === '1' }))}>
+        <option value="0">רגיל</option><option value="1">הפוך</option>
+      </select>
+    </div>
+  );
+  const lengths = (
+    <>
+      <dl className="kv" style={{ marginTop: 10 }}>
+        <dt>אורך קו ייחוס</dt><dd data-testid="prop-len">{L(dist(m.start, m.end))}</dd>
+        <dt>אורך חיתוך (נטו) מרבי</dt><dd>{L(cl.max)}</dd>
+        <dt>משקל</dt><dd data-testid="prop-weight">{f1((kgm * cl.max) / 1000)} ק"ג</dd>
+        <dt>סימון חלק</dt><dd>{mark ?? '—'}</dd>
+      </dl>
+      <LengthTable m={m} />
+      {m.purlin && <PurlinInfoBlock id={m.id} />}
+    </>
+  );
+  const advanced = (
+    <PSec id="adv" title="מתקדם — סיבוב, קואורדינטות, תכונות חתך" testId="ptab-adv" closed>
+      <div className="field"><label>סיבוב סביב הציר</label><NumField value={m.rollDeg} suffix="°" onCommit={(v) => store.exec(setMemberProps([m.id], { rollDeg: v }))} /></div>
+      <div className="panel-title">גיאומטריה</div>
+      <dl className="kv">
+        <dt>תיאור</dt><dd style={{ direction: 'rtl', textAlign: 'right', fontFamily: 'var(--font)' }}>{m.label}</dd>
+        <dt>אורך חיתוך מזערי</dt><dd>{L(cl.min)}</dd>
+        <dt>התחלה (X,Y,Z)</dt><dd>{[m.start.x, m.start.y, m.start.z].map((v) => v.toFixed(1)).join(', ')}</dd>
+        <dt>סוף (X,Y,Z)</dt><dd>{[m.end.x, m.end.y, m.end.z].map((v) => v.toFixed(1)).join(', ')}</dd>
+        <dt>חיתוך התחלה</dt><dd>{m.startCut ? 'מישורי' : 'ניצב'}</dd>
+        <dt>חיתוך סוף</dt><dd>{m.endCut ? 'מישורי' : 'ניצב'}</dd>
+      </dl>
+      {pr && <>
+        <div className="panel-title">תכונות חתך {pr.verified ? <span className="badge ok" title={pr.source} data-testid="prof-verified-adv">מאומת</span> : <span className="badge warn" title={pr.source}>לא מאומת</span>}</div>
+        <dl className="kv">
+          <dt>h × b</dt><dd>{f1(pr.props.h)} × {f1(pr.props.b)} מ"מ</dd>
+          <dt>A</dt><dd>{f1(pr.props.area / 100, 2)} ס"מ²</dd>
+          <dt>משקל למטר</dt><dd data-testid="prop-kgm">{f1(kgm, 2)} ק"ג/מ'</dd>
+          <dt>Iy</dt><dd>{f1(pr.props.Iy / 1e4)} ס"מ⁴</dd>
+          <dt>Iz</dt><dd>{f1(pr.props.Iz / 1e4)} ס"מ⁴</dd>
+          <dt>Wy / Wz</dt><dd>{f1(pr.props.Wy / 1e3)} / {f1(pr.props.Wz / 1e3)} ס"מ³</dd>
+          <dt>iy / iz</dt><dd>{f1(pr.props.iy / 10, 2)} / {f1(pr.props.iz / 10, 2)} ס"מ</dd>
+        </dl>
+        <div className="hint">{pr.verified ? `מקור: ${pr.source}.` : `מחושב מגיאומטריית החתך. ${pr.note ?? ''} אסור לשימוש בחישובי חוזק עד ייבוא קטלוג מאומת.`}</div>
+      </>}
+    </PSec>
+  );
+  const connBlock = (
+    <PSec id="conns" title={`חיבורים${conns ? ` (${conns})` : ''}`} testId="ptab-conns">
+      {!plateLike && <EndCards m={m} />}
+      {!plateLike && <DetailEnds m={m} />}
+      {plateLike && m.kind !== 'cleat' && m.connId && (d.connById.get(m.connId)?.type === 'purlin-cleat' || d.connById.get(m.connId)?.custom?.site.includes('|x:')) && <div className="hub-set"><CleatTypePicker connId={m.connId} /></div>}
+      {m.purlin && <div className="hub-set"><CleatTypePicker side={m.purlin.paramKey ?? (m.purlin.side === 'R' ? 'right' : 'left')} /></div>}
+      {custom && (
+        <div className="hub-set"><div className="hub-set-h">פרט מותאם: {p.customDetails?.find((x) => x.id === custom.detailId)?.name}</div>
+          <button className="btn primary" data-testid="open-studio-part" onClick={() => store.set({ detailStudio: custom.site })}>פתח בסטודיו פרטים</button></div>
+      )}
+      {plateLike && !custom && <HubSettings m={m} />}
+      <MemberConnections memberId={m.id} />
+      {!conns && <div className="hint">אין חיבורים לאלמנט זה.</div>}
+      {['column', 'rafter', 'beam', 'purlin', 'girt'].includes(m.kind) && !/(^|\.)TR\./.test(m.id) && <SpliceEditor m={m} />}
+    </PSec>
+  );
+  const famShape = <>
+    {fam && <PSec id="shape" title={`צורה ומידות — ${fam.title.split(' — ')[0]}`} testId="psec-shape"><div data-testid="hub-settings"><AssemblyShape asm={fam} scope={scope} setScope={setScope} /></div></PSec>}
+    {inRT && <PSec id="shape" title="צורה ומידות — מסבך גג" testId="psec-shape"><div data-testid="hub-settings"><EditCtx.Provider value={{ embed: true, part: 'shape' }}><RoofTrussPanel /></EditCtx.Provider></div></PSec>}
+    {tbDef && <PSec id="shape" title={`צורה ומידות — ${tbDef.kind === 'truss' ? 'מסבך נושא' : 'קורה נושאת'}`} testId="psec-shape"><div data-testid="hub-settings"><TransferShape id={tbDef.id} /></div></PSec>}
+  </>;
+  const cur = opts.find((o) => o.key === scopeNow);
   return (
     <div className="panel-body" data-testid="props-single">
-      <div className="el-head">
-        <div className="k">{kindLabelOf(m)}{frameNo > 0 ? ` · מסגרת ${frameNo}` : ''}{m.side ? ` · ${m.side === 'L' ? 'שמאל' : 'ימין'}` : ''} <span className={`badge ${m.source === 'manual' ? 'warn' : 'blue'}`}>{m.source === 'manual' ? 'ידני' : 'פרמטרי'}</span></div>
-        <div className="t"><b>{mark ?? m.label}</b><span className="mono" data-testid="prop-id">{m.id}</span></div>
-      </div>
-      {/* 1 — המכלול: שם ותמונה */}
-      <AssemblyCard m={m} />
-      {m.manualPlacement && m.source === 'generated' && (
-        <div className={`issue ${stale ? 'warning' : ''}`} style={{ marginTop: 6 }}>
-          <span className="ic">!</span>
-          <div>{stale ? 'מיקום ידני שאינו תקף עוד לאחר שינוי פרמטרי.' : 'האלמנט הוזז ידנית ואינו עוקב אחר הפרמטרים.'}
-            <div><button className="btn small" style={{ marginTop: 4 }} onClick={() => store.exec(resetOverrides([m.id]))}>החזר לפרמטרי</button></div></div>
-        </div>
-      )}
-      {/* 2 — חתך וחומר: בוחר חתך אחד בלבד, עם היקף */}
-      <PSec id="prof" title={plateLike ? 'חלק וחומר' : 'חתך וחומר'} testId="psec-prof">
-        {pr && !plateLike && (
-          <div className="sec-card">
-            <SectionShape outline={pr.outline.outer} />
-            <div style={{ minWidth: 0 }}>
-              <div className="nm">{m.profile}</div>
-              <div className="dm">h {f1(pr.props.h)} · b {f1(pr.props.b)}</div>
-              {pr.verified ? <span className="badge ok" title={pr.source} data-testid="prof-verified">✓ מאומת מקטלוג</span> : <span className="badge warn" title={pr.source}>לא מאומת</span>}
-            </div>
-          </div>
-        )}
-        {m.partDesc && <div className="hint" style={{ marginTop: 0 }}>{m.partDesc}</div>}
-        {!plateLike && <ProfileScope m={m} />}
-        <div className="field"><label>חומר</label>
-          <select className="inp" value={m.material} onChange={(e) => store.exec(setMemberProps([m.id], { material: e.target.value }))}>
-            {MATERIALS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-          </select>
-        </div>
-        {m.purlin ? (
-          <div className="field"><label>היפוך חתך (פטה זו)</label>
-            <select className="inp" data-testid="prop-flip" value={p.memberOverrides[m.id]?.mirror ? '1' : '0'} onChange={(e) => store.exec(setMemberProps([m.id], { mirror: e.target.value === '1' }))}>
-              <option value="0">לפי הגדרת הצד</option><option value="1">הפוך מהגדרת הצד</option>
-            </select>
-          </div>
-        ) : !plateLike && (
-          <div className="field"><label>היפוך חתך</label>
-            <select className="inp" value={m.mirror ? '1' : '0'} onChange={(e) => store.exec(setMemberProps([m.id], { mirror: e.target.value === '1' }))}>
-              <option value="0">רגיל</option><option value="1">הפוך</option>
-            </select>
-          </div>
-        )}
-        {ov && (ov.profile || ov.material || ov.rollDeg !== undefined || ov.mirror !== undefined) && m.source === 'generated' && (
-          <div className="row"><span className="badge warn">ערכים ששונו ידנית</span><button className="btn small" onClick={() => store.exec(resetOverrides([m.id]))}>איפוס</button></div>
-        )}
-        <dl className="kv" style={{ marginTop: 10 }}>
-          <dt>אורך קו ייחוס</dt><dd data-testid="prop-len">{L(dist(m.start, m.end))}</dd>
-          <dt>אורך חיתוך מרבי</dt><dd>{L(cl.max)}</dd>
-
-          <dt>משקל</dt><dd data-testid="prop-weight">{f1((kgm * cl.max) / 1000)} ק"ג</dd>
-          <dt>סימון חלק</dt><dd>{mark ?? '—'}</dd>
-        </dl>
-        <LengthTable m={m} />
-        {m.purlin && <PurlinInfoBlock id={m.id} />}
-      </PSec>
-      {/* 3 — צורה ומידות של המכלול */}
-      {fam && <PSec id="shape" title={`צורה ומידות — ${fam.title.split(' — ')[0]}`} testId="psec-shape"><div data-testid="hub-settings"><AssemblyShape asm={fam} scope={scope} setScope={setScope} /></div></PSec>}
-      {inRT && <PSec id="shape" title="צורה ומידות — מסבך גג" testId="psec-shape"><div data-testid="hub-settings"><EditCtx.Provider value={{ embed: true, part: 'shape' }}><RoofTrussPanel /></EditCtx.Provider></div></PSec>}
-      {tbDef && <PSec id="shape" title={`צורה ומידות — ${tbDef.kind === 'truss' ? 'מסבך נושא' : 'קורה נושאת'}`} testId="psec-shape"><div data-testid="hub-settings"><TransferShape id={tbDef.id} /></div></PSec>}
-      {/* 4 — חיבורים: סוג חיבור בכל קצה + פרטי החיבור + רשימה */}
-      <PSec id="conns" title={`חיבורים${conns ? ` (${conns})` : ''}`} testId="ptab-conns">
-        {!plateLike && <DetailEnds m={m} />}
-        {fam && <AssemblyConn asm={fam} scope={scope} />}
-        {plateLike && m.kind !== 'cleat' && m.connId && (d.connById.get(m.connId)?.type === 'purlin-cleat' || d.connById.get(m.connId)?.custom?.site.includes('|x:')) && <div className="hub-set"><CleatTypePicker connId={m.connId} /></div>}
-        {m.purlin && <div className="hub-set"><CleatTypePicker side={m.purlin.paramKey ?? (m.purlin.side === 'R' ? 'right' : 'left')} /></div>}
-        {custom && (
-          <div className="hub-set"><div className="hub-set-h">פרט מותאם: {p.customDetails?.find((x) => x.id === custom.detailId)?.name}</div>
-            <button className="btn primary" data-testid="open-studio-part" onClick={() => store.set({ detailStudio: custom.site })}>פתח בסטודיו פרטים</button></div>
-        )}
-        {plateLike && !custom && <HubSettings m={m} />}
-        <MemberConnections memberId={m.id} />
-        {!conns && <div className="hint">אין חיבורים לאלמנט זה.</div>}
-        {/* חיבור המשך — רק לאלמנטים ארוכים (לא מוטות מילוי של מסבך, לא תומכים/פלטות) */}
-        {['column', 'rafter', 'beam', 'purlin', 'girt'].includes(m.kind) && !/(^|\.)TR\./.test(m.id) && <SpliceEditor m={m} />}
-      </PSec>
-      {/* 5 — הגדרות כלליות של המבנה (עמוד/קורה/פטה): מקופל */}
-      {!plateLike && !fam && !tbDef && !inRT && <PSec id="general" title="הגדרות כלליות (לכל המבנה)" testId="psec-general" closed>
-        {/* פטה: החתך וסוג התושבת כבר למעלה — כאן רק פריסה ומידות */}
-        <EditCtx.Provider value={m.purlin ? { embed: true, part: 'shape' } : { embed: false }}><HubSettings m={m} /></EditCtx.Provider></PSec>}
-      {/* 6 — מתקדם */}
-      <PSec id="adv" title="מתקדם — סיבוב, קואורדינטות, תכונות חתך" testId="ptab-adv" closed>
-        <div className="field"><label>סיבוב סביב הציר</label><NumField value={m.rollDeg} suffix="°" onCommit={(v) => store.exec(setMemberProps([m.id], { rollDeg: v }))} /></div>
-        <div className="panel-title">גיאומטריה</div>
-        <dl className="kv">
-          <dt>תיאור</dt><dd style={{ direction: 'rtl', textAlign: 'right', fontFamily: 'var(--font)' }}>{m.label}</dd>
-          <dt>אורך חיתוך מזערי</dt><dd>{L(cl.min)}</dd>
-          <dt>התחלה (X,Y,Z)</dt><dd>{[m.start.x, m.start.y, m.start.z].map((v) => v.toFixed(1)).join(', ')}</dd>
-          <dt>סוף (X,Y,Z)</dt><dd>{[m.end.x, m.end.y, m.end.z].map((v) => v.toFixed(1)).join(', ')}</dd>
-          <dt>חיתוך התחלה</dt><dd>{m.startCut ? 'מישורי' : 'ניצב'}</dd>
-          <dt>חיתוך סוף</dt><dd>{m.endCut ? 'מישורי' : 'ניצב'}</dd>
-        </dl>
-        {pr && <>
-          <div className="panel-title">תכונות חתך {pr.verified ? <span className="badge ok" title={pr.source} data-testid="prof-verified-adv">מאומת</span> : <span className="badge warn" title={pr.source}>לא מאומת</span>}</div>
-          <dl className="kv">
-            <dt>h × b</dt><dd>{f1(pr.props.h)} × {f1(pr.props.b)} מ"מ</dd>
-            <dt>A</dt><dd>{f1(pr.props.area / 100, 2)} ס"מ²</dd>
-            <dt>משקל למטר</dt><dd data-testid="prop-kgm">{f1(kgm, 2)} ק"ג/מ'</dd>
-            <dt>Iy</dt><dd>{f1(pr.props.Iy / 1e4)} ס"מ⁴</dd>
-            <dt>Iz</dt><dd>{f1(pr.props.Iz / 1e4)} ס"מ⁴</dd>
-            <dt>Wy / Wz</dt><dd>{f1(pr.props.Wy / 1e3)} / {f1(pr.props.Wz / 1e3)} ס"מ³</dd>
-            <dt>iy / iz</dt><dd>{f1(pr.props.iy / 10, 2)} / {f1(pr.props.iz / 10, 2)} ס"מ</dd>
-          </dl>
-          <div className="hint">{pr.verified ? `מקור: ${pr.source}.` : `מחושב מגיאומטריית החתך. ${pr.note ?? ''} אסור לשימוש בחישובי חוזק עד ייבוא קטלוג מאומת.`}</div>
-        </>}
-      </PSec>
+      {head}
+      <ScopeBar opts={opts} cur={scopeNow} />
+      {!scopeNow && <div className="hint" data-testid="pscope-hint">בחר על מה לעבוד: האלמנט הזה בלבד, המכלול שלו, כל הציר או כל הדומים — ויוצגו ההגדרות של הבחירה.</div>}
+      {scopeNow === 'one' && <>
+        {manualNote}
+        <PSec id="part" title="שרטוט החלק" testId="psec-part"><PartPreview m={m} mark={mark} /></PSec>
+        <PSec id="prof" title={plateLike ? 'חלק וחומר' : 'חתך וחומר — האלמנט הזה'} testId="psec-prof">
+          {secCard}
+          {m.partDesc && <div className="hint" style={{ marginTop: 0 }}>{m.partDesc}</div>}
+          {!plateLike && (route && !route.one
+            ? <><div className="field prof"><label>חתך</label><span className="readonly mono">{m.profile}</span></div><div className="hint" style={{ marginTop: 0 }}>החתך נקבע לכל {route.what} (פחי החיבור לפיו) — לשינוי: "כל הדומים" או "המכלול".</div></>
+            : <div className="field prof"><label>חתך</label><ProfilePicker testId="prop-profile" value={m.profile} families={FAMS[m.kind]} role={m.kind === 'column' || m.kind === 'rafter' || m.kind === 'purlin' ? m.kind : undefined} onCommit={(v) => store.exec(setMemberProps([m.id], { profile: v }))} /></div>)}
+          {matField([m.id])}
+          {flipField}
+          {ov && (ov.profile || ov.material || ov.rollDeg !== undefined || ov.mirror !== undefined) && m.source === 'generated' && (
+            <div className="row"><span className="badge warn">ערכים ששונו ידנית</span><button className="btn small" onClick={() => store.exec(resetOverrides([m.id]))}>איפוס</button></div>
+          )}
+          {lengths}
+        </PSec>
+        {connBlock}
+        {advanced}
+      </>}
+      {scopeNow === 'asm' && <>
+        <AssemblyCard m={m} />
+        {(fam || inRT || tbDef) ? famShape : null}
+        {!plateLike && <PSec id="prof" title="חתך — כל המכלול / כל הדומים" testId="psec-prof">{secCard}<ProfileScope m={m} />{matField(cur?.ids ?? [m.id])}</PSec>}
+        {fam && <PSec id="conns" title="מחברי המכלול" testId="ptab-conns"><AssemblyConn asm={fam} scope={scope} /><MemberConnections memberId={m.id} /></PSec>}
+        {!fam && !tbDef && !inRT && <PSec id="general" title="הגדרות המכלול" testId="psec-general"><EditCtx.Provider value={m.purlin ? { embed: true, part: 'shape' } : { embed: false }}><HubSettings m={m} /></EditCtx.Provider></PSec>}
+      </>}
+      {cur && (scopeNow === 'line' || scopeNow === 'frame' || scopeNow === 'similar') && <GroupView m={m} ids={cur.ids} label={cur.label} similar={scopeNow === 'similar'} route={route}>
+        {scopeNow === 'similar' && !plateLike && !fam && !tbDef && !inRT && <PSec id="general" title="הגדרות כלליות (לכל המבנה)" testId="psec-general" closed><EditCtx.Provider value={m.purlin ? { embed: true, part: 'shape' } : { embed: false }}><HubSettings m={m} /></EditCtx.Provider></PSec>}
+        {scopeNow === 'similar' && famShape}
+      </GroupView>}
       <div className="hint">שינוי חל מיד · Ctrl+Z לביטול</div>
     </div>
   );
 }
 
-/** סעיף מתקפל בפאנל האלמנט; המצב (פתוח/סגור) נשמר */
 function PSec({ id, title, testId, closed, children }: { id: string; title: string; testId?: string; closed?: boolean; children: ReactNode }) {
   const key = `ksp-psec-${id}`;
   let open = !closed;
@@ -484,5 +522,157 @@ function LengthTable({ m }: { m: Member }) {
         </tr>
       ))}</tbody>
     </table>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// היקף קודם (1.45): בלחיצה על אלמנט בוחרים על מה עובדים — האלמנט / המכלול / הציר / המסגרת / כל הדומים.
+// המודל מציג את הבחירה (בידוד), והפאנל — רק את ההגדרות שלה.
+
+export type PropScope = 'one' | 'asm' | 'line' | 'frame' | 'similar';
+export interface ScopeOpt { key: PropScope; label: string; ids: string[]; show: string[] }
+
+/** אפשרויות ההיקף לאלמנט: מזהי האלמנטים שהשינוי חל עליהם (ids) ומה מוצג בתלת-ממד (show) */
+export function scopeOptions(m: Member, d: DerivedModel): ScopeOpt[] {
+  const parts = (ids: string[]) => d.connections.filter((c) => c.members.some((x) => ids.includes(x)) || c.parts.some((x) => ids.includes(x)))
+    .flatMap((c) => [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`])]);
+  const out: ScopeOpt[] = [{ key: 'one', label: 'האלמנט הזה', ids: [m.id], show: [m.id, ...parts([m.id])] }];
+  const asm = assemblyOf(m, d);
+  if (asm && asm.ids.length > 1) out.push({ key: 'asm', label: `המכלול${asm.family === 'frame' ? ' (המסגרת)' : ''}`, ids: asm.ids.filter((x) => d.byId.get(x)?.kind === m.kind), show: asm.ids });
+  else if (/^(TR|TB)\./.test(m.id)) {
+    // מסבך גג / קורה או מסבך נושא: המכלול = כל האלמנטים עם אותה תחילית
+    const pre = m.id.split('.').slice(0, 2).join('.');
+    const g = d.members.filter((x) => x.id === pre || x.id.startsWith(pre + '.'));
+    if (g.length > 1) out.push({ key: 'asm', label: 'המכלול', ids: g.filter((x) => x.kind === m.kind).map((x) => x.id), show: [...g.map((x) => x.id), ...parts(g.map((x) => x.id))] });
+  }
+  const same = (f: (x: Member) => boolean) => d.members.filter((x) => x.kind === m.kind && x.kind !== 'bolt' && f(x));
+  const lineId = m.lineId ?? (asm?.lineId);
+  if (lineId) { const g = same((x) => (x.lineId ?? assemblyOfCache(x, d)) === lineId); if (g.length > 1) out.push({ key: 'line', label: `כל הציר`, ids: g.map((x) => x.id), show: g.map((x) => x.id) }); }
+  if (m.frameId && (m.kind === 'column' || m.kind === 'rafter')) { const g = same((x) => x.frameId === m.frameId); if (g.length > 1) out.push({ key: 'frame', label: 'כל המסגרת', ids: g.map((x) => x.id), show: g.map((x) => x.id) }); }
+  const sim = similarOf(m, d.members);
+  if (sim.length > 1) out.push({ key: 'similar', label: `כל הדומים`, ids: sim.map((x) => x.id), show: sim.map((x) => x.id) });
+  return out;
+}
+/** ציר של אלמנט שאין לו lineId (רק לעמודים יש) — לפי המזהה של עמוד: F.COL.<ציר> */
+function assemblyOfCache(x: Member, _d: DerivedModel): string | undefined { void _d; const mm = /\.COL\.([^.]+)$/.exec(x.id); return mm?.[1]; }
+
+function ScopeBar({ opts, cur }: { opts: ScopeOpt[]; cur: PropScope | null }) {
+  const iso = useStore((s) => s.scopeIsolate ?? true);
+  return (
+    <div className="scope-bar" data-testid="pscope">
+      <div className="scope-bar-h">לעבוד על:</div>
+      <div className="scope-bar-b">
+        {opts.map((o) => <button key={o.key} className={`scope-b${cur === o.key ? ' on' : ''}`} data-testid={`pscope-${o.key}`} onClick={() => { store.set({ propScope: o.key }); try { localStorage.setItem('ksp-prop-scope', o.key); } catch { /* */ } }}>{o.label}<small>{o.ids.length}</small></button>)}
+      </div>
+      <label className="scope-iso"><input type="checkbox" data-testid="pscope-iso" checked={iso} onChange={(e) => store.set({ scopeIsolate: e.target.checked, ...(e.target.checked ? {} : { isolated: null }) })} />הצג בתלת-ממד רק את הבחירה</label>
+    </div>
+  );
+}
+
+/** בידוד התלת-ממד לפי ההיקף שנבחר (מורכב באפליקציה) */
+export function ScopeIsolator() {
+  const sel = useStore((s) => s.selection), scope = useStore((s) => s.propScope ?? null), iso = useStore((s) => s.scopeIsolate ?? true);
+  const d = useStore((s) => s.derived);
+  const key = `${sel.join(',')}|${scope}|${iso}`;
+  useEffect(() => {
+    const st = store.state;
+    if (sel.length === 1 && scope && iso) {
+      const m = d.byId.get(sel[0]);
+      const o = m ? scopeOptions(m, d).find((x) => x.key === scope) : null;
+      if (o) { store.set({ isolated: o.show, scopeIsoOwned: true }); setTimeout(() => (scope === 'one' ? window.__ksp?.viewport?.fitSelection?.() : window.__ksp?.viewport?.fitIds?.(o.show)), 40); return; }
+    }
+    if (st.scopeIsoOwned) store.set({ isolated: null, scopeIsoOwned: false });
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+/** שרטוט החלק (אותו מחולל של גיליון הייצור) — מוקטן, עם מעבר לגיליון המלא */
+function PartPreview({ m, mark }: { m: Member; mark?: string }) {
+  const p = useStore((s) => s.project), d = useStore((s) => s.derived);
+  const { fab, bom } = useFab();
+  const svg = useMemo(() => {
+    if (!mark) return null;
+    try { return sheetToSvg(buildSheet({ id: `D-PART-${mark}`, type: 'part', number: `P-${mark}`, title: `שרטוט חלק ${mark}`, ref: mark }, p, d, fab, bom)); } catch { return null; }
+  }, [p, d, fab, bom, mark]);
+  if (!mark) return <div className="hint">לאלמנט אין סימון ייצור.</div>;
+  if (!svg) return <div className="hint">לחלק הזה אין שרטוט חלק (פלטה / חלק במכלול) — ראה שרטוט המכלול.</div>;
+  return (
+    <div data-testid="part-preview">
+      <div className="part-prev" dangerouslySetInnerHTML={{ __html: svg }} />
+      <div className="row" style={{ gap: 6 }}>
+        <button className="btn small" data-testid="part-open" onClick={() => { store.set({ drawingFocus: `D-PART-${mark}` }); window.dispatchEvent(new CustomEvent('ksp-mode', { detail: 'drawings' })); }}>פתח גיליון מלא ←</button>
+        <span className="hint" style={{ margin: 0 }}>סימון {mark} · {m.profile}</span>
+      </div>
+    </div>
+  );
+}
+
+/** כרטיס חיבור לכל קצה: מה הפרט (פלטות, ברגים, סטטוס) + החלפת פרט באשף + עורך החיבור */
+function EndCards({ m }: { m: Member }) {
+  const d = useStore((s) => s.derived);
+  const own = d.connections.filter((c) => c.type !== 'custom' && (c.members.includes(m.id) || c.parts.includes(m.id)));
+  const centroid = (c: Connection) => { const ps = [...c.parts, ...c.bolts.map((b) => b.id)].map((x) => d.byId.get(x)).filter((x): x is Member => !!x); if (!ps.length) return null; return { x: ps.reduce((a, q) => a + q.start.x, 0) / ps.length, y: ps.reduce((a, q) => a + q.start.y, 0) / ps.length, z: ps.reduce((a, q) => a + q.start.z, 0) / ps.length }; };
+  const dd = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  const len = dist(m.start, m.end);
+  const ends: { e: 'start' | 'end'; list: Connection[] }[] = [{ e: 'start', list: [] }, { e: 'end', list: [] }];
+  const mid: Connection[] = [];
+  for (const c of own) { const P = centroid(c); if (!P) { mid.push(c); continue; } const a = dd(P, m.start), b = dd(P, m.end); if (Math.min(a, b) > Math.max(400, len * 0.2)) mid.push(c); else ends[a <= b ? 0 : 1].list.push(c); }
+  const summary = (c: Connection) => {
+    const pl = c.parts.map((x) => d.byId.get(x)).filter((x): x is Member => !!x && x.kind === 'plate');
+    const plates = [...new Set(pl.map((x) => (x.partDesc ?? x.profile).replace(/^.*?(PL[\d×x.]+).*$/, '$1')))].slice(0, 2).join(', ');
+    const bd = [...new Set(c.bolts.map((b) => b.d))];
+    return [plates && `פלטות ${plates}`, c.bolts.length ? `${c.bolts.length}×M${bd.join('/')}` : '', c.welds.length ? `${c.welds.length} ריתוכים` : ''].filter(Boolean).join(' · ');
+  };
+  const card = (c: Connection) => (
+    <div key={c.id} className="end-conn" data-testid={`endc-${c.id}`}>
+      <div className="end-conn-t"><b>{CONN_TYPE[c.type]}</b><span className={`sum-pill ${c.status === 'approved' ? '' : 'muted'}`}>{c.status === 'approved' ? 'מאושר' : 'לא מאושר'}</span></div>
+      <div className="sum-sub">{summary(c) || c.label}</div>
+      <div className="row" style={{ gap: 4, marginTop: 4 }}>
+        {familyOf(c) && <button className="btn small primary" data-testid={`endc-wiz-${c.id}`} onClick={() => store.set({ connWizard: c.id })}>החלף פרט ✎</button>}
+        <button className="btn small" data-testid={`endc-open-${c.id}`} onClick={() => store.set({ activeConn: c.id })}>עורך החיבור</button>
+      </div>
+    </div>
+  );
+  if (!own.length) return null;
+  return (
+    <div className="hub-set" data-testid="end-cards">
+      {ends.map(({ e, list }) => (
+        <div key={e} className="end-block"><div className="hub-set-h">{e === 'start' ? 'קצה התחלה' : 'קצה סוף'} <span className="muted mono">z {Math.round((e === 'start' ? m.start : m.end).z)}</span></div>
+          {list.length ? list.map(card) : <div className="hint" style={{ margin: 0 }}>אין חיבור בקצה הזה</div>}</div>
+      ))}
+      {mid.length > 0 && <div className="end-block"><div className="hub-set-h">לאורך האלמנט ({mid.length})</div>{mid.slice(0, 4).map(card)}{mid.length > 4 && <div className="hint">ועוד {mid.length - 4} — ברשימת החיבורים למטה</div>}</div>}
+    </div>
+  );
+}
+
+/** קבוצה (ציר / מסגרת / כל הדומים): חתך, חומר והיפוך לכולם; רשימה מקופלת */
+function GroupView({ m, ids, label, similar, route, children }: { m: Member; ids: string[]; label: string; similar: boolean; route: ReturnType<typeof profileRoute>; children?: ReactNode }) {
+  const d = useStore((s) => s.derived), p = useStore((s) => s.project);
+  const ms = ids.map((x) => d.byId.get(x)).filter((x): x is Member => !!x);
+  const profiles = [...new Set(ms.map((x) => x.profile))];
+  const plateLike = m.kind === 'plate' || m.kind === 'cleat' || m.kind === 'bolt' || m.kind === 'anchor';
+  const viaRoute = similar && route;
+  const setProf = (v: string) => {
+    if (viaRoute) { store.exec(route!.all(v)); const pre = m.id.split('.')[0] + '.'; const ov = Object.keys(p.memberOverrides).filter((x) => x.startsWith(pre) && p.memberOverrides[x]?.profile); if (ov.length) store.exec(resetOverrides(ov)); return; }
+    store.exec(setMemberProps(ids, { profile: v }));
+  };
+  const blocked = !similar && route && !route.one;
+  return (
+    <>
+      <PSec id="grp" title={`${label} — ${ms.length} ${PLURAL[m.kind] ?? 'אלמנטים'}`} testId="psec-group">
+        {!plateLike && (blocked
+          ? <><div className="field prof"><label>חתך</label><span className="readonly mono">{profiles.join(', ')}</span></div><div className="hint" style={{ marginTop: 0 }}>החתך נקבע לכל {route!.what} — לשינוי: "כל הדומים".</div></>
+          : <div className="field prof"><label>חתך {profiles.length > 1 ? '(משתנה)' : ''}</label><ProfilePicker testId="grp-profile" value={profiles.length === 1 ? profiles[0] : ''} placeholder={profiles.length > 1 ? 'משתנה' : undefined} varies={profiles.length > 1} families={FAMS[m.kind]} onCommit={setProf} /></div>)}
+        {viaRoute && <div className="hint" style={{ marginTop: 0 }}>חל על כל {route!.what} — פחי החיבור מתעדכנים לפי החתך.</div>}
+        <div className="field"><label>חומר</label>
+          <select className="inp" value={[...new Set(ms.map((x) => x.material))].length === 1 ? m.material : ''} onChange={(e) => e.target.value && store.exec(setMemberProps(ids, { material: e.target.value }))}>
+            {[...new Set(ms.map((x) => x.material))].length > 1 && <option value="">משתנה</option>}{MATERIALS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </select></div>
+        <dl className="kv"><dt>משקל כולל</dt><dd>{f1(ms.reduce((a, x) => { const pr = tryProfile(x.profile); return a + (pr ? massPerMeter(pr, getMaterial(x.material).density) * cutLength(x).max / 1000 : 0); }, 0))} ק"ג</dd></dl>
+        <Collapsed items={ms} first={4} testId="grp-list" render={(x) => <div key={x.id} className="sum-row" onClick={() => store.select([x.id])}><span className="mono">{x.id}</span><span className="k">{x.profile} · {(cutLength(x).max / 1000).toFixed(3)} מ'</span></div>} />
+        <button className="btn small" onClick={() => store.exec(resetOverrides(ids))}>איפוס התאמות ידניות בקבוצה</button>
+      </PSec>
+      {children}
+    </>
   );
 }

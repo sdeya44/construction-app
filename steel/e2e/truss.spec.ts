@@ -21,6 +21,7 @@ test('TR-01: מסבכי גג — הפעלה, עריכת שדה וצומת בלח
   await shot(page, 'TR_01_roof');
   // לחיצה על מוט מסבך בתלת-ממד — האשף בפאנל המאפיינים
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.select([k.store.state.derived.members.find((m: any) => m.id.startsWith('TR.')).id]); });
+  await page.getByTestId('pscope-asm').click();
   await expect(page.getByTestId('psec-shape')).toContainText('מסבך גג');
   await expect(page.getByTestId('props-single').getByTestId('tw-roof-pv-diag')).toBeVisible();
 });
