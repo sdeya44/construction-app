@@ -242,6 +242,11 @@ function PlanShapeFields() {
 }
 
 /** שדות נעילה אופקית. lineId — עריכה לציר אחד בלבד (חריגה); בלי — לכל הצירים */
+/** "כל הצירים": הערך הכללי גובר — מוחקים את אותם מפתחות מחריגות הצירים */
+function stripKeys<T extends object>(o: Record<string, T>, keys: string[]): Record<string, T> {
+  return Object.fromEntries(Object.entries(o).map(([l, v]) => [l, Object.fromEntries(Object.entries(v).filter(([k]) => !keys.includes(k))) as T]));
+}
+
 export function LockTrussFields({ lineId }: { lineId?: string } = {}) {
   const br = useStore((s) => s.project.building.bracing);
   const ed = useEdit();
@@ -249,7 +254,7 @@ export function LockTrussFields({ lineId }: { lineId?: string } = {}) {
   const p: LockTrussParams = { ...g, ...(lineId ? br.walls.lineTruss?.[lineId] ?? {} : {}) };
   const set = (patch: Partial<LockTrussParams>) => store.exec(setBuilding({ bracing: { ...br, walls: lineId
     ? { ...br.walls, lineTruss: { ...(br.walls.lineTruss ?? {}), [lineId]: { ...(br.walls.lineTruss?.[lineId] ?? {}), ...patch } } }
-    : { ...br.walls, truss: { ...g, ...patch } } } }));
+    : { ...br.walls, truss: { ...g, ...patch }, ...(br.walls.lineTruss ? { lineTruss: stripKeys(br.walls.lineTruss, Object.keys(patch)) } : {}) } } }));
   const shape = <>
     {ed.showProfile && <>
       <div className="field prof"><label>סיב וחגורה</label><ProfilePicker testId="lt-chord" value={p.chord} families={['RHS', 'SHS']} onCommit={(v) => set({ chord: v })} /></div>
@@ -296,7 +301,7 @@ export function PortalFields({ lineId }: { lineId?: string } = {}) {
   const p: PortalBraceParams = { ...g, ...(lineId ? br.walls.linePortal?.[lineId] ?? {} : {}) };
   const set = (patch: Partial<PortalBraceParams>) => store.exec(setBuilding({ bracing: { ...br, walls: lineId
     ? { ...br.walls, linePortal: { ...(br.walls.linePortal ?? {}), [lineId]: { ...(br.walls.linePortal?.[lineId] ?? {}), ...patch } } }
-    : { ...br.walls, portal: { ...g, ...patch } } } }));
+    : { ...br.walls, portal: { ...g, ...patch }, ...(br.walls.linePortal ? { linePortal: stripKeys(br.walls.linePortal, Object.keys(patch)) } : {}) } } }));
   const shape = <>
     <PortalSchematic invert={!!p.invert} params={p} onSet={set} />
     {ed.showProfile && <>

@@ -161,7 +161,7 @@ export function ScopeSwitch({ scope, setScope }: { scope: AsmScope; setScope: (v
 }
 
 /** צורה ומידות של המכלול (בלי חתך — החתך נבחר רק ב"חתך וחומר") */
-export function AssemblyShape({ asm, scope, setScope }: { asm: Asm; scope: AsmScope; setScope: (v: AsmScope) => void }) {
+export function AssemblyShape({ asm, scope, setScope, fixed }: { asm: Asm; scope: AsmScope; setScope: (v: AsmScope) => void; /** ההיקף נקבע בראש החלון — בלי בורר פנימי */ fixed?: boolean }) {
   const br = useStore((s) => s.project.building.bracing);
   const wallFam = asm.family === 'lock' || asm.family === 'portal' || asm.family === 'wallx';
   const lineType = (asm.lineId && br.walls.lineType?.[asm.lineId]) ?? br.walls.type ?? 'x';
@@ -169,7 +169,7 @@ export function AssemblyShape({ asm, scope, setScope }: { asm: Asm; scope: AsmSc
   return (
     <EditCtx.Provider value={{ embed: true, part: 'shape' }}>
       {wallFam && <>
-        <ScopeSwitch scope={scope} setScope={setScope} />
+        {!fixed && <ScopeSwitch scope={scope} setScope={setScope} />}
         <div className="field"><label>צורה</label><WallTypeSwitch asm={asm} scope={scope} /></div>
         {lineType === 'truss' && <LockTrussFields lineId={lid} />}
         {lineType === 'portal' && <PortalFields lineId={lid} />}

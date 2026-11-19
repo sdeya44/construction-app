@@ -1,6 +1,8 @@
 import { settingsOf } from './navIndex';
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { resetOverrides, setBuilding, setKneeBraces, setMemberProps, setTransfers, type Command } from '../commands/commands';
+import { defaultLockTruss } from '../geometry/lockTruss';
+import { defaultPortal } from '../geometry/portal';
 import { useFab } from '../fab/useFab';
 import { fromMm } from '../core/units';
 import { dist } from '../core/vec';
@@ -113,7 +115,7 @@ function PropertiesInner() {
   const custom = plateLike && m.connId?.startsWith('C.CD.') ? d.connById.get(m.connId)?.custom : undefined;
   const opts = scopeOptions(m, d);
   // היקף שנבחר קודם ואינו זמין לאלמנט הזה (למשל "כל הציר" לפלטה) — חוזרים ל"האלמנט הזה"
-  const scopeNow = scopeSel ? (opts.some((o) => o.key === scopeSel) ? scopeSel : 'one') : null;
+  const scopeNow = scopeSel ? (opts.some((o) => o.key === scopeSel) ? scopeSel : opts[0].key) : null;
   const route = profileRoute(m, p);
   const head = (
     <div className="el-head">
@@ -219,11 +221,13 @@ function PropertiesInner() {
     {tbDef && <PSec id="shape" title={`צורה ומידות — ${tbDef.kind === 'truss' ? 'מסבך נושא' : 'קורה נושאת'}`} testId="psec-shape"><div data-testid="hub-settings"><TransferShape id={tbDef.id} /></div></PSec>}
   </>;
   const cur = opts.find((o) => o.key === scopeNow);
+  const braceAsm = isBraceAsm(asm?.family);
+  const asmScope: AsmScope = braceAsm ? (scopeNow === 'asmall' || !fam?.lineId ? 'all' : 'line') : scope;
   return (
     <div className="panel-body" data-testid="props-single">
       {head}
       <ScopeBar opts={opts} cur={scopeNow} />
-      {!scopeNow && <div className="hint" data-testid="pscope-hint">בחר על מה לעבוד: האלמנט הזה בלבד, המכלול שלו, כל הציר או כל הדומים — ויוצגו ההגדרות של הבחירה.</div>}
+      {!scopeNow && <div className="hint" data-testid="pscope-hint">{braceAsm ? 'האלמנט הוא חלק ממכלול — בחר: המכלולים בציר הזה או כל המכלולים במודל, ויוצגו סוג המכלול, מידות, חתך ופרטי חיבור.' : 'בחר על מה לעבוד: האלמנט הזה בלבד, המכלול שלו, כל הציר או כל הדומים — ויוצגו ההגדרות של הבחירה.'}</div>}
       {scopeNow === 'one' && <>
         {manualNote}
         <PSec id="part" title="שרטוט החלק" testId="psec-part"><PartPreview m={m} mark={mark} /></PSec>
@@ -243,7 +247,14 @@ function PropertiesInner() {
         {connBlock}
         {advanced}
       </>}
-      {scopeNow === 'asm' && <>
+      {braceAsm && fam && (scopeNow === 'asm' || scopeNow === 'asmall') && <>
+        <AssemblyCard m={m} />
+        <div className="hint" data-testid="asm-applies">חל על: <b>{cur?.label}</b> — כל שינוי למטה (צורה, מידות, חתך, פרטים) יחול על כולם.</div>
+        <PSec id="shape" title={`סוג ומידות — ${fam.title.split(' — ')[0]}`} testId="psec-shape"><div data-testid="hub-settings"><AssemblyShape asm={fam} scope={asmScope} setScope={setScope} fixed /></div></PSec>
+        {!plateLike && <PSec id="prof" title="חתך" testId="psec-prof">{secCard}<AsmProfile m={m} scope={asmScope} lineId={fam.lineId} ids={cur?.ids ?? []} /></PSec>}
+        <PSec id="conns" title="פרטי חיבור" testId="ptab-conns"><AssemblyConn asm={fam} scope={asmScope} /><MemberConnections memberId={m.id} /></PSec>
+      </>}
+      {!braceAsm && scopeNow === 'asm' && <>
         <AssemblyCard m={m} />
         {(fam || inRT || tbDef) ? famShape : null}
         {!plateLike && <PSec id="prof" title="חתך — כל המכלול / כל הדומים" testId="psec-prof">{secCard}<ProfileScope m={m} />{matField(cur?.ids ?? [m.id])}</PSec>}
@@ -313,6 +324,51 @@ function profileRoute(m: Member, p: Project): { all: (v: string) => Command; one
   }
   if (/^HB\./.test(id) && br.roof.rhs) { const isD = /\.D\d+$/.test(id); return { all: (v) => setBuilding({ bracing: { ...br, roof: { ...br.roof, rhs: { ...br.roof.rhs!, ...(isD ? { diag: v } : { strut: v }) } } } }), one: false, what: isD ? 'אלכסוני הסבכה' : 'מוטות הסבכה' }; }
   return null;
+}
+
+/** חתך לאלמנט במכלול קשיחות: לפי ההיקף שנבחר בראש החלון (המכלולים בציר / כל המכלולים) */
+function AsmProfile({ m, scope, lineId, ids }: { m: Member; scope: AsmScope; lineId?: string; ids: string[] }) {
+  const p = useStore((s) => s.project);
+  const route = profileRoute(m, p);
+  const br = p.building.bracing;
+  const apply = (v: string) => {
+    if (/^LT\./.test(m.id)) {
+      // מסבך נעילה: החתך הוא פרמטר של המסבך (סיב/חגורה או אלכסונים)
+      const g = br.walls.truss ?? defaultLockTruss(), lp = lineId ? br.walls.lineTruss?.[lineId] ?? {} : {};
+      const k: 'chord' | 'diag' = /\.D\d+$/.test(m.id) ? 'diag' : 'chord';
+      const walls = scope === 'line' && lineId
+        ? { ...br.walls, lineTruss: { ...(br.walls.lineTruss ?? {}), [lineId]: { ...lp, [k]: v } } }
+        : { ...br.walls, truss: { ...g, [k]: v }, ...(br.walls.lineTruss ? { lineTruss: Object.fromEntries(Object.entries(br.walls.lineTruss).map(([l, o]) => { const { [k]: _x, ...rest } = o; void _x; return [l, rest]; })) } : {}) };
+      store.exec(setBuilding({ bracing: { ...br, walls } }));
+      const ov = ids.filter((x) => p.memberOverrides[x]?.profile);
+      if (ov.length) store.exec(resetOverrides(ov));
+      return;
+    }
+    if (/^BB\./.test(m.id)) {
+      // אגד B: החתך הוא פרמטר (קורה / אלכסונים) — לציר או כללי; "כללי" מוחק את החריגות של הצירים
+      const k: 'beam' | 'brace' = /\.K\d+$/.test(m.id) ? 'brace' : 'beam';
+      const g = br.walls.portal ?? defaultPortal(), lp = br.walls.linePortal;
+      const walls = scope === 'line' && lineId
+        ? { ...br.walls, portal: g, linePortal: { ...(lp ?? {}), [lineId]: { ...(lp?.[lineId] ?? {}), [k]: v } } }
+        : { ...br.walls, portal: { ...g, [k]: v }, ...(lp ? { linePortal: Object.fromEntries(Object.entries(lp).map(([l, o]) => { const { [k]: _x, ...rest } = o; void _x; return [l, rest]; })) } : {}) };
+      store.exec(setBuilding({ bracing: { ...br, walls } }));
+      const pre = 'BB.', ov = Object.keys(p.memberOverrides).filter((x) => x.startsWith(pre) && p.memberOverrides[x]?.profile);
+      if (ov.length) store.exec(resetOverrides(ov));
+      return;
+    }
+    if (scope === 'all' && route) {
+      store.exec(route.all(v));
+      const ov = ids.filter((x) => p.memberOverrides[x]?.profile);
+      if (ov.length) store.exec(resetOverrides(ov));
+      return;
+    }
+    store.exec(setMemberProps(ids.length ? ids : [m.id], { profile: v }));
+  };
+  const role = m.kind === 'column' || m.kind === 'rafter' || m.kind === 'purlin' ? m.kind : undefined;
+  return <>
+    <div className="field prof"><label>חתך</label><ProfilePicker testId="prop-profile" value={m.profile} families={FAMS[m.kind]} role={role} onCommit={apply} /></div>
+    <div className="hint" style={{ marginTop: 0 }}>{route?.what ? `${route.what} — ` : ''}{ids.length} אלמנטים ב-{m.profile}{scope === 'line' ? ' בציר הזה' : ' במודל'}.</div>
+  </>;
 }
 
 function ProfileScope({ m }: { m: Member }) {
@@ -529,15 +585,30 @@ function LengthTable({ m }: { m: Member }) {
 // היקף קודם (1.45): בלחיצה על אלמנט בוחרים על מה עובדים — האלמנט / המכלול / הציר / המסגרת / כל הדומים.
 // המודל מציג את הבחירה (בידוד), והפאנל — רק את ההגדרות שלה.
 
-export type PropScope = 'one' | 'asm' | 'line' | 'frame' | 'similar';
+export type PropScope = 'one' | 'asm' | 'asmall' | 'line' | 'frame' | 'similar';
 export interface ScopeOpt { key: PropScope; label: string; ids: string[]; show: string[] }
 
 /** אפשרויות ההיקף לאלמנט: מזהי האלמנטים שהשינוי חל עליהם (ids) ומה מוצג בתלת-ממד (show) */
 export function scopeOptions(m: Member, d: DerivedModel): ScopeOpt[] {
   const parts = (ids: string[]) => d.connections.filter((c) => c.members.some((x) => ids.includes(x)) || c.parts.some((x) => ids.includes(x)))
     .flatMap((c) => [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`])]);
-  const out: ScopeOpt[] = [{ key: 'one', label: 'האלמנט הזה', ids: [m.id], show: [m.id, ...parts([m.id])] }];
   const asm = assemblyOf(m, d);
+  // אלמנט שהוא חלק ממכלול קשיחות (אגד B / נעילה / X בקיר / קושרות גג) — עובדים רק על מכלולים (1.48)
+  const bf = asm ? BRACE_ASM[asm.family] : undefined;
+  if (asm && bf) {
+    const lab = asm.lineId ? d.section?.lines.find((l) => l.id === asm.lineId)?.label ?? asm.lineId : '';
+    const pick = (line?: string) => {
+      const all = d.members.filter((x) => bf.re.test(x.id) && (!line || bf.line(x.id) === line));
+      const same = plateKind(m) ? [] : all.filter((x) => x.kind === m.kind && x.profile === m.profile).map((x) => x.id);
+      const ids = all.map((x) => x.id);
+      return { ids: same, show: [...ids, ...parts(ids)] };
+    };
+    const o: ScopeOpt[] = [];
+    if (asm.lineId) o.push({ key: 'asm', label: `המכלולים בציר ${lab}`, ...pick(asm.lineId) });
+    o.push({ key: 'asmall', label: asm.family === 'roofx' ? 'כל קושרות הגג' : 'כל המכלולים במודל', ...pick() });
+    return o;
+  }
+  const out: ScopeOpt[] = [{ key: 'one', label: 'האלמנט הזה', ids: [m.id], show: [m.id, ...parts([m.id])] }];
   if (asm && asm.ids.length > 1) out.push({ key: 'asm', label: `המכלול${asm.family === 'frame' ? ' (המסגרת)' : ''}`, ids: asm.ids.filter((x) => d.byId.get(x)?.kind === m.kind), show: asm.ids });
   else if (/^(TR|TB)\./.test(m.id)) {
     // מסבך גג / קורה או מסבך נושא: המכלול = כל האלמנטים עם אותה תחילית
@@ -553,6 +624,15 @@ export function scopeOptions(m: Member, d: DerivedModel): ScopeOpt[] {
   if (sim.length > 1) out.push({ key: 'similar', label: `כל הדומים`, ids: sim.map((x) => x.id), show: sim.map((x) => x.id) });
   return out;
 }
+const plateKind = (m: Member) => m.kind === 'plate' || m.kind === 'cleat' || m.kind === 'bolt' || m.kind === 'anchor';
+/** מכלולי קשיחות: זיהוי לפי מזהה, והציר של כל אלמנט */
+const BRACE_ASM: Partial<Record<string, { re: RegExp; line: (id: string) => string | undefined }>> = {
+  portal: { re: /^BB\.\d+\./, line: (id) => /^BB\.\d+\.([^.]+)/.exec(id)?.[1] },
+  lock: { re: /^LT\.\d+\./, line: (id) => /^LT\.\d+\.([^.]+)/.exec(id)?.[1] },
+  wallx: { re: /^BR\.W\d+\./, line: (id) => /^BR\.W\d+\.([^.]+)/.exec(id)?.[1] },
+  roofx: { re: /^BR\.R\d+\./, line: () => undefined },
+};
+export const isBraceAsm = (fam?: string) => !!fam && !!BRACE_ASM[fam];
 /** ציר של אלמנט שאין לו lineId (רק לעמודים יש) — לפי המזהה של עמוד: F.COL.<ציר> */
 function assemblyOfCache(x: Member, _d: DerivedModel): string | undefined { void _d; const mm = /\.COL\.([^.]+)$/.exec(x.id); return mm?.[1]; }
 

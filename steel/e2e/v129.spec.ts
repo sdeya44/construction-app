@@ -111,7 +111,7 @@ test('V129-05 חלון מכלול: נעילה אופקית — צורה לציר
   await expect(page.getByTestId('asm-title')).toContainText('נעילה');
   await expect(page.getByTestId('asm-pic')).toBeVisible();
   await shot(page, 'v129-asm-lock');
-  await page.getByTestId('asm-scope-line').check();
+  await expect(page.getByTestId('asm-applies')).toContainText('המכלולים בציר'); // ההיקף נקבע בראש החלון (1.48)
   await page.getByTestId('asm-type-portal').click();
   await page.waitForTimeout(400);
   const s = await page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { bbL: d.members.some((m: any) => /^BB\..*\.L$/.test(m.id)), ltR: d.members.some((m: any) => /^LT\..*\.R\./.test(m.id)), err: d.issues.filter((i: any) => i.severity === 'error').length }; });

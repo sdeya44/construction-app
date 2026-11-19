@@ -88,9 +88,8 @@ test('HUB-02: לחיצה על אלכסון אגד B — שרטוט סכמטי ע
   await page.getByTestId('nav-b:knee').click(); // תפריט אחר פתוח — ההגדרות של האגד בפאנל האלמנט
   const id = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BB.'))?.id);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), id);
-  await page.getByTestId('pscope-asm').click(); // היקף: כל המכלול (האגד)
+  await page.getByTestId('pscope-asmall').click(); // היקף (1.48): כל המכלולים במודל
   await expect(page.getByTestId('hub-settings')).toBeVisible();
-  await page.getByTestId('asm-scope-all').check(); // חלון המכלול: שינוי לכל הצירים
   await page.getByTestId('hub-settings').getByTestId('sch-pb-drop').click();
   await page.getByTestId('sch-pb-drop-inp').fill('900'); await page.getByTestId('sch-pb-drop-inp').press('Enter');
   expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.walls.portal.drop)).toBe(900);
@@ -117,7 +116,8 @@ test('HUB-03: שינוי חתך מפאנל אלכסון — "רק האלמנט �
   // קושרת גג
   const br = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BR.R'))?.id);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), br);
-  await pickProfile(page, 'grp-profile', 'L60x6', 'L'); // היקף "כל הדומים" נשמר מהבחירה הקודמת
+  await expect(page.getByTestId('pscope-asmall')).toHaveClass(/on/); // קושרות גג = מכלול (1.48): רק "כל קושרות הגג"
+  await pickProfile(page, 'prop-profile', 'L60x6', 'L');
   const roof = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('BR.R')).map((m: any) => m.profile))]);
   expect(roof).toEqual(['L60x6']);
   await shot(page, 'HUB_03_brace_profile');

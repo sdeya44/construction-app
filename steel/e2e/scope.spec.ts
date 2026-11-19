@@ -55,3 +55,59 @@ test('SCOPE-02 (1.47.1): ברירת מחדל — לחיצה על אלמנט וב
   expect((await page.evaluate(() => (window as any).__ksp.store.state.isolated))?.length).toBeGreaterThan(1);
   expect(errors).toEqual([]);
 });
+
+test('SCOPE-03 (1.48): אלמנט במכלול קשיחות — רק "המכלולים בציר" / "כל המכלולים"; סוג וחתך לפי ההיקף', async ({ page }) => {
+  const errors = await boot(page);
+  const S = () => page.evaluate(() => (window as any).__ksp.store.state);
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.set({ propScope: null }); k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, bracing: { ...p.building.bracing, walls: { ...p.building.bracing.walls, enabled: true, type: 'portal' } } } }) }); });
+  const lines: string[] = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => /^BB\./.test(m.id)).map((m: any) => m.id.split('.')[2]))] as string[]);
+  expect(lines.length).toBeGreaterThan(1);
+  const [a, b] = lines;
+  const bbK = (l: string) => page.evaluate((ll) => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith(`BB.`) && m.id.split('.')[2] === ll && /\.K1$/.test(m.id)).id, l);
+  await page.evaluate((i) => (window as any).__ksp.store.select([i]), await bbK(a));
+  // אין "רק האלמנט הזה" / "כל הדומים" — רק מכלולים
+  await expect(page.getByTestId('pscope-one')).toHaveCount(0);
+  await expect(page.getByTestId('pscope-similar')).toHaveCount(0);
+  await page.getByTestId('pscope-asm').click();
+  await expect(page.getByTestId('asm-applies')).toContainText('המכלולים בציר');
+  await expect(page.getByTestId('asm-scope-line')).toHaveCount(0); // ההיקף נקבע למעלה
+  // חתך האלכסונים — לציר הזה בלבד
+  await pickProfile(page, 'prop-profile', 'SHS100x5', 'SHS');
+  const prof = (l: string) => page.evaluate((ll) => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BB.') && m.id.split('.')[2] === ll && /\.K1$/.test(m.id)).profile, l);
+  expect(await prof(a)).toBe('SHS100x5');
+  expect(await prof(b)).not.toBe('SHS100x5');
+  // סוג — לציר הזה בלבד
+  await page.getByTestId('asm-type-truss').click();
+  let w = (await S()).project.building.bracing.walls;
+  expect(w.lineType[a]).toBe('truss');
+  expect(w.lineType[b] ?? w.type).toBe('portal');
+  // מכלול בציר השני → כל המכלולים במודל → X לכולם
+  await page.evaluate((i) => (window as any).__ksp.store.select([i]), await bbK(b));
+  await page.getByTestId('pscope-asmall').click();
+  await expect(page.getByTestId('asm-applies')).toContainText('כל המכלולים במודל');
+  await page.getByTestId('asm-type-x').click();
+  w = (await S()).project.building.bracing.walls;
+  expect(w.type).toBe('x');
+  expect(w.lineType).toBeUndefined();
+  expect(errors).toEqual([]);
+});
+
+test('SCOPE-04 (1.48): "כל המכלולים במודל" גובר על הגדרה קודמת לציר', async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.set({ propScope: null }); k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, bracing: { ...p.building.bracing, walls: { ...p.building.bracing.walls, enabled: true, type: 'portal' } } } }) }); });
+  const lines: string[] = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => /^BB\./.test(m.id)).map((m: any) => m.id.split('.')[2]))] as string[]);
+  const [a, b] = lines;
+  const bbK = (l: string) => page.evaluate((ll) => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BB.') && m.id.split('.')[2] === ll && /\.K1$/.test(m.id)), l);
+  // ציר a: חתך אלכסון לציר בלבד
+  await page.evaluate(async (i) => (window as any).__ksp.store.select([i]), (await bbK(a)).id);
+  await page.getByTestId('pscope-asm').click();
+  await pickProfile(page, 'prop-profile', 'SHS100x5', 'SHS');
+  expect((await bbK(a)).profile).toBe('SHS100x5');
+  // מציר b: כל המכלולים — גם ציר a מתעדכן
+  await page.evaluate(async (i) => (window as any).__ksp.store.select([i]), (await bbK(b)).id);
+  await page.getByTestId('pscope-asmall').click();
+  await pickProfile(page, 'prop-profile', 'SHS120x5', 'SHS');
+  expect((await bbK(a)).profile).toBe('SHS120x5');
+  expect((await bbK(b)).profile).toBe('SHS120x5');
+  expect(errors).toEqual([]);
+});
