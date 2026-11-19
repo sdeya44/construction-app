@@ -15,9 +15,12 @@ test('TB-01: דילול עמודים — בחירת עמודים, חלון הצ�
   await shot(page, 'TB_02_model');
   await page.getByTestId('nav-b:tb').click();
   const id = await page.evaluate(() => (window as any).__ksp.store.state.project.building.transfers[0].id);
+  await page.getByTestId('tb-grp-0-edit').click();
+  await page.getByTestId('tb-ed-tab-support').click();
   await page.getByTestId(`tb-sup-tile-${id}-A2`).click();
   expect((await st()).err).toBe(0);
   expect((await st()).seats).toBe(3);
+  await page.getByTestId('tb-ed-back').click();
   await page.getByTestId(`tb-restore-${id}`).click();
   expect((await st()).cols).toBe(12);
 });

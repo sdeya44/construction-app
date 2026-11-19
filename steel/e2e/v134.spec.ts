@@ -34,6 +34,7 @@ test('V134-02: בורר פרופיל — חלונית עם סוגים וגדלי
 test('V134-03: תוכנית מסגרות ומרווחי פטות — עריכה על השרטוט', async ({ page }) => {
   await boot(page);
   await page.getByTestId('nav-s:geometry').click();
+  await page.getByTestId('geo-ed-tab-frames').click();
   await editDim(page, 'fs-bay-1', '5000');
   const fr = [...(await B(page)).frames].sort((a: any, b: any) => a.y - b.y);
   expect(fr[2].y - fr[1].y).toBe(5000);
@@ -57,6 +58,7 @@ test('V134-04: חיבורים מקובצים, קשיחות קירות בתוכנ
   // קשיחות קירות
   await page.getByTestId('nav-b:walls').click();
   if (!(await page.getByTestId('br-walls').isChecked())) await page.getByTestId('off-walls-add').click();
+  await page.getByTestId('br-walls-ed-tab-lines').click();
   await expect(page.getByTestId('walls-plan')).toBeVisible();
   const lines = await page.evaluate(() => (window as any).__ksp.store.state.derived.section.lines.map((l: any) => l.id));
   const before = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('BR.W')).length);

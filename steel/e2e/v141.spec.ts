@@ -36,11 +36,26 @@ test('V141-02: דילול עמודים — אלכסוני Y והחלה על כל
     { id: 'T1', lineId: 'L', from: 'F1', to: 'F3', removed: ['F2'], profile: 'IPE300', support: 'A1', seat: 'B1' },
     { id: 'T2', lineId: 'L', from: 'F3', to: 'F5', removed: ['F4'], profile: 'IPE300', support: 'A1', seat: 'B1' }] } }) }); });
   await page.getByTestId('nav-b:tb').click();
+  // שתי קורות זהות — קבוצה אחת; "ערוך את כולן" ← לשונית אלכסוני Y
+  await expect(page.getByTestId('tb-grp-1')).toHaveCount(0);
+  await page.getByTestId('tb-grp-0-edit').click();
+  await page.getByTestId('tb-ed-tab-knee').click();
   await page.getByTestId('tb-knee-T1').check();
-  await page.getByTestId('tb-apply-line-T1').click();
   const t = (await S(page)).project.building.transfers;
   expect(t.every((x: any) => x.knee?.enabled)).toBe(true);
   expect(await count(page, '^KT\\.')).toBe(4);
   expect((await S(page)).derived.issues.filter((i: any) => i.severity === 'error')).toEqual([]);
+  // קורה אחת מהרשימה — הופכת לחריג (קבוצה שנייה); "החל על כל הקורות בציר" מחזיר לקבוצה אחת
+  await page.getByTestId('tb-ed-back').click();
+  await page.getByTestId('tb-row-T2').click();
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, transfers: p.building.transfers.map((x: any) => (x.id === 'T2' ? { ...x, profile: 'IPE330' } : x)) } }) }); });
+  await page.getByTestId('tb-ed-back').click();
+  await expect(page.getByTestId('tb-grp-1')).toBeVisible();
+  await page.getByTestId('tb-grp-0-edit').click();
+  await page.getByTestId('tb-ed-tab-adv').click();
+  await page.getByTestId('tb-apply-line-T1').click();
+  await page.getByTestId('tb-ed-back').click();
+  await expect(page.getByTestId('tb-grp-1')).toHaveCount(0);
+  await shot(page, 'V141_02_groups');
   expect(errors).toEqual([]);
 });

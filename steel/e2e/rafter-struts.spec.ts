@@ -5,6 +5,7 @@ test('RS-01: תמוכות בין הקורות — שורה מציר א לכיו�
   const errors = await boot(page);
   await page.getByTestId('nav-b:roof').click();
   const S = () => page.evaluate(() => (window as any).__ksp.store.state);
+  await page.getByTestId('br-roof-ed-tab-struts').click();
   await page.getByTestId('rs-add').click();
   await page.getByTestId('rs-dist-0').fill('4000'); await page.getByTestId('rs-dist-0').press('Enter');
   const st = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => /^RS1\.\d+$/.test(m.id)).length);
@@ -20,9 +21,12 @@ test('RS-01: תמוכות בין הקורות — שורה מציר א לכיו�
   // קושרות הגג בקטע עם תמוכה: 2 פנלים; התמוכה מסומנת בתוכנית
   const b0 = bays[0];
   const seg = await page.evaluate(() => (window as any).__ksp.store.state.derived.roofSegments[0].id);
+  await page.getByTestId('br-roof-ed-tab-plan').click();
   expect(await page.getByTestId(`br-grid-rs-${b0}-${seg}`).count()).toBeGreaterThan(0); // קו אופקי — גובה 0, נבדק לפי קיום
   // לחיצה על התא: X → 2X — חלוקה ידנית; עם התמוכה — התראה
   await page.getByTestId(`br-grid-${b0}-${seg}`).click();
+  await expect(page.getByTestId('br-roof-alerts')).toContainText('בוטלה'); // התראות בראש המסך
+  await page.getByTestId('br-roof-ed-tab-struts').click();
   await expect(page.getByTestId('rs-issues')).toContainText('בוטלה');
   const issues = await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'CLASH'));
   expect(issues).toEqual([]);

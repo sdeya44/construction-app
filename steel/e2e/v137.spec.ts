@@ -27,6 +27,7 @@ test('V137-02: מסבך נושא בין העמודים — סנפיר שוכב/�
   await page.getByTestId('ctx-omit').click();
   await page.getByTestId('omit-apply').click();
   await page.getByTestId('nav-b:tb').click();
+  await page.getByTestId('tb-grp-0-edit').click();
   const id = await page.evaluate(() => (window as any).__ksp.store.state.project.building.transfers[0].id);
   await page.getByTestId(`tb-kind-truss-${id}`).click();
   for (const g of ['top', 'bottom']) { await page.getByTestId(`tw-${id}-p-${g}`).fill('RHS120x80x5'); await page.getByTestId(`tw-${id}-p-${g}`).press('Enter'); }

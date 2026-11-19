@@ -14,6 +14,7 @@ test('SCH-01: שרטוטים אינטראקטיביים — פטות, תומך, 
   await expect(page.getByTestId('sch-purlins-left')).toBeVisible();
   await editDim(page, 'sch-left-s0', '350');
   expect((await st(page)).purlins.left.first).toBe(350);
+  await page.getByTestId('purl-ed-tab-cleat').click();
   await editDim(page, 'sch-left-cl-base', '90');
   expect((await st(page)).purlins.left.cleat.base).toBe(90);
   await shot(page, 'SCH_01_purlins');
@@ -28,6 +29,7 @@ test('SCH-01: שרטוטים אינטראקטיביים — פטות, תומך, 
   const before = (await st(page)).bracing.roof.bays.length;
   await page.getByTestId('br-grid-2-L').click();
   expect((await st(page)).bracing.roof.bays.length).not.toBe(before);
+  await page.getByTestId('br-roof-ed-tab-sec').click();
   await editDim(page, 'sch-brc-end', '35');
   expect((await st(page)).bracing.conn.endDist).toBe(35);
   await shot(page, 'SCH_03_roofX');

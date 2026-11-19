@@ -9,7 +9,7 @@ import { defaultRodEnd, resolveBays, wallBays } from '../geometry/bracing';
 import { defaultRafterStruts, STRUT_DETAIL_HE } from '../geometry/rafterStruts';
 import { defaultFlyBraces, defaultLineTies, defaultSagRods } from '../geometry/roofExtras';
 import { uid } from '../core/ids';
-import { catalogNames } from '../profiles/library';
+import { catalogNames, tryProfile } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
 import { store, useStore } from '../store';
 import { Adv, BoltSelect, LenField, NumField, ProfilePicker, TextField, useEdit, Help } from './fields';
@@ -19,6 +19,7 @@ import { ClassicRoofDims } from './TriDims';
 import { FramesStrip, GussetSchematic, LockTrussSchematic, PortalSchematic, RidgeSchematic, WallsPlan } from './schematics';
 import { MenuPic, OffCard } from './pics';
 import { DetailTiles, PIC } from './DetailPicker';
+import { PanelAlerts, SumCard, TabbedEditor } from './summary';
 
 export function ProfileDatalist() {
   return (
@@ -26,6 +27,25 @@ export function ProfileDatalist() {
       {catalogNames().flatMap((g) => g.names).map((n) => <option key={n} value={n} />)}
     </datalist>
   );
+}
+
+/** סיכום הגיאומטריה: צירים, רוחב, גבהים, מסגרות */
+function GeomSummary() {
+  const b = useStore((s) => s.project.building);
+  const d = useStore((s) => s.derived);
+  const lines = [...(d.section?.lines ?? [])].sort((p, q) => p.x - q.x);
+  const fr = [...b.frames].sort((p, q) => p.y - q.y);
+  const sp = fr.slice(1).map((f, i) => Math.round(f.y - fr[i].y));
+  const uniq = [...new Set(sp)];
+  const L = fr.length ? fr[fr.length - 1].y - fr[0].y : 0;
+  const W = lines.length ? lines[lines.length - 1].x - lines[0].x : 0;
+  const issues = d.issues.filter((i) => ['PLANE_THROUGH', 'FRAMES', 'SECTION', 'GEOM'].includes(i.code) || /^(SEC|PLANE)/.test(i.code));
+  const m = (v: number) => (v / 1000).toFixed(2);
+  return <>
+    <SumCard testId="geo-sum" title={`${lines.length} צירים (${lines.map((l) => l.label).join(' · ')}) · רוחב ${m(W)} מ'`}
+      sub={`${fr.length} מסגרות · אורך ${m(L)} מ' · מפתחים ${uniq.length <= 3 ? uniq.map((v) => `${sp.filter((x) => x === v).length}×${m(v)}`).join(' + ') : `${m(Math.min(...sp))}–${m(Math.max(...sp))} מ'`}`} />
+    <PanelAlerts issues={issues} testId="geo-alerts" />
+  </>;
 }
 
 export type StructSection = 'project' | 'geometry' | 'profiles' | 'bracing' | 'frames';
@@ -40,39 +60,7 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
   const [nf, setNf] = useState(frames.length);
   const [sp, setSp] = useState(6000);
 
-  return (
-    <div className="panel-body" data-testid="structure-panel">
-      {show('project') && <>
-      <div className="panel-title">פרויקט</div>
-      <div className="field wide"><label>שם</label><TextField value={p.meta.name} onCommit={(v) => store.exec(setMeta({ name: v }))} /></div>
-      <div className="field wide"><label>מספר</label><TextField value={p.meta.number} onCommit={(v) => store.exec(setMeta({ number: v }))} /></div>
-      <div className="field wide"><label>לקוח</label><TextField value={p.meta.client} onCommit={(v) => store.exec(setMeta({ client: v }))} /></div>
-      <div className="field wide"><label>מתכנן</label><TextField value={p.meta.designer} onCommit={(v) => store.exec(setMeta({ designer: v }))} /></div>
-      <div className="field"><label>יחידות תצוגה</label>
-        <select className="inp" value={u} onChange={(e) => store.exec(setSettings({ displayUnit: e.target.value as 'm' | 'mm' }))}>
-          <option value="m">מטר</option><option value="mm">מילימטר</option>
-        </select>
-      </div>
-      <div className="field"><label>אורך חומר גלם</label><LenField mm={p.settings.stockLength} unit={u} min={1} onCommit={(v) => store.exec(setSettings({ stockLength: v }))} /></div>
-      <div className="field"><label>חלוקה אוטומטית לחומר גלם</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="auto-splice" checked={p.settings.autoSplice !== false} onChange={(e) => store.exec(setSettings({ autoSplice: e.target.checked }))} />{p.settings.autoSplice !== false ? 'כן — אלמנט ארוך מחולק עם חיבור המשך' : 'לא'}</label></div>
-      {p.settings.autoSplice !== false && <>
-        <div className="field"><label>אופן החלוקה</label>
-          <select className="inp" data-testid="splice-mode" value={p.settings.spliceMode ?? 'stock'} onChange={(e) => store.exec(setSettings({ spliceMode: e.target.value as 'stock' | 'equal' }))}>
-            <option value="stock">מוט מלא ({(p.settings.stockLength / 1000).toFixed(1)} מ') + השלמה</option><option value="equal">חלקים שווים</option>
-          </select></div>
-        {(['beams', 'columns'] as const).map((k) => (
-          <div className="field" key={k}><label>{k === 'beams' ? 'חיבור המשך קורות' : 'חיבור המשך עמודים'}</label>
-            <select className="inp" data-testid={`splice-joint-${k}`} value={p.settings.spliceJoint?.[k] ?? 'bolted'} onChange={(e) => store.exec(setSettings({ spliceJoint: { ...p.settings.spliceJoint, [k]: e.target.value as 'bolted' | 'welded' } }))}>
-              <option value="bolted">מוברג בשטח — פלטות קצה</option>
-              <option value="welded">מרותך במסגריה — פלטות כיסוי (יוצא כחלק אחד)</option>
-            </select></div>
-        ))}
-        <div className="field"><label>פלטות חיזוק בחיבור המשך קורה</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="splice-stiff" checked={!!p.settings.spliceStiffeners} onChange={(e) => store.exec(setSettings({ spliceStiffeners: e.target.checked }))} />{p.settings.spliceStiffeners ? 'כן — משולשים מעל ומתחת' : 'לא'}</label></div>
-      </>}
-      </>}
-
-      {show('geometry') && <>
-      <SectionEditor />
+  const quickJsx = () => <>
       <div className="panel-title">גיאומטריית מבנה</div>
       {!b.section && <Adv id="quick2" label="מידות מהירות — מבנה 2 צירים (סוג גג, רוחב, רכס)">
       <div className="field"><label>סוג גג</label>
@@ -100,20 +88,8 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
         ? 'כל גובה שמוזן (ובמידות על המודל) = פני עליון קורת הגג בציר העמוד. גובה העמוד עצמו נמוך ממנו: פחות עומק הקורה האנכי ופחות שתי פלטות ראש העמוד; ראש העמוד חתוך בשיפוע — בשרטוט החלק: אורך בצד העליון, בצד התחתון ובציר.'
         : 'כל גובה שמוזן = ציר קורת הגג בציר העמוד. גובה העמוד = הגובה פחות חצי עומק הקורה האנכי ופחות שתי פלטות ראש העמוד.'}</div>
 
-      </>}
-      {show('profiles') && <>
-      <div className="panel-title">חתכים וחומר</div>
-      <div className="field prof"><label>עמודים</label><ProfilePicker testId="columnProfile" role="column" value={b.columnProfile} families={['HEA', 'HEB', 'HEM', 'IPE', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ columnProfile: v })} /></div>
-      <div className="field prof"><label>קורות גג</label><ProfilePicker testId="rafterProfile" role="rafter" value={b.rafterProfile} families={['IPE', 'HEA', 'HEB', 'RHS', 'UPN']} onCommit={(v) => set({ rafterProfile: v })} /></div>
-      <div className="field"><label>חומר</label>
-        <select className="inp" value={b.material} onChange={(e) => set({ material: e.target.value })}>
-          {MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-      </div>
-
-      </>}
-      {show('bracing') && <BracingEditor />}
-      {(show('frames') || show('geometry')) && <>
+  </>;
+  const framesJsx = () => <>
       <div className="panel-title">אורך המבנה ומסגרות (לאורך Y)</div>
       <div className="field"><label>אורך המבנה</label><LenField testId="bld-length" mm={frames[frames.length - 1].y - frames[0].y} unit={u} min={1000} onCommit={(v) => store.exec(respaceFrames(frames.length, v / (frames.length - 1)))} /></div>
       <div className="field"><label>מספר מפתחים</label><NumField testId="bld-bays" value={frames.length - 1} onCommit={(v) => { const nb = Math.max(1, Math.round(v)); store.exec(respaceFrames(nb + 1, (frames[frames.length - 1].y - frames[0].y) / nb)); }} /></div>
@@ -152,7 +128,59 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
       <div className="field"><label>מרווח</label><LenField mm={sp} unit={u} onCommit={setSp} /></div>
       <button className="btn" data-testid="respace" onClick={() => store.exec(respaceFrames(nf, sp))}>החל חלוקה</button>
       </Adv>
+  </>;
+  return (
+    <div className="panel-body" data-testid="structure-panel">
+      {show('project') && <>
+      <div className="panel-title">פרויקט</div>
+      <div className="field wide"><label>שם</label><TextField value={p.meta.name} onCommit={(v) => store.exec(setMeta({ name: v }))} /></div>
+      <div className="field wide"><label>מספר</label><TextField value={p.meta.number} onCommit={(v) => store.exec(setMeta({ number: v }))} /></div>
+      <div className="field wide"><label>לקוח</label><TextField value={p.meta.client} onCommit={(v) => store.exec(setMeta({ client: v }))} /></div>
+      <div className="field wide"><label>מתכנן</label><TextField value={p.meta.designer} onCommit={(v) => store.exec(setMeta({ designer: v }))} /></div>
+      <div className="field"><label>יחידות תצוגה</label>
+        <select className="inp" value={u} onChange={(e) => store.exec(setSettings({ displayUnit: e.target.value as 'm' | 'mm' }))}>
+          <option value="m">מטר</option><option value="mm">מילימטר</option>
+        </select>
+      </div>
+      <div className="field"><label>אורך חומר גלם</label><LenField mm={p.settings.stockLength} unit={u} min={1} onCommit={(v) => store.exec(setSettings({ stockLength: v }))} /></div>
+      <div className="field"><label>חלוקה אוטומטית לחומר גלם</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="auto-splice" checked={p.settings.autoSplice !== false} onChange={(e) => store.exec(setSettings({ autoSplice: e.target.checked }))} />{p.settings.autoSplice !== false ? 'כן — אלמנט ארוך מחולק עם חיבור המשך' : 'לא'}</label></div>
+      {p.settings.autoSplice !== false && <>
+        <div className="field"><label>אופן החלוקה</label>
+          <select className="inp" data-testid="splice-mode" value={p.settings.spliceMode ?? 'stock'} onChange={(e) => store.exec(setSettings({ spliceMode: e.target.value as 'stock' | 'equal' }))}>
+            <option value="stock">מוט מלא ({(p.settings.stockLength / 1000).toFixed(1)} מ') + השלמה</option><option value="equal">חלקים שווים</option>
+          </select></div>
+        {(['beams', 'columns'] as const).map((k) => (
+          <div className="field" key={k}><label>{k === 'beams' ? 'חיבור המשך קורות' : 'חיבור המשך עמודים'}</label>
+            <select className="inp" data-testid={`splice-joint-${k}`} value={p.settings.spliceJoint?.[k] ?? 'bolted'} onChange={(e) => store.exec(setSettings({ spliceJoint: { ...p.settings.spliceJoint, [k]: e.target.value as 'bolted' | 'welded' } }))}>
+              <option value="bolted">מוברג בשטח — פלטות קצה</option>
+              <option value="welded">מרותך במסגריה — פלטות כיסוי (יוצא כחלק אחד)</option>
+            </select></div>
+        ))}
+        <div className="field"><label>פלטות חיזוק בחיבור המשך קורה</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="splice-stiff" checked={!!p.settings.spliceStiffeners} onChange={(e) => store.exec(setSettings({ spliceStiffeners: e.target.checked }))} />{p.settings.spliceStiffeners ? 'כן — משולשים מעל ומתחת' : 'לא'}</label></div>
       </>}
+      </>}
+
+      {show('geometry') && (section === 'geometry' ? <>
+        <GeomSummary />
+        <TabbedEditor testId="geo-ed" title="" tabs={[
+          { key: 'axes', label: 'צירים', render: () => <><SectionEditor part="axes" />{quickJsx()}</> },
+          { key: 'planes', label: 'מישורי גג וגבהים', render: () => <SectionEditor part="planes" /> },
+          { key: 'frames', label: `מסגרות (${frames.length})`, render: framesJsx },
+        ]} />
+      </> : <><SectionEditor />{quickJsx()}{framesJsx()}</>)}
+      {show('profiles') && <>
+      <div className="panel-title">חתכים וחומר</div>
+      <div className="field prof"><label>עמודים</label><ProfilePicker testId="columnProfile" role="column" value={b.columnProfile} families={['HEA', 'HEB', 'HEM', 'IPE', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ columnProfile: v })} /></div>
+      <div className="field prof"><label>קורות גג</label><ProfilePicker testId="rafterProfile" role="rafter" value={b.rafterProfile} families={['IPE', 'HEA', 'HEB', 'RHS', 'UPN']} onCommit={(v) => set({ rafterProfile: v })} /></div>
+      <div className="field"><label>חומר</label>
+        <select className="inp" value={b.material} onChange={(e) => set({ material: e.target.value })}>
+          {MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+      </div>
+
+      </>}
+      {show('bracing') && <BracingEditor />}
+      {show('frames') && section !== 'geometry' && framesJsx()}
     </div>
   );
 }
@@ -592,11 +620,12 @@ export function RafterStrutsEditor() {
 }
 
 /** מוטות תלייה ותמיכה צידית לפטות (1.41) */
-function PurlinExtras() {
+function PurlinExtras({ which }: { which?: 'sag' | 'fly' } = {}) {
   const br = useStore((s) => s.project.building.bracing);
   const set = (patch: Partial<BuildingParams['bracing']>) => store.exec(setBuilding({ bracing: { ...br, ...patch } }));
   const sr = br.sagRods ?? { ...defaultSagRods(), enabled: false }, fb = br.flyBraces ?? { ...defaultFlyBraces(), enabled: false };
   return <>
+    {which !== 'fly' && <>
     <div className="panel-title">מוטות תלייה בין הפטות
       <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="sr-on" checked={sr.enabled} onChange={(e) => set({ sagRods: { ...sr, enabled: e.target.checked } })} />פעיל</label>
     </div>
@@ -604,6 +633,8 @@ function PurlinExtras() {
       <div className="field"><label>קוטר מוט</label><select className="inp" data-testid="sr-d" value={sr.d} onChange={(e) => set({ sagRods: { ...sr, d: Number(e.target.value) } })}>{[8, 10, 12, 16].map((d) => <option key={d} value={d}>Ø{d}</option>)}</select></div>
       <div className="field"><label>שורות בכל מפתח</label><select className="inp" data-testid="sr-n" value={sr.perBay} onChange={(e) => set({ sagRods: { ...sr, perBay: Number(e.target.value) } })}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n === 1 ? 'אחת — באמצע' : `${n} — בחלוקה שווה`}</option>)}</select></div>
     </> : <div className="hint">מוט הברגה דרך ווב הפטות לאורך השיפוע, אומים בשני הצדדים — מקטין את מפתח הפטה בכיוון החלש.</div>}
+    </>}
+    {which !== 'sag' && <>
     <div className="panel-title">תמיכה צידית לפטות
       <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="fb-on" checked={fb.enabled} onChange={(e) => set({ flyBraces: { ...fb, enabled: e.target.checked } })} />פעיל</label>
     </div>
@@ -612,6 +643,7 @@ function PurlinExtras() {
       <div className="field"><label>בכל פטה</label><select className="inp" data-testid="fb-every" value={fb.every} onChange={(e) => set({ flyBraces: { ...fb, every: Number(e.target.value) } })}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n === 1 ? 'כל פטה' : `כל פטה ${n === 2 ? 'שנייה' : n === 3 ? 'שלישית' : 'רביעית'}`}</option>)}</select></div>
       <div className="field"><label>בורג</label><BoltSelect d={fb.boltD} onChange={(x) => set({ flyBraces: { ...fb, boltD: x } })} /></div>
     </> : <div className="hint">זוויתן ב-45° מהפטה אל פח מתחת לאגף התחתון של קורת הגג, בשני הצדדים — מייצב את האגף התחתון בכפיפה הפוכה (רוח).</div>}
+    </>}
   </>;
 }
 
@@ -636,6 +668,69 @@ function LineTiesEditor() {
   </>;
 }
 
+/** קושרות גג (1.42): סיכום + לשוניות — תוכנית / חתך ופרט / תמוכות בין הקורות / מתקדם */
+function RoofBracingPanel() {
+  const b = useStore((s) => s.project.building);
+  const d = useStore((s) => s.derived);
+  const br = b.bracing;
+  const nb = b.frames.length - 1;
+  const set = (patch: Partial<BuildingParams['bracing']>) => store.exec(setBuilding({ bracing: { ...br, ...patch } }));
+  const isX = (br.roof.type ?? 'x') === 'x';
+  const bays = br.roof.enabled ? resolveBays(br.roof.bays, nb) : [];
+  const nX = d.members.filter((m) => /^BR\.R/.test(m.id)).length / 2;
+  const rs = br.rafterStruts?.rows.length ?? 0;
+  const issues = d.issues.filter((i) => ['X_STRUT', 'X_STRUT_SHORT', 'X_COUNT', 'X_SNAP', 'BRACE_LONG', 'BRACE_SHORT', 'HB_NARROW', 'ROD_PROFILE', 'RS_OUT', 'RS_DEEP', 'RS_YSPLIT', 'RS_RHS', 'RS_BOLTS', 'STRUT_CLASH'].includes(i.code) && (i.code !== 'BRACE_SHORT' || /גג/.test(i.message)));
+  return <>
+    <div className="panel-title">קושרות גג
+      <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-roof" checked={br.roof.enabled} onChange={(e) => set({ roof: { ...br.roof, enabled: e.target.checked } })} />פעיל</label>
+    </div>
+    {!br.roof.enabled && <>
+      <OffCard pic="roofX" title="קושרות גג" desc="X מזוויתנים או סבכה אופקית RHS במישור הגג, במפתחים שבוחרים בתוכנית" onAdd={() => set({ roof: { ...br.roof, enabled: true } })} testId="off-roof" />
+      <RafterStrutsEditor />
+    </>}
+    {br.roof.enabled && <>
+      <SumCard testId="br-roof-sum" title={isX ? `X מ${tryProfile(br.roof.profile)?.family === 'L' ? 'זוויתן' : 'פרופיל'} ${br.roof.profile}` : 'סבכה אופקית RHS'}
+        sub={`${bays.length} מפתחים · ${isX ? ((br.roof.endDetail ?? 'gusset') === 'rod' ? 'מוט הברגה דרך הווב' : 'פח חיבור מרותך לווב') : 'מוטות + אלכסונים RHS'}${br.roof.toEave ? ' · כולל רצועת הקונזולה' : ''}`}
+        pills={[{ text: `${Math.round(nX)} אלכסונים`, tone: 'muted' }, ...(rs ? [{ text: `${rs} שורות תמוכה בין הקורות` }] : []), ...(issues.length ? [{ text: `${issues.length} הערות`, tone: 'warn' as const }] : [])]} />
+      <PanelAlerts issues={issues} testId="br-roof-alerts" />
+      <TabbedEditor testId="br-roof-ed" title="" tabs={[
+        { key: 'plan', label: 'תוכנית', render: () => <><RoofXGrid /><RoofXSplit /></> },
+        { key: 'sec', label: 'חתך ופרט', render: () => <>
+          <div className="field"><label>סוג</label>
+            <select className="inp" data-testid="br-roof-type" value={br.roof.type ?? 'x'} onChange={(e) => set({ roof: { ...br.roof, type: e.target.value as 'x' | 'rhs', rhs: br.roof.rhs ?? defaultRhsTruss() } })}>
+              <option value="x">X מזוויתנים (מתיחה)</option><option value="rhs">סבכה אופקית RHS (מוטות + אלכסונים)</option>
+            </select></div>
+          {isX ? <><div className="field prof"><label>חתך</label><ProfilePicker value={br.roof.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ roof: { ...br.roof, profile: v } })} /></div><RoofEndFields />{(br.roof.endDetail ?? 'gusset') === 'gusset' && <XConnFields />}</> : <RhsFields />}
+        </> },
+        { key: 'struts', label: `תמוכות בין הקורות${rs ? ` (${rs})` : ''}`, render: () => <RafterStrutsEditor /> },
+        { key: 'adv', label: 'מתקדם', render: () => <>
+          <div className="field"><label>שני קצוות באותה נקודה, אותו מפתח (זה ליד זה)</label><NumField testId="br-samegap" value={br.roof.sameGap ?? 200} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, sameGap: Math.max(0, v) } })} /></div>
+          {br.roof.endDetail === 'rod' && <div className="field"><label>מפתחים סמוכים — מוטות זה מעל זה</label><NumField testId="br-adjgap" value={br.roof.adjGap ?? 40} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, adjGap: Math.max(0, v) } })} /></div>}
+          <div className="field"><label>מרחק מפני עמוד שממשיך מעל הגג</label><NumField testId="br-colclear" value={br.roof.colClear ?? 150} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, colClear: Math.max(0, v) } })} /></div>
+          <Help>כל שיפוע מחולק לקטעים בכל ציר עמודים פנימי. בתוכנית — בחירה איפה יש X ובכמה פנלים לאורך השיפוע. תמוכה בין הקורות קובעת את חלוקת הפנלים.</Help>
+        </> },
+      ]} />
+    </>}
+  </>;
+}
+
+/** סיכום קשיחות קירות: לכל ציר — סוג ומפתחים */
+function WallsSummary() {
+  const b = useStore((s) => s.project.building);
+  const d = useStore((s) => s.derived);
+  const br = b.bracing;
+  const lines = [...(d.section?.lines ?? [])].sort((p, q) => p.x - q.x);
+  const nb = b.frames.length - 1;
+  const TYPE: Record<string, string> = { x: 'X', portal: 'אגד B', truss: 'נעילה' };
+  const rows = wallBays(br, lines.map((l) => l.id)).filter(([, bays]) => bays.length);
+  const issues = d.issues.filter((i) => /^(BR\.W|BB\.|LT\.|C\.BB|C\.LT|C\.LTIE|W)/.test(i.elementId ?? '') || ['TIE_PORTAL', 'TIE_TRUSS'].includes(i.code) || /קושרת קיר|אגד B|נעילה/.test(i.message));
+  return <>
+    <SumCard testId="br-walls-sum" title={rows.length ? rows.map(([lid, bays]) => `${lines.find((l) => l.id === lid)?.label ?? lid}: ${TYPE[br.walls.lineType?.[lid] ?? br.walls.type ?? 'x']} ×${resolveBays(bays, nb).length}`).join(' · ') : 'אין מפתחים נבחרים'}
+      sub={br.lineTies?.enabled ? `סיב רציף בצירים ${br.lineTies.lines.map((x) => lines.find((l) => l.id === x)?.label ?? x).join(', ')}` : undefined} />
+    <PanelAlerts issues={issues} testId="br-walls-alerts" />
+  </>;
+}
+
 function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) {
   const on = (k: Exclude<BraceSection, 'knee'>) => !part || part === k;
   const b = useStore((s) => s.project.building);
@@ -644,68 +739,46 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
   const set = (patch: Partial<BuildingParams['bracing']>) => store.exec(setBuilding({ bracing: { ...br, ...patch } }));
   return (
     <>
-      {on('roof') && <>
-      <div className="panel-title">קושרות X – גג
-        <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-roof" checked={br.roof.enabled} onChange={(e) => set({ roof: { ...br.roof, enabled: e.target.checked } })} />פעיל</label>
-      </div>
-      {!br.roof.enabled && <OffCard pic="roofX" title="קושרות גג" desc="X מזוויתנים או סבכה אופקית RHS במישור הגג, במפתחים שבוחרים בתוכנית" onAdd={() => set({ roof: { ...br.roof, enabled: true } })} testId="off-roof" />}
-      {br.roof.enabled && <>
-        <div className="field"><label>סוג</label>
-          <select className="inp" data-testid="br-roof-type" value={br.roof.type ?? 'x'} onChange={(e) => set({ roof: { ...br.roof, type: e.target.value as 'x' | 'rhs', rhs: br.roof.rhs ?? defaultRhsTruss() } })}>
-            <option value="x">X מזוויתנים (מתיחה)</option><option value="rhs">סבכה אופקית RHS (מוטות + אלכסונים)</option>
-          </select>
-        </div>
-        {(br.roof.type ?? 'x') === 'x'
-          ? <div className="field prof"><label>חתך</label><ProfilePicker value={br.roof.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ roof: { ...br.roof, profile: v } })} /></div>
-          : <RhsFields />}
-        <RoofXGrid />
-        <RoofXSplit />
-        {(br.roof.type ?? 'x') === 'x' && <>
-          <RoofEndFields />
-        </>}
-        <Adv id="roofgaps" label="מתקדם — מרווחים בקצוות הקושרות">
-          <div className="field"><label>שני קצוות באותה נקודה, אותו מפתח (זה ליד זה)</label><NumField testId="br-samegap" value={br.roof.sameGap ?? 200} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, sameGap: Math.max(0, v) } })} /></div>
-          {br.roof.endDetail === 'rod' && <div className="field"><label>מפתחים סמוכים — מוטות זה מעל זה</label><NumField testId="br-adjgap" value={br.roof.adjGap ?? 40} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, adjGap: Math.max(0, v) } })} /></div>}
-          <div className="field"><label>מרחק מפני עמוד שממשיך מעל הגג</label><NumField testId="br-colclear" value={br.roof.colClear ?? 150} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, colClear: Math.max(0, v) } })} /></div>
-        </Adv>
-        <Help>כל שיפוע מחולק לקטעים בכל ציר עמודים פנימי. בתוכנית — בחירה איפה יש X ובכמה פנלים לאורך השיפוע (קטע ארוך מקבל לפחות את מה שנדרש לאורך חומר הגלם). שני קצוות שמגיעים לאותה נקודה באותו מפתח — זה ליד זה; ממפתחים סמוכים (מוט הברגה) — זה מעל זה.</Help>
-      </>}
-      <RafterStrutsEditor />
-      </>}
+      {on('roof') && <RoofBracingPanel />}
       {on('walls') && <>
       <div className="panel-title">קשיחות לאורך – קירות
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-walls" checked={br.walls.enabled} onChange={(e) => set({ walls: { ...br.walls, enabled: e.target.checked } })} />פעיל</label>
       </div>
-      {!br.walls.enabled && <OffCard pic="walls" title="קשיחות קירות" desc="אלכסוני X, אגד B או נעילה אופקית בקירות לאורך המבנה" onAdd={() => set({ walls: { ...br.walls, enabled: true } })} testId="off-walls" />}
+      {!br.walls.enabled && <><OffCard pic="walls" title="קשיחות קירות" desc="אלכסוני X, אגד B או נעילה אופקית בקירות לאורך המבנה" onAdd={() => set({ walls: { ...br.walls, enabled: true } })} testId="off-walls" /><LineTiesEditor /></>}
       {br.walls.enabled && <>
-        <div className="choice2" role="radiogroup" aria-label="סוג קשיחות הקיר">
-          {([['x', 'אלכסוני X', 'קושרות X מזוויתנים — עובדות במתיחה', 'brace'], ['portal', 'אגד B', 'קורת RHS בין העמודים + שני אלכסונים קטנים', 'walls'], ['truss', 'נעילה אופקית', 'מסבך RHS במפתחים הנעולים + סיב רציף לכל האורך', 'walls']] as const).map(([k, t, dsc, pic]) => (
-            <button key={k} role="radio" aria-checked={(br.walls.type ?? 'x') === k} className={`choice-tile${(br.walls.type ?? 'x') === k ? ' on' : ''}`} data-testid={`br-walls-${k}`}
-              onClick={() => set({ walls: { ...br.walls, type: k, portal: br.walls.portal ?? defaultPortal(), truss: br.walls.truss ?? defaultLockTruss() } })}>
-              <MenuPic name={pic} size={44} /><b>{t}</b><span>{dsc}</span>
-            </button>
-          ))}
-        </div>
-        {(br.walls.type ?? 'x') === 'x'
-          ? <div className="field prof"><label>חתך</label><ProfilePicker value={br.walls.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ walls: { ...br.walls, profile: v } })} /></div>
-          : br.walls.type === 'truss' ? <LockTrussFields /> : <PortalFields />}
-        <WallLines nb={nb} />
+        <WallsSummary />
+        <TabbedEditor testId="br-walls-ed" title="" tabs={[
+          { key: 'type', label: 'סוג וחתך', render: () => <>
+            <div className="choice2" role="radiogroup" aria-label="סוג קשיחות הקיר">
+              {([['x', 'אלכסוני X', 'קושרות X מזוויתנים — עובדות במתיחה', 'brace'], ['portal', 'אגד B', 'קורת RHS בין העמודים + שני אלכסונים קטנים', 'walls'], ['truss', 'נעילה אופקית', 'מסבך RHS במפתחים הנעולים + סיב רציף לכל האורך', 'walls']] as const).map(([k, t, dsc, pic]) => (
+                <button key={k} role="radio" aria-checked={(br.walls.type ?? 'x') === k} className={`choice-tile${(br.walls.type ?? 'x') === k ? ' on' : ''}`} data-testid={`br-walls-${k}`}
+                  onClick={() => set({ walls: { ...br.walls, type: k, portal: br.walls.portal ?? defaultPortal(), truss: br.walls.truss ?? defaultLockTruss() } })}>
+                  <MenuPic name={pic} size={44} /><b>{t}</b><span>{dsc}</span>
+                </button>
+              ))}
+            </div>
+            {(br.walls.type ?? 'x') === 'x'
+              ? <><div className="field prof"><label>חתך</label><ProfilePicker value={br.walls.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ walls: { ...br.walls, profile: v } })} /></div><XConnFields /></>
+              : br.walls.type === 'truss' ? <LockTrussFields /> : <PortalFields />}
+          </> },
+          { key: 'lines', label: 'צירים ומפתחים', render: () => <WallLines nb={nb} /> },
+          { key: 'ties', label: `סיב רציף${br.lineTies?.enabled ? ' ✓' : ''}`, render: () => <LineTiesEditor /> },
+        ]} />
       </>}
-      <LineTiesEditor />
       </>}
-      {on('ties') && <>
-      <div className="panel-title">שורת קשירה לפטות
-        <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-ties" checked={br.purlinTies.enabled} onChange={(e) => set({ purlinTies: { ...br.purlinTies, enabled: e.target.checked } })} />פעיל</label>
-      </div>
-      {!br.purlinTies.enabled && <OffCard pic="ties" title="שורות קשירה לפטות" desc="זוויתן באמצע כל מפתח, צמוד לאגף התחתון של הפטות — מונע הפיתול שלהן" onAdd={() => set({ purlinTies: { ...br.purlinTies, enabled: true } })} testId="off-ties" />}
-      {br.purlinTies.enabled && <div className="field prof"><label>חתך</label><ProfilePicker value={br.purlinTies.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ purlinTies: { ...br.purlinTies, profile: v } })} /></div>}
-      </>}
-      {on('ties') && <PurlinExtras />}
+      {on('ties') && <TabbedEditor testId="br-ties-ed" title="" tabs={[
+        { key: 'ties', label: `שורות קשירה${br.purlinTies.enabled ? ' ✓' : ''}`, render: () => <>
+          <div className="panel-title">שורת קשירה לפטות
+            <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="br-ties" checked={br.purlinTies.enabled} onChange={(e) => set({ purlinTies: { ...br.purlinTies, enabled: e.target.checked } })} />פעיל</label>
+          </div>
+          {!br.purlinTies.enabled && <OffCard pic="ties" title="שורות קשירה לפטות" desc="זוויתן באמצע כל מפתח, צמוד לאגף התחתון של הפטות — מונע הפיתול שלהן" onAdd={() => set({ purlinTies: { ...br.purlinTies, enabled: true } })} testId="off-ties" />}
+          {br.purlinTies.enabled && <div className="field prof"><label>חתך</label><ProfilePicker value={br.purlinTies.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ purlinTies: { ...br.purlinTies, profile: v } })} /></div>}
+        </> },
+        { key: 'sag', label: `מוטות תלייה${br.sagRods?.enabled ? ' ✓' : ''}`, render: () => <PurlinExtras which="sag" /> },
+        { key: 'fly', label: `תמיכה צידית${br.flyBraces?.enabled ? ' ✓' : ''}`, render: () => <PurlinExtras which="fly" /> },
+      ]} />}
       {on('ridge') && <RidgeReinfEditor />}
-      {(on('roof') || on('walls')) && (br.roof.enabled && (br.roof.type ?? 'x') === 'x' || br.walls.enabled && (br.walls.type ?? 'x') === 'x') && <>
-        <XConnFields />
-      </>}
-      {(on('roof') || on('walls') || on('ties')) && <Help>קושרות X עובדות במתיחה בלבד. פח החיבור מרותך לווב הקורה/העמוד במסגריה, הזוויתן מוברג בשטח; בהצטלבות פח מילוי ובורג. שורת קשירה באמצע כל מפתח, צמודה לאגף התחתון של הפטות. בדיקת חוזק — אינה מבוצעת.</Help>}
+      {(on('walls') || on('ties')) && <Help>קושרות X עובדות במתיחה בלבד. פח החיבור מרותך לווב הקורה/העמוד במסגריה, הזוויתן מוברג בשטח; בהצטלבות פח מילוי ובורג. שורת קשירה באמצע כל מפתח, צמודה לאגף התחתון של הפטות. בדיקת חוזק — אינה מבוצעת.</Help>}
     </>
   );
 }

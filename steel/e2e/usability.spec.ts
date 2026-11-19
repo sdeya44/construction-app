@@ -139,6 +139,7 @@ test('USE-06b: דו-שיפועי סימטרי — גובה עמודים וגוב
   await page.getByTestId('nav-s:geometry').click();
   await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-gable-2').click();
+  await page.getByTestId('geo-ed-tab-planes').click();
   await expect(page.getByTestId('sec-plane-gable')).toBeVisible();
   await page.getByTestId('tri-gable-calc-slope').click();
   await page.getByTestId('tri-gable-col').fill('5.5'); await page.getByTestId('tri-gable-col').press('Enter');

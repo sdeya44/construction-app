@@ -636,6 +636,10 @@ export interface Project {
   cleatOverrides: Record<string, Partial<CleatParams>>;
   /** ספריית פרטי חיבור מותאמים (מתכון פעולות עם נוסחאות) */
   customDetails?: CustomDetail[];
+  /** ספריית חיבורים (1.42): הגדרות שמורות לסוגי פרט — בפרויקט הפתוח בלבד; ייצוא/ייבוא כסטנדרט חברה */
+  connLibrary?: import('./connRegistry').ConnPreset[];
+  /** ברירת מחדל לכל משפחת חיבור (מזהה הגדרה שמורה) */
+  connDefaults?: Partial<Record<import('./connRegistry').ConnFamily, string>>;
   /** שיוך פרט מותאם לקצה אלמנט: "מזהה אלמנט|start" או "|end" ⇒ מזהה פרט */
   detailAssign?: Record<string, string>;
   /** הודעות שהוסתרו: "קוד|*" לסוג שלם, או מפתח הודעה (issueKey) */

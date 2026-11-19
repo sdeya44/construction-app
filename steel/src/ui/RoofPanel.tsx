@@ -1,5 +1,6 @@
 import { CleatTypePicker } from './ConnTypePicker';
 import { proposeSplicesFor, setCleat, setPurlinSide, setPurlinSystem, setSection, type Command } from '../commands/commands';
+import { PanelAlerts, SumCard, TabbedEditor } from './summary';
 import { Adv, BoltSelect, NumField, Help } from './fields';
 import { fromMm } from '../core/units';
 import type { Member, PurlinSideParams } from '../model/types';
@@ -12,7 +13,7 @@ import { tryProfile } from '../profiles/library';
 
 const OPENING: Record<'up' | 'down', string> = { up: 'לכיוון הרכס / הצד הגבוה', down: 'לכיוון המרזב / הצד הנמוך' };
 
-function SideEditor({ side, title, items, freeStart }: { side: string; title: string; items: Member[]; freeStart?: boolean }) {
+function SideEditor({ side, title, items, freeStart, part }: { side: string; title: string; items: Member[]; freeStart?: boolean; part?: 'layout' | 'cleat' }) {
   const p = useStore((s) => s.project);
   const prm = purlinParams(p.building.purlins, side);
   const u = p.displayUnit;
@@ -29,6 +30,7 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
         </label>
       </div>}
       {prm.enabled && <>
+        {part !== 'cleat' && <>
         {ed.showProfile && <div className="field prof"><label>חתך הפטה</label><ProfilePicker testId={tid('profile')} role="purlin" value={prm.profile} families={['C', 'Z', 'RHS', 'IPE', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>}
         <PurlinSlopeSchematic side={side} items={items} mono={mono} />
         <div className="field"><label>חלוקה</label>
@@ -76,7 +78,8 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
             ? <><span className="badge warn">פריסה ידנית</span><button className="btn small" onClick={() => set({ manualPositions: null })}>חזרה לאוטומטי</button></>
             : <button className="btn small" data-testid={tid('manual')} onClick={() => set({ manualPositions: items.map((m) => m.purlin!.sSlope * (prm.measure === 'horizontal' ? 1 : 1)) })}>עריכה ידנית של המיקומים</button>}
         </div>
-        {ed.showConn && <>
+        </>}
+        {ed.showConn && part !== 'layout' && <>
         <div className="panel-title">תושבות פטה
           <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" checked={prm.cleat.enabled} data-testid={tid('cleat-enabled')} onChange={(e) => store.exec(setCleat(side, { enabled: e.target.checked }))} />פעיל</label>
         </div>
@@ -114,7 +117,7 @@ function SideEditor({ side, title, items, freeStart }: { side: string; title: st
           <div className="hint">מרותך לקורה במסגריה, מוברג לווב הפטה בשטח. הרגל הניצבת צמודה לווב (0 מ"מ), רגל הבסיס פונה הרחק מהאגף התחתון.</div>
         </>}
         </>}
-        {prm.manualPositions && (
+        {prm.manualPositions && part !== 'cleat' && (
           <div style={{ marginTop: 6 }}>
             {prm.manualPositions.map((v, i) => (
               <div className="field" key={i}><label>פטה {i + 1}</label>
@@ -171,6 +174,38 @@ export function RoofPanel({ section }: { section?: RoofSection } = {}) {
   const planes = d.section?.planes ?? [];
   const nSpl = d.splices.filter((s) => s.memberId.startsWith('PL.')).length;
   const exec = (c: Command) => store.exec(c);
+  const ed = useEdit();
+  const sides: { key: string; side: string; title: string; free?: boolean; items: Member[]; planeId?: string }[] = p.building.section
+    ? planes.map((pl) => ({ key: pl.id, side: pl.params, title: `פטות ${pl.label}`, free: pl.startFree, items: purlins.filter((m) => m.purlin!.side === pl.id), planeId: pl.id }))
+    : p.building.roofType === 'gable' ? [{ key: 'L', side: 'left', title: 'שיפוע שמאל', items: L }, { key: 'R', side: 'right', title: 'שיפוע ימין', items: R }] : [{ key: 'M', side: 'left', title: 'שיפוע הגג', items: M }];
+  if ((section === 'left' || section === 'right') && !ed.embed) {
+    const mine = p.building.section || p.building.roofType !== 'gable' ? sides : sides.filter((q) => q.side === section);
+    const issues = d.issues.filter((i) => i.fix?.purlinKey || /^PURLIN|^CLEAT|^CLASH/.test(i.code) && /פטה|תומך/.test(i.message));
+    return (
+      <div className="panel-body" data-testid="roof-panel">
+        {mine.map((q) => { const prm = purlinParams(pu, q.side); const sp = q.items.map((m) => m.purlin!.spanBefore).filter((v) => v > 0); return (
+          <SumCard key={q.key} testId={`purl-sum-${q.key}`} title={`${q.title} · ${q.items.length} פטות · ${prm.profile}`}
+            sub={`מרווח ${(prm.layout ?? 'fixed') === 'even' ? 'שווה' : 'קבוע'} ${sp.length ? `${Math.round(Math.min(...sp))}–${Math.round(Math.max(...sp))}` : prm.spacing} מ"מ · תושבת ${prm.cleat.enabled ? (prm.cleat.style ?? 'run') === 'run' ? 'זוויתן רץ' : 'זוויתן' : 'ללא'}`}
+            pills={prm.manualPositions ? [{ text: 'פריסה ידנית', tone: 'warn' }] : []} />); })}
+        <PanelAlerts issues={issues} testId="purl-alerts" />
+        <TabbedEditor testId="purl-ed" title="" initial={(() => { const sel = store.state.selection[0]; return sel && d.byId.get(sel)?.kind === 'cleat' ? 'cleat' : undefined; })()} tabs={[
+          { key: 'layout', label: 'חתך ופריסה', render: () => <>{mine.map((q) => <div key={q.key}>{q.planeId && <PlaneStart planeId={q.planeId} />}<SideEditor side={q.side} title={q.title} freeStart={q.free} items={q.items} part="layout" /></div>)}</> },
+          { key: 'cleat', label: 'תושבות', render: () => <>{mine.map((q) => <SideEditor key={q.key} side={q.side} title={q.title} freeStart={q.free} items={q.items} part="cleat" />)}</> },
+          { key: 'system', label: 'חומר וצד התחלה', render: () => <>
+            <div className="field"><label>חומר</label>
+              <select className="inp" value={pu.material} onChange={(e) => exec(setPurlinSystem({ material: e.target.value }))}>
+                {MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select></div>
+            {p.building.roofType === 'mono' && <div className="field"><label>צד התחלת הפריסה</label>
+              <select className="inp" value={pu.monoStart} data-testid="monoStart" onChange={(e) => exec(setPurlinSystem({ monoStart: e.target.value as 'low' | 'high' }))}>
+                <option value="high">הצד הגבוה</option><option value="low">הצד הנמוך</option>
+              </select></div>}
+            <Help>הפריסה מתחילה {p.building.roofType === 'gable' ? 'ברכס, לכל צד בנפרד,' : 'בקצה שנבחר'} ומתקדמת עד הקצה החיצוני של קורת הגג כולל הקונזולה. הפטה האחרונה בקצה, והשארית נשארת במפתח האחרון בלבד.</Help>
+          </> },
+        ]} />
+      </div>
+    );
+  }
   return (
     <div className="panel-body" data-testid="roof-panel">
       {(show('system') || show('left')) && <>

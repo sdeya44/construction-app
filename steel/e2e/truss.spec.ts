@@ -31,6 +31,7 @@ test('TR-02: מסבך נושא בדילול עמודים — מעבר "מסבך"
   await page.getByTestId('ctx-omit').click();
   await page.getByTestId('omit-apply').click();
   await page.getByTestId('nav-b:tb').click();
+  await page.getByTestId('tb-grp-0-edit').click();
   const id = await page.evaluate(() => (window as any).__ksp.store.state.project.building.transfers[0].id);
   await page.getByTestId(`tb-kind-truss-${id}`).click();
   await expect(page.getByTestId(`tw-${id}`)).toBeVisible();
@@ -49,6 +50,7 @@ test('TR-03: מסבך נושא — חגורות RHS ושינוי אורך שדה
   await page.getByTestId('ctx-omit').click();
   await page.getByTestId('omit-apply').click();
   await page.getByTestId('nav-b:tb').click();
+  await page.getByTestId('tb-grp-0-edit').click();
   const id = await page.evaluate(() => (window as any).__ksp.store.state.project.building.transfers[0].id);
   await page.getByTestId(`tb-kind-truss-${id}`).click();
   const st = () => page.evaluate(() => {
@@ -87,6 +89,7 @@ test('TR-04: מסבך נושא — שדות קבועים (שדה שנקבע נש
   await page.getByTestId('ctx-omit').click();
   await page.getByTestId('omit-apply').click();
   await page.getByTestId('nav-b:tb').click();
+  await page.getByTestId('tb-grp-0-edit').click();
   const id = await page.evaluate(() => (window as any).__ksp.store.state.project.building.transfers[0].id);
   await page.getByTestId(`tb-kind-truss-${id}`).click();
   const st = () => page.evaluate(() => {

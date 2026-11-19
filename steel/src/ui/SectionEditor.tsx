@@ -12,13 +12,14 @@ import type { KneeSideOverride } from '../model/types';
 import { KneeSchematic } from './schematics';
 import { OffCard } from './pics';
 import { DetailTiles, PIC, ScopeToggle } from './DetailPicker';
+import { PanelAlerts, SumCard, TabbedEditor } from './summary';
 import { kneeDetail } from '../geometry/knee';
 
 /**
  * בונה החתך המודולרי (החלטת משתמש 15.11.2026): תבניות + טבלת צירי עמודים + טבלת מישורי גג, עם תצוגה מקדימה.
  * כל שינוי חל מיד על המודל (פקודה אחת, ביטול אחד).
  */
-export function SectionEditor() {
+export function SectionEditor({ part }: { part?: 'axes' | 'planes' } = {}) {
   const p = useStore((s) => s.project);
   const d = useStore((s) => s.derived);
   const b = p.building;
@@ -29,11 +30,11 @@ export function SectionEditor() {
   return (
     <>
       {/* גלריית התבניות מקופלת (1.34): פותחים רק כדי להחליף צורה */}
-      <div className="tpl-bar">
+      {part !== 'planes' && <div className="tpl-bar">
         <span className="tpl-cur"><SectionPreview section={sec ?? toCustomSection(b, d.roof)} small /><span><small>צורת הסככה</small><b>{SECTION_TEMPLATES.find((t) => t.id === sec?.template)?.name ?? (sec ? 'מותאמת אישית' : b.roofType === 'gable' ? 'דו־שיפועי (2 צירים)' : 'חד־שיפועי (2 צירים)')}</b></span></span>
         <button className={`btn small${tplOpen ? ' primary' : ''}`} data-testid="tpl-toggle" aria-expanded={tplOpen} onClick={() => setTplOpen(!tplOpen)}>{tplOpen ? 'סגירה' : 'החלפת תבנית'}</button>
-      </div>
-      {tplOpen && <div className="tpl-grid">
+      </div>}
+      {tplOpen && part !== 'planes' && <div className="tpl-grid">
         {SECTION_TEMPLATES.map((t) => (
           <button key={t.id} className={`tpl${sec?.template === t.id ? ' on' : ''}`} data-testid={`tpl-${t.id}`} title={t.desc}
             onClick={() => {
@@ -48,13 +49,13 @@ export function SectionEditor() {
         ))}
       </div>}
       {/* אין "קלאסי" נפרד: מבנה של 2 צירים מוצג ונערך באותו עורך (העריכה הראשונה שומרת אותו כחתך) */}
-      <ModularTables sec={sec ?? toCustomSection(b, d.roof)} unit={u} apply={apply} />
-      <button className="btn small link-nav" data-testid="goto-knee" onClick={() => window.dispatchEvent(new CustomEvent('ksp-nav', { detail: 'b:knee' }))}>אלכסוני עמוד-קורה, חיזוק רכס וקושרות ← חיזוקים וקשיחות</button>
+      <ModularTables sec={sec ?? toCustomSection(b, d.roof)} unit={u} apply={apply} part={part} />
+      {part !== 'axes' && <button className="btn small link-nav" data-testid="goto-knee" onClick={() => window.dispatchEvent(new CustomEvent('ksp-nav', { detail: 'b:knee' }))}>אלכסוני עמוד-קורה, חיזוק רכס וקושרות ← חיזוקים וקשיחות</button>}
     </>
   );
 }
 
-function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' | 'mm'; apply: (s: CustomSection, label?: string) => void }) {
+function ModularTables({ sec, unit: u, apply, part }: { sec: CustomSection; unit: 'm' | 'mm'; apply: (s: CustomSection, label?: string) => void; part?: 'axes' | 'planes' }) {
   const lines = [...sec.lines].sort((a, b) => a.x - b.x);
   const lineBase = useStore((st) => st.project.building.lineBase) ?? {};
   const labels = useStore((st) => st.project.building.lineLabels) ?? {};
@@ -71,12 +72,15 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
   const together = !!pair && (joint ?? pair.symmetric);
   return (
     <>
+      {part !== 'planes' && <>
       <div className="axis-count" data-testid="axis-count">
         <div className="field"><label>מספר צירי עמודים</label><NumField testId="axis-n" value={sec.lines.length} onCommit={(v) => apply(setAxisCount(sec, v), 'מספר צירים')} /></div>
         <div className="field"><label>רוחב בין הצירים הקיצוניים</label><LenField testId="axis-w" mm={Math.max(...sec.lines.map((l) => l.x)) - Math.min(...sec.lines.map((l) => l.x))} unit={u} onCommit={(v) => apply(setAxisCount(sec, sec.lines.length, v), 'רוחב כולל')} /></div>
         <div className="hint" style={{ margin: 0 }}>הצירים מחולקים שווה; אחר כך אפשר לשנות כל מפתח בשרטוט (לחיצה על המידה) או לגרור ציר.</div>
       </div>
+      </>}
       <div className="sec-prev"><InteractiveSection sec={sec} apply={apply} base={baseEl} onBase={(v) => store.exec(setBuilding({ baseElevation: v }))} calcOf={(id) => calcOf(together ? 'gable' : id)} setCalc={(id, c) => setCalc({ ...calc, [together ? 'gable' : id]: c })} together={together} /></div>
+      {part !== 'planes' && <>
       <div className="panel-title">צירי עמודים ({lines.length})
         <button className="btn small" data-testid="sec-add-line" onClick={() => {
           const last = lines[lines.length - 1];
@@ -106,6 +110,8 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
       </table>
       </Adv>
       {Object.values(lineBase).some((z) => Math.abs(z - baseEl) > 1) && <div className="hint">תחתית עמוד מעל ±0.00 (חגורה / יסוד מוגבה): העמוד בציר מתקצר, גובה הגג לא משתנה. במסגרות ובתוכנית העיגון מופיע מפלס לכל ציר.</div>}
+      </>}
+      {part !== 'axes' && <>
       <Overhangs sec={sec} unit={u} apply={apply} />
       <div className="panel-title">מישורי גג ({sec.planes.length})
         <button className="btn small" data-testid="sec-add-plane" onClick={() => {
@@ -150,6 +156,7 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
         );
       })}
       <Help>גבהים = פני עליון של קורת הגג, בציר העמוד (לא בקצה הקונזולה). מזינים שניים מתוך גובה עמוד / גובה רכס / שיפוע — השלישי (מסומן "= מחושב") מתעדכן; "חשב" בשורה אחרת מעביר אליה את החישוב. מישור שעובר מעל עמוד יושב עליו; מישור שמסתיים בעמוד שממשיך למעלה מתחבר לצדו; שני קצוות באותה נקודה ללא עמוד = רכס. צד התחלת הפטות — בגג ופטות.</Help>
+      </>}
     </>
   );
 }
@@ -253,7 +260,8 @@ export function KneeDetailField({ sideKey }: { sideKey?: string } = {}) {
 
 export function KneeEditor() {
   const kb = useStore((s) => s.project.building.kneeBraces) ?? defaultKneeBraces();
-  const n = useStore((s) => s.derived.connections.filter((c) => c.type === 'knee').length);
+  const n = useStore((s) => s.derived.connections.filter((c) => c.type === 'knee' && c.id.startsWith('C.KB.')).length);
+  const d = useStore((s) => s.derived);
   const set = (patch: Parameters<typeof setKneeBraces>[0]) => store.exec(setKneeBraces(patch));
   const ed = useEdit();
   // פרט החיבור — שדות החיבור (בחלון האלמנט: בסעיף "חיבורים"; בתפריט הצד: ב"מתקדם")
@@ -272,7 +280,7 @@ export function KneeEditor() {
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="kb-on" checked={kb.enabled} onChange={(e) => set({ enabled: e.target.checked })} />פעיל {kb.enabled ? `(${n})` : ''}</label>
       </div>}
       {!kb.enabled && ed.showTitle && <OffCard pic="knee" title="אלכסוני עמוד-קורה" desc="אלכסון בכל מפגש עמוד-קורה (RHS80, 45°) — מחזק את המסגרת" onAdd={() => set({ enabled: true })} testId="off-kb" />}
-      {kb.enabled && <>
+      {kb.enabled && ed.embed && <><>
         <KneeSchematic />
         {ed.showProfile && <div className="field prof"><label>חתך</label><ProfilePicker testId="kb-profile" value={kb.profile} families={['RHS', 'SHS', 'CHS', 'L', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>}
         <div className="field"><label>קביעת הנקודה על הקורה</label>
@@ -281,9 +289,26 @@ export function KneeEditor() {
             <button className={`tbtn${kb.mode === 'reach' ? ' on' : ''}`} data-testid="kb-mode-reach" onClick={() => set({ mode: 'reach' })}>מרחק אופקי</button>
           </div>
         </div>
-        <KneeSides />
-        {!ed.embed && <Adv id="kb" label="מתקדם — פרט חיבור, ברגים, עובי">{connFields}</Adv>}
-        {ed.showTitle && <Help>בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. פרט הלקוח: פח מרותך לעמוד ולקורה (במישור המסגרת, מסגריה); בקצות ה-RHS חריץ ברוחב עובי הפח ולשונית מרותכת בתוכו; בשטח הלשונית צמודה לפח ומוברגת. אין בדיקת חוזק.</Help>}
+      </><KneeSides /></>}
+      {kb.enabled && !ed.embed && <>
+        <SumCard testId="kb-sum" title={`${n} אלכסונים · ${kb.profile}`} sub={`${(kb.mode ?? 'angle') === 'angle' ? `${kb.angle ?? 45}°` : `מרחק ${kb.reach}`} · ירידה ${kb.drop} · ${({ fin: 'פח + לשונית', angle: 'זוויתן מוברג לפח', flange: 'פלטת קצה לאגף' } as const)[kneeDetail(kb.detail, tryProfile(kb.profile)?.family ?? 'RHS')]}`}
+          pills={Object.values(kb.sides ?? {}).some((o) => o && Object.keys(o).some((x) => x !== 'on')) ? [{ text: 'יש ערכים חריגים למפתחים', tone: 'warn' }] : []} />
+        <PanelAlerts issues={d.issues.filter((i) => /^KNEE_|^BOLT_ACCESS|^PLATE_WIDE/.test(i.code) && /אלכסון/.test(i.message))} testId="kb-alerts" />
+        <TabbedEditor testId="kb-ed" title="" tabs={[
+          { key: 'shape', label: 'צורה וחתך', render: () => <>
+        <KneeSchematic />
+        {ed.showProfile && <div className="field prof"><label>חתך</label><ProfilePicker testId="kb-profile" value={kb.profile} families={['RHS', 'SHS', 'CHS', 'L', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>}
+        <div className="field"><label>קביעת הנקודה על הקורה</label>
+          <div className="seg">
+            <button className={`tbtn${(kb.mode ?? 'angle') === 'angle' ? ' on' : ''}`} data-testid="kb-mode-angle" onClick={() => set({ mode: 'angle' })}>זווית</button>
+            <button className={`tbtn${kb.mode === 'reach' ? ' on' : ''}`} data-testid="kb-mode-reach" onClick={() => set({ mode: 'reach' })}>מרחק אופקי</button>
+          </div>
+        </div>
+      </> },
+          { key: 'plan', label: 'איפה יש', render: () => <KneeSides /> },
+          { key: 'conn', label: 'פרט חיבור', render: () => connFields },
+        ]} />
+        <Help>בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. אין בדיקת חוזק.</Help>
       </>}
     </>
   );

@@ -75,6 +75,7 @@ test('STEP-01: גג מדורג — זיז לקורה העליונה מעבר ל�
   await page.getByTestId('nav-s:geometry').click();
   await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-stepped').click();
+  await page.getByTestId('geo-ed-tab-planes').click();
   const inp = page.getByTestId('ovh-step-1');
   await expect(inp).toBeVisible();
   await inp.fill('0.6'); await inp.press('Enter');

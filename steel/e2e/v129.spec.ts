@@ -15,12 +15,14 @@ const state = (page: Page) => page.evaluate(() => {
 test('V129-01 קושרת גג: פרט מוט הברגה + טבלת קטעים', async ({ page }) => {
   const errors = await boot(page);
   await page.getByTestId('nav-b:roof').click();
+  await page.getByTestId('br-roof-ed-tab-sec').click();
   await page.getByTestId('br-roof-end').selectOption('rod');
   await page.waitForTimeout(400);
   let s = await state(page);
   expect(s.err).toEqual([]);
   const rods = s.ids.filter((id) => id.endsWith('.ROD')).length;
   expect(rods).toBeGreaterThan(0);
+  await page.getByTestId('br-roof-ed-tab-plan').click();
   await expect(page.getByTestId('br-roof-grid')).toBeVisible();
   // תא קיים (מפתח 1, שיפוע שמאל): X אחד → שניים — יותר מוטות; עוד שתי לחיצות → ללא
   await page.getByTestId('br-grid-0-L').click();
@@ -79,6 +81,7 @@ test('V129-03 מכפל ומזחלה בפלטה', async ({ page }) => {
 test('V129-04 צורת תוכנית: מקבילית וטרפז', async ({ page }) => {
   const errors = await boot(page);
   await page.getByTestId('nav-s:geometry').click();
+  await page.getByTestId('geo-ed-tab-frames').click();
   await page.getByTestId('plan-shape').selectOption('skew');
   await page.waitForTimeout(500);
   let s = await state(page);

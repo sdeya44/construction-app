@@ -17,6 +17,7 @@ test('V135-01: חיבור המשך פטות בשרטוט; קונזולות, מפ
   await page.getByTestId('isec-base').dispatchEvent('click');
   await page.getByTestId('isec-input').fill('0.15'); await page.getByTestId('isec-input').press('Enter');
   expect((await B(page)).baseElevation).toBe(150);
+  await page.getByTestId('geo-ed-tab-frames').click();
   await editDim(page, 'fs-po-start', '400');
   expect((await B(page)).purlinOverhangStart).toBe(400);
   await page.getByTestId('fs-po-end').first().dispatchEvent('click');
