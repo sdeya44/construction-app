@@ -11,6 +11,8 @@ import type { BoltInfo, BuildingParams, Connection, FrameDef, Member, Project, T
 import type { NLine, NSection } from '../model/section';
 import { buildTrussPlane, trussNodes } from './truss';
 import { makeBolt } from './connections';
+import { finJoint } from './finJoint';
+import { localFrame } from './frame';
 
 const Z = v3(0, 0, 1), X = v3(1, 0, 0), Y = v3(0, 1, 0);
 const BOLT = { d: 20, grade: '8.8', standard: 'ISO 4017', clearance: 2 };
@@ -143,12 +145,51 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
     const y0 = frames[0].y, y1 = frames[frames.length - 1].y;
     // קצות ה-TB: A1 — עד פני העמוד הרחוקים; צד — מול ווב העמוד + פלטה/מרווח
     // צד: הקורה נעצרת מחוץ לקצות אגפי העמוד (cb/2) — פלטת סגירה (A2/A4/A5) או סנפיר (A3)
-    const endGap = tbEndGap(def.support, cb);
-    const ys = side ? y0 + endGap : y0 - cb / 2;
-    const ye = side ? y1 - endGap : y1 + cb / 2;
+    let endGap = tbEndGap(def.support, cb);
+    // מסבך בין העמודים: סוג החיבור לעמוד לפי צורת העמוד והחגורות
+    const tr0 = def.kind === 'truss' && def.truss ? def.truss : null;
+    let finMode = false;
+    let finFace = 0; // מרחק פני ההלחמה מציר העמוד (לאורך הקו)
+    const finT = 10, finBolt = BOLT;
+    if (tr0 && side && def.support === 'A2' && cFrom) {
+      const lf = localFrame(cFrom);
+      const webFacing = !isBox(cp) && Math.abs(lf.u.y) > 0.7; // ווב העמוד ניצב לקו (ברירת המחדל במסגרות) — האגפים פתוחים לכיוון המסבך
+      const halfY = Math.abs(lf.u.y) * cb / 2 + Math.abs(lf.v.y) * cp.props.h / 2;
+      const inner = cp.props.h - 2 * (cp.dims.tf ?? 10) - 2 * (cp.dims.r ?? 0);
+      const wMax = Math.max(...[tr0.profiles.top, tr0.profiles.bottom].map((n) => getProfile(n).props.b)) + 20 + (def.finOrient === 'vertical' ? 2 * finT : 0);
+      const fits = !webFacing || wMax <= inner;
+      const mode = def.trussConn ?? 'auto';
+      finMode = mode === 'fin' || (mode === 'auto' && fits);
+      if (finMode && !fits) res.issues.push({ code: 'PLATE_WIDE', severity: 'warning', message: `מסבך נושא ${def.id}: החגורה עם הסנפיר (${Math.round(wMax)}) רחבה מהמרווח בין אגפי העמוד (${Math.round(inner)}) — בחר "פלטה אל פלטה" או חגורה צרה יותר` });
+      finFace = webFacing ? ctw / 2 : halfY;
+      if (finMode) endGap = finFace; // החגורות מתחילות אחרי הסנפיר — המיקום הסופי נקבע מהפרט
+    }
+    let ys = side ? y0 + endGap : y0 - cb / 2;
+    let ye = side ? y1 - endGap : y1 + cb / 2;
+    // סנפיר: פרט לכל חגורה בכל קצה; קצה החגורה = סוף הלשונית
+    const finJ = new Map<string, ReturnType<typeof finJoint>>();
+    if (finMode && tr0) {
+      const horiz = (def.finOrient ?? 'horizontal') === 'horizontal';
+      const zcTop = zTop - h / 2, zcBot = zTop - h / 2 - tr0.depth;
+      for (const [fid, sgn, yF] of [[def.from, 1, y0 + finFace], [def.to, -1, y1 - finFace]] as const) {
+        for (const [key, zc, pName, mId] of [['T', zcTop, tr0.profiles.top, `TB.${def.id}`], ['B', zcBot, tr0.profiles.bottom, `TB.${def.id}.BC`]] as const) {
+          const pr = getProfile(pName);
+          const cid = `C.TBS.${def.id}.${fid}`;
+          const j = finJoint({ cid, tag: key, desc: key === 'T' ? 'חגורה עליונה' : 'חגורה תחתונה', hostId: colId(fid, line.id), memberId: mId,
+            P: horiz ? v3(x, yF, zc - finT) : v3(x, yF, zc), n: v3(0, sgn, 0), d: v3(0, sgn, 0), pn: horiz ? Z : X, side: 1,
+            prof: pr, profile: pName, finT, tongueT: finT, bolt: finBolt, bolts: 2, weldSize: 5, mat });
+          // שוכב: הפח אופקי מרותך לעמוד, והלשונית (בחריץ בחגורה) מונחת עליו — פלטה על פלטה, ברגים אנכיים
+          finJ.set(`${fid}|${key}`, j);
+        }
+      }
+      const yA = Math.max(...['T', 'B'].map((k) => finJ.get(`${def.from}|${k}`)!.start.y));
+      const yB = Math.min(...['T', 'B'].map((k) => finJ.get(`${def.to}|${k}`)!.start.y));
+      ys = yA; ye = yB;
+    }
     const tbId = `TB.${def.id}`;
     const TB: Member = {
-      id: tbId, kind: 'beam', label: `קורה נושאת ציר ${line.label} (${frames.length - 1} מפתחים)`, start: v3(x, ys, zTop), end: v3(x, ye, zTop),
+      id: tbId, kind: 'beam', label: `קורה נושאת ציר ${line.label} (${frames.length - 1} מפתחים)`,
+      start: finMode ? add(finJ.get(`${def.from}|T`)!.start, v3(0, 0, h / 2)) : v3(x, ys, zTop), end: finMode ? add(finJ.get(`${def.to}|T`)!.start, v3(0, 0, h / 2)) : v3(x, ye, zTop),
       profile: def.profile, material: mat, rollDeg: 0, mirror: false, anchor: 'top', refUp: Z, source: 'generated', manualPlacement: false, lineId: line.id,
     };
     res.members.push(TB);
@@ -159,14 +200,17 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
     const zBC = tr ? zTop - h / 2 - tr.depth : 0;
     if (tr) {
       TB.label = `מסבך נושא ציר ${line.label} — חגורה עליונה`;
-      const BC: Member = { ...TB, id: bcId, label: `מסבך נושא ציר ${line.label} — חגורה תחתונה`, start: v3(x, ys, zBC), end: v3(x, ye, zBC), profile: tr.profiles.bottom, anchor: 'center' };
+      const BC: Member = { ...TB, id: bcId, label: `מסבך נושא ציר ${line.label} — חגורה תחתונה`, start: finMode ? finJ.get(`${def.from}|B`)!.start : v3(x, ys, zBC), end: finMode ? finJ.get(`${def.to}|B`)!.start : v3(x, ye, zBC), profile: tr.profiles.bottom, anchor: 'center' };
       res.members.push(BC);
       const n = Math.max(2, tr.panels);
       // חלוקת השדות לפי צירי העמודים (צמתים על המסגרות); בין העמודים — הצמתים הקיצוניים זזים לפלטות הקצה
       const nodes = trussNodes(tr, y0, y1);
       if (side) { nodes[0] = ys; nodes[nodes.length - 1] = ye; }
-      const tp = buildTrussPlane({ idBase: `${tbId}.TR`, connId: `C.TBT.${def.id}`, label: `מסבך נושא ציר ${line.label}`, origin: v3(x, 0, 0), e: Y, nodes,
-        top: { z: () => zTop - h / 2, h, memberAt: () => tbId }, bot: { z: () => zBC, h: pB!.props.h, memberAt: () => bcId }, spec: tr, mat });
+      // בין העמודים: אין אנך בקצוות — העמוד עצמו סוגר את המסבך (אנך היה מתנגש בעמוד/בפרט החיבור)
+      const specB = side ? { ...tr, verts: tr.verts.map((v, i) => (i === 0 || i === tr.verts.length - 1 ? false : v)) } : tr;
+      const xPl = finMode ? finJ.get(`${def.from}|T`)!.start.x : x;
+      const tp = buildTrussPlane({ idBase: `${tbId}.TR`, connId: `C.TBT.${def.id}`, label: `מסבך נושא ציר ${line.label}`, origin: v3(xPl, 0, 0), e: Y, nodes,
+        top: { z: () => zTop - h / 2, h, memberAt: () => tbId }, bot: { z: () => zBC, h: pB!.props.h, memberAt: () => bcId }, spec: specB, mat });
       res.members.push(...tp.members); res.connections.push(tp.connection); res.issues.push(...tp.issues);
       // מושבים בצמתים: מסגרת שאינה על צומת — אזהרה
       for (const f of pl.supported) if (!nodes.some((sN) => Math.abs(sN - f.y) < 5)) { res.issues.push({ code: 'TB_TRUSS', severity: 'warning', elementId: tbId, message: `מסבך נושא ${def.id}: קורת הגג במסגרת ${f.id} אינה על צומת — התאם את מספר השדות לכפולה של מספר המפתחים` }); break; }
@@ -233,14 +277,21 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
       }
       // פלטת סגירה בין קצות אגפי העמוד (מסגריה) — משטח לחיבור הקורה ב-A2/A4/A5
       let close: Member | null = null;
-      if (def.support === 'A2' || def.support === 'A4' || def.support === 'A5') {
+      if (finMode) {
+        // סנפיר: פח מרותך לעמוד + לשונית בחגורה, לכל חגורה
+        for (const key of ['T', 'B']) {
+          const j = finJ.get(`${fid}|${key}`)!;
+          res.members.push(...j.members); res.issues.push(...j.issues);
+          parts.push(...j.members.map((m) => m.id)); bolts.push(...j.bolts); welds.push(...j.welds);
+        }
+      } else if (def.support === 'A2' || def.support === 'A4' || def.support === 'A5') {
         const yC = fy + sgn * (cb / 2 + 7.5), ch2 = cp.props.h;
         const zc0 = (def.support === 'A5' ? zB - 200 : zB - 40), zc1 = Math.min(zTop + 40, Math.max(c.start.z, c.end.z) - 60);
         close = plate(`${id}.CL`, `פלטת סגירה בין אגפי העמוד PL15×${Math.round(ch2)}×${Math.round(zc1 - zc0)}`, v3(x, yC, zc0), v3(x, yC, zc1), ch2, 15, Y, 'center', id);
         res.members.push(close); parts.push(close.id); welds.push(weld(id, 9, c.id, close.id, 2 * (zc1 - zc0), v3(x, yC, (zc0 + zc1) / 2)));
       }
       const yFace = fy + sgn * (cb / 2 + 15);
-      if (def.support === 'A1') { /* נבנה למעלה */ }
+      if (def.support === 'A1' || finMode) { /* נבנה למעלה */ }
       else if (def.support === 'A2' && tr) {
         // מסבך בין העמודים: פלטת קצה גבוהה אחת מרותכת לשתי החגורות (מסגריה), מוברגת לפלטת הסגירה — קבוצת ברגים בכל חגורה
         const yEP = yFace + sgn * 7.5, wEP = Math.max(tb, sbw, 120), hEP = zTop - zB;

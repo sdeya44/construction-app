@@ -136,8 +136,13 @@ describe('מסבכים', () => {
       expect(col(dBw).end.z).toBeCloseTo(full.end.z, 3);
       const tb = dBw.members.find((m: any) => m.id === 'TB.T1')!, bc = dBw.members.find((m: any) => m.id === 'TB.T1.BC')!;
       // החגורות מתחילות אחרי פני העמוד (לא מעל הציר)
-      expect(Math.min(tb.start.y, tb.end.y)).toBeGreaterThan(f[0].y + 100);
-      expect(Math.max(bc.start.y, bc.end.y)).toBeLessThan(f[3].y - 100);
+      expect(Math.min(tb.start.y, tb.end.y)).toBeGreaterThan(f[0].y + 50);
+      expect(Math.max(bc.start.y, bc.end.y)).toBeLessThan(f[3].y - 50);
+      // אין אנך בקצוות המסבך (העמוד סוגר את המסבך)
+      expect(dBw.members.some((m: any) => m.id === 'TB.T1.TR.V0')).toBe(false);
+      // HEA160 רחב מהמרווח בין אגפי העמוד ⇒ פלטה אל פלטה; RHS200x100 נכנס ⇒ סנפיר (פח + לשונית)
+      const fin = dBw.members.some((m: any) => m.id.startsWith('C.TBS.T1.') && m.id.endsWith('.T'));
+      expect(fin).toBe(prof[0].startsWith('RHS'));
       // ראש החגורה העליונה מתחת לראש העמוד
       expect(tb.start.z).toBeLessThan(full.end.z);
       const sup = dBw.connections.filter((c) => c.id.startsWith('C.TBS.T1.'));
@@ -147,5 +152,30 @@ describe('מסבכים', () => {
         expect(c.bolts.length).toBeGreaterThanOrEqual(4);
       }
     }
+  });
+  it('TR-U9: מסבך בין העמודים — בחירת סוג חיבור וכיוון הסנפיר, עמוד מסובב (אגף לכיוון המסבך)', () => {
+    const b = defaultBuilding(); const f = [...b.frames].sort((x, y) => x.y - y.y);
+    const spec = { ...defaultTrussSpec(6, 1000), profiles: { ...defaultTrussSpec(6, 1000).profiles, top: 'RHS120x80x5', bottom: 'RHS120x80x5' } };
+    const mk = (extra: object, bb0 = b) => { const bb = structuredClone(bb0); bb.transfers = [{ id: 'T1', lineId: 'L', from: f[0].id, to: f[3].id, removed: [f[1].id, f[2].id], profile: 'HEA160', support: 'A1', seat: 'B1', kind: 'truss', truss: spec, trussFit: 'between', ...extra }]; return generate(newProject('x', bb)); };
+    const plateOf = (d: any) => d.members.find((m: any) => m.id === `C.TBS.T1.${f[0].id}.T.PL`);
+    // שוכב (ברירת מחדל): הפח אופקי — נורמל המישור אנכי, הברגים אנכיים
+    const h = mk({});
+    expect(errs(h)).toEqual([]);
+    expect(Math.abs(plateOf(h).refUp.z)).toBeCloseTo(1, 5);
+    const sup = h.connections.find((c: any) => c.id === `C.TBS.T1.${f[0].id}`)!;
+    expect(sup.bolts.every((q: any) => Math.abs(q.axis.z) > 0.99)).toBe(true);
+    // עומד: הפח במישור המסבך
+    const v = mk({ finOrient: 'vertical' });
+    expect(errs(v)).toEqual([]);
+    expect(Math.abs(plateOf(v).refUp.x)).toBeCloseTo(1, 5);
+    // פלטה אל פלטה לפי בחירה: פלטת סגירה + פלטת קצה
+    const p = mk({ trussConn: 'plate' });
+    expect(errs(p)).toEqual([]);
+    expect(p.members.some((m: any) => m.id === `C.TBS.T1.${f[0].id}.CL`)).toBe(true);
+    expect(plateOf(p)).toBeUndefined();
+    // סנפיר בכפייה על חגורה רחבה — אזהרה
+    const specW = { ...spec, profiles: { ...spec.profiles, top: 'RHS200x200x8', bottom: 'RHS200x200x8' } };
+    const bw = structuredClone(b); bw.transfers = [{ id: 'T1', lineId: 'L', from: f[0].id, to: f[3].id, removed: [f[1].id, f[2].id], profile: 'HEA160', support: 'A1', seat: 'B1', kind: 'truss', truss: specW, trussFit: 'between', trussConn: 'fin' }];
+    expect(generate(newProject('x', bw)).issues.some((i) => i.code === 'PLATE_WIDE')).toBe(true);
   });
 });

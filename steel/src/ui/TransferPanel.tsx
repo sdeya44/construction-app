@@ -79,8 +79,23 @@ function TransferRow({ t, onChange, onRemove, embed }: { t: TransferDef; onChang
           <button role="radio" aria-checked={t.trussFit === 'between'} className={`tbtn${t.trussFit === 'between' ? ' on' : ''}`} data-testid={`tb-fit-between-${t.id}`} onClick={() => onChange({ trussFit: 'between' })}>העמודים עד הקורה — המסבך ביניהם</button>
         </div>
         <div className="hint">{t.trussFit === 'between'
-          ? 'העמודים התומכים ממשיכים עד קורת הגג (כמו במסגרת רגילה); המסבך בין העמודים, מתחת לראשיהם — כמו קורת אגד B. כל קצה: פלטת קצה גבוהה מרותכת לשתי החגורות, מוברגת לפלטת סגירה בין אגפי העמוד. חלוקת השדות לפי צירי העמודים; השדות הקיצוניים מתקצרים עד פלטת הקצה.'
+          ? 'העמודים התומכים ממשיכים עד קורת הגג (כמו במסגרת רגילה); המסבך בין העמודים, מתחת לראשיהם — כמו קורת אגד B, בלי אנך בקצוות (העמוד סוגר את המסבך). חלוקת השדות לפי צירי העמודים.'
           : 'העמודים התומכים מתקצרים; המסבך יושב על ראשיהם (A1) וקורות הגג על הצמתים העליונים.'}</div>
+        {t.trussFit === 'between' && <>
+          <div className="tb-lbl">חיבור החגורות לעמוד</div>
+          <div className="seg scope-seg" role="radiogroup" aria-label="חיבור החגורות לעמוד">
+            {([['auto', 'אוטומטי'], ['fin', 'סנפיר'], ['plate', 'פלטה אל פלטה']] as const).map(([k, l]) => (
+              <button key={k} role="radio" aria-checked={(t.trussConn ?? 'auto') === k} className={`tbtn${(t.trussConn ?? 'auto') === k ? ' on' : ''}`} data-testid={`tb-conn-${k}-${t.id}`} onClick={() => onChange({ trussConn: k })}>{l}</button>
+            ))}
+          </div>
+          {(t.trussConn ?? 'auto') !== 'plate' && <div className="seg scope-seg" role="radiogroup" aria-label="כיוון הסנפיר" style={{ marginTop: 4 }}>
+            {([['horizontal', 'פח שוכב — החגורה מונחת עליו'], ['vertical', 'פח עומד במישור המסבך']] as const).map(([k, l]) => (
+              <button key={k} role="radio" aria-checked={(t.finOrient ?? 'horizontal') === k} className={`tbtn${(t.finOrient ?? 'horizontal') === k ? ' on' : ''}`} data-testid={`tb-orient-${k}-${t.id}`} onClick={() => onChange({ finOrient: k })}>{l}</button>
+            ))}
+          </div>}
+          <TrussConnPic conn={t.trussConn ?? 'auto'} orient={t.finOrient ?? 'horizontal'} />
+          <div className="hint">סנפיר: פח מרותך לעמוד במסגריה — לווב בין האגפים (עמוד I שהווב פונה למסבך) או ישירות לדופן (עמוד RHS / אגף שפונה למסבך); בחגורה לשונית בחריץ, 2 ברגים בשטח. פח שוכב — מניחים את החגורה על הפח ומכניסים ברגים אנכיים. פלטה אל פלטה: כשהחגורה רחבה מהמרווח בין האגפים — פלטת סגירה רחבה על קצות האגפים ופלטת קצה בחגורות. "אוטומטי" בוחר סנפיר כשהחגורה נכנסת, אחרת פלטה אל פלטה.</div>
+        </>}
       </>}
       {t.kind === 'truss' && t.truss
         ? <TrussWizard spec={t.truss} span={span * 1000} chordFamilies={['HEA', 'HEB', 'IPE', 'RHS', 'SHS']} loads={tl} testId={`tw-${t.id}`} readOnlyProfiles={embed} onChange={(sp) => onChange({ truss: sp })}
@@ -201,3 +216,33 @@ export function RoofTrussPanel() {
 }
 const evenPanels = (span: number) => { const n = Math.max(4, Math.round(span / 1500)); return n % 2 ? n + 1 : n; };
 const depthFor = (span: number) => Math.max(800, Math.round(span / 12 / 100) * 100);
+
+/** תרשים מבט על של חיבור חגורה לעמוד I (הווב פונה למסבך): סנפיר / פלטה אל פלטה */
+function TrussConnPic({ conn, orient }: { conn: 'auto' | 'fin' | 'plate'; orient: 'horizontal' | 'vertical' }) {
+  const plate = conn === 'plate';
+  return (
+    <div className="schem" data-testid="tb-conn-pic">
+      <svg viewBox="0 0 220 74" role="img" aria-label="חיבור החגורה לעמוד — מבט על">
+        <text x={110} y={9} className="sm-lbl-s" textAnchor="middle">מבט על — עמוד I, הווב פונה למסבך</text>
+        {/* עמוד: שני אגפים ווב */}
+        <rect x={30} y={18} width={44} height={4} className="sm-main" />
+        <rect x={30} y={52} width={44} height={4} className="sm-main" />
+        <rect x={50} y={22} width={4} height={30} className="sm-main" />
+        {plate ? <>
+          <rect x={74} y={16} width={4} height={42} className="sm-hi" />
+          <rect x={78} y={18} width={4} height={38} className="sm-hi" />
+          <rect x={82} y={24} width={110} height={26} className="sm-thin" />
+          <text x={150} y={68} className="sm-lbl-s" textAnchor="middle">פלטת סגירה + פלטת קצה, ברגים אופקיים</text>
+        </> : <>
+          {orient === 'horizontal'
+            ? <rect x={54} y={27} width={60} height={20} className="sm-hi" />
+            : <rect x={54} y={35} width={60} height={4} className="sm-hi" />}
+          <rect x={92} y={orient === 'horizontal' ? 29 : 39} width={70} height={orient === 'horizontal' ? 16 : 3} className="sm-hi" opacity={0.6} />
+          <rect x={106} y={26} width={86} height={22} className="sm-thin" />
+          {[0, 1].map((i) => <circle key={i} cx={98 + i * 10} cy={orient === 'horizontal' ? 37 : 41} r={2.2} className="sm-main" />)}
+          <text x={150} y={68} className="sm-lbl-s" textAnchor="middle">{orient === 'horizontal' ? 'פח שוכב מרותך לווב — החגורה מונחת עליו' : 'פח עומד מרותך לווב — לשונית בצד'}</text>
+        </>}
+      </svg>
+    </div>
+  );
+}

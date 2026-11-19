@@ -230,7 +230,8 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
   if (br.walls.enabled) {
     const ctw = col.dims.tw ?? col.dims.t ?? 6;
     // עובי הווב של העמוד בפועל (חתך שהוחלף לעמוד מסוים)
-    const twOf = (id: string) => { const n = profOf?.(id); const pr = n ? tryProfile(n) : null; return pr ? pr.dims.tw ?? pr.dims.t ?? ctw : ctw; };
+    // עמוד חלול (RHS/SHS): פני ההלחמה הם הדופן החיצונית (רוחב מלא), לא עובי הדופן
+    const twOf = (id: string) => { const n = profOf?.(id); const pr = (n ? tryProfile(n) : null) ?? col; return pr.family === 'RHS' || pr.family === 'SHS' ? pr.props.b : pr.dims.tw ?? pr.dims.t ?? ctw; };
     const ls = [...topo.sec.lines].sort((p, q) => p.x - q.x);
     for (const [lid, bays] of wallBays(b.bracing, ls.map((l) => l.id))) {
       const l = ls.find((q) => q.id === lid)!;
