@@ -13,12 +13,15 @@ test('V141-01: מוטות תלייה, תמיכה צידית, סיב רציף, ב
   expect((await S(page)).derived.section.lines[0].label).toBe('E');
   // מוטות תלייה ותמיכה צידית
   await page.getByTestId('nav-b:ties').click();
+  await page.getByTestId('br-ties-ed-tab-sag').click();
   await page.getByTestId('sr-on').check();
   expect(await count(page, '^SR\\.')).toBeGreaterThan(0);
+  await page.getByTestId('br-ties-ed-tab-fly').click();
   await page.getByTestId('fb-on').check();
   expect(await count(page, '^FB\\.')).toBeGreaterThan(0);
   // סיב רציף
   await page.getByTestId('nav-b:walls').click();
+  if (await page.getByTestId('br-walls-ed-tab-ties').count()) await page.getByTestId('br-walls-ed-tab-ties').click();
   await page.getByTestId('lt-on').check();
   expect(await count(page, '^LTIE\\.')).toBeGreaterThan(0);
   // בסיס בכלונס

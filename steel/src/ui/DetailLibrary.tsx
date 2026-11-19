@@ -10,6 +10,7 @@ export function DetailLibrary() {
   const uses = (id: string) => Object.entries(p.detailAssign ?? {}).filter(([, v]) => v === id).map(([k]) => k);
   return (
     <div className="panel-body" data-testid="detail-library">
+      <button className="btn" style={{ width: '100%', marginBottom: 8 }} data-testid="open-conn-library" onClick={() => store.set({ connLibraryOpen: true })}>ספריית חיבורים — הגדרות שמורות לפרויקט ←</button>
       <div className="panel-title">ספריית פרטים ({lib.length})</div>
       {!lib.length && <div className="hint">אין עדיין פרטים בספרייה. בוחרים אלמנט ← "סוג חיבור בכל קצה" ← "פרט חדש בסטודיו", או תושבת ← "סוג התושבת".</div>}
       {lib.length > 0 && (

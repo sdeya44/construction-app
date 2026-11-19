@@ -5,6 +5,7 @@ test('KB-02: אלכסוני עמוד-קורה — תוכנית איפה יש: ת
   const errors = await boot(page);
   await page.getByTestId('nav-b:knee').click();
   await page.getByTestId('kb-on').check();
+  await page.getByTestId('kb-ed-tab-plan').click();
   await expect(page.getByTestId('kb-grid')).toBeVisible();
   const n = () => page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('KB.')).length);
   const n0 = await n();
@@ -38,6 +39,7 @@ test('KB-03: קונזולה — עמוד הקצה מופיע עם שני צדד�
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, rafterOverhangLeft: 1500, rafterOverhangRight: 1500 } }) }); });
   await page.getByTestId('nav-b:knee').click();
   await page.getByTestId('kb-on').check();
+  await page.getByTestId('kb-ed-tab-plan').click();
   await expect(page.getByTestId('kb-cell-0-L.L.L')).toBeVisible();
   await expect(page.getByTestId('kb-cell-0-L.L.R')).toBeVisible();
   await expect(page.getByTestId('kb-cell-0-R.R.R')).toBeVisible();

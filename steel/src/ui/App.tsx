@@ -19,6 +19,7 @@ import { moveLines, setPlaneSlope, shiftRoof, toCustomSection } from '../model/s
 import { NAV_INDEX } from './navIndex';
 import { NavContent, NavCrumb, SideNav, NAV_INDEX_LABEL, navGroupOf, type NavKey } from './SideNav';
 import { EaveCheckDialog } from './EaveCheckDialog';
+import { ConnLibrary, ConnWizard } from './ConnWizard';
 import { DetailStudio } from './DetailStudio';
 import { LayersMenu } from './LayersMenu';
 import { DeletedPanel } from './DeletedPanel';
@@ -279,7 +280,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.42.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.43.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -440,6 +441,8 @@ export function App() {
 
       {menu && ms.length > 0 && <MarkingMenu x={menu.x} y={menu.y} title={ms.length === 1 ? (ms[0]!.id.length > 12 ? KIND_LABEL[ms[0]!.kind] : ms[0]!.id) : String(ms.length)} items={menuItems()} onClose={() => setMenu(null)} />}
       <EaveCheckDialog />
+      <ConnWizard />
+      <ConnLibrary />
       <DetailStudio />
       {dimEdit && (
         <input className="inp num dim-edit" autoFocus data-testid="dim-edit" defaultValue={(dimEdit.value / 1000).toFixed(3)} style={{ left: dimEdit.x, top: dimEdit.y }}

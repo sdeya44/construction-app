@@ -47,6 +47,10 @@ export interface AppState {
   detailStudio: string | null;
   /** חיבור שהפלטות שלו נערכות בסטודיו (אשף הפלטה כחלק מהסטודיו) */
   studioConn?: string | null;
+  /** אשף החיבורים פתוח על חיבור (1.42) */
+  connWizard?: string | null;
+  /** ספריית החיבורים פתוחה */
+  connLibraryOpen?: boolean;
   /** מזחלה שנבחרה בלחיצה (מזהה המישור) — פותח את אשף המזחלה */
   activeGutter?: string | null;
   measure: { a?: { x: number; y: number; z: number }; b?: { x: number; y: number; z: number } };

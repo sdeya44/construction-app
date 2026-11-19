@@ -291,7 +291,7 @@ export function KneeEditor() {
         </div>
       </><KneeSides /></>}
       {kb.enabled && !ed.embed && <>
-        <SumCard testId="kb-sum" title={`${n} אלכסונים · ${kb.profile}`} sub={`${(kb.mode ?? 'angle') === 'angle' ? `${kb.angle ?? 45}°` : `מרחק ${kb.reach}`} · ירידה ${kb.drop} · ${({ fin: 'פח + לשונית', angle: 'זוויתן מוברג לפח', flange: 'פלטת קצה לאגף' } as const)[kneeDetail(kb.detail, tryProfile(kb.profile)?.family ?? 'RHS')]}`}
+        <SumCard testId="kb-sum" editLabel="פרט ✎" onEdit={() => { const c = d.connections.find((x) => x.id.startsWith('C.KB.')); if (c) store.set({ connWizard: c.id }); }} title={`${n} אלכסונים · ${kb.profile}`} sub={`${(kb.mode ?? 'angle') === 'angle' ? `${kb.angle ?? 45}°` : `מרחק ${kb.reach}`} · ירידה ${kb.drop} · ${({ fin: 'פח + לשונית', angle: 'זוויתן מוברג לפח', flange: 'פלטת קצה לאגף' } as const)[kneeDetail(kb.detail, tryProfile(kb.profile)?.family ?? 'RHS')]}`}
           pills={Object.values(kb.sides ?? {}).some((o) => o && Object.keys(o).some((x) => x !== 'on')) ? [{ text: 'יש ערכים חריגים למפתחים', tone: 'warn' }] : []} />
         <PanelAlerts issues={d.issues.filter((i) => /^KNEE_|^BOLT_ACCESS|^PLATE_WIDE/.test(i.code) && /אלכסון/.test(i.message))} testId="kb-alerts" />
         <TabbedEditor testId="kb-ed" title="" tabs={[

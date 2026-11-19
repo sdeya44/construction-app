@@ -11,6 +11,7 @@ import { Adv, BoltSelect, LenField, NumField } from './fields';
 import { Icon } from './icons';
 import { PlateWizard } from './PlateWizard';
 import { DetailTiles, PIC, ScopeToggle } from './DetailPicker';
+import { familyOf } from '../model/connRegistry';
 import { CleatTypePicker } from './ConnTypePicker';
 
 const STATUS: Record<ApprovalStatus, string> = { 'not-verified': 'לא מאומת', 'for-review': 'לבדיקה', approved: 'מאושר' };
@@ -88,6 +89,7 @@ export function ConnectionEditor() {
         ))}
       </div>
       {tab === 'plate' && <>
+      {familyOf(c) && <button className="btn primary" style={{ width: '100%', margin: '4px 0 8px' }} data-testid="conn-wizard-open" onClick={() => store.set({ connWizard: c.id })}>אשף חיבורים — פרטים מתאימים למצב הזה ✎</button>}
       <PlateWizard c={c} />
       <SectionSvg c={c} />
       </>}

@@ -551,6 +551,7 @@ export function RafterStrutConnFields() {
       <div className="field"><label>קוטר בורג</label><BoltSelect testId="rs-bolt" d={rs.bolt.d} onChange={(x) => save({ bolt: { ...rs.bolt, d: x } })} /></div>
     </>}
     {det === 'weld' && <div className="hint">ה-RHS נחתך לפני הווב ומרותך בשטח בריתוך היקפי — ללא פחים וברגים.</div>}
+    {(() => { const c = store.state.derived.connections.find((x) => /^C\.RS\d+\./.test(x.id)); return c ? <button className="btn small" data-testid="rs-wizard" onClick={() => store.set({ connWizard: c.id })}>אשף חיבורים ✎</button> : null; })()}
   </>;
 }
 

@@ -959,3 +959,21 @@ details.adv .adv-body { padding-bottom: 6px; }
 .tab-ed-tab { border: 0; background: none; padding: 5px 10px; border-radius: 7px; font-weight: 600; color: var(--muted); cursor: pointer; font-family: inherit; font-size: 12.5px; }
 .tab-ed-tab.on { background: var(--brand); color: #fff; }
 .tab-ed-ft { color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+/* ---- אשף החיבורים (1.42) */
+.dialog.wiz { width: min(1360px, 96vw); max-width: none; height: min(860px, 92vh); display: flex; flex-direction: column; }
+.dialog.wiz header { display: flex; align-items: center; gap: 8px; }
+.dialog.wiz header h2 { margin-inline-end: auto; }
+.wiz-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 280px 1fr 360px; }
+.wiz-col { padding: 12px 14px; overflow: auto; }
+.wiz-col + .wiz-col { border-inline-start: 1px solid var(--line); }
+.wiz-col h3 { margin: 0 0 10px; font-size: 14px; }
+.wiz-col .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 12.5px; margin: 0 0 10px; }
+.wiz-col .kv dt { color: var(--muted); } .wiz-col .kv dd { margin: 0; font-weight: 600; }
+.wiz-card { width: 100%; display: grid; grid-template-columns: 66px 1fr auto; gap: 10px; align-items: center; text-align: start; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-top: 8px; cursor: pointer; font-family: inherit; color: inherit; }
+.wiz-card.on { border: 2px solid var(--brand); background: #f6faf7; }
+.wiz-card.no { opacity: .55; cursor: default; }
+.wiz-txt { display: flex; flex-direction: column; gap: 2px; } .wiz-txt b { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; } .wiz-txt small { color: var(--muted); font-size: 12px; }
+.fit-ok { color: var(--brand) !important; } .fit-warn { color: var(--warn) !important; } .fit-no { color: var(--err) !important; }
+.wiz-check { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.dialog.wiz footer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
