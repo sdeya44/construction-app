@@ -1051,3 +1051,13 @@ details.adv .adv-body { padding-bottom: 6px; }
 .kb-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 6px 0; }
 .kb-quick .inp.num { width: 54px; }
 .kb-quick .sep { width: 1px; height: 20px; background: var(--line); margin: 0 3px; }
+/* 1.53: טבלת מופעים לרכיב */
+.ctab-wrap { overflow-x: auto; }
+.ctab { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.ctab th { text-align: start; color: var(--muted); font-weight: 600; padding: 5px 6px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
+.ctab td { padding: 6px; border-bottom: 1px solid var(--line); }
+.ctab td.mono { font-family: var(--mono); font-size: 11.5px; }
+.ctab .n { text-align: end; }
+.ctab tbody tr { cursor: pointer; }
+.ctab tbody tr:hover, .ctab tbody tr.on { background: #fdf1e4; }
+.ctab tfoot td { font-weight: 700; border-bottom: 0; }

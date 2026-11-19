@@ -1,3 +1,4 @@
+import { ComponentTable } from './ComponentTable';
 import { useRef, useState } from 'react';
 import { setBuilding, setKneeBraces, setSection, setSettings } from '../commands/commands';
 import { tryProfile } from '../profiles/library';
@@ -307,6 +308,7 @@ export function KneeEditor() {
         </div>
       </> },
           { key: 'plan', label: 'איפה יש', render: () => <KneeSides /> },
+          { key: 'table', label: 'טבלה', render: () => <ComponentTable match={/^KB\./} testId="ctab-knee" /> },
           { key: 'conn', label: 'פרט חיבור', render: () => connFields },
         ]} />
         <Help>בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. אין בדיקת חוזק.</Help>

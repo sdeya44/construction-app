@@ -19,6 +19,7 @@ import { HaunchEditor, KneeEditor, SectionEditor } from './SectionEditor';
 import { ClassicRoofDims } from './TriDims';
 import { FramesStrip, GussetSchematic, LockTrussSchematic, PortalSchematic, RidgeSchematic, WallsPlan } from './schematics';
 import { OffCard } from './pics';
+import { ComponentTable } from './ComponentTable';
 import { DetailTiles, PIC } from './DetailPicker';
 import { PanelAlerts, SumCard, TabbedEditor } from './summary';
 
@@ -712,6 +713,7 @@ function RoofBracingPanel() {
           {isX ? <><div className="field prof"><label>חתך</label><ProfilePicker testId="br-roof-prof" value={br.roof.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ roof: { ...br.roof, profile: v } })} /></div><RoofEndFields />{(br.roof.endDetail ?? 'gusset') === 'gusset' && <XConnFields />}</> : <RhsFields />}
         </> },
         { key: 'struts', label: `תמוכות בין הקורות${rs ? ` (${rs})` : ''}`, render: () => <RafterStrutsEditor /> },
+        { key: 'table', label: 'טבלה', render: () => <ComponentTable match={/^(BR\.R|HB\.)/} testId="ctab-roof" /> },
         { key: 'adv', label: 'מתקדם', render: () => <>
           <div className="field"><label>שני קצוות באותה נקודה, אותו מפתח (זה ליד זה)</label><NumField testId="br-samegap" value={br.roof.sameGap ?? 200} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, sameGap: Math.max(0, v) } })} /></div>
           {br.roof.endDetail === 'rod' && <div className="field"><label>מפתחים סמוכים — מוטות זה מעל זה</label><NumField testId="br-adjgap" value={br.roof.adjGap ?? 40} suffix='מ"מ' onCommit={(v) => set({ roof: { ...br.roof, adjGap: Math.max(0, v) } })} /></div>}
@@ -773,6 +775,7 @@ export function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> }
           </> },
           { key: 'lines', label: 'צירים ומפתחים', render: () => <WallLines nb={nb} /> },
           { key: 'ties', label: `סיב רציף${br.lineTies?.enabled ? ' ✓' : ''}`, render: () => <LineTiesEditor /> },
+          { key: 'table', label: 'טבלה', render: () => <ComponentTable match={/^(BR\.W|BB\.|LT\.)/} testId="ctab-walls" /> },
         ]} />
       </>}
       </>}

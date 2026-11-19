@@ -122,3 +122,21 @@ test('UX152-01: פרט טיפוסי בכרטיס החיבור / בעורך / ב�
   expect((await frs()).length).toBe(nf);
   expect(errors).toEqual([]);
 });
+
+test('UX153-01: טבלת מופעים — שורה לכל מכלול, ריחוף מדגיש, לחיצה בוחרת ומתמקדת', async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, bracing: { ...p.building.bracing, walls: { ...p.building.bracing.walls, enabled: true, type: 'portal' } } } }) }); });
+  await page.getByTestId('nav-b:walls').click();
+  await page.getByTestId('br-walls-ed-tab-table').click();
+  const rows = page.locator('[data-testid^="ctab-walls-row-"]');
+  const nAsm = await page.evaluate(() => new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => /^BB\./.test(m.id)).map((m: any) => m.id.split('.').slice(0, 3).join('.'))).size);
+  await expect(rows).toHaveCount(nAsm);
+  await expect(page.getByTestId('ctab-walls')).toContainText('אגד B');
+  await rows.first().hover();
+  expect((await page.evaluate(() => (window as any).__ksp.store.state.scopeHi))?.length).toBeGreaterThan(1);
+  await rows.first().click();
+  await expect(page.getByTestId('props-single')).toBeVisible();
+  expect((await page.evaluate(() => (window as any).__ksp.store.state.selection[0]))).toMatch(/^BB\./);
+  await expect(page.getByTestId('view-restore')).toBeVisible();
+  expect(errors).toEqual([]);
+});
