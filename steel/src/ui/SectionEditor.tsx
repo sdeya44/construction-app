@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { setBuilding, setKneeBraces, setSection } from '../commands/commands';
+import { setBuilding, setKneeBraces, setSection, setSettings } from '../commands/commands';
+import { tryProfile } from '../profiles/library';
 import { defaultKneeBraces } from '../geometry/knee';
 import { defaultHaunch } from '../geometry/haunch';
 import { gablePair, lineLabel, moveLines, planeDims, setAxisCount, setPlaneDims, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
@@ -399,6 +400,23 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
   base?: number; onBase?: (v: number) => void;
 }) {
   const W = 300, H = 170, padX = 18, padTop = 26, padBot = 40;
+  // מפלס ייחוס לגבהים (תצוגה והזנה): המודל שומר פני עליון קורת הגג; כאן מוסיפים/מפחיתים את שכבות הגג או הקורה והפלטות
+  const proj = useStore((s) => s.project);
+  const der = useStore((s) => s.derived);
+  const datum = proj.settings.heightDatum ?? 'tos';
+  const datumOff = (planeId: string) => {
+    if (datum === 'tos') return 0;
+    const pl = sec.planes.find((q) => q.id === planeId);
+    const kk = pl ? Math.sqrt(1 + ((pl.z1 - pl.z0) / ((pl.x1 - pl.x0) || 1)) ** 2) : 1;
+    if (datum === 'col') {
+      const e = proj.connectionDefaults.eave;
+      return -((tryProfile(proj.building.rafterProfile)?.props.h ?? 0) * kk + (e.t ?? 12) * (e.split === false ? 1 : 2));
+    }
+    const pm = der.members.find((m) => m.purlin?.side === planeId) ?? der.members.find((m) => m.purlin);
+    const ph = (pm ? tryProfile(pm.profile)?.props.h : undefined) ?? 0;
+    const rc = proj.building.cladding?.roof;
+    return ph * kk + (datum === 'roof' && rc?.enabled ? (rc.thickness ?? 0) : 0);
+  };
   const [drag, setDrag] = useState<{ id: string; x: number } | null>(null);
   const [selPl, setSelPl] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ kind: 'span' | 'ovl' | 'ovr' | 'z' | 'base'; key: string; at: { x: number; y: number }; value: number } | null>(null);
@@ -445,7 +463,8 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
       apply({ ...sec, template: undefined, planes: sec.planes.map((q) => (q.id === pl.id ? { ...q, ...patch } : q)) }, 'שינוי קונזולה');
     } else {
       const [pid, end] = edit.key.split(':');
-      apply({ ...sec, template: undefined, planes: sec.planes.map((q) => (q.id === pid ? { ...q, [end === 'x0' ? 'z0' : 'z1']: v } : q)) }, 'שינוי גובה');
+      const vz = v - datumOff(pid);
+      apply({ ...sec, template: undefined, planes: sec.planes.map((q) => (q.id === pid ? { ...q, [end === 'x0' ? 'z0' : 'z1']: vz } : q)) }, 'שינוי גובה');
     }
     setEdit(null);
   };
@@ -453,6 +472,15 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
   const yDim = H - padBot + 16, yOv = H - padBot + 30;
   return (
     <div className="isec" data-testid="isec">
+      <div className="isec-datum">
+        <label htmlFor="isec-datum">הגבהים בשרטוט מתייחסים ל:</label>
+        <select id="isec-datum" className="inp" data-testid="isec-datum" value={datum} onChange={(e) => store.exec(setSettings({ heightDatum: e.target.value as 'tos' | 'col' | 'purlin' | 'roof' }))}>
+          <option value="tos">פני עליון קורת הגג (פלדה)</option>
+          <option value="col">ראש העמוד (מתחת לקורה ולפלטות)</option>
+          <option value="purlin">פני עליון הפטות</option>
+          <option value="roof">פני הגג הגמור (פטה + פנל)</option>
+        </select>
+      </div>
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="sec-svg isec-svg" onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} role="img" aria-label="עורך חתך">
         <line x1={0} y1={Y(0)} x2={W} y2={Y(0)} className="g" />
         {sec.planes.map((p) => (
@@ -490,8 +518,8 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
           const dup = sec.planes.some((q, qi) => qi < pi && ((Math.abs(q.x0 - x) < 1 && Math.abs(q.z0 - z) < 1) || (Math.abs(q.x1 - x) < 1 && Math.abs(q.z1 - z) < 1)));
           if (dup) return null;
           return (
-            <g key={`${p.id}${e}`} className="isec-dim z" onClick={() => openEdit('z', `${p.id}:${e}`, X(x), Y(z) - 10, z)} data-testid={`isec-z-${p.id}-${e}`}>
-              <text x={X(x) + (e === 'x0' ? 2 : -2)} y={Y(z) - 5} className={`t ${e === 'x0' ? 'st' : 'en'}`}>{m(z)}</text>
+            <g key={`${p.id}${e}`} className="isec-dim z" onClick={() => openEdit('z', `${p.id}:${e}`, X(x), Y(z) - 10, z + datumOff(p.id))} data-testid={`isec-z-${p.id}-${e}`}>
+              <text x={X(x) + (e === 'x0' ? 2 : -2)} y={Y(z) - 5} className={`t ${e === 'x0' ? 'st' : 'en'}`}>{m(z + datumOff(p.id))}</text>
             </g>
           );
         }))}

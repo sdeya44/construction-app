@@ -56,11 +56,12 @@ export function ClassicRoofDims({ b, unit, set, testId = 'cl', ids }: {
   const linked = Math.abs(b.eaveRight - b.eaveLeft) < 0.5;
   const [sameR, setSameR] = useState<boolean>(linked);
   if (b.roofType === 'mono') {
-    return (
+    return (<>
       <TriDims testId={testId} unit={unit} col={b.eaveLeft} top={b.eaveRight} run={b.width} calc={calc} onCalc={setCalc}
         labels={{ col: 'גובה עמוד א (שמאל)', top: 'גובה עמוד ב (ימין)' }} fieldIds={{ col: ids?.col ?? 'eaveLeft', top: ids?.top ?? 'eaveRight', slope: ids?.slope ?? 'slopeLeft' }}
         onCommit={(v) => set({ eaveLeft: v.col, eaveRight: v.top })} />
-    );
+      <HeightNote />
+    </>);
   }
   const run = Math.max(1, b.ridgeX);
   const ridge = b.eaveLeft + (b.slopeLeftPct / 100) * run;
@@ -71,6 +72,12 @@ export function ClassicRoofDims({ b, unit, set, testId = 'cl', ids }: {
         onCommit={(v) => set({ eaveLeft: v.col, slopeLeftPct: Math.round(((v.top - v.col) / run) * 100 * 10000) / 10000, ...(sameR ? { eaveRight: v.col } : {}) })} />
       <label className="row" style={{ margin: '2px 0' }}><input type="checkbox" data-testid={`${testId}-same-r`} checked={sameR} onChange={(e) => { setSameR(e.target.checked); if (e.target.checked) set({ eaveRight: b.eaveLeft }); }} />עמוד ב (ימין) באותו גובה — גג סימטרי בגובה</label>
       {!sameR && <div className="field"><label>גובה עמוד ב (ימין)</label><LenField testId={ids?.right ?? 'eaveRight'} mm={b.eaveRight} unit={unit} onCommit={(v) => set({ eaveRight: v })} /></div>}
+      <HeightNote />
     </>
   );
+}
+
+/** הבהרה: "גובה עמוד" = פני עליון קורת הגג בציר העמוד (לא ראש העמוד ולא פני הגג) */
+export function HeightNote() {
+  return <div className="hint" data-testid="height-note">הגבהים כאן — <b>פני עליון קורת הגג (פלדה) בציר העמוד</b>. ראש העמוד נמוך יותר בעומק הקורה ובפלטות החיבור; פני הגג הגמור גבוהים יותר בפטה ובפנל. בשרטוט החתך ("צירים, מסגרות וגבהים") אפשר לבחור לאיזה מפלס הגבהים מתייחסים.</div>;
 }

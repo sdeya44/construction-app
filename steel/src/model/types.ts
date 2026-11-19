@@ -567,6 +567,8 @@ export interface Project {
   settings: { stockLength: Mm; stockLengths: Mm[]; kerf: Mm; checkedBy: string; approvedBy: string; autoSplice?: boolean;
     /** האחדת אורכי ברגים: הפרש מרבי (מ"מ) לאיחוד לאורך הארוך; 0/ריק = כבוי */
     boltUnify?: Mm;
+    /** לאיזה מפלס מתייחסים הגבהים בשרטוט החתך (הזנה ותצוגה בלבד; המודל שומר פני עליון קורת גג): tos (ברירת מחדל) / col = ראש העמוד / purlin = פני עליון הפטות / roof = פני הגג הגמור */
+    heightDatum?: 'tos' | 'col' | 'purlin' | 'roof';
     /** סבולת מספור (מ"מ): חלקים באותה צורה שאורכם ומיקומי חוריהם שונים עד הסבולת מקבלים סימון אחד ומיוצרים כמו הנציג; 0/ריק = כבוי */
     markTol?: Mm;
     /** stock = מוט מלא והשלמה (ברירת מחדל); equal = חלקים שווים */

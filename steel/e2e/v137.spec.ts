@@ -49,3 +49,26 @@ test('V137-02: מסבך נושא בין העמודים — סנפיר שוכב/�
   await shot(page, 'V137_02_fin');
   expect(errors).toEqual([]);
 });
+
+test('V138-01: מפלס ייחוס לגבהים בשרטוט החתך; פירוט אורך חיתוך עמוד', async ({ page }) => {
+  const errors = await boot(page);
+  await page.getByTestId('nav-s:geometry').click();
+  const sec = () => page.evaluate(() => (window as any).__ksp.store.state.project.building.section ?? null);
+  await page.getByTestId('isec-datum').selectOption('purlin');
+  const tid = await page.locator('[data-testid^="isec-z-"]').first().getAttribute('data-testid');
+  const pid = tid!.replace('isec-z-', '').replace(/-x[01]$/, '');
+  await page.getByTestId(tid!).dispatchEvent('click');
+  await page.getByTestId('isec-input').fill('6.3'); await page.getByTestId('isec-input').press('Enter');
+  const s1 = await sec();
+  const pl = s1.planes.find((q: any) => q.id === pid); const zz = tid!.endsWith('x0') ? pl.z0 : pl.z1;
+  const k = Math.sqrt(1 + ((pl.z1 - pl.z0) / (pl.x1 - pl.x0)) ** 2);
+  const ph = await page.evaluate((id) => { const d = (window as any).__ksp.store.state.derived; const m = d.members.find((x: any) => x.purlin?.side === id) ?? d.members.find((x: any) => x.purlin); return Number(/^C(\d+)/.exec(m.profile)?.[1] ?? 0); }, pid);
+  expect(Math.abs(zz - (6300 - ph * k))).toBeLessThan(2);
+  await expect(page.getByTestId(tid!)).toHaveText('6.30');
+  await page.getByTestId('isec-datum').selectOption('tos');
+  await shot(page, 'V138_01_datum');
+  await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
+  await expect(page.getByTestId('prop-cut-why')).toContainText('קורת גג');
+  await shot(page, 'V138_01_cut');
+  expect(errors).toEqual([]);
+});
