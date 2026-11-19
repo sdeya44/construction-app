@@ -54,7 +54,7 @@ export const xMax = (p: Pick<NPlane, 'a' | 'b'>) => Math.max(p.a.x, p.b.x);
 /** חתך מנורמל מתוך פרמטרי המבנה: מצב קלאסי (דו/חד־שיפועי) או חתך מודולרי (building.section). */
 export function normalizeSection(b: BuildingParams, roof: RoofInfo): NSection {
   if (b.section) {
-    const lines = [...b.section.lines].sort((p, q) => p.x - q.x).map((l, i) => ({ id: l.id, label: lineLabel(i), x: l.x, ...(l.wall ? { wall: true } : {}) }));
+    const lines = [...b.section.lines].sort((p, q) => p.x - q.x).map((l, i) => ({ id: l.id, label: b.lineLabels?.[l.id]?.trim() || lineLabel(i), x: l.x, ...(l.wall ? { wall: true } : {}) }));
     const planes: NPlane[] = b.section.planes.map((pl, i) => {
       const p0 = { x: pl.x0, z: pl.z0 }, p1 = { x: pl.x1, z: pl.z1 };
       const startAt = pl.start === 'x0' ? 'b' : 'b'; // הקורה תמיד מהקצה הרחוק אל קצה ההתחלה
@@ -71,7 +71,7 @@ export function normalizeSection(b: BuildingParams, roof: RoofInfo): NSection {
     }
     return { lines, planes, custom: true };
   }
-  const lines: NLine[] = [{ id: 'L', label: lineLabel(0), x: 0 }, { id: 'R', label: lineLabel(1), x: b.width }];
+  const lines: NLine[] = [{ id: 'L', label: b.lineLabels?.L?.trim() || lineLabel(0), x: 0 }, { id: 'R', label: b.lineLabels?.R?.trim() || lineLabel(1), x: b.width }];
   if (b.roofType === 'gable') {
     const R = { x: b.ridgeX, z: roof.ridgeZ! };
     const A = { x: -b.rafterOverhangLeft, z: b.eaveLeft - roof.slopeLeft * b.rafterOverhangLeft };

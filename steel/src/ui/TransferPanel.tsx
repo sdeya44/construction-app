@@ -7,7 +7,7 @@ import { TrussWizard } from './TrussWizard';
 import type { RoofTrussParams, TransferDef, TbSeat, TbSupport } from '../model/types';
 import { store, useStore } from '../store';
 import { Dialog } from './Dialogs';
-import { ProfilePicker, useEdit, Help } from './fields';
+import { NumField, ProfilePicker, useEdit, Help } from './fields';
 import { OffCard } from './pics';
 import { FramePickStrip } from './schematics';
 
@@ -53,7 +53,7 @@ function SeatPic({ k }: { k: TbSeat }) {
 }
 
 /** שורת עריכה של קורה נושאת אחת (בחלון ובפאנל) */
-function TransferRow({ t, onChange, onRemove, embed }: { t: TransferDef; onChange: (patch: Partial<TransferDef>) => void; onRemove?: () => void; /** בחלון האלמנט: החתכים נבחרים ב"חתך וחומר" — כאן לקריאה בלבד */ embed?: boolean }) {
+function TransferRow({ t, onChange, onRemove, embed, onApplyLine, lineCount }: { t: TransferDef; onChange: (patch: Partial<TransferDef>) => void; onRemove?: () => void; onApplyLine?: () => void; lineCount?: number; /** בחלון האלמנט: החתכים נבחרים ב"חתך וחומר" — כאן לקריאה בלבד */ embed?: boolean }) {
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
   const lab = useLineLabel();
   const fr = [...p.building.frames].sort((a, b) => a.y - b.y);
@@ -125,6 +125,16 @@ function TransferRow({ t, onChange, onRemove, embed }: { t: TransferDef; onChang
         {SEATS.filter((k) => !(t.kind === 'truss' && (k === 'B4' || (k === 'B2' && /^(RHS|SHS)/i.test(t.truss?.profiles.top ?? ''))))).map((k) => <button key={k} role="radio" aria-checked={t.seat === k} className={`pic-tile${t.seat === k ? ' on' : ''}`} data-testid={`tb-seat-tile-${t.id}-${k}`} title={SEAT_HINT[k]} onClick={() => onChange({ seat: k })}><SeatPic k={k} /><b>{k}</b><span>{SEAT_HE[k]}</span></button>)}
       </div>
       <div className="hint">{SEAT_HINT[t.seat]}</div>
+      {(t.kind ?? 'beam') === 'beam' && <>
+        <label className="row" style={{ marginTop: 6 }}><input type="checkbox" data-testid={`tb-knee-${t.id}`} checked={!!t.knee?.enabled} onChange={(e) => onChange({ knee: { ...(t.knee ?? { profile: 'L50x5', drop: 800, angle: 45 }), enabled: e.target.checked } })} />אלכסוני Y מהקורה לעמודים התומכים</label>
+        {t.knee?.enabled && <>
+          <div className="field prof"><label>חתך אלכסון</label><ProfilePicker testId={`tb-knee-prof-${t.id}`} value={t.knee.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => onChange({ knee: { ...t.knee!, profile: v } })} /></div>
+          <div className="field"><label>ירידה מתחתית הקורה</label><NumField testId={`tb-knee-drop-${t.id}`} value={t.knee.drop} suffix='מ"מ' onCommit={(v) => onChange({ knee: { ...t.knee!, drop: Math.max(200, v) } })} /></div>
+          <div className="field"><label>זווית מהאופק</label><NumField testId={`tb-knee-ang-${t.id}`} value={t.knee.angle} suffix="°" onCommit={(v) => onChange({ knee: { ...t.knee!, angle: Math.max(25, Math.min(65, v)) } })} /></div>
+          <div className="hint">זוויתן: מוברג לפח מרותך; RHS: פח + לשונית בחריץ. בבדיקת החתך המפתח האפקטיבי קטן בהיטל האלכסונים (הערכה).</div>
+        </>}
+      </>}
+      {onApplyLine && (lineCount ?? 0) > 1 && <button className="btn small" data-testid={`tb-apply-line-${t.id}`} title="חתך, סוג, תמיכה, חיבור קורות הגג ואלכסונים — לכל הקורות הנושאות בציר" onClick={onApplyLine}>החל על כל {lineCount} הקורות בציר {lab(t.lineId)}</button>}
       {span * 1000 > p.settings.stockLength - 30 && <>
         <div className="field"><label>חלוקה (ארוך מ-{(p.settings.stockLength / 1000).toFixed(1)} מ')</label>
           <select className="inp" data-testid={`tb-splice-${t.id}`} value={t.splice ?? 'auto'} onChange={(e) => onChange({ splice: e.target.value as 'auto' | 'none' })}>
@@ -165,7 +175,9 @@ export function TransferPanel() {
     <div className="panel-body" data-testid="tb-panel">
       <div className="panel-title">קורות נושאות (דילול עמודים)</div>
       {!list.length && <Help>אין עמודים מבוטלים. לביטול: בוחרים עמודים בתלת־ממד (Ctrl ללחיצה מרובה) ← "בטל עמודים" בסרגל ההקשר. התוכנה מציעה קורה נושאת בין העמודים שנותרו, עם בחירת תמיכה (A1–A5) וחיבור קורות הגג (B1–B4).</Help>}
-      {list.map((t, i) => <TransferRow key={t.id} t={t} onChange={(patch) => set(list.map((x, k) => (k === i ? { ...x, ...patch } : x)))} onRemove={() => set(list.filter((_, k) => k !== i))} />)}
+      {list.map((t, i) => <TransferRow key={t.id} t={t} onChange={(patch) => set(list.map((x, k) => (k === i ? { ...x, ...patch } : x)))} onRemove={() => set(list.filter((_, k) => k !== i))}
+        lineCount={list.filter((x) => x.lineId === t.lineId).length}
+        onApplyLine={() => set(list.map((x) => (x.lineId === t.lineId && x.id !== t.id ? { ...x, profile: t.profile, kind: t.kind, support: t.support, seat: t.seat, knee: t.knee ? { ...t.knee } : undefined, truss: t.truss, trussFit: t.trussFit, trussConn: t.trussConn, finOrient: t.finOrient } : x)))} />)}
     </div>
   );
 }

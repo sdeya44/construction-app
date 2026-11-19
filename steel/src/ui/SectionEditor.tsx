@@ -11,6 +11,8 @@ import { Icon } from './icons';
 import type { KneeSideOverride } from '../model/types';
 import { KneeSchematic } from './schematics';
 import { OffCard } from './pics';
+import { DetailTiles, PIC, ScopeToggle } from './DetailPicker';
+import { kneeDetail } from '../geometry/knee';
 
 /**
  * בונה החתך המודולרי (החלטת משתמש 15.11.2026): תבניות + טבלת צירי עמודים + טבלת מישורי גג, עם תצוגה מקדימה.
@@ -55,6 +57,7 @@ export function SectionEditor() {
 function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' | 'mm'; apply: (s: CustomSection, label?: string) => void }) {
   const lines = [...sec.lines].sort((a, b) => a.x - b.x);
   const lineBase = useStore((st) => st.project.building.lineBase) ?? {};
+  const labels = useStore((st) => st.project.building.lineLabels) ?? {};
   const baseEl = useStore((st) => st.project.building.baseElevation);
   const setLine = (id: string, x: number) => apply(moveLines(sec, new Map([[id, x]])), 'הזזת ציר');
   const setPlane = (id: string, patch: Partial<RoofPlaneDef>) => apply({ ...sec, template: undefined, planes: sec.planes.map((pl) => (pl.id === id ? { ...pl, ...patch } : pl)) });
@@ -80,13 +83,15 @@ function ModularTables({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' 
           apply({ ...sec, lines: [...sec.lines, { id: newId('C', sec.lines.map((l) => l.id)), x: last.x + 6000 }] }, 'הוספת ציר');
         }}><Icon name="plus" />ציר</button>
       </div>
-      <Adv id="sec-lines-tbl" label="טבלת צירים — מיקום, תחתית עמוד, קיר קיים">
+      <Adv id="sec-lines-tbl" label="טבלת צירים — שם, מיקום, תחתית עמוד, קיר קיים">
       <table className="tbl" data-testid="sec-lines">
-        <thead><tr><th>ציר</th><th>מיקום X</th><th>מפתח</th><th title="מפלס תחתית העמוד: פני חגורה / יסוד, ביחס ל-±0.00">תחתית עמוד</th><th title="קיר קיים: אין עמוד — הקורות מעוגנות לקיר">קיר</th><th /></tr></thead>
+        <thead><tr><th title="שם הציר כמו בתוכנית">שם</th><th>מיקום X</th><th>מפתח</th><th title="מפלס תחתית העמוד: פני חגורה / יסוד, ביחס ל-±0.00">תחתית עמוד</th><th title="קיר קיים: אין עמוד — הקורות מעוגנות לקיר">קיר</th><th /></tr></thead>
         <tbody>
           {lines.map((l, i) => (
             <tr key={l.id}>
-              <td><b>{lineLabel(i)}</b></td>
+              <td><input className="inp" style={{ width: 52, fontWeight: 700, textAlign: 'center' }} data-testid={`sec-label-${i}`} defaultValue={labels[l.id] ?? ''} placeholder={lineLabel(i)} key={`${l.id}-${labels[l.id] ?? ''}`} title="שם הציר כמו בתוכנית (ריק = אות ברירת מחדל)"
+                onBlur={(e) => { const v = e.target.value.trim(); if (v === (labels[l.id] ?? '')) return; const nl = { ...labels }; if (v) nl[l.id] = v; else delete nl[l.id]; store.exec(setBuilding({ lineLabels: Object.keys(nl).length ? nl : undefined })); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} /></td>
               <td><LenField mm={l.x} unit={u} testId={`sec-x-${i}`} onCommit={(v) => setLine(l.id, v)} /></td>
               <td>{i > 0 ? <LenField mm={l.x - lines[i - 1].x} unit={u} min={500} onCommit={(v) => {
                 const delta = v - (l.x - lines[i - 1].x);
@@ -217,6 +222,35 @@ export function HaunchEditor() {
   );
 }
 
+/**
+ * פרט חיבור אלכסון עמוד-קורה — אריחים מסוננים לפי משפחת החתך (זוויתן: מוברג לפח; חלול: לשונית בחריץ; שניהם: פלטת קצה).
+ * sideKey: בעורך החיבור — אפשר חריג למפתח-צד הזה (בכל המסגרות).
+ */
+export function KneeDetailField({ sideKey }: { sideKey?: string } = {}) {
+  const kb = useStore((s) => s.project.building.kneeBraces) ?? defaultKneeBraces();
+  const ov = sideKey ? kb.sides?.[sideKey] : undefined;
+  const [scope, setScope] = useState<'all' | 'one'>(ov?.detail ? 'one' : 'all');
+  const prof = (scope === 'one' && ov?.profile) || kb.profile;
+  const fam = tryProfile(prof)?.family ?? 'RHS';
+  const cur = kneeDetail(scope === 'one' ? ov?.detail ?? kb.detail : kb.detail, fam);
+  const pick = (k: 'fin' | 'angle' | 'flange') => {
+    if (scope === 'one' && sideKey) store.exec(setKneeBraces({ sides: { ...(kb.sides ?? {}), [sideKey]: { ...(kb.sides?.[sideKey] ?? {}), detail: k } } }));
+    else store.exec(setKneeBraces({ detail: k }));
+  };
+  const setSc = (v: 'all' | 'one') => {
+    setScope(v);
+    if (v === 'all' && sideKey && kb.sides?.[sideKey]?.detail) { const o = { ...kb.sides[sideKey] }; delete o.detail; store.exec(setKneeBraces({ sides: { ...(kb.sides ?? {}), [sideKey]: o } })); }
+  };
+  return <>
+    {sideKey && <ScopeToggle value={scope} onChange={setSc} oneLabel="רק במיקום הזה (כל המסגרות)" testId="kb-scope" />}
+    <DetailTiles label="פרט חיבור" testId="kb-detail" value={cur} onChange={pick} note={fam === 'L' ? '(חתך זוויתן — לשונית בחריץ אינה אפשרית)' : undefined} options={[
+      { key: 'fin', title: 'פח + לשונית בחריץ', desc: 'פח מרותך למארח (מסגריה), לשונית מרותכת בחריץ ה-RHS; בשטח מוברגים בחפיפה', pic: PIC.fin, hidden: fam === 'L' },
+      { key: 'angle', title: 'זוויתן מוברג לפח', desc: 'פח מרותך למארח (מסגריה); הרגל השטוחה של הזוויתן מוברגת ישירות לפח בשטח — ללא לשונית', pic: PIC.angle, hidden: fam !== 'L' },
+      { key: 'flange', title: 'פלטת קצה לאגף', desc: 'פלטת קצה מרותכת לאלכסון, מוברגת לאגף העמוד ולאגף התחתון של הקורה (4 ברגים)', pic: PIC.flange },
+    ]} />
+  </>;
+}
+
 export function KneeEditor() {
   const kb = useStore((s) => s.project.building.kneeBraces) ?? defaultKneeBraces();
   const n = useStore((s) => s.derived.connections.filter((c) => c.type === 'knee').length);
@@ -224,10 +258,7 @@ export function KneeEditor() {
   const ed = useEdit();
   // פרט החיבור — שדות החיבור (בחלון האלמנט: בסעיף "חיבורים"; בתפריט הצד: ב"מתקדם")
   const connFields = <>
-    <div className="field"><label>פרט חיבור</label>
-      <select className="inp" data-testid="kb-detail" value={kb.detail === 'flange' ? 'flange' : 'fin'} onChange={(e) => set({ detail: e.target.value as 'fin' | 'flange' })}>
-        <option value="fin">פח מרותך + לשונית בחריץ ה-RHS (פרט הלקוח)</option><option value="flange">פלטת קצה מוברגת לאגף המארח</option>
-      </select></div>
+    <KneeDetailField />
     {kb.detail !== 'flange'
       ? <div className="field"><label>ברגים בכל קצה</label>
           <select className="inp" data-testid="kb-bolts" value={kb.boltsPerEnd ?? 2} onChange={(e) => set({ boltsPerEnd: Number(e.target.value) })}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}×M{kb.bolt.d} — {n / 2} {n === 2 ? 'שורה' : 'שורות'} של 2 לרוחב</option>)}</select></div>
@@ -506,7 +537,7 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
           <g key={l.id} className={`isec-ax${drag?.id === l.id ? ' on' : ''}`} onPointerDown={onDown(l.id)} data-testid={`isec-ax-${i}`}>
             <line x1={X(l.x)} y1={Y(0)} x2={X(l.x)} y2={Y(topAt(l.x))} className="c" />
             <line x1={X(l.x)} y1={Y(0) + 3} x2={X(l.x)} y2={Y(topAt(l.x)) - 2} className="hit" />
-            <circle cx={X(l.x)} cy={Y(0) + 9} r={6} className="bub" /><text x={X(l.x)} y={Y(0) + 12} className="t b">{lineLabel(i)}</text>
+            <circle cx={X(l.x)} cy={Y(0) + 9} r={6} className="bub" /><text x={X(l.x)} y={Y(0) + 12} className="t b">{store.state.project.building.lineLabels?.[l.id] || lineLabel(i)}</text>
           </g>
         ))}
         {lines.slice(1).map((l, i) => {

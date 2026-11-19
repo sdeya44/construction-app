@@ -3,7 +3,7 @@ import type { BoltInfo, Connection, KneeBraceParams, Member, Project, Validation
 import { zAt, type SectionTopology } from '../model/section';
 import { getProfile, tryProfile } from '../profiles/library';
 import { hw, makeBolt } from './connections';
-import { finJoint } from './finJoint';
+import { angleFin, finJoint } from './finJoint';
 import { trussFrames } from './truss';
 
 /** ברירת מחדל לפי תוכניות הלקוח: RHS80/80/4, פלטת קצה 180×280×14 בכל קצה, 4×M16 (שתי עמודות × שתי שורות) */
@@ -52,7 +52,7 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
         // הגדרה לכל צד בנפרד (מפתחים שונים — אורכים שונים): דריסה של ההגדרות הכלליות
         const ov = kb.sides?.[key];
         if (ov?.on === false) continue;
-        const kq = { ...kb, ...(ov ?? {}) };
+        const kq = { ...kb, ...(ov ?? {}), detail: ov?.detail ?? kb.detail };
         let profK = ov?.profile ? tryProfile(ov.profile) ?? prof : prof;
         if (ov?.profile && tryProfile(ov.profile)) kq.profile = ov.profile;
         // נקודת החיבור לקורה: לפי זווית מהאופק (ברירת מחדל 45°) או מרחק אופקי קבוע
@@ -105,7 +105,23 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
         // חתך לאלמנט בודד (מפאנל האלמנט: "רק האלמנט הזה")
         const ovM = project.memberOverrides[bid]?.profile;
         if (ovM && tryProfile(ovM)) { kq.profile = ovM; profK = tryProfile(ovM)!; }
-        if ((kq.detail ?? 'fin') !== 'flange') {
+        const det = kneeDetail(kq.detail, profK.family);
+        if (det === 'angle') {
+          // זוויתן מוברג ישירות לפח מרותך (ללא לשונית): הרגל השטוחה על הפח בצד +Y, אותו כיוון רגל בשני הקצוות
+          const uC = norm(cross(Y, dir));
+          const common = { cid: id, desc: 'אלכסון', memberId: bid, prof: profK, finT: kq.plateT, bolt: kq.bolt, bolts: Math.max(1, Math.round((kq.boltsPerEnd ?? 2) / 2)), weldSize: kq.weldSize, mat, pn: Y, gauge: angleGaugeOf(profK.props.b), uDir: uC };
+          const jc = angleFin({ ...common, tag: 'C', hostId: col.id, P: lineHitPlane(C0, dir, colFace), n: colFace.normal, d: dir });
+          const jr = angleFin({ ...common, tag: 'R', hostId: raf.id, P: lineHitPlane(C0, dir, rafUnder), n: rafUnder.normal, d: scale(dir, -1) });
+          if (dot(sub(jr.boltLine, jc.boltLine), dir) < 300) { out.issues.push({ code: 'KNEE_SHORT', severity: 'warning', message: `אלכסון ${key} מסגרת ${fi}: קצר מדי לפרט הזוויתן` }); continue; }
+          out.members.push({
+            id: bid, kind: 'brace', label: `אלכסון עמוד-קורה ציר ${jn.line.label} מסגרת ${fi}`, start: jc.start, end: jr.start, profile: kq.profile, material: mat,
+            rollDeg: 0, mirror: false, anchor: 'corner', refUp: Y, source: 'generated', manualPlacement: false, connId: id, partDesc: `אלכסון ${kq.profile}`,
+          }, ...jc.members, ...jr.members);
+          out.issues.push(...jc.issues, ...jr.issues);
+          out.connections.push({ id, type: 'knee', label: `אלכסון עמוד-קורה ציר ${jn.line.label} (${s < 0 ? 'שמאל' : 'ימין'}) מסגרת ${fi} — זוויתן מוברג לפח`, members: [col.id, raf.id], parts: [bid, ...jc.parts, ...jr.parts], bolts: [...jc.bolts, ...jr.bolts], welds: [...jc.welds, ...jr.welds], status: 'not-verified', fixity: 'pinned', overridden: false });
+          continue;
+        }
+        if (det === 'fin') {
           // פרט הלקוח: פח מרותך לעמוד/לקורה במישור המסגרת, לשונית בחריץ ה-RHS, 2 ברגים בחפיפה
           const common = { cid: id, desc: 'אלכסון', memberId: bid, prof: profK, profile: kq.profile, finT: kq.plateT, tongueT: kq.plateT, bolt: kq.bolt, bolts: kq.boltsPerEnd ?? 2, weldSize: kq.weldSize, mat, pn: Y, side: 1 as const };
           const jc = finJoint({ ...common, tag: 'C', hostId: col.id, P: lineHitPlane(C0, dir, colFace), n: colFace.normal, d: dir });
@@ -173,3 +189,12 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
   }
   return out;
 }
+
+/** פרט אפקטיבי לפי משפחת החתך: זוויתן — מוברג ישירות לפח (לשונית בחריץ אינה אפשרית); חלול — לשונית בחריץ; flange נשאר */
+export function kneeDetail(detail: KneeBraceParams['detail'], family: string): 'fin' | 'flange' | 'angle' {
+  if (detail === 'flange') return 'flange';
+  if (family === 'L') return 'angle';
+  return 'fin';
+}
+/** קו ברגים מקובל בזוויתן (גב הזוויתן → ציר הבורג) */
+export function angleGaugeOf(leg: number): number { return leg <= 50 ? 28 : leg <= 60 ? 33 : leg <= 70 ? 38 : leg <= 80 ? 45 : leg <= 90 ? 50 : 55; }

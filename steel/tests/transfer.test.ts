@@ -93,3 +93,26 @@ describe('דילול עמודים — קורה נושאת', () => {
     expect(len(`KB.${fr}.R.R.L`)).toBeGreaterThan(len0 + 300);
   });
 });
+
+describe('אלכסוני Y לקורה נושאת (1.41)', () => {
+  it('TB-KNEE: זוויתן L50 משני הצדדים; מפתח אפקטיבי קטן בבדיקה; ללא התנגשויות', async () => {
+    const { defaultBuilding, newProject } = await import('../src/model/defaults');
+    const { generate } = await import('../src/geometry/generate');
+    const { planOmissions, setTransfers } = await import('../src/commands/commands');
+    const { transferUtil } = await import('../src/model/sizing');
+    let p = newProject('t', defaultBuilding());
+    const plan = planOmissions(p, ['F3.COL.L']);
+    p = setTransfers(plan.defs.map((x) => ({ ...x, profile: 'IPE300' }))).run(p);
+    const d0 = generate(p);
+    const u0 = transferUtil(p, d0, p.building.transfers![0], 'IPE300');
+    p = setTransfers(p.building.transfers!.map((x) => ({ ...x, knee: { enabled: true, profile: 'L50x5', drop: 800, angle: 45 } }))).run(p);
+    const d = generate(p);
+    const kt = d.members.filter((m) => /^KT\./.test(m.id));
+    expect(kt.length).toBe(2);
+    expect(d.connections.filter((c) => c.id.startsWith('C.KT.')).every((c) => !c.parts.some((x) => x.endsWith('.T')))).toBe(true);
+    expect(d.issues.filter((i) => i.code === 'CLASH' || i.severity === 'error')).toEqual([]);
+    const u1 = transferUtil(p, d, p.building.transfers![0], 'IPE300');
+    expect(u1.util).toBeLessThan(u0.util);
+    expect(u1.text).toContain('אלכסוני Y');
+  });
+});

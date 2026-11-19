@@ -7,6 +7,7 @@ import { defaultRhsTruss, rhsTruss } from './hbrace';
 import { buildPortalLine, defaultPortal } from './portal';
 import { buildLockTrussLine, defaultLockTruss } from './lockTruss';
 import { localFrame } from './frame';
+import { buildFlyBraces, buildLineTies, buildSagRods } from './roofExtras';
 import { buildRafterStruts, defaultRafterStruts, strutCutsIn, strutLines, strutPlateHalf } from './rafterStruts';
 import { bolt } from '../model/defaults';
 
@@ -343,6 +344,15 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         }
         res.connections.push({ id: cid, type: 'brace', label: `שורת קשירה מפתח ${bay + 1} — מוברגת לאגף התחתון של כל פטה`, members: ps.map((m) => m.id), parts: [id, ...bolts.map((b2) => b2.id)], bolts, welds: [], status: 'not-verified', fixity: 'pinned', overridden: false });
       }
+    }
+  }
+  // ---- מוטות תלייה, תמיכה צידית לפטות, סיב רציף בשורת עמודים (1.41)
+  {
+    // תמיכה צידית: דילוג ליד תמוכה בין הקורות ולידי פחי קושרות הגג על ווב הקורה (מניעת התנגשות)
+    const plates = res.members.filter((m) => m.kind === 'plate' && /^C\.(BR\.R|RS\d)/.test(m.connId ?? '')).map((m) => ({ x: (m.start.x + m.end.x) / 2, y: (m.start.y + m.end.y) / 2, r: Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y) / 2 }));
+    const avoid = (x: number, y: number) => plates.some((q) => Math.abs(q.x - x) < q.r + 120 && Math.abs(q.y - y) < 500);
+    for (const part of [buildSagRods(b, topo, purlins), buildFlyBraces(b, topo, purlins, profOf, avoid, res.members.filter((m) => (m.kind === 'brace' || m.kind === 'plate' || m.kind === 'beam') && /^(C\.)?(BR\.R|RS\d|HB\.)/.test(m.connId ?? m.id))), buildLineTies(b, topo, profOf)]) {
+      res.members.push(...part.members); res.connections.push(...part.connections); res.issues.push(...part.issues);
     }
   }
   void eff;

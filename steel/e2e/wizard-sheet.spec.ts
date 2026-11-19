@@ -105,3 +105,26 @@ test('LW-UI: סככת L מהאשף — דו-שיפועי וחד-שיפועי; ע
   await expect(page.getByText('פרט מזחלה וירידת מרזב').first()).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('WZ-02: אשף — תבנית חד-שיפועי רב-מפתחי, מפתחי קצה שונים, שמות צירים ומרווחי צירים (1.41)', async ({ page }) => {
+  const errors = await boot(page);
+  await page.getByTestId('btn-new').click();
+  await page.getByTestId('np-mono-multi').click();
+  await page.getByTestId('wz-next').click();
+  await page.getByTestId('np-length').fill('102.1'); await page.getByTestId('np-length').press('Enter');
+  await page.getByTestId('np-count').fill('22'); await page.getByTestId('np-count').press('Enter');
+  await page.getByTestId('np-endA').fill('3.5'); await page.getByTestId('np-endA').press('Enter');
+  await page.getByTestId('np-endB').fill('3.6'); await page.getByTestId('np-endB').press('Enter');
+  await expect(page.getByTestId('np-frames-sum')).toContainText('3500 + 19×5000 + 3600');
+  await page.getByTestId('np-labels').fill('C, B, A');
+  await page.getByTestId('np-spans').fill('8000, 9000');
+  await page.getByTestId('wz-step-2').click();
+  await page.getByTestId('np-autosize').uncheck();
+  await page.getByTestId('wz-step-5').click();
+  await page.getByTestId('create').click();
+  const r = await page.evaluate(() => { const s = (window as any).__ksp.store.state; const b = s.project.building; const fy = b.frames.map((f: any) => f.y); return { n: b.frames.length, first: fy[1] - fy[0], mid: fy[2] - fy[1], last: fy[fy.length - 1] - fy[fy.length - 2], labels: s.derived.section.lines.map((l: any) => l.label), xs: s.derived.section.lines.map((l: any) => l.x) }; });
+  expect(r).toMatchObject({ n: 22, first: 3500, last: 3600, labels: ['C', 'B', 'A'] });
+  expect(Math.round(r.mid)).toBe(5000);
+  expect(r.xs[1] - r.xs[0]).toBe(8000); expect(r.xs[2] - r.xs[1]).toBe(9000);
+  expect(errors).toEqual([]);
+});

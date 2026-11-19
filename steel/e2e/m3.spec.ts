@@ -83,7 +83,7 @@ test.describe('M3 – תומכים וחיבורים', () => {
     await shot(page, 'CONN_ridge');
     await page.evaluate(() => (window as any).__ksp.store.set({ activeConn: 'C.BASE.F1.L', isolated: null }));
     await page.getByTestId('cp-t').fill('30'); await page.getByTestId('cp-t').press('Enter');
-    await expect(page.getByTestId('cp-mode')).toHaveValue('embedded');
+    await expect(page.getByTestId('cp-mode-embedded')).toHaveAttribute('aria-checked', 'true');
     await page.getByTestId('conn-tab-admin').click();
     await page.getByTestId('tpl-name').fill('בסיס 30');
     await page.getByTestId('tpl-save').click();

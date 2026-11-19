@@ -51,9 +51,19 @@ test('KB-03: קונזולה — עמוד הקצה מופיע עם שני צדד�
   // עורך החיבור: פרט חיבור — בחירה (לא קבוע)
   const cid = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => c.type === 'knee').id);
   await page.evaluate((i) => (window as any).__ksp.store.set({ activeConn: i }), cid);
-  await page.getByTestId('pw-kb-detail').selectOption('flange');
+  await page.getByTestId('conn-editor').getByTestId('kb-detail-flange').click();
   expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.kneeBraces.detail)).toBe('flange');
   await expect(page.getByTestId('pw-kb-n')).toHaveCount(0);
+  // חריג למיקום הזה בלבד: חזרה ל"פח + לשונית" רק במפתח-צד של החיבור
+  await page.getByTestId('conn-editor').getByTestId('kb-scope-one').click();
+  await page.getByTestId('conn-editor').getByTestId('kb-detail-fin').click();
+  const kb = await page.evaluate(() => (window as any).__ksp.store.state.project.building.kneeBraces);
+  expect(kb.detail).toBe('flange');
+  expect(Object.values(kb.sides ?? {}).some((o: any) => o.detail === 'fin')).toBe(true);
+  // זוויתן: אריח "לשונית" לא מוצג
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, kneeBraces: { ...p.building.kneeBraces, profile: 'L50x5', detail: 'fin', sides: {} } } }) }); });
+  await expect(page.getByTestId('conn-editor').getByTestId('kb-detail-fin')).toHaveCount(0);
+  await expect(page.getByTestId('conn-editor').getByTestId('kb-detail-angle')).toHaveAttribute('aria-checked', 'true');
   expect(errors).toEqual([]);
 });
 

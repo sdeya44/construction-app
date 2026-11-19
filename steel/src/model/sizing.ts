@@ -263,7 +263,10 @@ export function transferUtil(p: Project, d: DerivedModel, def: NonNullable<Proje
   const f0 = fr.find((f) => f.id === def.from), f1 = fr.find((f) => f.id === def.to);
   const x = d.section?.lines.find((l) => l.id === def.lineId)?.x;
   if (!f0 || !f1 || x === undefined) return { util: 0, text: '' };
-  const L = f1.y - f0.y;
+  // אלכסוני Y (1.41): הערכה — הקורה נבדקת בין נקודות האלכסונים (מפתח אפקטיבי), העומסים מחוץ לו נלקחים ישירות לאלכסון/לעמוד
+  const kr = def.knee?.enabled && def.kind !== 'truss' ? def.knee.drop / Math.tan((Math.max(25, Math.min(65, def.knee.angle)) * Math.PI) / 180) + 75 : 0;
+  const L = f1.y - f0.y - 2 * kr;
+  if (L <= 500) return { util: 0, text: 'קורה נושאת עם אלכסונים — מפתח אפקטיבי קטן' };
   const w = cfg.gamma * (cfg.dead + Math.max(cfg.live, cfg.snow));
   const trib = (f: typeof fr[number]) => { const i = fr.indexOf(f); return ((i > 0 ? f.y - fr[i - 1].y : 0) + (i < fr.length - 1 ? fr[i + 1].y - f.y : 0)) / 2; };
   const loads: { a: number; P: number }[] = [];
@@ -271,7 +274,8 @@ export function transferUtil(p: Project, d: DerivedModel, def: NonNullable<Proje
     const f = fr.find((q) => q.id === fid); if (!f) continue;
     const half = d.members.filter((m) => m.kind === 'rafter' && m.frameId === fid && Math.min(m.start.x, m.end.x) - 1 <= x && Math.max(m.start.x, m.end.x) + 1 >= x)
       .reduce((s2, m) => s2 + Math.abs(m.end.x - m.start.x) / 2, 0) || 3500;
-    loads.push({ a: f.y - f0.y, P: (w * (trib(f) / 1000) * (half / 1000)) });
+    const a = f.y - f0.y - kr;
+    if (a > 0 && a < L) loads.push({ a, P: (w * (trib(f) / 1000) * (half / 1000)) });
   }
   const RA = loads.reduce((s2, q) => s2 + (q.P * (L - q.a)) / L, 0);
   let M = 0;
@@ -280,7 +284,7 @@ export function transferUtil(p: Project, d: DerivedModel, def: NonNullable<Proje
   const dl = loads.reduce((s2, q) => { const a = Math.min(q.a, L - q.a); return s2 + ((q.P / cfg.gamma) * 1000 * a * (3 * L * L - 4 * a * a)) / (48 * E2 * I); }, 0);
   const uM = (M * 1e6) / ((pr.props.Wy ?? 1) * fy), uD = dl / (L / 300);
   const util = Math.max(uM, uD);
-  return { util, tags: { span: L, P: loads.length ? Math.max(...loads.map((q) => q.P)) : 0, uM, dl, dlLim: L / 300 }, text: `קורה נושאת · מפתח ${(L / 1000).toFixed(2)} מ' · ${loads.length} קורות גג (P≈${loads.length ? Math.max(...loads.map((q) => q.P)).toFixed(1) : 0} kN) · M≈${M.toFixed(1)} kNm · ניצולת כפיפה ${uM.toFixed(2)} · שקיעה ${dl.toFixed(1)} מ"מ (L/300=${(L / 300).toFixed(1)})` };
+  return { util, tags: { span: L, P: loads.length ? Math.max(...loads.map((q) => q.P)) : 0, uM, dl, dlLim: L / 300 }, text: `קורה נושאת${kr ? ' עם אלכסוני Y (הערכה)' : ''} · מפתח ${kr ? 'אפקטיבי ' : ''}${(L / 1000).toFixed(2)} מ' · ${loads.length} קורות גג (P≈${loads.length ? Math.max(...loads.map((q) => q.P)).toFixed(1) : 0} kN) · M≈${M.toFixed(1)} kNm · ניצולת כפיפה ${uM.toFixed(2)} · שקיעה ${dl.toFixed(1)} מ"מ (L/300=${(L / 300).toFixed(1)})` };
 }
 
 /** עומסים נקודתיים על קורה/מסבך נושא (קנ"ט, מרחק מהתמיכה הראשונה במ"מ) */

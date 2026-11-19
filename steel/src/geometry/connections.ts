@@ -356,6 +356,13 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       const pid = `${id}.PL`;
       const label = `פלטת בסיס ${topo.sec.custom ? `ציר ${ln.label}` : side === 'L' ? 'שמאל' : 'ימין'} מסגרת ${fi}`;
       const cp = getProfile(col!.profile);
+      if (prm.mode === 'pile') {
+        // עמוד טמון בכלונס (1.41): ללא פלטה וללא עיגון — העמוד מוארך מתחת למפלס הבסיס בעומק ההטמנה (כלול באורך ההזמנה)
+        const emb = Math.max(0, prm.pileEmbed ?? 600);
+        col!.start = add(col!.start, v3(0, 0, -emb));
+        res.connections.push({ id, type: 'base', label: `${label} — עמוד טמון בכלונס ${emb} מ"מ`, members: [col!.id], parts: [], bolts: [], welds: [], status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'rigid', overridden: !!project.connectionOverrides[id] });
+        continue;
+      }
       const embedded = (prm.mode ?? 'embedded') === 'embedded';
       const base = col!.start;
       const top = embedded ? base : add(base, scale(Z, prm.t));

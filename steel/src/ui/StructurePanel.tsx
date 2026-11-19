@@ -7,6 +7,7 @@ import { defaultRhsTruss } from '../geometry/hbrace';
 import { defaultRidgeReinf } from '../model/defaults';
 import { defaultRodEnd, resolveBays, wallBays } from '../geometry/bracing';
 import { defaultRafterStruts, STRUT_DETAIL_HE } from '../geometry/rafterStruts';
+import { defaultFlyBraces, defaultLineTies, defaultSagRods } from '../geometry/roofExtras';
 import { uid } from '../core/ids';
 import { catalogNames } from '../profiles/library';
 import { MATERIALS } from '../profiles/materials';
@@ -17,6 +18,7 @@ import { HaunchEditor, KneeEditor, SectionEditor } from './SectionEditor';
 import { ClassicRoofDims } from './TriDims';
 import { FramesStrip, GussetSchematic, LockTrussSchematic, PortalSchematic, RidgeSchematic, WallsPlan } from './schematics';
 import { MenuPic, OffCard } from './pics';
+import { DetailTiles, PIC } from './DetailPicker';
 
 export function ProfileDatalist() {
   return (
@@ -507,10 +509,11 @@ export function RafterStrutConnFields() {
   const save = (patch: Partial<typeof rs>) => store.exec(setBuilding({ bracing: { ...br, rafterStruts: { ...rs, ...patch } } }));
   const det = rs.detail ?? 'endplate';
   return <>
-    <div className="field"><label>פרט חיבור לווב הקורה</label>
-      <select className="inp" data-testid="rs-detail" value={det} onChange={(e) => save({ detail: e.target.value as RafterStrutDetail })}>
-        {(Object.keys(STRUT_DETAIL_HE) as RafterStrutDetail[]).map((k) => <option key={k} value={k}>{STRUT_DETAIL_HE[k]}</option>)}
-      </select></div>
+    <DetailTiles label="פרט חיבור לווב הקורה" testId="rs-detail" value={det} onChange={(k) => save({ detail: k })} options={[
+      { key: 'endplate', title: 'פלטת קצה מוברגת', desc: STRUT_DETAIL_HE.endplate + ' — פלטה מרותכת לתמוכה (מסגריה), ברגים מחוץ לחתך; משני צדי קורה — אותם ברגים דרך הווב', pic: PIC.endplate },
+      { key: 'fin', title: 'פח + לשונית', desc: STRUT_DETAIL_HE.fin + ' — פח מרותך לווב (מסגריה), לשונית בחריץ ה-RHS, מוברגים בחפיפה בשטח', pic: PIC.fin },
+      { key: 'weld', title: 'ריתוך ישיר', desc: STRUT_DETAIL_HE.weld + ' — ריתוך היקפי, ללא פחים וברגים', pic: PIC.weld },
+    ]} />
     {det !== 'weld' && <>
       <div className="field"><label>{det === 'fin' ? 'עובי פח ולשונית' : 'עובי פלטת קצה'}</label><NumField testId="rs-t" value={rs.plateT} suffix='מ"מ' onCommit={(v) => save({ plateT: Math.max(6, v) })} /></div>
       <div className="field"><label>ברגים בכל קצה</label>
@@ -588,6 +591,51 @@ export function RafterStrutsEditor() {
   );
 }
 
+/** מוטות תלייה ותמיכה צידית לפטות (1.41) */
+function PurlinExtras() {
+  const br = useStore((s) => s.project.building.bracing);
+  const set = (patch: Partial<BuildingParams['bracing']>) => store.exec(setBuilding({ bracing: { ...br, ...patch } }));
+  const sr = br.sagRods ?? { ...defaultSagRods(), enabled: false }, fb = br.flyBraces ?? { ...defaultFlyBraces(), enabled: false };
+  return <>
+    <div className="panel-title">מוטות תלייה בין הפטות
+      <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="sr-on" checked={sr.enabled} onChange={(e) => set({ sagRods: { ...sr, enabled: e.target.checked } })} />פעיל</label>
+    </div>
+    {sr.enabled ? <>
+      <div className="field"><label>קוטר מוט</label><select className="inp" data-testid="sr-d" value={sr.d} onChange={(e) => set({ sagRods: { ...sr, d: Number(e.target.value) } })}>{[8, 10, 12, 16].map((d) => <option key={d} value={d}>Ø{d}</option>)}</select></div>
+      <div className="field"><label>שורות בכל מפתח</label><select className="inp" data-testid="sr-n" value={sr.perBay} onChange={(e) => set({ sagRods: { ...sr, perBay: Number(e.target.value) } })}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n === 1 ? 'אחת — באמצע' : `${n} — בחלוקה שווה`}</option>)}</select></div>
+    </> : <div className="hint">מוט הברגה דרך ווב הפטות לאורך השיפוע, אומים בשני הצדדים — מקטין את מפתח הפטה בכיוון החלש.</div>}
+    <div className="panel-title">תמיכה צידית לפטות
+      <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="fb-on" checked={fb.enabled} onChange={(e) => set({ flyBraces: { ...fb, enabled: e.target.checked } })} />פעיל</label>
+    </div>
+    {fb.enabled ? <>
+      <div className="field prof"><label>חתך</label><ProfilePicker testId="fb-profile" value={fb.profile} families={['L']} onCommit={(v) => set({ flyBraces: { ...fb, profile: v } })} /></div>
+      <div className="field"><label>בכל פטה</label><select className="inp" data-testid="fb-every" value={fb.every} onChange={(e) => set({ flyBraces: { ...fb, every: Number(e.target.value) } })}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n === 1 ? 'כל פטה' : `כל פטה ${n === 2 ? 'שנייה' : n === 3 ? 'שלישית' : 'רביעית'}`}</option>)}</select></div>
+      <div className="field"><label>בורג</label><BoltSelect d={fb.boltD} onChange={(x) => set({ flyBraces: { ...fb, boltD: x } })} /></div>
+    </> : <div className="hint">זוויתן ב-45° מהפטה אל פח מתחת לאגף התחתון של קורת הגג, בשני הצדדים — מייצב את האגף התחתון בכפיפה הפוכה (רוח).</div>}
+  </>;
+}
+
+/** סיב רציף בשורת עמודים (1.41) */
+function LineTiesEditor() {
+  const br = useStore((s) => s.project.building.bracing);
+  const d = useStore((s) => s.derived);
+  const lines = [...(d.section?.lines ?? [])].sort((p, q) => p.x - q.x).filter((l) => !l.wall);
+  const lt = br.lineTies ?? { ...defaultLineTies([]), enabled: false };
+  const save = (patch: Partial<typeof lt>) => store.exec(setBuilding({ bracing: { ...br, lineTies: { ...lt, ...patch } } }));
+  return <>
+    <div className="panel-title">סיב רציף בשורת עמודים
+      <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="lt-on" checked={lt.enabled} onChange={(e) => save({ enabled: e.target.checked, lines: lt.lines.length ? lt.lines : lines.length ? [lines[0].id, lines[lines.length - 1].id] : [] })} />פעיל</label>
+    </div>
+    {lt.enabled ? <>
+      <div className="field"><label>צירים</label><div className="row" style={{ flexWrap: 'wrap', gap: 4 }}>
+        {lines.map((l) => <button key={l.id} className={`tbtn${lt.lines.includes(l.id) ? ' on' : ''}`} data-testid={`lt-line-${l.id}`} onClick={() => save({ lines: lt.lines.includes(l.id) ? lt.lines.filter((x) => x !== l.id) : [...lt.lines, l.id] })}>{l.label}</button>)}
+      </div></div>
+      <div className="field prof"><label>חתך</label><ProfilePicker testId="lt-profile" value={lt.profile} families={['RHS', 'SHS']} onCommit={(v) => save({ profile: v })} /></div>
+      <div className="hint">בין ראשי העמודים בכל המפתחים, מתחת לקורת הגג; פח מרותך לעמוד + לשונית בחריץ ה-RHS, מוברגים בשטח. במפתח שבו עמוד בוטל (דילול) — אין סיב.</div>
+    </> : <div className="hint">קורת RHS רציפה לאורך ציר עמודים (סיב מרזב / קורת שוליים) — מעבירה כוחות אופקיים לקשיחות.</div>}
+  </>;
+}
+
 function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) {
   const on = (k: Exclude<BraceSection, 'knee'>) => !part || part === k;
   const b = useStore((s) => s.project.building);
@@ -643,6 +691,7 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
           : br.walls.type === 'truss' ? <LockTrussFields /> : <PortalFields />}
         <WallLines nb={nb} />
       </>}
+      <LineTiesEditor />
       </>}
       {on('ties') && <>
       <div className="panel-title">שורת קשירה לפטות
@@ -651,6 +700,7 @@ function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) 
       {!br.purlinTies.enabled && <OffCard pic="ties" title="שורות קשירה לפטות" desc="זוויתן באמצע כל מפתח, צמוד לאגף התחתון של הפטות — מונע הפיתול שלהן" onAdd={() => set({ purlinTies: { ...br.purlinTies, enabled: true } })} testId="off-ties" />}
       {br.purlinTies.enabled && <div className="field prof"><label>חתך</label><ProfilePicker value={br.purlinTies.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ purlinTies: { ...br.purlinTies, profile: v } })} /></div>}
       </>}
+      {on('ties') && <PurlinExtras />}
       {on('ridge') && <RidgeReinfEditor />}
       {(on('roof') || on('walls')) && (br.roof.enabled && (br.roof.type ?? 'x') === 'x' || br.walls.enabled && (br.walls.type ?? 'x') === 'x') && <>
         <XConnFields />

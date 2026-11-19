@@ -1,7 +1,7 @@
 import { applyStandard } from '../persist/shopStandard';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { copyMembers, mirrorMembers, moveMembers, rotateMembers } from '../commands/commands';
-import { uniformFrames, defaultBuilding, newProject } from '../model/defaults';
+import { framesFromSpacings, uniformFrames, defaultBuilding, newProject } from '../model/defaults';
 import { fromFileJson } from '../model/migrate';
 import type { BuildingParams, WingDef } from '../model/types';
 import { validateBuilding } from '../model/validate';
@@ -10,7 +10,7 @@ import { deleteProject, listProjects, listSnapshots, loadProject, loadSnapshot, 
 import { store, useStore } from '../store';
 import { cachedSolid } from '../view/scene';
 import { LenField, NumField, ProfilePicker } from './fields';
-import { SECTION_TEMPLATES, toCustomSection } from '../model/section';
+import { SECTION_TEMPLATES, moveLines, toCustomSection } from '../model/section';
 import { generate } from '../geometry/generate';
 import { massPerMeter, tryProfile } from '../profiles/library';
 import { getMaterial } from '../profiles/materials';
@@ -79,6 +79,11 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   /** סככת L: כנף דו/חד-שיפועית */
   const [lWing, setLWing] = useState<null | 'gable' | 'mono'>(null);
   const [knee, setKnee] = useState(false);
+  /** מפתחי קצה (0 = כמו השאר), מרווחי צירים לתבנית ושמות צירים — כמו בתוכנית (1.41) */
+  const [endA, setEndA] = useState(0);
+  const [endB, setEndB] = useState(0);
+  const [spansTxt, setSpansTxt] = useState('');
+  const [labelsTxt, setLabelsTxt] = useState('');
   const [autoSize, setAutoSize] = useState(true);
   const [clad, setClad] = useState(true);
   const [cladWalls, setCladWalls] = useState(true);
@@ -89,6 +94,12 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   };
   const build = (): BuildingParams | null => {
     if (!(count >= 2 && count <= 200)) return null;
+    const n = Math.round(count) - 1;
+    if (endA > 0 || endB > 0) {
+      const mid = n - (endA > 0 ? 1 : 0) - (endB > 0 ? 1 : 0), rest = length - Math.max(0, endA) - Math.max(0, endB);
+      if (mid < 1 || rest <= mid * 500) return null;
+      return { ...b, frames: framesFromSpacings([...(endA > 0 ? [endA] : []), ...Array.from({ length: mid }, () => rest / mid), ...(endB > 0 ? [endB] : [])]) };
+    }
     return { ...b, frames: uniformFrames(Math.round(count), length) };
   };
   const cand = build();
@@ -97,13 +108,25 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const tpl = SECTION_TEMPLATES.find((t) => t.id === kind);
   const make = (): BuildingParams | null => {
     if (!cand || errors.length) return null;
-    const bb: BuildingParams = { ...cand, ...(tpl ? { section: tpl.make() } : {}), kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined };
+    let sec = tpl ? tpl.make() : undefined;
+    // מרווחי צירים לתבנית ("8000, 9000"): הצירים זזים, המישורים נמתחים איתם
+    const spans = spansTxt.split(/[,;\s]+/).map(Number).filter((v) => v > 0);
+    if (sec && spans.length === sec.lines.length - 1) {
+      const ls = [...sec.lines].sort((p, q) => p.x - q.x);
+      let x = ls[0].x; const mv = new Map<string, number>([[ls[0].id, x]]);
+      ls.slice(1).forEach((l, i) => { x += spans[i]; mv.set(l.id, x); });
+      sec = moveLines(sec, mv);
+    }
+    const names = labelsTxt.split(/[,;\s]+/).map((v) => v.trim()).filter(Boolean);
+    const lineIds = sec ? [...sec.lines].sort((p, q) => p.x - q.x).map((l) => l.id) : ['L', 'R'];
+    const lineLabels = names.length ? Object.fromEntries(lineIds.map((id, i) => [id, names[i]]).filter(([, v]) => v)) : undefined;
+    const bb: BuildingParams = { ...cand, ...(sec ? { section: sec } : {}), ...(lineLabels ? { lineLabels } : {}), kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined };
     if (lWing && !tpl) bb.wing = defaultWing(bb, lWing);
     if (clad) { bb.cladding = defaultCladding(); if (!cladWalls) { bb.cladding.walls.enabled = false; bb.cladding.girts.enabled = false; bb.cladding.posts.enabled = false; } }
     return bb;
   };
   // תצוגה חיה: יצירת המודל מהבחירות הנוכחיות (בלי התאמת חתכים — זו רצה ביצירה)
-  const key = JSON.stringify([b, length, count, kind, knee, clad, cladWalls, lWing]);
+  const key = JSON.stringify([b, length, count, kind, knee, clad, cladWalls, lWing, endA, endB, spansTxt, labelsTxt]);
   const live = useMemo(() => {
     const bb = make();
     if (!bb) return null;
@@ -170,6 +193,11 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
             <div className="field"><label>אורך</label><LenField testId="np-length" mm={length} unit={u} onCommit={setLength} /></div>
             <div className="field"><label>מספר מסגרות</label><NumField testId="np-count" value={count} onCommit={(v) => setCount(Math.round(v))} /></div>
             <div className="field"><label>מרווח מסגרות</label><LenField testId="np-bay" mm={bay} unit={u} onCommit={(v) => { if (v > 0) setCount(Math.max(2, Math.round(length / v) + 1)); }} /></div>
+            <div className="field"><label>מפתח קצה ראשון (0 = כמו השאר)</label><LenField testId="np-endA" mm={endA} unit={u} onCommit={(v) => setEndA(Math.max(0, v))} /></div>
+            <div className="field"><label>מפתח קצה אחרון (0 = כמו השאר)</label><LenField testId="np-endB" mm={endB} unit={u} onCommit={(v) => setEndB(Math.max(0, v))} /></div>
+            {(endA > 0 || endB > 0) && cand && <div className="hint" data-testid="np-frames-sum">מפתחים: {(() => { const sp = cand.frames.slice(1).map((f, i) => Math.round(f.y - cand.frames[i].y)); const mid = sp.slice(endA > 0 ? 1 : 0, sp.length - (endB > 0 ? 1 : 0)); return `${endA > 0 ? `${endA} + ` : ''}${mid.length}×${mid[0] ?? 0}${endB > 0 ? ` + ${endB}` : ''}`; })()}</div>}
+            <div className="field"><label>שמות צירים (מופרדים בפסיק)</label><input className="inp" data-testid="np-labels" value={labelsTxt} placeholder="א, ב, ג — או כמו בתוכנית: E, D, A" onChange={(e) => setLabelsTxt(e.target.value)} /></div>
+            {tpl && <div className="field"><label>מרווחי צירים (מ"מ, מופרדים בפסיק)</label><input className="inp" data-testid="np-spans" value={spansTxt} placeholder={(() => { const ls = [...tpl.make().lines].sort((p, q) => p.x - q.x); return ls.slice(1).map((l, i) => l.x - ls[i].x).join(', '); })()} onChange={(e) => setSpansTxt(e.target.value)} /></div>}
             {tpl ? <div className="hint">{tpl.desc}. צירים, גבהים, קונזולות ושיפועים של תבנית — נערכים אחרי היצירה במבנה ← צירים, מסגרות וגבהים (כולל גרירה בתצוגה), או בגיליון הפרמטרים.</div> : <>
               <div className="field"><label>רוחב</label><LenField testId="np-width" mm={b.width} unit={u} onCommit={(v) => set(b.roofType === 'gable' ? { width: v, ridgeX: v / 2 } : { width: v })} /></div>
               {b.roofType === 'gable' && <div className="field"><label>מיקום רכס מציר א</label><LenField testId="np-ridgeX" mm={b.ridgeX} unit={u} onCommit={(v) => set({ ridgeX: v })} /></div>}

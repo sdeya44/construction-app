@@ -179,3 +179,14 @@ describe('מידות גג: גובה עמוד / גובה רכס / שיפוע (ש�
     expect(pd2.slopePct).toBeCloseTo((1600 / 16000) * 100, 3);
   });
 });
+
+describe('שמות צירים חופשיים (1.41)', () => {
+  it('SEC-LBL: lineLabels — החתך הנגזר, התוויות בחיבורים ובשרטוט התוכנית משתמשים בשם', async () => {
+    const { defaultBuilding, newProject } = await import('../src/model/defaults');
+    const { generate } = await import('../src/geometry/generate');
+    const b = defaultBuilding(); b.lineLabels = { L: 'E', R: 'A' };
+    const d = generate(newProject('t', b));
+    expect(d.section!.lines.map((l) => l.label)).toEqual(['E', 'A']);
+    expect(d.connections.some((c) => /ציר E/.test(c.label))).toBe(true);
+  });
+});

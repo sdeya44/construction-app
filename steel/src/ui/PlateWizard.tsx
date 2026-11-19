@@ -4,6 +4,7 @@ import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import { defaultKneeBraces } from '../geometry/knee';
 import { RafterStrutConnFields } from './StructurePanel';
+import { KneeDetailField } from './SectionEditor';
 import { defaultPortal } from '../geometry/portal';
 import { defaultSideConn } from '../model/defaults';
 import type { Connection, Member, PlateConnParams, Project } from '../model/types';
@@ -162,11 +163,9 @@ function OtherPlateFields({ c }: { c: Connection }) {
     const kb = b.kneeBraces ?? defaultKneeBraces();
     return (
       <div className="pw-fields">
-        <label>פרט חיבור<select className="inp" data-testid="pw-kb-detail" value={kb.detail === 'flange' ? 'flange' : 'fin'} onChange={(e) => store.exec(setKneeBraces({ detail: e.target.value as 'fin' | 'flange' }))}>
-          <option value="fin">פח מרותך + לשונית בחריץ</option><option value="flange">פלטת קצה מוברגת לאגף</option>
-        </select></label>
+        <div style={{ gridColumn: '1 / -1' }}><KneeDetailField sideKey={c.id.split('.').slice(3).join('.')} /></div>
         {num('עובי פח', kb.plateT, (v) => store.exec(setKneeBraces({ plateT: v })), 'pw-kb-t')}
-        {kb.detail !== 'flange' && <label>ברגים בקצה<select className="inp" data-testid="pw-kb-n" value={kb.boltsPerEnd ?? 2} onChange={(e) => store.exec(setKneeBraces({ boltsPerEnd: Number(e.target.value) }))}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>}
+        {kb.detail !== 'flange' && <label>{tryProfile(kb.profile)?.family === 'L' ? 'ברגים בקצה (זוויתן: חצי — בשורה)' : 'ברגים בקצה'}<select className="inp" data-testid="pw-kb-n" value={kb.boltsPerEnd ?? 2} onChange={(e) => store.exec(setKneeBraces({ boltsPerEnd: Number(e.target.value) }))}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>}
         <label>בורג<BoltSelect d={kb.bolt.d} onChange={(n) => store.exec(setKneeBraces({ bolt: { ...kb.bolt, d: n } }))} /></label>
       </div>
     );

@@ -10,6 +10,7 @@ import { cachedSolid } from '../view/scene';
 import { Adv, BoltSelect, LenField, NumField } from './fields';
 import { Icon } from './icons';
 import { PlateWizard } from './PlateWizard';
+import { DetailTiles, PIC, ScopeToggle } from './DetailPicker';
 import { CleatTypePicker } from './ConnTypePicker';
 
 const STATUS: Record<ApprovalStatus, string> = { 'not-verified': 'לא מאומת', 'for-review': 'לבדיקה', approved: 'מאושר' };
@@ -44,6 +45,7 @@ export function ConnectionEditor() {
   const p = useStore((s) => s.project);
   const [tplName, setTplName] = useState('');
   const [tab, setTab] = useState<'plate' | 'bolts' | 'admin'>('plate');
+  const [baseScope, setBaseScope] = useState<'all' | 'one'>('all');
   if (!id) return null;
   const c = d.connById.get(id);
   if (!c) return (
@@ -111,13 +113,15 @@ export function ConnectionEditor() {
 
       {c.type === 'eave' && eff?.split !== false && <div className="hint">שתי הפלטות מרותכות במסגריה (לעמוד ולתחתית הקורה) ומוברגות זו לזו בשטח. הברגים בפינות: מחוץ לרוחב אגף הקורה ומחוץ להיטל העמוד, לגישת מפתח.</div>}
       {c.type === 'brace' && <div className="issue warning"><span className="ic">!</span>{c.label}. החלקים: {c.parts.join(', ')}.</div>}
-      {eff && c.type === 'base' && (
-        <div className="field"><label>סוג פרט</label>
-          <select className="inp" data-testid="cp-mode" value={eff.mode ?? 'embedded'} onChange={(e) => setP({ mode: e.target.value as 'embedded' | 'bolted' })}>
-            <option value="embedded">פלטה מבוטנת, ריתוך עמוד בשטח</option><option value="bolted">פלטה מרותכת לעמוד, ברגי עיגון</option>
-          </select>
-        </div>
-      )}
+      {eff && c.type === 'base' && <>
+        <ScopeToggle value={baseScope} onChange={setBaseScope} oneLabel="רק הבסיס הזה" testId="cp-scope" />
+        <DetailTiles label="סוג פרט בסיס" testId="cp-mode" value={eff.mode ?? 'embedded'} onChange={(k) => (baseScope === 'all' ? store.exec(setConnectionDefault('base', { mode: k })) : setP({ mode: k }))} options={[
+          { key: 'embedded', title: 'פלטה מבוטנת', desc: 'פלטה עם מוטות עיגון מרותכים מבוטנת ביסוד; העמוד מרותך אליה בשטח', pic: PIC.baseEmbedded },
+          { key: 'bolted', title: 'ברגי עיגון', desc: 'פלטה מרותכת לעמוד במסגריה, ברגי עיגון בשטח', pic: PIC.baseBolted },
+          { key: 'pile', title: 'טמון בכלונס', desc: 'העמוד טמון בכלונס/ביסוס — ללא פלטה וללא עיגון; העמוד מוארך בעומק ההטמנה', pic: PIC.basePile },
+        ]} />
+        {eff.mode === 'pile' && <div className="field"><label>עומק הטמנה</label><NumField testId="cp-pile" value={eff.pileEmbed ?? 600} suffix='מ"מ' onCommit={(v) => (baseScope === 'all' ? store.exec(setConnectionDefault('base', { pileEmbed: Math.max(0, v) })) : setP({ pileEmbed: Math.max(0, v) }))} /></div>}
+      </>}
       {eff && c.type === 'eave' && eff.split !== false && <button className="btn small" data-testid="eave-check-open" onClick={() => store.set({ eaveCheck: id })}>בדיקת פלטה והצעת מידות</button>}
       {eff && c.type === 'eave' && (
         <div className="field"><label>סוג פרט</label>

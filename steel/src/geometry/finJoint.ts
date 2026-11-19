@@ -107,3 +107,44 @@ export function finJoint(j: FinJointIn): FinJointOut {
   );
   return { start: add(ax(sEnd), off), members, bolts, welds, parts: [fin, tg, ...bolts.map((b) => b.id)], issues, finW, finL, tongueL };
 }
+
+/**
+ * פרט זוויתן (1.41): פח מרותך למארח (מסגריה) והזוויתן מוברג ישירות לפח (שטח) — רגל שטוחה על פני הפח, ברגים
+ * בשורה אחת על קו הברגים של הרגל (gauge). ללא לשונית וללא חריץ. מתאים לאלכסוני זוויתן (L50 וכו').
+ * קו הברגים = קו העבודה (P + s·d); הזוויתן מונח בצד +pn של הפח.
+ */
+export interface AngleFinIn { cid: string; tag?: string; desc: string; hostId: string; memberId: string; P: Vec3; n: Vec3; d: Vec3; pn: Vec3; prof: Profile; finT: number; bolt: BoltSpec; bolts: number; weldSize: number; mat: string; gauge: number; clearance?: number; /** כיוון הרגל השטוחה (אחיד לשני הקצוות) */ uDir?: Vec3 }
+export interface AngleFinOut { start: Vec3; boltLine: Vec3; members: Member[]; bolts: BoltInfo[]; welds: WeldInfo[]; parts: string[]; issues: ValidationIssue[] }
+export function angleFin(j: AngleFinIn): AngleFinOut {
+  const members: Member[] = [], welds: WeldInfo[] = [], issues: ValidationIssue[] = [];
+  const d = norm(j.d);
+  const pn = norm(sub(j.pn, scale(d, dot(j.pn, d))));
+  const u = j.uDir ? norm(j.uDir) : norm(cross(pn, d)); // כיוון הרגל השטוחה במישור הפח
+  const hdir = norm(cross(pn, j.n));
+  const leg = j.prof.props.b, t = j.prof.dims.t ?? 5, g = j.gauge;
+  const d0 = j.bolt.d + j.bolt.clearance;
+  const edge = Math.max(25, Math.ceil((1.5 * d0) / 5) * 5);
+  const pitch = Math.max(50, Math.ceil((2.4 * d0) / 5) * 5);
+  const clr = j.clearance ?? 10;
+  if (leg - g < 1.2 * d0 - 0.01) issues.push({ code: 'BOLT_EDGE', severity: 'warning', elementId: j.cid, message: `${j.desc}: קו ברגים ${g} ברגל ${leg} — מרחק שפה קטן לבורג M${j.bolt.d}` });
+  const dn = Math.max(dot(d, j.n), 0.25), un = Math.abs(dot(u, j.n));
+  // פינות הזוויתן (לרוחב: [-g, leg-g] מקו הברגים) במרחק clearance מהמארח
+  const sTip = (clr + Math.max(g, leg - g) * un) / dn;
+  const nb = Math.max(1, j.bolts);
+  const sB = Array.from({ length: nb }, (_, i) => sTip + edge + i * pitch);
+  const sLast = sB[sB.length - 1];
+  const ax = (s: number) => add(j.P, scale(d, s));
+  // הפח: מכסה את הרגל השטוחה + 10 מכל צד, מהמארח (קצה חתוך בזווית) עד הבורג האחרון + שפה
+  const W = Math.ceil((leg + 20) / 5) * 5, uc = leg / 2 - g;
+  const s0 = -((W / 2 + Math.abs(uc)) * un) / dn, finL = Math.ceil((sLast + edge - s0) / 5) * 5;
+  const base = j.tag ? `${j.cid}.${j.tag}` : j.cid;
+  const fin = `${base}.PL`;
+  const offC = scale(u, uc);
+  members.push({ id: fin, kind: 'plate', label: `פח חיבור ${j.desc} PL${j.finT}×${W}×${finL}`, start: add(ax(s0), offC), end: add(ax(s0 + finL), offC), profile: `PL${W}x${j.finT}`, material: j.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: pn, startCut: { point: j.P, normal: scale(j.n, -1) }, source: 'generated', manualPlacement: false, connId: j.cid, partDesc: `פח חיבור ${j.desc} PL${j.finT}×${W}×${finL} (קצה חתוך בזווית)` });
+  const bolts: BoltInfo[] = sB.map((s, i) => makeBolt(`${base}.B${i + 1}`, j.cid, add(ax(s), scale(pn, j.finT / 2 + t)), scale(pn, -1), j.bolt, j.finT + t, 'site', [j.memberId, fin], d, members));
+  const weldL = Math.round(W / Math.max(Math.sqrt(1 - un * un), 0.25));
+  welds.push({ id: `${base}.W1`, connId: j.cid, type: 'fillet', a: j.weldSize, length: 2 * weldL, location: 'shop', between: [j.hostId, fin], from: add(j.P, scale(hdir, -weldL / 2)), to: add(j.P, scale(hdir, weldL / 2)) });
+  // קצה הזוויתן: על קו הפינה (עקב) — קו הברגים מוסט ב-g לרוחב ובחצי עובי הפח
+  const corner = (s: number) => add(add(ax(s), scale(u, -g)), scale(pn, j.finT / 2));
+  return { start: corner(sTip), boltLine: ax(sTip), members, bolts, welds, parts: [fin, ...bolts.map((b) => b.id)], issues };
+}

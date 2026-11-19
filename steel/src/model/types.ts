@@ -139,6 +139,12 @@ export interface BracingParams {
   purlinTies: { enabled: boolean; profile: string };
   /** תמוכות בין הקורות (1.40): RHS לאורך המבנה בין קורות גג סמוכות, מחובר לווב הקורות. מחלק את פנלי קושרות הגג */
   rafterStruts?: RafterStrutParams;
+  /** מוטות תלייה בין הפטות (1.41): מוט הברגה דרך ווב הפטות, לאורך השיפוע, 1–3 שורות בכל מפתח */
+  sagRods?: { enabled: boolean; d: number; perBay: number; bays?: number[] };
+  /** תמיכה צידית לפטה (1.41): זוויתן מהפטה לאגף התחתון של קורת הגג, בשני הצדדים, בכל פטה n-ית */
+  flyBraces?: { enabled: boolean; profile: string; every: number; boltD: number };
+  /** סיב רציף בשורת עמודים (1.41): קורת RHS בין ראשי העמודים בכל המפתחים, מתחת לקורת הגג */
+  lineTies?: { enabled: boolean; lines: string[]; profile: string; plateT: Mm; bolt: BoltSpec };
   /** חיבורי קושרות X: פח חיבור מרותך לקורה/עמוד במסגריה, הזוויתן מוברג בשטח; בורג בהצטלבות עם פח מילוי */
   conn: BraceConnParams;
 }
@@ -318,6 +324,8 @@ export interface BuildingParams {
   bracing: BracingParams;
   /** חתך מודולרי (שורות עמודים ומישורי גג). חסר = מצב קלאסי לפי roofType/width/eave/ridge */
   section?: CustomSection;
+  /** שמות צירי עמודים חופשיים (מזהה ציר → שם, למשל A / D / E כמו בתוכנית). חסר = א, ב, ג… */
+  lineLabels?: Record<string, string>;
   /** אלכסוני עמוד-קורה (קנה/knee brace) */
   kneeBraces?: KneeBraceParams;
   /** חיזוק רכס לקבלת העומסים */
@@ -396,6 +404,8 @@ export interface TransferDef {
   seat: TbSeat;
   /** beam (ברירת מחדל) או מסבך נושא */
   kind?: 'beam' | 'truss';
+  /** אלכסוני Y מהקורה הנושאת לעמודים התומכים (1.41): ירידה מתחתית הקורה וזווית; מקטינים את המפתח בבדיקת החתך */
+  knee?: { enabled: boolean; profile: string; drop: Mm; angle: number };
   truss?: TrussSpec;
   /** מסבך: top = על ראשי העמודים (העמודים מתקצרים, ברירת מחדל); between = העמודים ממשיכים עד קורת הגג והמסבך ביניהם (כמו אגד B) */
   trussFit?: 'top' | 'between';
@@ -480,8 +490,8 @@ export interface KneeBraceParams {
   /** angle (ברירת מחדל, 45° מהאופק): נקודת החיבור לקורה נגזרת מהזווית; reach: מרחק אופקי קבוע */
   mode?: 'angle' | 'reach';
   angle?: number;
-  /** fin (ברירת מחדל, פרט הלקוח): פח מרותך למארח + לשונית בחריץ ה-RHS, מוברגים בחפיפה; flange: פלטת קצה מוברגת לאגף המארח */
-  detail?: 'fin' | 'flange' | 'stub';
+  /** fin (ברירת מחדל ל-RHS): פח מרותך למארח + לשונית בחריץ; angle (ברירת מחדל לזוויתן): זוויתן מוברג ישירות לפח; flange: פלטת קצה מוברגת לאגף המארח */
+  detail?: 'fin' | 'flange' | 'stub' | 'angle';
   /** ברגים בכל קצה (בשורה לאורך הציר) */
   boltsPerEnd?: number;
   /** פלטות קצה: עובי; רוחב/אורך — לפרט flange בלבד (בפרט stub נגזרים מהפרופיל והברגים) */
@@ -495,7 +505,7 @@ export interface KneeBraceParams {
   /** ביטול במסגרת מסוימת: "מסגרת|קו.מישור.צד" */
   offCells?: string[];
 }
-export interface KneeSideOverride { on?: boolean; drop?: Mm; angle?: number; reach?: Mm; mode?: 'angle' | 'reach'; profile?: string }
+export interface KneeSideOverride { on?: boolean; drop?: Mm; angle?: number; reach?: Mm; mode?: 'angle' | 'reach'; profile?: string; /** פרט חיבור חריג לצד הזה */ detail?: 'fin' | 'flange' | 'angle' }
 
 export interface ProjectMeta {
   name: string;
@@ -549,7 +559,9 @@ export interface PlateConnParams {
    * פלטת בסיס בלבד. embedded: פלטה מבוטנת ביסוד (פני הפלטה = מפלס הבסיס) עם מוטות עיגון מרותכים מתחתיה,
    * והעמוד מרותך אליה בשטח (חריג מאושר לעיקרון — נדרש תיקון גלוון). bolted: פלטה מרותכת לעמוד וברגי עיגון.
    */
-  mode?: 'embedded' | 'bolted';
+  mode?: 'embedded' | 'bolted' | 'pile';
+  /** בסיס בכלונס (pile): עומק הטמנת העמוד בכלונס */
+  pileEmbed?: Mm;
 }
 
 export type ConnectionDefaults = Record<'eave' | 'ridge' | 'base', PlateConnParams> & { side?: PlateConnParams };

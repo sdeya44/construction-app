@@ -37,3 +37,19 @@ describe('אלכסוני עמוד-קורה — צד הקונזולה בתוכנ�
     expect(kneeLayout(k0, lines).cols.map((c) => [c.left ?? null, c.right ?? null])).toEqual([[null, 'L.L.R'], ['R.R.L', null]]);
   });
 });
+
+describe('אלכסון זוויתן — פרט מוברג לפח (1.41)', () => {
+  it('KB-L1: L50x5 — פח מרותך + זוויתן מוברג, ללא לשונית, ללא התנגשויות; RHS נשאר עם לשונית', () => {
+    const b = defaultBuilding(); b.kneeBraces = { ...defaultKneeBraces(), enabled: true, profile: 'L50x5' };
+    const d = generate(newProject('x', b));
+    const c = d.connections.find((x) => x.type === 'knee')!;
+    expect(c.parts.some((p) => p.endsWith('.T'))).toBe(false);
+    expect(c.parts.filter((p) => p.endsWith('.PL')).length).toBe(2);
+    expect(c.bolts.length).toBe(2); // בורג אחד בכל קצה (2 בכל קצה ב-RHS = שורה אחת)
+    expect(d.issues.filter((i) => i.code === 'CLASH')).toEqual([]);
+    expect(d.issues.filter((i) => i.severity === 'error')).toEqual([]);
+    const b2 = defaultBuilding(); b2.kneeBraces = { ...defaultKneeBraces(), enabled: true };
+    const d2 = generate(newProject('x', b2));
+    expect(d2.connections.find((x) => x.type === 'knee')!.parts.some((p) => p.endsWith('.T'))).toBe(true);
+  });
+});

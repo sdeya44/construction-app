@@ -28,7 +28,7 @@ test('RS-01: תמוכות בין הקורות — שורה מציר א לכיו�
   expect(issues).toEqual([]);
   await shot(page, 'RS_01_struts');
   // פרט חיבור: פח + לשונית בחריץ (כללי), ריתוך בשורה בלבד; ובעורך החיבור — חזרה לפלטת קצה
-  await page.getByTestId('rs-detail').selectOption('fin');
+  await page.getByTestId('rs-detail-fin').first().click();
   const tongues = () => page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => /^C\.RS1\..*\.T$/.test(m.id)).length);
   expect(await tongues()).toBeGreaterThan(0);
   await page.getByTestId('rs-detail-0').selectOption('weld');
@@ -37,7 +37,7 @@ test('RS-01: תמוכות בין הקורות — שורה מציר א לכיו�
   await page.getByTestId('rs-detail-0').selectOption('');
   const cid = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => c.id.startsWith('C.RS1.')).id);
   await page.evaluate((i) => (window as any).__ksp.store.set({ activeConn: i }), cid);
-  await page.getByTestId('pw-rs').getByTestId('rs-detail').selectOption('endplate');
+  await page.getByTestId('pw-rs').getByTestId('rs-detail-endplate').click();
   expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.rafterStruts.detail)).toBe('endplate');
   await shot(page, 'RS_01_conn');
   expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'CLASH'))).toEqual([]);

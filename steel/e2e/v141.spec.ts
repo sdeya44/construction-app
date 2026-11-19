@@ -1,0 +1,46 @@
+import { expect, test } from '@playwright/test';
+import { boot, shot } from './helpers';
+
+const S = (page: import('@playwright/test').Page) => page.evaluate(() => (window as any).__ksp.store.state);
+const count = (page: import('@playwright/test').Page, re: string) => page.evaluate((r) => (window as any).__ksp.store.state.derived.members.filter((m: any) => new RegExp(r).test(m.id)).length, re);
+
+test('V141-01: מוטות תלייה, תמיכה צידית, סיב רציף, בסיס בכלונס, שם ציר — מהממשק, ללא שגיאות', async ({ page }) => {
+  const errors = await boot(page);
+  // שם ציר
+  await page.getByTestId('nav-s:geometry').click();
+  if (!(await page.getByTestId('sec-label-0').count())) await page.getByText('טבלת צירים — שם, מיקום').click();
+  await page.getByTestId('sec-label-0').fill('E'); await page.getByTestId('sec-label-0').press('Enter');
+  expect((await S(page)).derived.section.lines[0].label).toBe('E');
+  // מוטות תלייה ותמיכה צידית
+  await page.getByTestId('nav-b:ties').click();
+  await page.getByTestId('sr-on').check();
+  expect(await count(page, '^SR\\.')).toBeGreaterThan(0);
+  await page.getByTestId('fb-on').check();
+  expect(await count(page, '^FB\\.')).toBeGreaterThan(0);
+  // סיב רציף
+  await page.getByTestId('nav-b:walls').click();
+  await page.getByTestId('lt-on').check();
+  expect(await count(page, '^LTIE\\.')).toBeGreaterThan(0);
+  // בסיס בכלונס
+  await page.evaluate(() => (window as any).__ksp.store.set({ activeConn: 'C.BASE.F1.L' }));
+  await page.getByTestId('cp-mode-pile').click();
+  expect((await S(page)).project.building ? (await S(page)).derived.members.some((m: any) => m.kind === 'anchor') : true).toBe(false);
+  await shot(page, 'V141_01');
+  expect((await S(page)).derived.issues.filter((i: any) => i.severity === 'error')).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test('V141-02: דילול עמודים — אלכסוני Y והחלה על כל הקורות בציר', async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, transfers: [
+    { id: 'T1', lineId: 'L', from: 'F1', to: 'F3', removed: ['F2'], profile: 'IPE300', support: 'A1', seat: 'B1' },
+    { id: 'T2', lineId: 'L', from: 'F3', to: 'F5', removed: ['F4'], profile: 'IPE300', support: 'A1', seat: 'B1' }] } }) }); });
+  await page.getByTestId('nav-b:tb').click();
+  await page.getByTestId('tb-knee-T1').check();
+  await page.getByTestId('tb-apply-line-T1').click();
+  const t = (await S(page)).project.building.transfers;
+  expect(t.every((x: any) => x.knee?.enabled)).toBe(true);
+  expect(await count(page, '^KT\\.')).toBe(4);
+  expect((await S(page)).derived.issues.filter((i: any) => i.severity === 'error')).toEqual([]);
+  expect(errors).toEqual([]);
+});

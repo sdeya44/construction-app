@@ -11,7 +11,7 @@ import type { BoltInfo, BuildingParams, Connection, FrameDef, Member, Project, T
 import type { NLine, NSection } from '../model/section';
 import { buildTrussPlane, trussNodes } from './truss';
 import { makeBolt } from './connections';
-import { finJoint } from './finJoint';
+import { angleFin, finJoint } from './finJoint';
 import { localFrame } from './frame';
 
 const Z = v3(0, 0, 1), X = v3(1, 0, 0), Y = v3(0, 1, 0);
@@ -194,6 +194,34 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
       profile: def.profile, material: mat, rollDeg: 0, mirror: false, anchor: 'top', refUp: Z, source: 'generated', manualPlacement: false, lineId: line.id,
     };
     res.members.push(TB);
+    // ---------- אלכסוני Y מתחתית הקורה הנושאת אל העמודים התומכים (1.41), במישור הציר
+    const kn = def.knee;
+    if (kn?.enabled && def.kind !== 'truss') {
+      const kp = tryProfile(kn.profile);
+      if (!kp) res.issues.push({ code: 'PROFILE', severity: 'error', message: `אלכסון קורה נושאת: חתך לא מוכר ${kn.profile}` });
+      else for (const [fid, sgn, yC] of [[def.from, 1, y0], [def.to, -1, y1]] as const) {
+        const col = byId.get(colId(fid, line.id));
+        if (!col) continue;
+        const lf = localFrame(col), cpp = getProfile(col.profile);
+        const halfY = Math.abs(lf.u.y) * cpp.props.b / 2 + Math.abs(lf.v.y) * cpp.props.h / 2;
+        const reach = kn.drop / Math.tan((Math.max(25, Math.min(65, kn.angle)) * Math.PI) / 180);
+        const zU = zTop - h;
+        const C0 = v3(x, yC + sgn * halfY, zU - kn.drop), R0 = v3(x, yC + sgn * (halfY + reach), zU);
+        if (Math.abs(R0.y - yC) > Math.abs(y1 - y0) / 2 - 200) { res.issues.push({ code: 'TB_KNEE_LONG', severity: 'warning', message: `אלכסון קורה נושאת ${def.id}: האלכסון מגיע מעבר לאמצע המפתח — הקטן ירידה / הגדל זווית` }); continue; }
+        const dir = norm(sub(R0, C0));
+        const cid = `C.KT.${def.id}.${fid}`, bid = `KT.${def.id}.${fid}`;
+        const base = { cid, desc: 'אלכסון קורה נושאת', memberId: bid, prof: kp, finT: 10, bolt: { ...BOLT, d: 16 }, weldSize: 5, mat, pn: X };
+        const L = kp.family === 'L';
+        const uC = norm(v3(0, -dir.z, dir.y));
+        const jc = L ? angleFin({ ...base, tag: 'C', hostId: col.id, P: C0, n: v3(0, sgn, 0), d: dir, bolts: 1, gauge: kp.props.b <= 50 ? 28 : Math.round(kp.props.b * 0.55), uDir: uC })
+          : finJoint({ ...base, tag: 'C', hostId: col.id, P: C0, n: v3(0, sgn, 0), d: dir, side: 1, profile: kn.profile, tongueT: 10, bolts: 2 });
+        const jr = L ? angleFin({ ...base, tag: 'R', hostId: tbId, P: R0, n: v3(0, 0, -1), d: scale(dir, -1), bolts: 1, gauge: kp.props.b <= 50 ? 28 : Math.round(kp.props.b * 0.55), uDir: uC })
+          : finJoint({ ...base, tag: 'R', hostId: tbId, P: R0, n: v3(0, 0, -1), d: scale(dir, -1), side: 1, profile: kn.profile, tongueT: 10, bolts: 2 });
+        res.members.push({ id: bid, kind: 'brace', label: `אלכסון קורה נושאת ציר ${line.label}`, start: jc.start, end: jr.start, profile: kn.profile, material: mat, rollDeg: 0, mirror: false, anchor: L ? 'corner' : 'center', refUp: X, source: 'generated', manualPlacement: false, connId: cid, partDesc: `אלכסון ${kn.profile}` }, ...jc.members, ...jr.members);
+        res.issues.push(...jc.issues, ...jr.issues);
+        res.connections.push({ id: cid, type: 'knee', label: `אלכסון קורה נושאת ציר ${line.label} — ${L ? 'זוויתן מוברג לפח' : 'פח + לשונית'}`, members: [col.id, tbId], parts: [bid, ...jc.parts, ...jr.parts], bolts: [...jc.bolts, ...jr.bolts], welds: [...jc.welds, ...jr.welds], status: 'not-verified', fixity: 'pinned', overridden: false });
+      }
+    }
     // ---------- מסבך נושא: חגורה תחתונה, אנכיים ואלכסונים (מרותכים), חיבורי המשך באמצע שדות
     const tr = def.kind === 'truss' && def.truss ? def.truss : null;
     const pB = tr ? getProfile(tr.profiles.bottom) : null;
