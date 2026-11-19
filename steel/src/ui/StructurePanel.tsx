@@ -1,3 +1,4 @@
+import { ROOF_PIC, WALL_PIC } from './DetailPicker';
 import { useState } from 'react';
 import { addFrame, removeFrame, respaceFrames, setBuilding, setFrameY, setMeta, setSettings } from '../commands/commands';
 import type { BuildingParams, RafterStrutDetail, RafterStrutRow, LockTrussParams, PortalBraceParams, RhsTrussParams, RidgeReinfParams } from '../model/types';
@@ -17,7 +18,7 @@ import { Icon } from './icons';
 import { HaunchEditor, KneeEditor, SectionEditor } from './SectionEditor';
 import { ClassicRoofDims } from './TriDims';
 import { FramesStrip, GussetSchematic, LockTrussSchematic, PortalSchematic, RidgeSchematic, WallsPlan } from './schematics';
-import { MenuPic, OffCard } from './pics';
+import { OffCard } from './pics';
 import { DetailTiles, PIC } from './DetailPicker';
 import { PanelAlerts, SumCard, TabbedEditor } from './summary';
 
@@ -702,10 +703,12 @@ function RoofBracingPanel() {
       <TabbedEditor testId="br-roof-ed" title="" tabs={[
         { key: 'plan', label: 'תוכנית', render: () => <><RoofXGrid /><RoofXSplit /></> },
         { key: 'sec', label: 'חתך ופרט', render: () => <>
-          <div className="field"><label>סוג</label>
-            <select className="inp" data-testid="br-roof-type" value={br.roof.type ?? 'x'} onChange={(e) => set({ roof: { ...br.roof, type: e.target.value as 'x' | 'rhs', rhs: br.roof.rhs ?? defaultRhsTruss() } })}>
-              <option value="x">X מזוויתנים (מתיחה)</option><option value="rhs">סבכה אופקית RHS (מוטות + אלכסונים)</option>
-            </select></div>
+          <div className="choice2" role="radiogroup" aria-label="סוג קושרות הגג" data-testid="br-roof-type">
+            {([['x', 'X מזוויתנים', 'מתיחה בלבד', ROOF_PIC.x], ['rhs', 'סבכה RHS', 'מוטות + אלכסונים', ROOF_PIC.rhs]] as const).map(([k, t, dsc, pic]) => (
+              <button key={k} role="radio" aria-checked={(br.roof.type ?? 'x') === k} className={`choice-tile${(br.roof.type ?? 'x') === k ? ' on' : ''}`} data-testid={`br-roof-type-${k}`} title={dsc}
+                onClick={() => set({ roof: { ...br.roof, type: k, rhs: br.roof.rhs ?? defaultRhsTruss() } })}>{pic}<b>{t}</b><span>{dsc}</span></button>
+            ))}
+          </div>
           {isX ? <><div className="field prof"><label>חתך</label><ProfilePicker testId="br-roof-prof" value={br.roof.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => set({ roof: { ...br.roof, profile: v } })} /></div><RoofEndFields />{(br.roof.endDetail ?? 'gusset') === 'gusset' && <XConnFields />}</> : <RhsFields />}
         </> },
         { key: 'struts', label: `תמוכות בין הקורות${rs ? ` (${rs})` : ''}`, render: () => <RafterStrutsEditor /> },
@@ -755,11 +758,11 @@ export function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> }
         <WallsSummary />
         <TabbedEditor testId="br-walls-ed" title="" tabs={[
           { key: 'type', label: 'סוג וחתך', render: () => <>
-            <div className="choice2 compact" role="radiogroup" aria-label="סוג קשיחות הקיר">
-              {([['x', 'קושרות X', 'קושרות X מזוויתנים — עובדות במתיחה', 'brace'], ['portal', 'אגד B', 'קורת RHS בין העמודים + שני אלכסונים קטנים', 'walls'], ['truss', 'מסבך נעילה', 'מסבך RHS במפתחים הנעולים + סיב רציף לכל האורך', 'walls']] as const).map(([k, t, dsc, pic]) => (
+            <div className="choice3" role="radiogroup" aria-label="סוג קשיחות הקיר">
+              {([['x', 'קושרות X', 'קושרות X מזוויתנים — עובדות במתיחה', 'brace'], ['portal', 'אגד B', 'קורת RHS בין העמודים + שני אלכסונים קטנים', 'walls'], ['truss', 'מסבך נעילה', 'מסבך RHS במפתחים הנעולים + סיב רציף לכל האורך', 'walls']] as const).map(([k, t, dsc]) => (
                 <button key={k} role="radio" aria-checked={(br.walls.type ?? 'x') === k} className={`choice-tile${(br.walls.type ?? 'x') === k ? ' on' : ''}`} data-testid={`br-walls-${k}`} title={dsc}
                   onClick={() => set({ walls: { ...br.walls, type: k, lineType: undefined, portal: br.walls.portal ?? defaultPortal(), truss: br.walls.truss ?? defaultLockTruss() } })}>
-                  <MenuPic name={pic} size={28} /><b>{t}</b>
+                  {WALL_PIC[k]}<b>{t}</b>
                 </button>
               ))}
             </div>

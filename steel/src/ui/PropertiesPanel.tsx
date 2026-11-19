@@ -671,8 +671,15 @@ export function ScopeIsolator() {
     const opts = m ? scopeOptions(m, d) : [];
     const o = scope ? opts.find((x) => x.key === scope) ?? (opts.length ? opts[0] : null) : null;
     // הדגשה כתומה של מה שהשינוי יחול עליו (1.49) — תמיד, בלי להעלים את המודל
-    const hi = o && o.key !== 'one' ? (o.key === 'asm' || o.key === 'asmall' ? o.show : o.ids) : null;
+    // מארחים (עמוד / קורה / פטה) אינם משתנים בשינוי המכלול — לא מודגשים
+    const host = (id: string) => { const k = d.byId.get(id); return !!k && (k.kind === 'column' || k.kind === 'rafter' || !!k.purlin) && k.kind !== m?.kind; };
+    const hi = o && o.key !== 'one' ? (o.key === 'asm' || o.key === 'asmall' ? o.show.filter((x) => !host(x)) : o.ids) : null;
     if ((hi ?? []).join(',') !== (st.scopeHi ?? []).join(',')) store.set({ scopeHi: hi });
+    // 1.51: הגדרות האלכסונים — המבט מתקרב לאלכסון הזה ולפחים שלו (כפתור "חזרה למודל המלא")
+    if (o?.key === 'asm' && m && /^KB\./.test(m.id) && !iso) {
+      const parts = d.connections.filter((c) => c.members.includes(m.id)).flatMap((c) => c.parts);
+      setTimeout(() => window.__ksp?.viewport?.focusIds?.([m.id, ...parts], 400), 40);
+    }
     if (o && iso) { store.set({ isolated: o.show, scopeIsoOwned: true }); setTimeout(() => (o.key === 'one' ? window.__ksp?.viewport?.fitSelection?.() : window.__ksp?.viewport?.fitIds?.(o.show)), 40); return; }
     if (st.scopeIsoOwned) store.set({ isolated: null, scopeIsoOwned: false });
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps

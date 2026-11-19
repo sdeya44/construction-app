@@ -1,3 +1,4 @@
+import { WALL_PIC } from './DetailPicker';
 import { useMemo } from 'react';
 import { setBuilding } from '../commands/commands';
 import type { DerivedModel, Member } from '../model/types';
@@ -123,9 +124,9 @@ function WallTypeSwitch({ asm, scope }: { asm: Asm; scope: 'line' | 'all' }) {
     store.exec(setBuilding({ bracing: { ...br, walls: { ...walls, portal: walls.portal ?? defaultPortal(), truss: walls.truss ?? defaultLockTruss() } } }));
   };
   return (
-    <div className="ss-row" role="radiogroup" aria-label="צורת המכלול">
+    <div className="choice3" role="radiogroup" aria-label="צורת המכלול">
       {([['x', 'קושרות X'], ['portal', 'אגד B'], ['truss', 'מסבך נעילה']] as const).map(([k, t]) => (
-        <button key={k} className={`btn small${cur === k ? ' on' : ''}`} data-testid={`asm-type-${k}`} onClick={() => set(k)}>{t}</button>
+        <button key={k} role="radio" aria-checked={cur === k} className={`choice-tile${cur === k ? ' on' : ''}`} data-testid={`asm-type-${k}`} onClick={() => set(k)}>{WALL_PIC[k]}<b>{t}</b></button>
       ))}
     </div>
   );

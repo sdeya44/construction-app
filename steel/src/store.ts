@@ -59,6 +59,8 @@ export interface AppState {
   pickNext?: string | null;
   /** הדגשת ההיקף שנבחר בחלון האלמנט (כתום) */
   scopeHi?: string[] | null;
+  /** המבט מוקרב לצומת (עריכת חיבור) — מוצג כפתור "חזרה למודל המלא" */
+  viewFocused?: boolean;
   scopeIsoOwned?: boolean;
   /** שרטוט לפתיחה במצב שרטוטים */
   drawingFocus?: string | null;

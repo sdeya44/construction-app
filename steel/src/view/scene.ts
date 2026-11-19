@@ -6,6 +6,17 @@ export const KIND_COLOR: Record<MemberKind, number> = {
   column: 0x5f6a66, rafter: 0x7c8781, beam: 0x8a948e, brace: 0x9a8a68, purlin: 0xb2ada2, girt: 0xa9b3ad, cleat: 0x4f7f66, plate: 0x6f8a5a, bolt: 0x8a5a2b, anchor: 0x7a6a5a,
 };
 const MANUAL_COLOR = 0xb08a4a;
+/** 1.51: צבע לפי קבוצת רכיב — רואים במבט מה יש איפה (לא ירוק/כתום, השמורים לבחירה ולהדגשת היקף) */
+export function groupColor(m: Member): number | undefined {
+  const id = m.id;
+  if (m.kind === 'bolt' || m.kind === 'anchor') return undefined;
+  if (m.kind === 'plate' || m.kind === 'cleat') return /^(C\.)?(BR|BB|LT|KB)\./.test(m.connId ?? id) || /^C\.(BR|BB|LT|KB)\./.test(m.connId ?? '') ? 0x8f6a4a : undefined;
+  if (/^KB\./.test(id)) return 0xb8952a;            // אלכסוני עמוד-קורה — חרדל
+  if (/^(BR\.R|HB\.|RS\.)/.test(id)) return 0x3f78b5; // קושרות גג — כחול
+  if (/^(BR\.W|BB\.|LT\.)/.test(id)) return 0x3e9bb3; // קשיחות קירות — תכלת
+  if (/^(TR\.|TB\.)/.test(id)) return 0x6f5aa0;      // מסבכים / דילול — סגול
+  return undefined;
+}
 
 const solidCache = new Map<string, Solid>();
 function solidKey(m: Member) {
@@ -52,7 +63,7 @@ export function buildModel(members: Member[], material: THREE.Material, edgeMat:
     const cc = colorOf?.(m);
     if (cc !== undefined) c.setHex(cc);
     else {
-      c.setHex(m.source === 'manual' ? MANUAL_COLOR : KIND_COLOR[m.kind]);
+      c.setHex(m.source === 'manual' ? MANUAL_COLOR : groupColor(m) ?? KIND_COLOR[m.kind]);
       if (m.manualPlacement && m.source === 'generated') c.offsetHSL(0.08, 0.15, 0);
     }
     pos.set(s.tris, tp);

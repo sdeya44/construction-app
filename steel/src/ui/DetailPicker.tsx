@@ -38,7 +38,7 @@ export function ScopeToggle({ value, onChange, oneLabel, testId }: { value: 'all
 
 // ---- שרטוטים קטנים (60×44) — סכמטיים, צבעי המערכת
 const H = '#8a948f', S = '#3a4a42', P = '#c2721c', B = '#2f6fb0';
-const Svg = ({ children }: { children: ReactNode }) => <svg viewBox="0 0 60 44" width={60} height={44} aria-hidden="true">{children}</svg>;
+const Svg = ({ children }: { children: ReactNode }) => <svg viewBox="0 0 60 44" width={88} height={64} aria-hidden="true">{children}</svg>;
 const bolt = (x: number, y: number) => <circle cx={x} cy={y} r={2.2} fill={B} />;
 
 /** מארח (אגף/ווב) משמאל, אלמנט אלכסוני */
@@ -60,4 +60,20 @@ export const PIC = {
   cleatPlate: <Svg><rect x={2} y={32} width={56} height={6} fill={H} /><rect x={20} y={10} width={4} height={22} fill={P} /><path d="M24 32 L36 32 L24 16 Z" fill={P} opacity={0.7} />{bolt(22, 14)}{bolt(22, 24)}</Svg>,
   splicePlate: <Svg><rect x={2} y={14} width={26} height={16} fill="none" stroke={S} strokeWidth={2} /><rect x={32} y={14} width={26} height={16} fill="none" stroke={S} strokeWidth={2} /><rect x={18} y={17} width={24} height={10} fill={P} />{bolt(22, 22)}{bolt(38, 22)}</Svg>,
   basePile: <Svg><rect x={24} y={2} width={12} height={34} fill="none" stroke={S} strokeWidth={2} /><rect x={16} y={20} width={28} height={24} fill="#d9d4c7" /><path d="M2 20 H58" stroke={H} strokeWidth={1} strokeDasharray="3 2" /></Svg>,
+};
+
+/** סוגי מכלול קשיחות קיר (1.51) — אריחים גדולים עם ציור המכלול בין שני עמודים */
+const W = ({ children }: { children: ReactNode }) => <svg viewBox="0 0 80 50" width={92} height={58} aria-hidden="true"><path d="M8 46 V4 M72 46 V4" stroke={H} strokeWidth={4} /><path d="M4 46 H76" stroke="#c9cfca" strokeWidth={1.5} />{children}</svg>;
+export const WALL_PIC = {
+  x: <W><path d="M10 8 L70 44 M70 8 L10 44" stroke={S} strokeWidth={2.4} /><rect x={36} y={22} width={8} height={8} fill={P} /></W>,
+  portal: <W><path d="M10 10 H70" stroke={S} strokeWidth={4.5} /><path d="M10 24 L22 10 M70 24 L58 10" stroke={S} strokeWidth={2.4} /></W>,
+  truss: <W><path d="M10 9 H70 M10 21 H70" stroke={S} strokeWidth={2.6} /><path d="M10 21 L20 9 L30 21 L40 9 L50 21 L60 9 L70 21" stroke={S} strokeWidth={1.8} fill="none" /></W>,
+  none: <W><path d="M30 26 H50" stroke="#b9c0bb" strokeWidth={2} strokeDasharray="4 3" /></W>,
+};
+
+/** סוג קושרות גג — מבט על פנל בין שתי קורות */
+const RF = ({ children }: { children: ReactNode }) => <svg viewBox="0 0 80 50" width={92} height={58} aria-hidden="true"><path d="M6 6 H74 M6 44 H74" stroke={H} strokeWidth={4} />{children}</svg>;
+export const ROOF_PIC = {
+  x: <RF><path d="M10 8 L70 42 M70 8 L10 42" stroke={B} strokeWidth={2.4} /></RF>,
+  rhs: <RF><path d="M10 8 V42 M40 8 V42 M70 8 V42" stroke={S} strokeWidth={2.4} /><path d="M10 8 L40 42 M40 8 L70 42" stroke={S} strokeWidth={1.8} /></RF>,
 };

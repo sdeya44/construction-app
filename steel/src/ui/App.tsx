@@ -61,6 +61,16 @@ export function App() {
     const id = connNow ?? selNow[0];
     if (id) { const k = settingsOf(id, store.state.derived.byId.get(id)?.kind ?? ''); if (k) setNavRaw(k[0] as NavKey); }
   }, [selSig, gutNow]);
+  // 1.51: עריכת חיבור / אשף חיבור — המבט מתקרב לצומת (כפתור "חזרה למודל המלא" מחזיר)
+  const wizNow = useStore((x) => x.connWizard ?? null);
+  useEffect(() => {
+    const cid = connNow ?? wizNow;
+    if (!cid) return;
+    const d = store.state.derived, c = d.connById.get(cid);
+    if (!c) return;
+    const small = [...c.parts, ...c.bolts.map((b) => `${b.id}.H`)].filter((x) => d.byId.has(x));
+    setTimeout(() => vp.current?.focusIds(small.length ? small : c.members, small.length ? 700 : 300), 60);
+  }, [connNow, wizNow]);
   const navShown = !wide || lp === 'nav';
   useEffect(() => { const k = navShown ? nav : undefined; if (store.state.navKey !== k) store.set({ navKey: k }); }, [nav, navShown]);
   const setTab = (t: SideTab) => setNav(t);
@@ -285,7 +295,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.50.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.51.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -323,6 +333,7 @@ export function App() {
             {errs > 0 && <button className="chip-st err" onClick={() => goTab('issues')} data-testid="chip-errors">{errs} שגיאות</button>}
             {warns > 0 && <button className="chip-st warn" onClick={() => goTab('issues')} data-testid="chip-warnings">{warns} אזהרות</button>}
             {s.isolated && <button className="chip-st" onClick={showAll}>מצב בידוד · הצג הכל</button>}
+
           </div>
 
           <div className="viewbar" role="toolbar" aria-label="מבט ותצוגה">
@@ -352,6 +363,7 @@ export function App() {
             <TB icon="showAll" title="הצג הכל (U)" disabled={!s.hidden.length && !s.isolated} onClick={showAll} testId="show-all" />
           </div>
 
+          {s.viewFocused && <button className="view-restore" data-testid="view-restore" title="המבט התקרב לצומת שבעריכה — חזרה למבט הקודם" onClick={() => vp.current?.restoreView()}>↩ חזרה למודל המלא</button>}
           <ContextBar vp={vpObj} onOpenConn={openConn} onMore={(x, y) => setMenu({ x, y })} />
           <GutterPickHint />
           <ConnCard onOpen={openConn} />

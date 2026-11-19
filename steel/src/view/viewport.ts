@@ -833,6 +833,41 @@ export class Viewport {
     this.panes[0].fit(box, undefined, new THREE.Vector3(dir.x, dir.y, dir.z));
   }
 
+  /** מבט לפני "התמקדות בצומת" (1.51) — לחזרה למודל המלא בכפתור */
+  private savedView: { pos: THREE.Vector3; target: THREE.Vector3; zoom: number; halfH: number; customDir?: THREE.Vector3; view: ViewName } | null = null;
+  /** התמקדות בצומת/חיבור: שומר את המבט הנוכחי (פעם אחת) ומקרב מאותו כיוון מבט */
+  focusIds(ids: string[], pad = 500) {
+    const s = store.state, p = this.panes[0];
+    if (!p) return;
+    const box = new THREE.Box3();
+    for (const id of ids) {
+      const m = s.derived.byId.get(id);
+      if (!m) continue;
+      const sol = cachedSolid(m);
+      for (const q of [...sol.startRing, ...sol.endRing]) box.expandByPoint(new THREE.Vector3(q.x, q.y, q.z));
+    }
+    if (box.isEmpty()) return;
+    if (!this.savedView) this.savedView = { pos: p.camera.position.clone(), target: p.controls.target.clone(), zoom: p.ortho.zoom, halfH: p.orthoHalfH, customDir: p.customDir?.clone(), view: p.view };
+    box.expandByScalar(pad);
+    const dir = p.camera.position.clone().sub(p.controls.target).normalize();
+    p.fit(box, undefined, dir);
+    if (!s.viewFocused) store.set({ viewFocused: true });
+  }
+  /** חזרה למבט שלפני ההתמקדות */
+  restoreView() {
+    const v = this.savedView, p = this.panes[0];
+    this.savedView = null;
+    if (store.state.viewFocused) store.set({ viewFocused: false });
+    if (!v || !p) return;
+    p.view = v.view; p.customDir = v.customDir;
+    p.orthoHalfH = v.halfH; p.ortho.zoom = v.zoom;
+    p.persp.position.copy(v.pos); p.ortho.position.copy(v.pos);
+    p.controls.target.copy(v.target);
+    const dd = v.pos.distanceTo(v.target); p.persp.near = Math.max(1, dd / 1000); p.persp.far = dd * 20;
+    p.updateCams(); p.controls.update();
+    this.requestRender();
+  }
+
   /** התמקדות באוסף אלמנטים (היקף שנבחר בפאנל — מכלול / ציר / כל הדומים) */
   fitIds(ids: string[]) { this.fitSelection(ids); }
 

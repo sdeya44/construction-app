@@ -72,3 +72,25 @@ test('UX150-01: פאנל בלי לשוניות — שביל מהאלמנט לר�
   await expect(page.getByTestId('lp-crumb')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test('UX151-01: עריכת חיבור — המבט מתקרב לצומת; "חזרה למודל המלא" מחזיר את המבט', async ({ page }) => {
+  const errors = await boot(page);
+  const cam = () => page.evaluate(() => { const p = (window as any).__ksp.viewport.panes[0]; return p.camera.position.toArray().map((v: number) => Math.round(v)); });
+  const before = await cam();
+  const cid = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => c.type === 'eave')?.id);
+  await page.evaluate((c) => (window as any).__ksp.store.set({ activeConn: c }), cid);
+  await expect(page.getByTestId('view-restore')).toBeVisible();
+  const near = await cam();
+  expect(near).not.toEqual(before);
+  await page.getByTestId('view-restore').click();
+  await expect(page.getByTestId('view-restore')).toHaveCount(0);
+  expect(await cam()).toEqual(before);
+  // אריחי סוג גדולים: קשיחות קירות וקושרות גג
+  await page.evaluate(() => (window as any).__ksp.store.set({ activeConn: null }));
+  await page.getByTestId('nav-b:roof').click();
+  const add = page.getByTestId('off-roof'); if (await add.count()) await add.click();
+  await page.getByTestId('br-roof-ed-tab-sec').click();
+  await page.getByTestId('br-roof-type-rhs').click();
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.roof.type)).toBe('rhs');
+  expect(errors).toEqual([]);
+});

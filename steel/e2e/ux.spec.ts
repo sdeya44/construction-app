@@ -165,7 +165,7 @@ test('BR-02: סבכה אופקית RHS וחיזוק רכס בשתי השיטות
   await boot(page);
   await page.getByTestId('tab-brace').click();
   await page.getByTestId('br-roof-ed-tab-sec').click();
-  await page.getByTestId('br-roof-type').selectOption('rhs');
+  await page.getByTestId('br-roof-type-rhs').click(); // 1.51: אריחים
   const q = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { hb: d.members.filter((m: any) => m.id.startsWith('HB.') && m.kind === 'brace').length, x: d.members.filter((m: any) => m.id.startsWith('BR.R')).length, tie: d.connections.filter((c: any) => c.type === 'ridge-tie').length, st: d.members.filter((m: any) => /C\.RIDGE\..*\.ST/.test(m.id)).length, clash: d.issues.filter((i: any) => i.code === 'CLASH').length }; });
   expect(await q()).toMatchObject({ hb: 12, x: 0, clash: 0 });
   await page.getByTestId('ridge-reinf').selectOption('plate');
