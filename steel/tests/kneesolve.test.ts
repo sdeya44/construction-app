@@ -30,3 +30,16 @@ it('KS-01: מדידה ופתרון — ירידה+זווית, אופקי+זוו�
   expect(s3).toBeTruthy();
   expect(Math.abs(s3.meas.L - (m.L + 100))).toBeLessThan(3);
 });
+
+/** KS-03 (1.57): בדיקת דרגות חופש — ירידה+זווית תקין; מידה צירית + בין נקודות המגע (כמעט מקבילות) — לא תקין */
+it('KS-03: זוג מידות תלוי מסומן לא תקין', async () => {
+  const { checkKneePair } = await import('../src/geometry/kneeSolve');
+  const p = newProject();
+  p.building = defaultBuilding() as typeof p.building;
+  p.building.kneeBraces = { ...defaultKneeBraces(), enabled: true };
+  const id = 'KB.F2.L.L.R';
+  expect(checkKneePair(p, id, ['v', 'ang']).ok).toBe(true);
+  expect(checkKneePair(p, id, ['h', 'ang']).ok).toBe(true);
+  expect(checkKneePair(p, id, ['ax', 'face']).ok).toBe(false);
+  expect(checkKneePair(p, id, ['v', 'v']).ok).toBe(false);
+});

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { resetOverrides, setBuilding, setKneeBraces, setMemberProps } from '../commands/commands';
 import { defaultHaunch } from '../geometry/haunch';
 import { defaultKneeBraces, kneeDetail } from '../geometry/knee';
-import { kneeKeyOf, measureKnee, solveKnee, type KDim, type KMeas } from '../geometry/kneeSolve';
+import { checkKneePair, kneeKeyOf, measureKnee, solveKnee, type KDim, type KMeas } from '../geometry/kneeSolve';
 import type { KneeSideOverride } from '../model/types';
 import { tryProfile } from '../profiles/library';
 import { store, useStore } from '../store';
@@ -12,6 +12,7 @@ import { BoltSelect, EditCtx, NumField, ProfilePicker } from './fields';
 import { LiveView3D, LockIc } from './LiveView3D';
 import { HaunchEditor, KneePic, KneeSides } from './SectionEditor';
 import { DetailEnds, EndCards } from './PropertiesPanel';
+import { WizardNavigation, WizardScopeSelector, WizardSection, WizardTypeSelector, WizardValidation, wizardClip, wizardCopy } from './wizard/Wizard';
 
 /**
  * 1.56: חלון אלכסונים — במבנה אחיד לכל הרכיבים:
@@ -54,6 +55,13 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
   const meas = useMemo(() => (ref ? measureKnee(d, ref) : null), [d, ref]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // 1.57: בדיקת דרגות חופש של שתי המידות הקובעות (על המודל עצמו)
+  const [pairBad, setPairBad] = useState<string | null>(null);
+  useEffect(() => {
+    if (!ref || locks.length !== 2) { setPairBad(null); return; }
+    const t = setTimeout(() => { const r = checkKneePair(store.state.project, ref, [locks[0], locks[1]], scope === 'loc' ? key ?? undefined : undefined); setPairBad(r.ok ? null : r.reason ?? 'לא תקין'); }, 60);
+    return () => clearTimeout(t);
+  }, [locks.join(','), ref, scope, key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setType = (t: 'knee' | 'haunch' | 'none') => store.exec(setBuilding({
     kneeBraces: { ...kb, enabled: t === 'knee' },
@@ -67,6 +75,8 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
     const L2 = locks.includes(k) ? locks : [locks[locks.length - 1], k];
     setLocks(L2);
     const other = L2.find((x) => x !== k)!;
+    const chk = checkKneePair(store.state.project, ref, [k, other], scope === 'loc' ? key! : undefined);
+    if (!chk.ok) { setPairBad(chk.reason ?? 'לא תקין'); setMsg(null); return; }
     const targets: Partial<KMeas> = { [k]: v, [other]: meas[other] };
     setBusy(true); setMsg(null);
     setTimeout(() => {
@@ -132,66 +142,70 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
     { k: 'conn', n: 3, t: 'חתך ומחברים', sub: `${profNow} · ${({ fin: 'פח + לשונית', angle: 'זוויתן', flange: 'פלטת קצה' } as const)[detNow]}` },
   ];
 
+  // הדגשה כתומה של מה שהשינוי יחול עליו
+  const scopeIds = useMemo(() => {
+    const own = scope === 'one' && ref ? [ref] : scope === 'loc' && key ? kbs.filter((m) => kneeKeyOf(m.id) === key).map((m) => m.id) : kbs.map((m) => m.id);
+    const S = new Set(own);
+    return [...own, ...d.connections.filter((c) => c.parts.some((x) => S.has(x)) || c.members.some((x) => S.has(x))).flatMap((c) => c.parts.filter((x) => !S.has(x)))];
+  }, [d, kbs, scope, ref, key]);
+  useEffect(() => { store.set({ scopeHi: type === 'knee' ? scopeIds : null }); }, [scopeIds, type]);
+  useEffect(() => () => { store.set({ scopeHi: null }); }, []);
+  const issues = useMemo(() => d.issues.filter((i) => /^(C\.)?KB\./.test(i.elementId ?? '') || /^KNEE_/.test(i.code)), [d]);
+  type KCopy = { drop: number; angle: number; mode: 'angle' | 'reach'; reach: number; profile: string; detail?: 'fin' | 'flange' | 'angle' | 'stub' };
+  const copyNow = () => wizardCopy('knee', { drop: (scope === 'loc' ? ov?.drop : undefined) ?? kb.drop, angle: (scope === 'loc' ? ov?.angle : undefined) ?? kb.angle ?? 45, mode: 'angle', reach: kb.reach, profile: profNow, detail: (scope !== 'all' ? ov?.detail : undefined) ?? kb.detail } as KCopy);
+  const clipNow = wizardClip<KCopy>('knee');
+  const paste = () => {
+    const c = wizardClip<KCopy>('knee'); if (!c) return;
+    if (scope !== 'all' && key) store.exec(setKneeBraces({ sides: { ...(kb.sides ?? {}), [key]: { ...(kb.sides?.[key] ?? {}), mode: 'angle', drop: c.drop, angle: c.angle, profile: c.profile, detail: c.detail === 'stub' ? undefined : c.detail } } }));
+    else store.exec(setKneeBraces({ mode: 'angle', drop: c.drop, angle: c.angle, profile: c.profile, detail: c.detail }));
+  };
   return (
     <div className="ks" data-testid="knee-studio">
       {/* סוג: אחד משניהם */}
-      <div className="ks-types" role="radiogroup" aria-label="סוג החיזוק בראש העמוד">
-        {([['knee', 'אלכסון עמוד-קורה', 'אלכסון RHS בין העמוד לקורה'], ['haunch', 'מכפל', 'פח משולש מתחת לקורה ליד העמוד']] as const).map(([k, t, sub]) => (
-          <button key={k} role="radio" aria-checked={type === k} className={`ks-type${type === k ? ' on' : ''}`} onClick={() => setType(k)} data-testid={`ks-type-${k}`}>
-            {k === 'knee' ? <KneePic k={fam === 'L' ? 'angle' : 'fin'} /> : <svg viewBox="0 0 120 80" className="ks-hn" aria-hidden="true"><rect x="10" y="6" width="14" height="70" fill="#5b6977" /><rect x="10" y="6" width="104" height="12" fill="#5b6977" /><path d="M24 18 L84 18 L24 52 Z" fill="#8fa1b3" stroke="#3b4b5e" /></svg>}
-            <b>{t}</b><small>{sub}</small>
-          </button>
-        ))}
-        <label className="ks-off"><input type="checkbox" data-testid="kb-on" checked={kb.enabled} onChange={(e) => setType(e.target.checked ? 'knee' : 'none')} />פעיל</label>
-      </div>
+      <WizardTypeSelector<'knee' | 'haunch'> label="סוג החיזוק בראש העמוד" value={type === 'none' ? null : type} onPick={setType}
+        types={[
+          { key: 'knee', title: 'אלכסון עמוד-קורה', sub: 'אלכסון RHS בין העמוד לקורה', pic: <KneePic k={fam === 'L' ? 'angle' : 'fin'} />, testId: 'ks-type-knee' },
+          { key: 'haunch', title: 'מכפל', sub: 'פח משולש מתחת לקורה ליד העמוד', pic: <svg viewBox="0 0 120 60" className="ks-hn" aria-hidden="true"><rect x="10" y="4" width="14" height="54" fill="#5b6977" /><rect x="10" y="4" width="104" height="10" fill="#5b6977" /><path d="M24 14 L84 14 L24 40 Z" fill="#8fa1b3" stroke="#3b4b5e" /></svg>, testId: 'ks-type-haunch' },
+        ]}
+        extra={<label className="ks-off"><input type="checkbox" data-testid="kb-on" checked={kb.enabled} onChange={(e) => setType(e.target.checked ? 'knee' : 'none')} />פעיל</label>} />
 
       {type === 'none' && <div className="ks-empty">בחרו סוג — אלכסון עמוד-קורה או מכפל. אי אפשר את שניהם באותו מבנה.</div>}
       {type === 'haunch' && <div className="ks-panel"><EditCtx.Provider value={{ embed: false }}><HaunchEditor /></EditCtx.Provider></div>}
 
       {type === 'knee' && <>
         {/* היקף — לפני שמשנים */}
-        <div className="ks-scope" role="radiogroup" aria-label="השינוי יחול על" data-testid="ks-scope">
-          <span className="ks-lbl">השינויים יחולו על:</span>
-          {scopes.map((o) => (
-            <button key={o.k} role="radio" aria-checked={scope === o.k} disabled={!!o.dis} title={o.dis} className={`ks-sc${scope === o.k ? ' on' : ''}`} onClick={() => setScope(o.k)}
-              data-testid={o.k === 'all' ? 'pscope-asm' : o.k === 'one' ? 'pscope-one' : 'pscope-loc'}>{o.t}<i>{o.n}</i></button>
-          ))}
-        </div>
+        <WizardScopeSelector<Scope> value={scope} onPick={setScope}
+          scopes={scopes.map((o) => ({ key: o.k, title: o.t, count: o.n, disabled: o.dis, testId: o.k === 'all' ? 'pscope-asm' : o.k === 'one' ? 'pscope-one' : 'pscope-loc' }))}
+          note={<>{scopeIds.length} אלמנטים וחלקים — מודגשים בכתום · <button className="wz-link" onClick={copyNow} data-testid="wz-copy">העתקת הגדרות</button>{clipNow && <> · <button className="wz-link" onClick={paste} data-testid="wz-paste">הדבקה</button></>}</>} />
         {selKb && <div className="ks-sel">נבחר: אלכסון מסגרת {frameNo} · ציר {lineLabel} ({sideLabel})</div>}
+        <WizardNavigation value={sec} onPick={setSec} subs={Object.fromEntries(secs.map((x) => [x.k, x.sub]))} />
+        <WizardValidation issues={issues} />
 
-        {/* שלושה כפתורים */}
-        <div className="ks-secs" role="tablist">
-          {secs.map((s) => (
-            <button key={s.k} role="tab" aria-selected={sec === s.k} className={`ks-sec${sec === s.k ? ' on' : ''}`} onClick={() => setSec(s.k)} data-testid={`ks-sec-${s.k}`}>
-              <span className="ks-n">{s.n}</span><span className="ks-st"><b>{s.t}</b><small>{s.sub}</small></span>
-            </button>
-          ))}
-        </div>
-
-        {sec === 'loc' && <div className="ks-panel" data-testid="ks-loc">
+        {sec === 'loc' && <WizardSection id="loc">
           <div className="ks-note">איפה יש אלכסונים — לחיצה על צד בתוכנית מוסיפה או מסירה. "מסגרות הקצה", "כל המסגרות" — בחירה מהירה.</div>
           <KneeSides />
-        </div>}
+        </WizardSection>}
 
-        {sec === 'geo' && <div className="ks-panel ks-geo" data-testid="ks-geo">
+        {sec === 'geo' && <WizardSection id="geo" className="ks-geo">
           <LiveView3D set={set3d} rev={d} height={330} />
           <div className="ks-dims">
             <div className="ks-note">שתי מידות קובעות (מנעול סגור) — השאר נגזרות. לחיצה על מנעול בוחרת מידה קובעת; הקלדת ערך במידה פתוחה הופכת אותה לקובעת.</div>
             {ORDER.map((k) => (
-              <div key={k} className={`ks-dim${locks.includes(k) ? ' lk' : ''}`}>
+              <div key={k} className={`ks-dim${locks.includes(k) ? ' lk' : ''}${locks.includes(k) && pairBad ? ' bad' : ''}`} data-state={locks.includes(k) ? (pairBad ? 'invalid' : 'locked') : 'computed'} data-testid={`kd-row-${k}`}>
                 <button className={`ks-lock${locks.includes(k) ? ' on' : ''}`} onClick={() => toggleLock(k)} aria-pressed={locks.includes(k)} aria-label={`${DIM[k].t} — ${locks.includes(k) ? 'קובעת' : 'נגזרת'}`} data-testid={`kd-lock-${k}`}><LockIc on={locks.includes(k)} /></button>
                 <span className="ks-dl"><b>{DIM[k].t}</b><small>{DIM[k].sub}</small></span>
-                <DimInput k={k} v={meas?.[k]} onCommit={(v) => commit(k, v)} disabled={busy || scope === 'one' || !meas} />
+                <DimInput k={k} v={meas?.[k]} onCommit={(v) => commit(k, v)} disabled={busy || scope === 'one' || !meas || (!!pairBad && locks.includes(k))} />
                 <span className="ks-u">{DIM[k].unit}</span>
               </div>
             ))}
+            {pairBad && <div className="ks-bad" data-testid="ks-pair-bad">{pairBad}</div>}
             {busy && <div className="ks-note" data-testid="ks-busy">מחשב…</div>}
             {msg && <div className="ks-warn" data-testid="ks-msg">{msg}</div>}
             {scope === 'one' && <div className="ks-warn">גיאומטריה לאלכסון בודד אינה נתמכת — היא חלה על כל האלכסונים במיקום (בכל המסגרות) או בכל המודל.</div>}
           </div>
-        </div>}
+        </WizardSection>}
 
-        {sec === 'conn' && <div className="ks-panel" data-testid="ks-conn">
+        {sec === 'conn' && <WizardSection id="conn">
           <div className="field prof"><label>חתך האלכסון</label><ProfilePicker testId={scope === 'one' ? 'prop-profile' : 'kb-profile'} value={profNow} families={['RHS', 'SHS', 'CHS', 'L', 'UPN']} onCommit={setProf} /></div>
           <div className="ks-ends" role="tablist" aria-label="מחברים">
             {([['C', 'מחבר 1 — לעמוד', 'קצה תחתון, לאגף העמוד'], ['R', 'מחבר 2 — לקורה', 'קצה עליון, לתחתית הקורה']] as const).map(([k, t, sub]) => (
@@ -218,7 +232,7 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
               <button className="btn" disabled={!ref} onClick={() => ref && store.set({ detailStudio: `${ref}|${end === 'C' ? 'start' : 'end'}`, studioConn: conn?.id ?? null })} data-testid="ks-studio">סטודיו ✎ — {end === 'C' ? 'הקצה לעמוד' : 'הקצה לקורה'}</button>
             </div>
           </div>
-        </div>}
+        </WizardSection>}
       </>}
     </div>
   );

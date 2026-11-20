@@ -81,3 +81,28 @@ test('WZ-03: תפריט ההקשר — "עריכה" פותח את חלון הע�
   await expect(page.getByTestId('props-single')).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('WZ-04: אשף האלכסונים על הרכיבים המשותפים — זוג מידות תלוי מסומן "לא תקין"; ביטול מחזיר', async ({ page }) => {
+  const errors = await boot(page);
+  await openNav(page, 'b:knee');
+  const win = page.getByTestId('cwin-knee');
+  await win.getByTestId('ks-type-knee').click();
+  await win.getByTestId('pscope-asm').click();
+  // הדגשה במודל: כל האלכסונים + החלקים שלהם
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.scopeHi?.length ?? 0)).toBeGreaterThan(12);
+  await win.getByTestId('ks-sec-geo').click();
+  await expect(win.getByTestId('kd-row-v')).toHaveAttribute('data-state', 'locked');
+  await expect(win.getByTestId('kd-row-h')).toHaveAttribute('data-state', 'computed');
+  // מידה צירית + בין נקודות המגע — כמעט מקבילות: לא תקין
+  await win.getByTestId('kd-lock-ax').click();
+  await win.getByTestId('kd-lock-face').click();
+  await expect(win.getByTestId('ks-pair-bad')).toBeVisible({ timeout: 10000 });
+  await expect(win.getByTestId('kd-row-face')).toHaveAttribute('data-state', 'invalid');
+  // חזרה לזוג תקין
+  await win.getByTestId('kd-lock-v').click();
+  await expect(win.getByTestId('ks-pair-bad')).toHaveCount(0, { timeout: 10000 });
+  // ביטול — האלכסונים חוזרים למצב שלפני (כבויים)
+  await win.getByTestId('wz-cancel').click();
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.kneeBraces?.enabled ?? false)).toBe(false);
+  expect(errors).toEqual([]);
+});

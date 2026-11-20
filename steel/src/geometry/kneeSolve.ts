@@ -115,3 +115,32 @@ export function solveKnee(p: Project, kbId: string, targets: Partial<KMeas>, sid
   const ok = keys.every((k) => Math.abs(mm![k] - targets[k]!) < (k === 'ang' ? 0.5 : 3));
   return ok ? { drop: Math.round(x[0]), angle: Math.round(x[1] * 10) / 10, meas: mm } : null;
 }
+
+/**
+ * 1.57: בדיקת דרגות חופש — האם שתי המידות הנעולות קובעות את האלכסון (ירידה + זווית).
+ * יעקוביאן 2×2 בהפרשים סופיים בנקודה הנוכחית; דטרמיננטה מנורמלת קטנה ⇒ המידות תלויות זו בזו (לא תקין).
+ */
+export function checkKneePair(p: Project, kbId: string, dims: [KDim, KDim], sideKey?: string): { ok: boolean; reason?: string } {
+  if (dims[0] === dims[1]) return { ok: false, reason: 'נדרשות שתי מידות שונות' };
+  const kb = p.building.kneeBraces ?? defaultKneeBraces();
+  const ov = sideKey ? kb.sides?.[sideKey] : undefined;
+  const m0 = measureKnee(generate(p), kbId);
+  if (!m0) return { ok: false, reason: 'האלכסון לא נמצא במודל' };
+  const x = [ov?.drop ?? kb.drop, m0.ang];
+  const f = (xx: number[]) => measureKnee(generate(withParams(p, xx[0], xx[1], sideKey)), kbId);
+  const base = f(x); if (!base) return { ok: false, reason: 'לא ניתן למדוד' };
+  const hs = [20, 1];
+  const cols: number[][] = [];
+  for (let j = 0; j < 2; j++) {
+    const xp = [...x]; xp[j] += hs[j];
+    const mp = f(xp); if (!mp) return { ok: false, reason: 'לא ניתן למדוד' };
+    cols.push(dims.map((k) => (mp[k] - base[k]) / hs[j]));
+  }
+  // J[i][j] = ∂dim_i/∂x_j ; נרמול שורות כדי שהבדיקה לא תלויה ביחידות
+  // קנה מידה טיפוסי למשתנים (100 מ"מ ירידה, 10° זווית) — כדי שהבדיקה לא תלויה ביחידות
+  const J = [[cols[0][0] * 100, cols[1][0] * 10], [cols[0][1] * 100, cols[1][1] * 10]];
+  const n0 = Math.hypot(J[0][0], J[0][1]) || 1, n1 = Math.hypot(J[1][0], J[1][1]) || 1;
+  const det = (J[0][0] * J[1][1] - J[0][1] * J[1][0]) / (n0 * n1);
+  if (Math.abs(det) < 0.05) return { ok: false, reason: 'שתי המידות תלויות זו בזו — הן לא קובעות יחד את האלכסון. בחרו מידה קובעת אחרת.' };
+  return { ok: true };
+}
