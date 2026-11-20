@@ -1,4 +1,5 @@
 import { ROOF_PIC, WALL_PIC } from './DetailPicker';
+import { RealPic, wallTypeThumb } from './RealPic';
 import { useState } from 'react';
 import { addFrame, removeFrame, respaceFrames, setBuilding, setFrameY, setMeta, setSettings } from '../commands/commands';
 import type { BuildingParams, RafterStrutDetail, RafterStrutRow, LockTrussParams, PortalBraceParams, RhsTrussParams, RidgeReinfParams } from '../model/types';
@@ -742,6 +743,13 @@ function WallsSummary() {
   </>;
 }
 
+/** 1.55: תמונה מרונדרת של סוג קשיחות הקיר (המבנה הזה עם הסוג) — עד שהיא מוכנה: הציור */
+export function WallPic({ k }: { k: 'x' | 'portal' | 'truss' }) {
+  const p = useStore((s) => s.project);
+  const t = wallTypeThumb(p, k);
+  return <RealPic id={t.id} make={t.make} fallback={WALL_PIC[k]} alt={k === 'x' ? 'קושרות X' : k === 'portal' ? 'אגד B' : 'מסבך נעילה'} />;
+}
+
 export function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> } = {}) {
   const on = (k: Exclude<BraceSection, 'knee'>) => !part || part === k;
   const b = useStore((s) => s.project.building);
@@ -764,7 +772,7 @@ export function BracingEditor({ part }: { part?: Exclude<BraceSection, 'knee'> }
               {([['x', 'קושרות X', 'קושרות X מזוויתנים — עובדות במתיחה', 'brace'], ['portal', 'אגד B', 'קורת RHS בין העמודים + שני אלכסונים קטנים', 'walls'], ['truss', 'מסבך נעילה', 'מסבך RHS במפתחים הנעולים + סיב רציף לכל האורך', 'walls']] as const).map(([k, t, dsc]) => (
                 <button key={k} role="radio" aria-checked={(br.walls.type ?? 'x') === k} className={`choice-tile${(br.walls.type ?? 'x') === k ? ' on' : ''}`} data-testid={`br-walls-${k}`} title={dsc}
                   onClick={() => set({ walls: { ...br.walls, type: k, lineType: undefined, portal: br.walls.portal ?? defaultPortal(), truss: br.walls.truss ?? defaultLockTruss() } })}>
-                  {WALL_PIC[k]}<b>{t}</b>
+                  <WallPic k={k} /><b>{t}</b>
                 </button>
               ))}
             </div>

@@ -14,6 +14,7 @@ import type { KneeSideOverride } from '../model/types';
 import { KneeSchematic } from './schematics';
 import { OffCard } from './pics';
 import { DetailTiles, PIC, ScopeToggle } from './DetailPicker';
+import { kneeDetailThumb, RealPic } from './RealPic';
 import { PanelAlerts, SumCard, TabbedEditor } from './summary';
 import { kneeDetail } from '../geometry/knee';
 
@@ -254,11 +255,18 @@ export function KneeDetailField({ sideKey }: { sideKey?: string } = {}) {
   return <>
     {sideKey && <ScopeToggle value={scope} onChange={setSc} oneLabel="רק במיקום הזה (כל המסגרות)" testId="kb-scope" />}
     <DetailTiles label="פרט חיבור" testId="kb-detail" value={cur} onChange={pick} note={fam === 'L' ? '(חתך זוויתן — לשונית בחריץ אינה אפשרית)' : undefined} options={[
-      { key: 'fin', title: 'פח + לשונית בחריץ', desc: 'פח מרותך למארח (מסגריה), לשונית מרותכת בחריץ ה-RHS; בשטח מוברגים בחפיפה', pic: PIC.fin, hidden: fam === 'L' },
-      { key: 'angle', title: 'זוויתן מוברג לפח', desc: 'פח מרותך למארח (מסגריה); הרגל השטוחה של הזוויתן מוברגת ישירות לפח בשטח — ללא לשונית', pic: PIC.angle, hidden: fam !== 'L' },
-      { key: 'flange', title: 'פלטת קצה לאגף', desc: 'פלטת קצה מרותכת לאלכסון, מוברגת לאגף העמוד ולאגף התחתון של הקורה (4 ברגים)', pic: PIC.flange },
+      { key: 'fin', title: 'פח + לשונית בחריץ', desc: 'פח מרותך למארח (מסגריה), לשונית מרותכת בחריץ ה-RHS; בשטח מוברגים בחפיפה', pic: <KneePic k="fin" />, hidden: fam === 'L' },
+      { key: 'angle', title: 'זוויתן מוברג לפח', desc: 'פח מרותך למארח (מסגריה); הרגל השטוחה של הזוויתן מוברגת ישירות לפח בשטח — ללא לשונית', pic: <KneePic k="angle" />, hidden: fam !== 'L' },
+      { key: 'flange', title: 'פלטת קצה לאגף', desc: 'פלטת קצה מרותכת לאלכסון, מוברגת לאגף העמוד ולאגף התחתון של הקורה (4 ברגים)', pic: <KneePic k="flange" /> },
     ]} />
   </>;
+}
+
+/** 1.55: תמונה מרונדרת של פרט חיבור האלכסון (המבנה הזה עם הפרט) */
+function KneePic({ k }: { k: 'fin' | 'angle' | 'flange' }) {
+  const p = useStore((s) => s.project);
+  const t = kneeDetailThumb(p, k);
+  return <RealPic id={t.id} make={t.make} fallback={PIC[k]} alt={k} />;
 }
 
 export function KneeEditor() {

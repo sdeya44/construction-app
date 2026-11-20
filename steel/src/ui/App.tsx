@@ -22,6 +22,7 @@ import { NavContent, NavCrumb, SideNav, NAV_INDEX_LABEL, navGroupOf, type NavKey
 import { EaveCheckDialog } from './EaveCheckDialog';
 import { ConnLibrary, ConnWizard } from './ConnWizard';
 import { DetailStudio } from './DetailStudio';
+import { ComponentWindow, compOfMember, compOfNav } from './ComponentWindow';
 import { LayersMenu } from './LayersMenu';
 import { DeletedPanel } from './DeletedPanel';
 
@@ -264,6 +265,9 @@ export function App() {
   ];
 
   const ms = sel.map((id) => s.derived.byId.get(id)).filter(Boolean);
+  // 1.55: חלון רכיב (קשיחות קירות / אלכסוני עמוד-קורה) — מהריבון, מהשלבים או מלחיצה על אלמנט שלו
+  const comp = !wide ? null : lp === 'nav' ? compOfNav(nav) : !s.activeConn && !s.activeGutter && ms.length === 1 ? compOfMember(ms[0]!, s.derived) : null;
+  const closePanel = () => { setPanelOpen(false); setLpFull(false); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); };
   const menuItems = (): Cmd[] => {
     const one = ms.length === 1 ? ms[0]! : null;
     const conns = one ? connectionsOf(one, s.derived.connections, s.derived.connById) : [];
@@ -299,7 +303,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.54.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.55.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -324,7 +328,7 @@ export function App() {
 
       {mode === 'drawings' && <main className="mode-area"><DrawingsView /></main>}
       {mode === 'production' && <main className="mode-area"><ProductionView /></main>}
-      <main className={`workspace${wide && !panelOpen ? ' panel-closed' : ''}${!propsPinned ? ' props-collapsed' : ''}${!propsPinned && (sel.length || s.activeConn || lp === 'nav') ? ' props-float' : ''}${treeHidden ? ' tree-hidden' : ''}${lpFull ? ' lp-full' : ''}`} style={mode !== 'model' ? { display: 'none' } : undefined}>
+      <main className={`workspace${wide && !panelOpen ? ' panel-closed' : ''}${!propsPinned ? ' props-collapsed' : ''}${!propsPinned && (sel.length || s.activeConn || lp === 'nav') ? ' props-float' : ''}${treeHidden ? ' tree-hidden' : ''}${lpFull ? ' lp-full' : ''}${comp ? ' comp-open' : ''}`} style={mode !== 'model' ? { display: 'none' } : undefined}>
         {wide && <div className="rb-wrap"><SideNav ribbon nav={nav} setNav={setNav} onOpenConn={openConn} /></div>}
         <aside className={`side side-start${sideOpen ? ' open' : ''}`} data-testid="nav-tree-pane">
           {wide ? <StepsRail nav={nav} setNav={setNav} setMode={setMode} onExport={exportProject} /> : <SideNav nav={nav} setNav={setNav} onOpenConn={openConn} treeOnly={wide} />}
@@ -427,21 +431,27 @@ export function App() {
         </div>
         <aside className={`side side-end${propsOpen ? ' open' : ''}`} data-testid="props">
           <button className="props-pin desk-only" data-testid="props-pin" title={propsPinned ? 'כיווץ הפאנל — יותר מקום לתלת־ממד; בבחירה הפאנל נפתח כשכבה' : 'קיבוע הפאנל'} onClick={() => setPropsPinned(!propsPinned)}>{propsPinned ? '▸ כיווץ פאנל' : '◂ הגדרות ומאפיינים'}</button>
+          {comp ? (
+            <ComponentWindow kind={comp} memberId={lp === 'sel' ? sel[0] : undefined} onClose={closePanel} onFull={() => { setLpFull(!lpFull); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }}>
+              {lp === 'nav' ? <div className="nav-content" data-testid="lp-nav-content"><NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div> : <PropertiesPanel />}
+            </ComponentWindow>
+          ) : <>
           {wide && (
-            // 1.50: בלי לשוניות — תצוגה אחת: מה שנבחר אחרון. מחלון האלמנט — שביל לרכיב כולו; מהרכיב — "נבחר: … ←" חזרה לאלמנט
-            <div className="lp-head" data-testid="lp-head">
-              {lp === 'sel'
-                ? <span className="lp-path"><button className="lp-crumb" data-testid="lp-crumb" title="הגדרות הרכיב כולו (כמו בעץ)" onClick={() => setLp('nav')}>→ {NAV_INDEX_LABEL(nav)}</button><span className="lp-sep">·</span><b className="lp-here" data-testid="lp-here">{s.activeConn ? 'חיבור' : s.activeGutter ? 'מזחלה' : ms.length === 1 ? ms[0]!.label : `${sel.length} אלמנטים`}</b></span>
-                : <span className="lp-path muted">הגדרות הרכיב</span>}
-              <button className="lp-close" data-testid="lp-close" title="סגירת הפאנל — המודל במסך מלא" aria-label="סגירת הפאנל" onClick={() => { setPanelOpen(false); setLpFull(false); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }}>✕</button>
-              <button className="lp-full-btn" onClick={() => { setLpFull(!lpFull); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }} title={lpFull ? 'חזרה לגודל רגיל (Esc)' : 'פאנל במסך מלא — לעריכה של טבלאות ופרטים גדולים'} data-testid="lp-full">{lpFull ? '⤡' : '⤢'}</button>
-            </div>
-          )}
-          {wide && lp === 'nav'
-            ? <div className="nav-content" data-testid="lp-nav-content">
-                {(sel.length > 0 || s.activeConn) && <div className="sel-strip" data-testid="sel-strip"><span>נבחר: <b>{s.activeConn ?? (ms.length === 1 ? ms[0]!.label : `${sel.length} אלמנטים`)}</b> — כאן: הגדרות הרכיב כולו</span><button className="btn small" data-testid="sel-strip-props" onClick={() => setLp('sel')}>{s.activeConn ? 'חזרה לעורך החיבור' : 'חזרה לאלמנט'} ←</button></div>}
-                <NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div>
-            : <PropertiesPanel />}
+              // 1.50: בלי לשוניות — תצוגה אחת: מה שנבחר אחרון. מחלון האלמנט — שביל לרכיב כולו; מהרכיב — "נבחר: … ←" חזרה לאלמנט
+              <div className="lp-head" data-testid="lp-head">
+                {lp === 'sel'
+                  ? <span className="lp-path"><button className="lp-crumb" data-testid="lp-crumb" title="הגדרות הרכיב כולו (כמו בעץ)" onClick={() => setLp('nav')}>→ {NAV_INDEX_LABEL(nav)}</button><span className="lp-sep">·</span><b className="lp-here" data-testid="lp-here">{s.activeConn ? 'חיבור' : s.activeGutter ? 'מזחלה' : ms.length === 1 ? ms[0]!.label : `${sel.length} אלמנטים`}</b></span>
+                  : <span className="lp-path muted">הגדרות הרכיב</span>}
+                <button className="lp-close" data-testid="lp-close" title="סגירת הפאנל — המודל במסך מלא" aria-label="סגירת הפאנל" onClick={() => { setPanelOpen(false); setLpFull(false); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }}>✕</button>
+                <button className="lp-full-btn" onClick={() => { setLpFull(!lpFull); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }} title={lpFull ? 'חזרה לגודל רגיל (Esc)' : 'פאנל במסך מלא — לעריכה של טבלאות ופרטים גדולים'} data-testid="lp-full">{lpFull ? '⤡' : '⤢'}</button>
+              </div>
+            )}
+            {wide && lp === 'nav'
+              ? <div className="nav-content" data-testid="lp-nav-content">
+                  {(sel.length > 0 || s.activeConn) && <div className="sel-strip" data-testid="sel-strip"><span>נבחר: <b>{s.activeConn ?? (ms.length === 1 ? ms[0]!.label : `${sel.length} אלמנטים`)}</b> — כאן: הגדרות הרכיב כולו</span><button className="btn small" data-testid="sel-strip-props" onClick={() => setLp('sel')}>{s.activeConn ? 'חזרה לעורך החיבור' : 'חזרה לאלמנט'} ←</button></div>}
+                  <NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div>
+              : <PropertiesPanel />}
+    </>}
         </aside>
       </main>
 

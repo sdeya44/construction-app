@@ -1149,3 +1149,65 @@ details.adv .adv-body { padding-bottom: 6px; }
 .kb-prev > :not(summary) { margin: 0 8px 8px; }
 .live-note { margin-top: 10px; font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
 .live-note::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+
+/* ===== 1.55: חלון רכיב — מעטפת מעוצבת, תלת-ממד ריאליסטי חי, מחברים ===== */
+@media (min-width: 861px) {
+  .workspace.comp-open { --pw: min(900px, 56vw); }
+  .workspace.comp-open > .center { min-width: 0; overflow: hidden; }
+  .workspace.comp-open > .side-end { background: linear-gradient(180deg, #e9eef4, #e2e8ef); padding: 10px; box-sizing: border-box; border-inline-start: 0; }
+  .workspace.comp-open .props-pin { display: none; }
+  /* מודל צר — תג החיבור למעלה, שלא ייפול מתחת לסרגל ההקשרי */
+  .workspace.comp-open .conncard-tag { bottom: auto; top: 104px; }
+}
+.cwin { height: 100%; display: flex; flex-direction: column; background: var(--panel); border-radius: 16px; box-shadow: 0 18px 44px rgba(15, 27, 45, .18), 0 0 0 1px rgba(15, 27, 45, .06); overflow: hidden; min-width: 0; }
+.cwin-h { display: flex; align-items: center; gap: 12px; padding: 12px 16px 10px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, #fff, #f7f9fc); }
+.cwin-ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex: none; background: #e6f4f7; }
+.cwin-mustard .cwin-ic { background: #fbf3d9; }
+.cwin-ic .mpic { color: #1f7f95; }
+.cwin-mustard .cwin-ic .mpic { color: #a8861c; }
+.cwin-t { display: flex; flex-direction: column; min-width: 0; }
+.cwin-t small { font-size: 11.5px; color: var(--muted); }
+.cwin-t b { font-size: 19px; font-weight: 800; letter-spacing: -.2px; line-height: 1.15; }
+.cwin-pill { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: #e6f4f7; color: #155e6f; white-space: nowrap; }
+.cwin-mustard .cwin-pill { background: #fbf3d9; color: #6b520a; }
+.cwin-h .sp { flex: 1; }
+.cwin-x { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: #fff; color: var(--text); cursor: pointer; font-size: 15px; flex: none; }
+.cwin-x:hover { border-color: var(--brand); color: var(--brand); }
+.cwin-body { flex: 1; min-height: 0; display: flex; flex-wrap: wrap; overflow-y: auto; align-content: flex-start; }
+.cwin-main { flex: 1 1 400px; min-width: 0; padding: 4px 14px 14px; box-sizing: border-box; }
+.cwin-main .panel-body { padding: 0; }
+.cwin-side { flex: 0 1 380px; min-width: 300px; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; background: linear-gradient(180deg, #f6f8fb, #eef2f6); border-inline-start: 1px solid var(--line); }
+@media (min-width: 861px) { .cwin-side { position: sticky; top: 0; align-self: flex-start; } }
+.cwin-f { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); background: #fbfcfe; }
+.cwin-f i { width: 8px; height: 8px; border-radius: 50%; background: #1f9d55; box-shadow: 0 0 0 3px rgba(31, 157, 85, .15); }
+.cwin-sec { font-size: 12px; font-weight: 800; color: var(--muted); letter-spacing: .3px; margin-bottom: 6px; }
+
+.live3d { border-radius: 14px; overflow: hidden; background: #fff; box-shadow: 0 6px 18px rgba(15, 27, 45, .10), 0 0 0 1px rgba(15, 27, 45, .06); }
+.live3d-stage { position: relative; }
+.live3d-cv { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.live3d-cv:active { cursor: grabbing; }
+.live3d-tags { position: absolute; inset: 0; pointer-events: none; }
+.live3d-tag { position: absolute; transform: translate(-50%, -50%); background: rgba(255, 255, 255, .94); border: 1.5px solid #2563a8; color: #1d4f86; border-radius: 7px; padding: 1px 7px; font: 600 11.5px/1.5 'JetBrains Mono', ui-monospace, monospace; white-space: nowrap; box-shadow: 0 2px 6px rgba(15, 27, 45, .12); direction: ltr; }
+.live3d-tag.hot { border-color: #e07b1a; color: #9a4f08; background: rgba(255, 246, 236, .96); direction: rtl; font-family: var(--font); }
+.live3d-live { position: absolute; top: 10px; inset-inline-start: 10px; display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #1f6b42; background: rgba(255, 255, 255, .85); border-radius: 999px; padding: 2px 9px; }
+.live3d-live i { width: 7px; height: 7px; border-radius: 50%; background: #1f9d55; }
+.live3d-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; text-align: center; padding: 20px; }
+.live3d-bar { display: flex; align-items: center; gap: 4px; padding: 7px 8px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.live3d-bar .sp { flex: 1; }
+.vbtn { border: 1px solid var(--line); background: #fff; border-radius: 8px; height: 28px; min-width: 28px; padding: 0 8px; font: inherit; font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; }
+.vbtn:hover { border-color: var(--brand); color: var(--brand); }
+.seg-mini { display: flex; gap: 2px; background: var(--panel-2); border-radius: 8px; padding: 2px; }
+.seg-mini button { border: 0; background: transparent; font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); padding: 4px 9px; border-radius: 6px; cursor: pointer; }
+.seg-mini button.on { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(15, 27, 45, .15); }
+
+.cc-card { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: 11px; padding: 8px 10px; margin-bottom: 6px; }
+.cc-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cc-t b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-t small { font-size: 11.5px; color: var(--muted); }
+.cc-a { display: flex; gap: 4px; flex: none; }
+.cc-add { width: 100%; border: 1.5px dashed #9fb1c6; background: #f9fbfd; color: var(--brand); border-radius: 11px; padding: 10px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.cc-add:hover { border-color: var(--brand); background: var(--brand-soft); }
+
+/* אריחי סוג עם תמונה מרונדרת */
+.real-pic { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 9px; background: linear-gradient(180deg, #dfe7ef, #f2efe8); }
+.choice-tile .real-pic { margin-bottom: 4px; }

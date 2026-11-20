@@ -1,4 +1,4 @@
-import { WALL_PIC } from './DetailPicker';
+import { WallPic } from './StructurePanel';
 import { useMemo } from 'react';
 import { setBuilding } from '../commands/commands';
 import type { DerivedModel, Member } from '../model/types';
@@ -126,7 +126,7 @@ function WallTypeSwitch({ asm, scope }: { asm: Asm; scope: 'line' | 'all' }) {
   return (
     <div className="choice3" role="radiogroup" aria-label="צורת המכלול">
       {([['x', 'קושרות X'], ['portal', 'אגד B'], ['truss', 'מסבך נעילה']] as const).map(([k, t]) => (
-        <button key={k} role="radio" aria-checked={cur === k} className={`choice-tile${cur === k ? ' on' : ''}`} data-testid={`asm-type-${k}`} onClick={() => set(k)}>{WALL_PIC[k]}<b>{t}</b></button>
+        <button key={k} role="radio" aria-checked={cur === k} className={`choice-tile${cur === k ? ' on' : ''}`} data-testid={`asm-type-${k}`} onClick={() => set(k)}><WallPic k={k} /><b>{t}</b></button>
       ))}
     </div>
   );
