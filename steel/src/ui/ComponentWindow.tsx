@@ -69,7 +69,7 @@ function connGroups(d: DerivedModel, re: RegExp) {
   });
 }
 
-export function ComponentWindow({ kind, memberId, onClose, children, studio }: { kind: CompKind; memberId?: string; onClose: () => void; children?: ReactNode; /** 1.56: חלון במבנה האחיד (סוג → היקף → 3 כפתורים) — מחליף את התוכן והצד */ studio?: ReactNode }) {
+export function ComponentWindow({ kind, memberId, onClose, children, studio, step }: { kind: CompKind; memberId?: string; onClose: () => void; children?: ReactNode; /** 1.56: חלון במבנה האחיד (סוג → היקף → 3 כפתורים) — מחליף את התוכן והצד */ studio?: ReactNode; /** 1.59: שלב העבודה שהאישור משלים */ step?: string | null }) {
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
   const M = compMeta(kind);
   // 1.57: האשף פותח טרנזקציה — אישור = פעולת Undo אחת, ביטול = חזרה למצב שלפני
@@ -147,7 +147,7 @@ export function ComponentWindow({ kind, memberId, onClose, children, studio }: {
         </aside>
       </div>
       </>}
-      {!min && (studio ? <WizardActions label={`אשף: ${M.title}`} onClose={onClose} /> : <footer className="cwin-f"><i />כל שינוי מוצג מיד בתצוגה ובמודל · Ctrl+Z לביטול · גרירת הכותרת מזיזה את החלון</footer>)}
+      {!min && (studio ? <WizardActions label={`אשף: ${M.title}`} onClose={onClose} step={step} /> : <footer className="cwin-f"><i />כל שינוי מוצג מיד בתצוגה ובמודל · Ctrl+Z לביטול · גרירת הכותרת מזיזה את החלון</footer>)}
     </section>
   );
 }

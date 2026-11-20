@@ -7,7 +7,7 @@ test('UX154-01: מצב רגיל — פאנל סגור והמודל ברוב המ
   const vpW = () => page.getByTestId('viewport').evaluate((e) => e.getBoundingClientRect().width);
   const wsW = await page.locator('.workspace').evaluate((e) => e.getBoundingClientRect().width);
   await expect(page.getByTestId('props')).toBeHidden();
-  expect((await vpW()) / wsW).toBeGreaterThan(0.9);
+  expect((await vpW()) / wsW).toBeGreaterThan(0.85); // 1.59: סרגל השלבים עם שמות (188px) — מכווץ: מעל 0.95
   // ריבון: לשונית ← כלי ← הפאנל נפתח עם העורך
   await page.getByTestId('tab-brace').click();
   await page.getByTestId('nav-b:walls').click();
@@ -32,9 +32,12 @@ test('UX154-02: כיווץ ריבון; סרגל ההתקדמות — לחיצה 
   await page.getByTestId('sr-8').click();
   await expect(page.getByTestId('tab-brace')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('nav-b:walls')).toHaveClass(/on/);
-  // רשימת השלבים
-  await page.getByTestId('sr-ring').click();
-  await expect(page.getByTestId('sr-pop')).toContainText('16');
+  // 1.59: סרגל השלבים עם שמות — 16 שלבים, ניתן לכווץ לנקודות
+  await expect(page.getByTestId('steps-rail').locator('.sr-item')).toHaveCount(16);
+  await expect(page.getByTestId('sr-8')).toContainText('קשיחות קירות');
+  await page.getByTestId('sr-fold').click();
+  await expect(page.getByTestId('sr-8')).not.toContainText('קשיחות קירות');
+  await page.getByTestId('sr-fold').click();
   await openNav(page, 's:geometry');
   await expect(page.getByTestId('tab-structure')).toHaveAttribute('aria-selected', 'true');
   expect(errors).toEqual([]);

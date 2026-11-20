@@ -22,7 +22,9 @@ import { NavContent, NavCrumb, SideNav, NAV_INDEX_LABEL, navGroupOf, type NavKey
 import { EaveCheckDialog } from './EaveCheckDialog';
 import { ConnLibrary, ConnWizard } from './ConnWizard';
 import { DetailStudio } from './DetailStudio';
-import { ComponentWindow, compOfConn, compOfMember, compOfNav, compPick } from './ComponentWindow';
+import { ComponentWindow, compMeta, compOfConn, compOfMember, compOfNav, compPick } from './ComponentWindow';
+import { stepMarks, stepOfNav } from './steps';
+import { markStepDone } from './wizard/Wizard';
 import { FamilyStudio } from './FamilyStudio';
 import { KneeStudio } from './KneeStudio';
 import { WallsStudio } from './WallsStudio';
@@ -268,6 +270,8 @@ export function App() {
   ];
 
   const ms = sel.map((id) => s.derived.byId.get(id)).filter(Boolean);
+  // 1.59: סרגל השלבים — עם שמות (ברירת מחדל) או מכווץ לנקודות
+  const [railWide, setRailWide] = useState(() => { try { return localStorage.getItem('ksp-rail-wide') !== '0'; } catch { return true; } });
   // 1.55: חלון רכיב (קשיחות קירות / אלכסוני עמוד-קורה) — מהריבון, מהשלבים או מלחיצה על אלמנט שלו
   const comp = !wide ? null : lp === 'nav' || (!ms.length && !s.activeConn && !s.activeGutter) ? compOfNav(nav) : s.activeConn ? compOfConn(s.activeConn) : !s.activeGutter && ms.length === 1 ? compOfMember(ms[0]!, s.derived) : null;
   // 1.55.2: חלון/פאנל צף מעל המודל — מרכז התמונה עובר לחלק הגלוי של המודל
@@ -328,7 +332,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.58.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.59.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -353,10 +357,10 @@ export function App() {
 
       {mode === 'drawings' && <main className="mode-area"><DrawingsView /></main>}
       {mode === 'production' && <main className="mode-area"><ProductionView /></main>}
-      <main className={`workspace${wide && !panelOpen ? ' panel-closed' : ''}${!propsPinned ? ' props-collapsed' : ''}${!propsPinned && (sel.length || s.activeConn || lp === 'nav') ? ' props-float' : ''}${treeHidden ? ' tree-hidden' : ''}${lpFull ? ' lp-full' : ''}${comp ? ' comp-open' : ''}`} style={mode !== 'model' ? { display: 'none' } : undefined}>
+      <main className={`workspace${wide && !panelOpen ? ' panel-closed' : ''}${!propsPinned ? ' props-collapsed' : ''}${!propsPinned && (sel.length || s.activeConn || lp === 'nav') ? ' props-float' : ''}${treeHidden ? ' tree-hidden' : ''}${lpFull ? ' lp-full' : ''}${comp ? ' comp-open' : ''}${wide && railWide ? ' rail-wide' : ''}`} style={mode !== 'model' ? { display: 'none' } : undefined}>
         {wide && <div className="rb-wrap"><SideNav ribbon nav={nav} setNav={setNav} onOpenConn={openConn} /></div>}
         <aside className={`side side-start${sideOpen ? ' open' : ''}`} data-testid="nav-tree-pane">
-          {wide ? <StepsRail nav={nav} setNav={setNav} setMode={setMode} onExport={exportProject} /> : <SideNav nav={nav} setNav={setNav} onOpenConn={openConn} treeOnly={wide} />}
+          {wide ? <StepsRail nav={nav} setNav={setNav} setMode={setMode} onExport={exportProject} wide={railWide} setWide={(v) => { setRailWide(v); try { localStorage.setItem('ksp-rail-wide', v ? '1' : '0'); } catch { /* */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }} /> : <SideNav nav={nav} setNav={setNav} onOpenConn={openConn} treeOnly={wide} />}
         </aside>
         <div className="center">
           <section className="viewport-host" dir="ltr" ref={host} data-testid="viewport">
@@ -457,7 +461,7 @@ export function App() {
         <aside className={`side side-end${propsOpen ? ' open' : ''}`} data-testid="props">
           <button className="props-pin desk-only" data-testid="props-pin" title={propsPinned ? 'כיווץ הפאנל — יותר מקום לתלת־ממד; בבחירה הפאנל נפתח כשכבה' : 'קיבוע הפאנל'} onClick={() => setPropsPinned(!propsPinned)}>{propsPinned ? '▸ כיווץ פאנל' : '◂ הגדרות ומאפיינים'}</button>
           {comp ? (!panelOpen ? null :
-            <ComponentWindow key={comp} kind={comp} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} onClose={closePanel}
+            <ComponentWindow key={comp} kind={comp} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} onClose={closePanel} step={stepOfNav(compOfNav(nav) === comp ? nav : compMeta(comp).nav)}
               studio={comp === 'knee' ? <KneeStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} /> : comp === 'walls' ? <WallsStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} /> : <FamilyStudio fam={comp} nav={nav} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} />}>
               {lp === 'nav' ? <div className="nav-content" data-testid="lp-nav-content"><NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div> : <PropertiesPanel />}
             </ComponentWindow>
@@ -468,6 +472,7 @@ export function App() {
                 {lp === 'sel'
                   ? <span className="lp-path"><button className="lp-crumb" data-testid="lp-crumb" title="הגדרות הרכיב כולו (כמו בעץ)" onClick={() => setLp('nav')}>→ {NAV_INDEX_LABEL(nav)}</button><span className="lp-sep">·</span><b className="lp-here" data-testid="lp-here">{s.activeConn ? 'חיבור' : s.activeGutter ? 'מזחלה' : ms.length === 1 ? ms[0]!.label : `${sel.length} אלמנטים`}</b></span>
                   : <span className="lp-path muted">הגדרות הרכיב</span>}
+                {lp === 'nav' && (() => { const k = stepOfNav(nav); if (!k || k === 'issues') return null; const done = stepMarks(s.project, s.derived)[k] === 'done' && !!s.project.meta.steps; return done ? <span className="step-done-b" data-testid="step-done-ok">✓ השלב הושלם</span> : <button className="btn small step-done-b" data-testid="step-done" title="סימון השלב כהושלם בסרגל השלבים" onClick={() => markStepDone(k)}>✓ סיום השלב</button>; })()}
                 <button className="lp-close" data-testid="lp-close" title="סגירת הפאנל — המודל במסך מלא" aria-label="סגירת הפאנל" onClick={() => { setPanelOpen(false); setLpFull(false); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }}>✕</button>
                 <button className="lp-full-btn" onClick={() => { setLpFull(!lpFull); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }} title={lpFull ? 'חזרה לגודל רגיל (Esc)' : 'פאנל במסך מלא — לעריכה של טבלאות ופרטים גדולים'} data-testid="lp-full">{lpFull ? '⤡' : '⤢'}</button>
               </div>

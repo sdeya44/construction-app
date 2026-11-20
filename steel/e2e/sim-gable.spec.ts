@@ -29,7 +29,7 @@ async function clickMember(page: Page, id: string) {
   expect(got.startsWith(pre), `${id} ← ${got}`).toBe(true);
   return clicks;
 }
-const W = <T,>(page: Page, f: string) => page.evaluate(`(() => { const b = window.__ksp.store.state.project.building, d = window.__ksp.store.state.derived; return ${f}; })()`) as Promise<T>;
+const W = <T,>(page: Page, f: string) => page.evaluate(`(() => { const p = window.__ksp.store.state.project, b = p.building, d = window.__ksp.store.state.derived; return ${f}; })()`) as Promise<T>;
 
 test('SIM-03: דו-שיפועי 18×12 — אגד B, נעילה, חלוקת קושרות גג, אלכסונים רק במסגרות הקצה — הכל מלחיצה על המודל', async ({ page }) => {
   test.setTimeout(90000);
@@ -46,7 +46,13 @@ test('SIM-03: דו-שיפועי 18×12 — אגד B, נעילה, חלוקת קו
   await page.getByTestId('create').click();
   await page.waitForTimeout(600);
   expect(await W(page, `({ w: b.width, f: b.frames.map(f => f.y), kb: d.members.filter(m => m.id.startsWith('KB.')).length, roof: b.bracing.roof.enabled, walls: b.bracing.walls.enabled, err: d.issues.filter(i => i.severity === 'error').length })`))
-    .toEqual({ w: 18000, f: [0, 6000, 12000], kb: 6, roof: true, walls: true, err: 0 });
+    .toEqual({ w: 18000, f: [0, 6000, 12000], kb: 6, roof: false, walls: false, err: 0 });
+  // 1.59: פרויקט חדש — קושרות גג וקשיחות קירות כבויות; מוסיפים מסרגל השלבים ("להוסיף?" ← האשף ← אישור)
+  await page.getByTestId('sr-7').click(); await page.getByTestId('sr-ask-add').click();
+  await page.getByTestId('cwin-roofx').getByTestId('br-roof-type-x').click(); await page.getByTestId('cwin-roofx').getByTestId('wz-ok').click();
+  await page.getByTestId('sr-8').click(); await page.getByTestId('sr-ask-add').click();
+  await page.getByTestId('cwin-walls').getByTestId('br-walls-x').click(); await page.getByTestId('cwin-walls').getByTestId('wz-ok').click();
+  expect(await W(page, `({ roof: b.bracing.roof.enabled, walls: b.bracing.walls.enabled, steps: p.meta.steps })`)).toEqual({ roof: true, walls: true, steps: { 'b:roof': 'done', 'b:walls': 'done' } });
 
   // 1. קשיחות קירות X → אגד B: לחיצה על קושרת קיר → "כל המכלולים במודל" → אגד B
   let n = await clickMember(page, 'BR.W1.L.1');

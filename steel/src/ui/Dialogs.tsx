@@ -121,6 +121,9 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
     const lineIds = sec ? [...sec.lines].sort((p, q) => p.x - q.x).map((l) => l.id) : ['L', 'R'];
     const lineLabels = names.length ? Object.fromEntries(lineIds.map((id, i) => [id, names[i]]).filter(([, v]) => v)) : undefined;
     const bb: BuildingParams = { ...cand, ...(sec ? { section: sec } : {}), ...(lineLabels ? { lineLabels } : {}), kneeBraces: knee ? { ...defaultKneeBraces(), enabled: true } : undefined };
+    // 1.59: פרויקט חדש — רכיבים אופציונליים כבויים; מוסיפים מסרגל השלבים ("להוסיף?") או מהריבון
+    bb.bracing = { ...bb.bracing, roof: { ...bb.bracing.roof, enabled: false }, walls: { ...bb.bracing.walls, enabled: false }, purlinTies: { ...bb.bracing.purlinTies, enabled: false } };
+    if (bb.ridgeReinf) bb.ridgeReinf = { ...bb.ridgeReinf, type: 'none' };
     if (lWing && !tpl) bb.wing = defaultWing(bb, lWing);
     if (clad) { bb.cladding = defaultCladding(); if (!cladWalls) { bb.cladding.walls.enabled = false; bb.cladding.girts.enabled = false; bb.cladding.posts.enabled = false; } }
     return bb;
@@ -143,6 +146,7 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
     if (!bb) return;
     let p = applyStandard(newProject(name, bb)); // סטנדרט מסגריה שמור (אם קיים)
     p.meta.number = number; p.meta.client = client;
+    p.meta.steps = {}; // 1.59: כל שלב "לא הוגדר" עד אישור באשף
     if (autoSize) { try { p = applySizingSuggestion().run(p); } catch { /* נשאר עם החתכים שנבחרו */ } }
     store.loadProject(p, true);
     void store.saveNow('יצירת פרויקט');

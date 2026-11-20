@@ -82,3 +82,43 @@ test('FW-03: לחיצה על קושרת גג במודל פותחת את אותו
   expect(await page.evaluate(() => ((window as any).__ksp.store.state.scopeHi ?? []).length)).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
+
+test('ST-02 (1.59): פרויקט חדש — רכיבים כבויים, "להוסיף?" בסרגל, הושלם רק אחרי אישור; "לא נדרש" נשמר', async ({ page }) => {
+  const errors = await boot(page);
+  await page.getByTestId('btn-new').click();
+  await page.getByTestId('create').click();
+  const B = () => page.evaluate(() => (window as any).__ksp.store.state.project);
+  const p0 = await B();
+  expect(p0.building.bracing.roof.enabled).toBe(false);
+  expect(p0.building.bracing.walls.enabled).toBe(false);
+  expect(p0.meta.steps).toEqual({});
+  // קושרות גג (שלב 7): לא קיים — שאלה; ביטול לא משנה דבר
+  await expect(page.getByTestId('sr-7')).toHaveAttribute('data-state', 'todo');
+  await page.getByTestId('sr-7').click();
+  await expect(page.getByTestId('sr-ask')).toBeVisible();
+  await page.getByTestId('sr-ask-cancel').click();
+  await expect(page.getByTestId('sr-ask')).toHaveCount(0);
+  // הוספה → האשף; בחירת סוג בלי אישור (✕) — הרכיב נוסף אבל השלב עדיין לא הושלם
+  await page.getByTestId('sr-7').click();
+  await page.getByTestId('sr-ask-add').click();
+  const win = page.getByTestId('cwin-roofx');
+  await win.getByTestId('br-roof-type-x').click();
+  await win.getByTestId('cwin-close').click();
+  expect((await B()).building.bracing.roof.enabled).toBe(true);
+  await expect(page.getByTestId('sr-7')).toHaveAttribute('data-state', 'todo');
+  // פתיחה שוב (קיים — ישר לאשף) ואישור → הושלם
+  await page.getByTestId('sr-7').click();
+  await page.getByTestId('cwin-roofx').getByTestId('wz-ok').click();
+  await expect(page.getByTestId('sr-7')).toHaveAttribute('data-state', /ok|warn/);
+  expect((await B()).meta.steps['b:roof']).toBe('done');
+  // "לא נדרש" לקשיחות קירות — נספר, נשמר בפרויקט
+  await page.getByTestId('sr-8').click();
+  await page.getByTestId('sr-ask-skip').click();
+  await expect(page.getByTestId('sr-8')).toHaveAttribute('data-state', 'skip');
+  expect((await B()).meta.steps['b:walls']).toBe('skip');
+  // שלב בלי אשף (פרויקט) — "סיום השלב"
+  await page.getByTestId('sr-1').click();
+  await page.getByTestId('step-done').click();
+  await expect(page.getByTestId('sr-1')).toHaveAttribute('data-state', /ok|warn/);
+  expect(errors).toEqual([]);
+});

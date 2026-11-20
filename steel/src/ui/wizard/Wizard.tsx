@@ -1,6 +1,8 @@
 import { useEffect, type ReactNode } from 'react';
 import { store, useStore } from '../../store';
 import type { ValidationIssue as Issue } from '../../model/types';
+import { setMeta } from '../../commands/commands';
+import { stepMarks } from '../steps';
 
 /**
  * 1.57: KAYAN Unified Engineering Wizard System — רכיבים משותפים.
@@ -80,7 +82,14 @@ export function useWizardTx(label: string) {
     return () => { store.txCommit(label); };
   }, [label]);
 }
-export function WizardActions({ label, onClose, children }: { label: string; onClose: () => void; children?: ReactNode }) {
+/** 1.59: אישור באשף מסמן את שלב העבודה כ"הושלם" (נשמר בפרויקט, באותה פעולת Undo) */
+export function markStepDone(step: string) {
+  const st = store.state;
+  const marks = stepMarks(st.project, st.derived);
+  if (marks[step] === 'done' && st.project.meta.steps) return;
+  try { store.exec(setMeta({ steps: { ...marks, [step]: 'done' } })); } catch { /* מהדורה נעולה — אין סימון */ }
+}
+export function WizardActions({ label, onClose, children, step }: { label: string; onClose: () => void; children?: ReactNode; step?: string | null }) {
   const steps = useStore((s) => s.txSteps ?? 0);
   return (
     <div className="wz-actions" data-testid="wz-actions">
@@ -89,7 +98,7 @@ export function WizardActions({ label, onClose, children }: { label: string; onC
       <span className="sp" />
       <button className="wz-btn" disabled={!steps} onClick={() => store.txUndo()} data-testid="wz-undo" title="ביטול הצעד האחרון בתוך האשף">↶ שחזור</button>
       <button className="wz-btn" onClick={() => { store.txCancel(); onClose(); }} data-testid="wz-cancel" title="ביטול כל השינויים מאז פתיחת האשף">ביטול</button>
-      <button className="wz-btn pri" onClick={() => { store.txCommit(label); onClose(); }} data-testid="wz-ok">אישור</button>
+      <button className="wz-btn pri" onClick={() => { if (step) markStepDone(step); store.txCommit(label); onClose(); }} data-testid="wz-ok" title={step ? 'שמירה וסימון השלב כהושלם' : undefined}>אישור</button>
     </div>
   );
 }

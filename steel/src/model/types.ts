@@ -515,6 +515,8 @@ export interface ProjectMeta {
   client: string;
   createdAt: string;
   updatedAt: string;
+  /** 1.59: מצב שלבי העבודה — 'done' = אושר באשף, 'skip' = "לא נדרש במבנה הזה". חסר = פרויקט ישן (מחושב לפי מה שקיים) */
+  steps?: Record<string, 'done' | 'skip'>;
 }
 
 export interface ManualPlacement {

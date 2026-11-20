@@ -22,7 +22,7 @@ test('CW-01: כלי "קשיחות קירות" בריבון פותח חלון ר�
   await expect(win.getByTestId('live3d-canvas')).toBeVisible();
   // 1.55.1: המודל נשאר במסך מלא — החלון צף מעליו
   const w = await page.evaluate(() => (window as any).__ksp.viewport.panes[0].el.getBoundingClientRect().width);
-  expect(w).toBeGreaterThan(1600 * 0.85);
+  expect(w).toBeGreaterThan(1600 * 0.8); // 1.59: סרגל השלבים עם שמות
   // מזעור: החלון הופך לפס, והמודל גלוי; לחיצה נוספת מחזירה
   await win.getByTestId('cwin-min').click();
   await expect(win.getByTestId('live3d-canvas')).toBeHidden();
@@ -71,7 +71,7 @@ test('CW-03 (1.55.2): מקום אחד לכל נושא — חיבור של הרכ
   // פאנל המאפיינים צף — המודל לא מצטמצם
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
   await expect(page.getByTestId('fpanel')).toBeVisible();
-  expect(await vpW()).toBeGreaterThan(1600 * 0.85);
+  expect(await vpW()).toBeGreaterThan(1600 * 0.8);
   // עורך חיבור של קשיחות קירות נפתח בתוך חלון הרכיב (לא בפאנל נפרד)
   const cid = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => /^C\.BR\.W/.test(c.id))?.id);
   expect(cid).toBeTruthy();

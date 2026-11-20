@@ -1363,3 +1363,43 @@ details.adv .adv-body { padding-bottom: 6px; }
 /* 1.58: כותרת משנה בתוך קבוצת הגדרות (אשף אחיד) */
 .wz-sub { font-size: var(--wz-fs-s); font-weight: 700; color: var(--wz-muted); text-transform: none; margin: var(--wz-s3) 0 var(--wz-s1); padding-top: var(--wz-s2); border-top: 1px solid var(--wz-line); }
 .ks .wz-type:not(:has(img, svg, canvas)) { justify-content: center; min-height: 52px; }
+
+/* 1.59: סרגל שלבי העבודה — שמות + מצב; מכווץ לנקודות */
+@media (min-width: 861px) { .workspace.rail-wide { --tw: 188px; } }
+.steps-rail { align-items: stretch; gap: 0; padding: 8px 0 6px; }
+.sr-head { display: flex; align-items: center; gap: 8px; padding: 0 8px 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; flex: none; }
+.steps-rail:not(.wide) .sr-head { flex-direction: column; gap: 4px; padding: 0 0 6px; }
+.sr-head .sr-ring { margin: 0; cursor: default; }
+.sr-ht { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.sr-ht b { font-size: 12.5px; } .sr-ht small { font-size: 11px; color: var(--muted); }
+.sr-fold { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; width: 22px; height: 22px; padding: 0; font: inherit; font-weight: 700; color: var(--muted); cursor: pointer; flex: none; }
+.sr-fold:hover { color: var(--brand); border-color: var(--brand); }
+.sr-list { display: flex; flex-direction: column; gap: 1px; overflow-y: auto; min-height: 0; flex: 1; padding: 0 4px; }
+.steps-rail:not(.wide) .sr-list { align-items: center; gap: 3px; }
+.sr-grp { font-size: 10.5px; font-weight: 700; color: var(--faint, #8a96a6); padding: 6px 6px 2px; letter-spacing: .02em; }
+.sr-sep { display: block; width: 18px; height: 1px; background: var(--line); margin: 4px auto; }
+.sr-item { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 3px 4px; border-radius: 8px; font: inherit; color: var(--text); cursor: pointer; text-align: start; min-height: 32px; }
+.steps-rail:not(.wide) .sr-item { padding: 0; min-height: 0; border-radius: 50%; }
+.sr-item:hover { background: var(--panel-2); }
+.sr-item.on { background: var(--brand-soft); box-shadow: inset 3px 0 0 #e08a2e; }
+.steps-rail:not(.wide) .sr-item.on { background: none; box-shadow: none; }
+.steps-rail:not(.wide) .sr-item.on .sr-dot { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px #e08a2e; }
+.sr-item .sr-t { line-height: 1.2; }
+.sr-item .sr-t b { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr-item .sr-t small { font-size: 10.5px; }
+.sr-item.ok .sr-t small { color: #1f7a45; } .sr-item.warn .sr-t small { color: var(--warn); }
+.sr-item.absent .sr-t b { color: var(--muted); font-weight: 500; }
+.sr-item.absent.todo .sr-t small { color: var(--brand); font-weight: 600; }
+.sr-dot.ok { background: #1f9d55; border-color: #1f9d55; color: #fff; }
+.sr-dot.todo { background: var(--panel); border-color: var(--line-strong); color: var(--muted); }
+.sr-dot.skip { border-style: dashed; background: var(--panel); color: var(--faint, #8a96a6); }
+.sr-dot.out { background: var(--panel-2); border-color: var(--line); }
+.sr-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 6px; padding: 6px 10px 0; border-top: 1px solid var(--line); margin-top: 4px; font-size: 10.5px; color: var(--muted); flex: none; }
+.sr-legend span { display: flex; align-items: center; gap: 4px; }
+.sr-legend .sr-dot { width: 10px; height: 10px; border-width: 1.5px; display: inline-block; }
+.sr-ask-bg { position: fixed; inset: 0; z-index: 60; background: rgba(15, 27, 45, .28); display: grid; place-items: center; }
+.sr-ask { width: min(420px, calc(100vw - 32px)); background: var(--panel); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 18px 18px 14px; display: flex; flex-direction: column; gap: 8px; }
+.sr-ask b { font-size: 15px; } .sr-ask p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.sr-ask-a { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.step-done-b { margin-inline-start: auto; }
+span.step-done-b { color: #1f7a45; font-size: 12px; font-weight: 600; }
