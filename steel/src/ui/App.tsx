@@ -22,7 +22,7 @@ import { NavContent, NavCrumb, SideNav, NAV_INDEX_LABEL, navGroupOf, type NavKey
 import { EaveCheckDialog } from './EaveCheckDialog';
 import { ConnLibrary, ConnWizard } from './ConnWizard';
 import { DetailStudio } from './DetailStudio';
-import { ComponentWindow, compOfMember, compOfNav } from './ComponentWindow';
+import { ComponentWindow, compOfConn, compOfMember, compOfNav } from './ComponentWindow';
 import { LayersMenu } from './LayersMenu';
 import { DeletedPanel } from './DeletedPanel';
 
@@ -266,7 +266,22 @@ export function App() {
 
   const ms = sel.map((id) => s.derived.byId.get(id)).filter(Boolean);
   // 1.55: חלון רכיב (קשיחות קירות / אלכסוני עמוד-קורה) — מהריבון, מהשלבים או מלחיצה על אלמנט שלו
-  const comp = !wide ? null : lp === 'nav' ? compOfNav(nav) : !s.activeConn && !s.activeGutter && ms.length === 1 ? compOfMember(ms[0]!, s.derived) : null;
+  const comp = !wide ? null : lp === 'nav' || (!ms.length && !s.activeConn && !s.activeGutter) ? compOfNav(nav) : s.activeConn ? compOfConn(s.activeConn) : !s.activeGutter && ms.length === 1 ? compOfMember(ms[0]!, s.derived) : null;
+  // 1.55.2: חלון/פאנל צף מעל המודל — מרכז התמונה עובר לחלק הגלוי של המודל
+  useEffect(() => {
+    const t = setInterval(() => {
+      const v = vp.current; const pane = v?.panes[0]?.el.getBoundingClientRect();
+      const fl = document.querySelector<HTMLElement>('.workspace:not(.panel-closed) > .side-end > .cwin:not(.min), .workspace:not(.panel-closed) > .side-end > .fpanel');
+      if (!v || !pane) return;
+      const r = fl && fl.offsetParent ? fl.getBoundingClientRect() : null;
+      if (!r || r.width < 10 || r.width > pane.width * 0.8) { v.setSafe(0, 0); return; }
+      const mid = (r.left + r.right) / 2;
+      if (mid > pane.left + pane.width / 2) v.setSafe(0, pane.right - r.left + 8); else v.setSafe(r.right - pane.left + 8, 0);
+    }, 200);
+    return () => clearInterval(t);
+  }, []);
+  // חלון רכיב פתוח — לחיצה במודל מעדיפה את אלמנטי הרכיב
+  useEffect(() => { const pf = comp === 'walls' ? '^(C\\.)?(BR\\.W|BB\\.|LT\\.)' : comp === 'knee' ? '^(C\\.)?KB\\.' : null; if ((store.state.pickPrefer ?? null) !== pf) store.set({ pickPrefer: pf }); }, [comp]);
   const closePanel = () => { setPanelOpen(false); setLpFull(false); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); };
   const menuItems = (): Cmd[] => {
     const one = ms.length === 1 ? ms[0]! : null;
@@ -303,7 +318,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.55.1</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.55.2</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -432,10 +447,10 @@ export function App() {
         <aside className={`side side-end${propsOpen ? ' open' : ''}`} data-testid="props">
           <button className="props-pin desk-only" data-testid="props-pin" title={propsPinned ? 'כיווץ הפאנל — יותר מקום לתלת־ממד; בבחירה הפאנל נפתח כשכבה' : 'קיבוע הפאנל'} onClick={() => setPropsPinned(!propsPinned)}>{propsPinned ? '▸ כיווץ פאנל' : '◂ הגדרות ומאפיינים'}</button>
           {comp ? (
-            <ComponentWindow kind={comp} memberId={lp === 'sel' ? sel[0] : undefined} onClose={closePanel}>
+            <ComponentWindow kind={comp} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} onClose={closePanel}>
               {lp === 'nav' ? <div className="nav-content" data-testid="lp-nav-content"><NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div> : <PropertiesPanel />}
             </ComponentWindow>
-          ) : <>
+          ) : <section className="fpanel" data-testid="fpanel">
           {wide && (
               // 1.50: בלי לשוניות — תצוגה אחת: מה שנבחר אחרון. מחלון האלמנט — שביל לרכיב כולו; מהרכיב — "נבחר: … ←" חזרה לאלמנט
               <div className="lp-head" data-testid="lp-head">
@@ -451,7 +466,7 @@ export function App() {
                   {(sel.length > 0 || s.activeConn) && <div className="sel-strip" data-testid="sel-strip"><span>נבחר: <b>{s.activeConn ?? (ms.length === 1 ? ms[0]!.label : `${sel.length} אלמנטים`)}</b> — כאן: הגדרות הרכיב כולו</span><button className="btn small" data-testid="sel-strip-props" onClick={() => setLp('sel')}>{s.activeConn ? 'חזרה לעורך החיבור' : 'חזרה לאלמנט'} ←</button></div>}
                   <NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div>
               : <PropertiesPanel />}
-    </>}
+    </section>}
         </aside>
       </main>
 

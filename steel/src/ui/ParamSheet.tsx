@@ -139,7 +139,10 @@ export function ParamSheet() {
             const head = r.g !== lastG ? (lastG = r.g, <tr className="ps-grp" key={`g-${r.g}`}><td colSpan={prev ? 5 : 4}>{r.g}</td></tr>) : null;
             const id = `ps-${r.label}`;
             const k = r.kind;
-            const cell = !r.mut || k === 'ro' ? <span className="muted">{String(v)}</span>
+            // 1.55.2: לרכיב עם חלון משלו (קשיחות קירות, אלכסוני עמוד-קורה) — מקום עריכה יחיד: החלון. כאן תצוגה + פתיחה
+            const win = r.nav === 'b:walls' || r.nav === 'b:knee';
+            const cell = win ? <button className="ps-open" onClick={() => go(r.nav)} data-testid={id}>{k === 'bool' ? (v ? 'פעיל' : 'כבוי') : String(v || '—')} <span>פתיחת החלון ←</span></button>
+              : !r.mut || k === 'ro' ? <span className="muted">{String(v)}</span>
               : k === 'len' ? <LenField mm={v as number} unit={u} onCommit={(x) => edit(r, x)} testId={id} />
               : k === 'num' ? <NumField value={v as number} onCommit={(x) => edit(r, x)} testId={id} />
               : k === 'pct' ? <NumField value={v as number} suffix="%" onCommit={(x) => edit(r, x)} testId={id} />

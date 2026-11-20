@@ -62,3 +62,32 @@ test('CW-02: לחיצה על אלכסון עמוד-קורה במודל פותח�
   await expect(page.getByTestId('cwin-knee')).toBeHidden();
   expect(errors).toEqual([]);
 });
+
+test('CW-03 (1.55.2): מקום אחד לכל נושא — חיבור של הרכיב, שורת הגיליון ופאנל צף; מזעור נשמר בלחיצה על שטח ריק', async ({ page }) => {
+  const errors = await boot(page);
+  const vpW = () => page.evaluate(() => (window as any).__ksp.viewport.panes[0].el.getBoundingClientRect().width);
+  // פאנל המאפיינים צף — המודל לא מצטמצם
+  await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
+  await expect(page.getByTestId('fpanel')).toBeVisible();
+  expect(await vpW()).toBeGreaterThan(1600 * 0.85);
+  // עורך חיבור של קשיחות קירות נפתח בתוך חלון הרכיב (לא בפאנל נפרד)
+  const cid = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => /^C\.BR\.W/.test(c.id))?.id);
+  expect(cid).toBeTruthy();
+  await page.evaluate((c) => (window as any).__ksp.store.set({ activeConn: c }), cid);
+  await expect(page.getByTestId('cwin-walls')).toBeVisible();
+  await page.evaluate(() => (window as any).__ksp.store.set({ activeConn: null }));
+  // גיליון הפרמטרים: שורת קשיחות קירות אינה עורכת — פותחת את החלון
+  await openNav(page, 's:sheet');
+  await page.getByTestId('ps-קשיחות קירות — חתך').click();
+  await expect(page.getByTestId('cwin-walls')).toBeVisible();
+  // מזעור, ולחיצה על שטח ריק במודל — החלון נשאר ממוזער
+  await page.getByTestId('cwin-min').click();
+  await expect(page.getByTestId('cwin-walls')).toHaveClass(/min/);
+  const pr = (await page.getByTestId('viewport').boundingBox())!;
+  await page.mouse.click(pr.x + 40, pr.y + pr.height - 120);
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('cwin-walls')).toHaveClass(/min/);
+  // חלון פתוח — לחיצה במודל מעדיפה את אלמנטי הרכיב
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.pickPrefer)).toContain('BR');
+  expect(errors).toEqual([]);
+});

@@ -124,7 +124,8 @@ class Pane {
     const size = box.getSize(new THREE.Vector3()).length();
     const dir = (this.customDir ?? DIRS[this.view]).clone().normalize();
     const cam = this.camera as THREE.PerspectiveCamera | THREE.OrthographicCamera;
-    const a = this.rect.w / Math.max(1, this.rect.h);
+    const cov = this.vp.safe && this.vp.panes.length === 1 ? this.vp.safe.l + this.vp.safe.r : 0;
+    const a = Math.max(120, this.rect.w - cov) / Math.max(1, this.rect.h);
     cam.position.copy(center).addScaledVector(dir, size * 2);
     cam.up.set(0, 0, 1);
     cam.lookAt(center);
@@ -142,6 +143,9 @@ class Pane {
     const target = center.clone().add(shift);
     const margin = 1.12;
     const halfH = Math.max((y1 - y0) / 2, (x1 - x0) / 2 / a) * margin;
+    // 1.55.2: חלון צף מכסה צד של המודל — ההתאמה ממרכזת את המודל בחלק הגלוי (המודל לא זז בפתיחת/סגירת החלון — רק בהתאמה)
+    const sf = this.vp.safe, sx = sf && this.vp.panes.length === 1 ? (sf.r - sf.l) / 2 : 0;
+    if (sx) target.add(new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0).multiplyScalar((sx * 2 * halfH) / Math.max(1, this.rect.h)));
     if (this.projection === 'ortho') {
       this.orthoHalfH = halfH;
       this.ortho.zoom = 1;
@@ -319,6 +323,13 @@ export class Viewport {
   }
   /** המשתמש סובב/הזיז/הגדיל — לא להתאים את המבט אוטומטית; התאמה אוטומטית רק בשניות הראשונות (התייצבות הפריסה) */
   userMoved = false;
+  /** רוחב שמכוסה בחלון צף משמאל/מימין לחלונית המודל (פיקסלים) */
+  safe = { l: 0, r: 0 };
+  setSafe(l: number, r: number) {
+    l = Math.max(0, Math.round(l)); r = Math.max(0, Math.round(r));
+    if (l === this.safe.l && r === this.safe.r) return;
+    this.safe = { l, r };
+  }
   private bootAt = performance.now();
 
   /** סנכרון מצב האפליקציה לסצנה. בונה מחדש רק מה שהשתנה. */
@@ -684,6 +695,11 @@ export class Viewport {
         tri = [0, 1, 2].map((k) => new THREE.Vector3().fromBufferAttribute(pos, f + k));
       }
       if (!ids.includes(id)) { ids.push(id); points.push(h.point.clone()); }
+    }
+    const pref = store.state.pickPrefer;
+    if (pref && ids.length > 1) {
+      const re = new RegExp(pref), ord = ids.map((_, i) => i).sort((a, b) => Number(!re.test(ids[a])) - Number(!re.test(ids[b])) || a - b);
+      return { ids: ord.map((i) => ids[i]), points: ord.map((i) => points[i]), tri };
     }
     return { ids, points, tri };
   }

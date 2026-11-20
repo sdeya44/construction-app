@@ -16,6 +16,9 @@ const META: Record<CompKind, { title: string; crumb: string; pic: string; re: Re
   walls: { title: 'קשיחות קירות', crumb: 'חיזוקים', pic: 'walls', re: WALL_RE, nav: 'b:walls', tint: 'teal' },
   knee: { title: 'אלכסוני עמוד-קורה', crumb: 'חיזוקים', pic: 'knee', re: KNEE_RE, nav: 'b:knee', tint: 'mustard' },
 };
+/** נקודת הלחיצה האחרונה במודל — החלון נפתח בצד השני, כדי לא לכסות את מה שנלחץ */
+let lastDown: { x: number; t: number } | null = null;
+if (typeof document !== 'undefined') document.addEventListener('pointerdown', (e) => { if ((e.target as HTMLElement)?.closest?.('.vp-pane')) lastDown = { x: e.clientX, t: Date.now() }; }, true);
 const isPart = (m: Member) => m.kind === 'plate' || m.kind === 'bolt' || m.kind === 'cleat' || m.kind === 'anchor';
 
 /** לאיזה חלון רכיב שייך אלמנט (כולל הפלטות והברגים של החיבורים שלו) */
@@ -24,6 +27,13 @@ export function compOfMember(m: Member | undefined, d: DerivedModel): CompKind |
   const id = isPart(m) ? (m.connId ? d.connById.get(m.connId)?.members[0] ?? m.connId : m.id) : m.id;
   if (/^(C\.)?(BR\.W|BB\.|LT\.)/.test(id) && !/^(C\.)?LTIE/.test(id)) return 'walls';
   if (/^(C\.)?KB\./.test(id)) return 'knee';
+  return null;
+}
+/** חיבור (עורך החיבור) ששייך לרכיב — נפתח באותו חלון */
+export function compOfConn(id: string | null | undefined): CompKind | null {
+  if (!id) return null;
+  if (/^C\.(BR\.W|BB\.|LT\.)/.test(id) && !/^C\.LTIE/.test(id)) return 'walls';
+  if (/^C\.KB\./.test(id)) return 'knee';
   return null;
 }
 export const compOfNav = (k: NavKey): CompKind | null => (k === 'b:walls' ? 'walls' : k === 'b:knee' ? 'knee' : null);
@@ -61,7 +71,16 @@ export function ComponentWindow({ kind, memberId, onClose, children }: { kind: C
   const [min, setMin] = useState(false);
   const [max, setMax] = useState(false);
   const [off, setOff] = useState({ x: 0, y: 0 });
-  useEffect(() => { setMin(false); }, [memberId, kind]);
+  const [side, setSide] = useState<'r' | 'l'>('r');
+  useEffect(() => {
+    if (!memberId) return; // ניקוי בחירה (לחיצה על שטח ריק) — החלון נשאר כמו שהוא (גם ממוזער)
+    setMin(false);
+    // נפתח מלחיצה במודל: אם הלחיצה בחצי הימני — החלון משמאל (ולהפך); גם המיקום הגרור מתאפס
+    if (lastDown && Date.now() - lastDown.t < 1500) {
+      const c = document.querySelector('.workspace > .center')?.getBoundingClientRect();
+      if (c) { const s2 = lastDown.x > c.left + c.width / 2 ? 'l' : 'r'; if (s2 !== side) { setSide(s2); setOff({ x: 0, y: 0 }); } }
+    }
+  }, [memberId, kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const drag = (e: React.PointerEvent<HTMLElement>) => {
     if ((e.target as HTMLElement).closest('button') || max) return;
     const x0 = e.clientX, y0 = e.clientY, o0 = off, el = e.currentTarget.closest('.cwin') as HTMLElement | null;
@@ -75,8 +94,10 @@ export function ComponentWindow({ kind, memberId, onClose, children }: { kind: C
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
   };
   // נפתח מלחיצה על אלמנט ועדיין לא נבחר היקף — ישר להגדרות הרכיב (בלי לשמור כהעדפה)
-  useEffect(() => { if (memberId && !store.state.propScope) store.set({ propScope: kind === 'knee' ? 'asm' : 'asmall' }); }, [memberId, kind]);
-  const set = useMemo(() => (kind === 'walls' ? wallSet(p, d, { memberId, whole: wide }) : kneeSet(p, d, { memberId, frame: wide })), [kind, p, d, memberId, wide]);
+  useEffect(() => { if (memberId && d.byId.has(memberId) && !store.state.propScope) store.set({ propScope: kind === 'knee' ? 'asm' : 'asmall' }); }, [memberId, kind]);
+  // חיבור פתוח (עורך החיבור) — התצוגה מתמקדת באלמנט של הרכיב שבחיבור
+  const focusId = memberId && !d.byId.has(memberId) ? d.connById.get(memberId)?.members.find((x) => M.re.test(x)) : memberId;
+  const set = useMemo(() => (kind === 'walls' ? wallSet(p, d, { memberId: focusId, whole: wide }) : kneeSet(p, d, { memberId: focusId, frame: wide })), [kind, p, d, focusId, wide]);
   const count = d.members.filter((m) => M.re.test(m.id) && !isPart(m)).length;
   const groups = useMemo(() => connGroups(d, M.re), [d, M.re]);
   const mainEnd = useMemo(() => { const m = d.members.find((x) => M.re.test(x.id) && !isPart(x)); return m ? `${m.id}|start` : null; }, [d, M.re]);
@@ -85,7 +106,7 @@ export function ComponentWindow({ kind, memberId, onClose, children }: { kind: C
     <button className={wide ? 'on' : ''} onClick={() => setWide(true)} data-testid="live3d-far">{kind === 'walls' ? 'כל הקיר' : 'מסגרת'}</button>
   </div>;
   return (
-    <section className={`cwin cwin-${M.tint}${min ? ' min' : ''}${max ? ' max' : ''}`} data-testid={`cwin-${kind}`} aria-label={M.title} style={max ? undefined : { transform: `translate(${off.x}px, ${off.y}px)` }}>
+    <section className={`cwin cwin-${M.tint}${min ? ' min' : ''}${max ? ' max' : ''}${side === 'l' ? ' at-l' : ''}`} data-side={side} data-testid={`cwin-${kind}`} aria-label={M.title} style={max ? undefined : { transform: `translate(${off.x}px, ${off.y}px)` }}>
       <header className="cwin-h" onPointerDown={drag} onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('button')) setMin(!min); }} title="גרירה מזיזה את החלון · לחיצה כפולה ממזערת">
         <span className="cwin-ic"><MenuPic name={M.pic} size={30} /></span>
         <div className="cwin-t"><small>{M.crumb} › {M.title}</small><b>{M.title}</b></div>

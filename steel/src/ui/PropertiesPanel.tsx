@@ -677,10 +677,7 @@ export function ScopeIsolator() {
     const hi = o && o.key !== 'one' ? (o.key === 'asm' || o.key === 'asmall' ? o.show.filter((x) => !host(x)) : o.ids) : null;
     if ((hi ?? []).join(',') !== (st.scopeHi ?? []).join(',')) store.set({ scopeHi: hi });
     // 1.51: הגדרות האלכסונים — המבט מתקרב לאלכסון הזה ולפחים שלו (כפתור "חזרה למודל המלא")
-    if (o?.key === 'asm' && m && /^KB\./.test(m.id) && !iso) {
-      const parts = d.connections.filter((c) => c.members.includes(m.id)).flatMap((c) => c.parts);
-      setTimeout(() => window.__ksp?.viewport?.focusIds?.([m.id, ...parts], 400), 40);
-    }
+    // 1.55.2: בלי "צלילה" של המודל לצומת — הצומת מוצג בתלת-ממד החי שבחלון הרכיב, והמודל נשאר במבט המלא
     if (o && iso) { store.set({ isolated: o.show, scopeIsoOwned: true }); setTimeout(() => (o.key === 'one' ? window.__ksp?.viewport?.fitSelection?.() : window.__ksp?.viewport?.fitIds?.(o.show)), 40); return; }
     if (st.scopeIsoOwned) store.set({ isolated: null, scopeIsoOwned: false });
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
