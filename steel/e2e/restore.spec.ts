@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, openNav } from './helpers';
 
 test('DEL-E1: מחיקת שני אלכסונים והחזרת אחד מהם מהרשימה — עם הפלטות שלו', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-b:knee').click(); await page.getByTestId('kb-on').check();
+  await openNav(page, 'b:knee'); await page.getByTestId('kb-on').check();
   await page.waitForTimeout(500);
   const st = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { kb: d.members.filter((m: any) => m.id.startsWith('KB.')).map((m: any) => m.id), kbPl: d.members.filter((m: any) => m.id.startsWith('C.KB.')).length, del: (window as any).__ksp.store.state.project.deleted }; });
   const s0 = await st();

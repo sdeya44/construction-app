@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, openNav } from './helpers';
 
 /** v1.29: קושרת גג במוט הברגה + כיסוי חלקי, נעילה אופקית, מזחלה בפלטה, מכפל, תבניות חדשות, צורת תוכנית */
 const state = (page: Page) => page.evaluate(() => {
@@ -14,7 +14,7 @@ const state = (page: Page) => page.evaluate(() => {
 
 test('V129-01 קושרת גג: פרט מוט הברגה + טבלת קטעים', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-b:roof').click();
+  await openNav(page, 'b:roof');
   await page.getByTestId('br-roof-ed-tab-sec').click();
   await page.getByTestId('br-roof-end').selectOption('rod');
   await page.waitForTimeout(400);
@@ -41,7 +41,7 @@ test('V129-01 קושרת גג: פרט מוט הברגה + טבלת קטעים', 
 
 test('V129-02 נעילה אופקית — מסבך + סיב רציף', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-b:walls').click();
+  await openNav(page, 'b:walls');
   if (!(await page.getByTestId('br-walls').isChecked())) await page.getByTestId('br-walls').check();
   await page.getByTestId('br-walls-truss').click();
   await page.waitForTimeout(400);
@@ -58,14 +58,14 @@ test('V129-02 נעילה אופקית — מסבך + סיב רציף', async ({ 
 
 test('V129-03 מכפל ומזחלה בפלטה', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-b:knee').click();
+  await openNav(page, 'b:knee');
   await page.getByTestId('hn-on').check();
   await page.waitForTimeout(400);
   let s = await state(page);
   expect(s.err).toEqual([]);
   expect(s.conns.some((id) => id.startsWith('C.HN.'))).toBe(true);
   if (!(await page.getByTestId('nav-w:roof').count())) await page.getByTestId('tab-clad').click();
-  await page.getByTestId('nav-w:roof').click();
+  await openNav(page, 'w:roof');
   if (await page.getByTestId('clad-enable').count()) await page.getByTestId('clad-enable').click();
   const g = page.getByTestId('clad-gutter');
   if (!(await g.isChecked())) await g.check();
@@ -80,7 +80,7 @@ test('V129-03 מכפל ומזחלה בפלטה', async ({ page }) => {
 
 test('V129-04 צורת תוכנית: מקבילית וטרפז', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-s:geometry').click();
+  await openNav(page, 's:geometry');
   await page.getByTestId('geo-ed-tab-frames').click();
   await page.getByTestId('plan-shape').selectOption('skew');
   await page.waitForTimeout(500);
@@ -99,7 +99,7 @@ test('V129-04 צורת תוכנית: מקבילית וטרפז', async ({ page }
 
 test('V129-05 חלון מכלול: נעילה אופקית — צורה לציר אחד, תמונה; אשף פלטה בסטודיו', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-b:walls').click();
+  await openNav(page, 'b:walls');
   if (!(await page.getByTestId('br-walls').isChecked())) await page.getByTestId('br-walls').check();
   await page.getByTestId('br-walls-truss').click();
   await page.waitForTimeout(400);
@@ -129,7 +129,7 @@ test('V129-05 חלון מכלול: נעילה אופקית — צורה לציר
 test('V130-01 לחיצה על המזחלה בתלת־ממד פותחת את אשף המזחלה; מידה בשרטוט משנה את החתך', async ({ page }) => {
   const errors = await boot(page);
   await page.getByTestId('tab-clad').click().catch(() => {});
-  await page.getByTestId('nav-w:roof').click();
+  await openNav(page, 'w:roof');
   if (await page.getByTestId('clad-enable').count()) await page.getByTestId('clad-enable').click();
   await page.waitForTimeout(500);
   await page.evaluate(() => (window as any).__ksp.viewport.fitAll('iso'));

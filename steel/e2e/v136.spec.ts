@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { boot, EVIDENCE, shot } from './helpers';
+import { boot, EVIDENCE, shot, openNav } from './helpers';
 
 test('V136-01: תוכנית הרכבה ותוויות בשרטוטים; הצעות האחדה בייצור', async ({ page }) => {
   const errors = await boot(page);
@@ -30,7 +30,7 @@ test('V136-02: תמונה ריאליסטית ללקוח', async ({ page }) => {
   const f = await (await dl).path();
   expect(fs.readFileSync(f).subarray(1, 4).toString()).toBe('PNG');
   await page.getByTestId('tab-clad').click();
-  await page.getByTestId('nav-w:walls').click();
+  await openNav(page, 'w:walls');
   await page.getByText('הוספת חיפוי למבנה').first().click();
   const url2: string = await page.evaluate(() => (window as any).__ksp.viewport.presentationShot(1200, 750, true));
   fs.writeFileSync(path.join(EVIDENCE, 'V136_02_client_clad.png'), Buffer.from(url2.split(',')[1], 'base64'));
@@ -53,7 +53,7 @@ test('V136-03: כל הציר / כל הקו מהסרגל ההקשרי; קושרו
   expect(hi2.length).toBe(nf);
   await shot(page, 'V136_03_line');
   await page.evaluate(() => (window as any).__ksp.store.select([]));
-  await page.getByTestId('nav-b:roof').click();
+  await openNav(page, 'b:roof');
   const add = page.getByTestId('off-roof'); if (await add.count()) await add.click();
   await page.getByTestId('br-split').selectOption('purlins');
   await page.getByTestId('br-toeave').check();

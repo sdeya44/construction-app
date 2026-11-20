@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, openNav } from './helpers';
 
 test('TB-01: דילול עמודים — בחירת עמודים, חלון הצעה, קורה נושאת, החלפת סוג תמיכה, החזרת עמודים', async ({ page }) => {
   await boot(page);
@@ -13,7 +13,7 @@ test('TB-01: דילול עמודים — בחירת עמודים, חלון הצ�
   expect(await st()).toEqual({ err: 0, tb: 1, cols: 9, seats: 5 });
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.select(['TB.' + k.store.state.project.building.transfers[0].id]); k.viewport.zoomToSelection?.(); });
   await shot(page, 'TB_02_model');
-  await page.getByTestId('nav-b:tb').click();
+  await openNav(page, 'b:tb');
   const id = await page.evaluate(() => (window as any).__ksp.store.state.project.building.transfers[0].id);
   await page.getByTestId('tb-grp-0-edit').click();
   await page.getByTestId('tb-ed-tab-support').click();

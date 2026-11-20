@@ -511,7 +511,7 @@ function SectionShape({ outline }: { outline: { u: number; v: number }[] }) {
   const u0 = Math.min(...us), u1 = Math.max(...us), v0 = Math.min(...vs), v1 = Math.max(...vs);
   const w = u1 - u0 || 1, h = v1 - v0 || 1, k = Math.min(36 / w, 50 / h);
   const pts = outline.map((q) => `${(20 + (q.u - (u0 + u1) / 2) * k).toFixed(2)},${(27 - (q.v - (v0 + v1) / 2) * k).toFixed(2)}`).join(' ');
-  return <svg viewBox="0 0 40 54" role="img" aria-label="חתך"><polygon points={pts} fill="#1f5a3f" /></svg>;
+  return <svg viewBox="0 0 40 54" role="img" aria-label="חתך"><polygon points={pts} fill="#2563a8" /></svg>;
 }
 
 function ModelSummary() {

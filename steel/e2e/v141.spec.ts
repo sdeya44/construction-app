@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, openNav } from './helpers';
 
 const S = (page: import('@playwright/test').Page) => page.evaluate(() => (window as any).__ksp.store.state);
 const count = (page: import('@playwright/test').Page, re: string) => page.evaluate((r) => (window as any).__ksp.store.state.derived.members.filter((m: any) => new RegExp(r).test(m.id)).length, re);
@@ -7,12 +7,12 @@ const count = (page: import('@playwright/test').Page, re: string) => page.evalua
 test('V141-01: מוטות תלייה, תמיכה צידית, סיב רציף, בסיס בכלונס, שם ציר — מהממשק, ללא שגיאות', async ({ page }) => {
   const errors = await boot(page);
   // שם ציר
-  await page.getByTestId('nav-s:geometry').click();
+  await openNav(page, 's:geometry');
   if (!(await page.getByTestId('sec-label-0').count())) await page.getByText('טבלת צירים — שם, מיקום').click();
   await page.getByTestId('sec-label-0').fill('E'); await page.getByTestId('sec-label-0').press('Enter');
   expect((await S(page)).derived.section.lines[0].label).toBe('E');
   // מוטות תלייה ותמיכה צידית
-  await page.getByTestId('nav-b:ties').click();
+  await openNav(page, 'b:ties');
   await page.getByTestId('br-ties-ed-tab-sag').click();
   await page.getByTestId('sr-on').check();
   expect(await count(page, '^SR\\.')).toBeGreaterThan(0);
@@ -20,7 +20,7 @@ test('V141-01: מוטות תלייה, תמיכה צידית, סיב רציף, ב
   await page.getByTestId('fb-on').check();
   expect(await count(page, '^FB\\.')).toBeGreaterThan(0);
   // סיב רציף
-  await page.getByTestId('nav-b:walls').click();
+  await openNav(page, 'b:walls');
   if (await page.getByTestId('br-walls-ed-tab-ties').count()) await page.getByTestId('br-walls-ed-tab-ties').click();
   await page.getByTestId('lt-on').check();
   expect(await count(page, '^LTIE\\.')).toBeGreaterThan(0);
@@ -38,7 +38,7 @@ test('V141-02: דילול עמודים — אלכסוני Y והחלה על כל
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, transfers: [
     { id: 'T1', lineId: 'L', from: 'F1', to: 'F3', removed: ['F2'], profile: 'IPE300', support: 'A1', seat: 'B1' },
     { id: 'T2', lineId: 'L', from: 'F3', to: 'F5', removed: ['F4'], profile: 'IPE300', support: 'A1', seat: 'B1' }] } }) }); });
-  await page.getByTestId('nav-b:tb').click();
+  await openNav(page, 'b:tb');
   // שתי קורות זהות — קבוצה אחת; "ערוך את כולן" ← לשונית אלכסוני Y
   await expect(page.getByTestId('tb-grp-1')).toHaveCount(0);
   await page.getByTestId('tb-grp-0-edit').click();

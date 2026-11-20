@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, pickProfile } from './helpers';
+import { boot, pickProfile, openNav } from './helpers';
 
 const st = (page: import('@playwright/test').Page) => page.evaluate(() => {
   const s = (window as any).__ksp.store.state; const b = s.project.building;
@@ -33,7 +33,7 @@ test('WZ-01: אשף פרויקט חדש — שלבים, תצוגה חיה, תו�
 
 test('PS-01: גיליון פרמטרים — עריכה בטבלה, חריגים והחזרה לכללי, השוואה למהדורה', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-s:sheet').click();
+  await openNav(page, 's:sheet');
   await expect(page.getByTestId('param-sheet')).toBeVisible();
   await page.getByTestId('ps-מספר מסגרות').fill('8'); await page.getByTestId('ps-מספר מסגרות').press('Enter');
   expect((await st(page)).frames).toBe(8);
@@ -44,7 +44,7 @@ test('PS-01: גיליון פרמטרים — עריכה בטבלה, חריגים
   expect((await st(page)).ov).toBe(0);
   // אישור מהדורה ושינוי — השורה מסומנת כשונתה
   await page.evaluate(() => { const k = (window as any).__ksp; const n = structuredClone(k.store.state.project); n.revision.log.push({ rev: 'A', date: '', note: '', status: 'approved', snapshot: JSON.stringify(n) }); k.store.loadProject(n, false); });
-  await page.getByTestId('nav-s:sheet').click();
+  await openNav(page, 's:sheet');
   await page.getByTestId('ps-only').check();
   await expect(page.locator('[data-testid^="ps-row-"]')).toHaveCount(0);
   await page.getByTestId('ps-only').uncheck();
@@ -65,7 +65,7 @@ test('SC-01: שינוי חתך לאלמנט אחד — התוכנה שואלת "
   expect(await prof('F5.COL.R')).toBe('HEB200');
   await page.getByTestId('pscope-one').click();
   // אלכסון: רק אחד
-  await page.getByTestId('nav-b:knee').click(); await page.getByTestId('kb-on').check();
+  await openNav(page, 'b:knee'); await page.getByTestId('kb-on').check();
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
   await pickProfile(page, 'prop-profile', 'SHS100x5', 'SHS');
   expect(await prof('KB.F2.L.L.R')).toBe('SHS100x5');
@@ -93,7 +93,7 @@ test('LW-UI: סככת L מהאשף — דו-שיפועי וחד-שיפועי; ע
     expect(r.seats).toBe(3);
   }
   // עריכה: צד שמאל, 3 מפתחים
-  await page.getByTestId('nav-b:wing').click();
+  await openNav(page, 'b:wing');
   await page.getByTestId('wing-side').selectOption('L');
   await page.getByTestId('wing-bays').fill('3'); await page.getByTestId('wing-bays').press('Enter');
   const r2 = await s();

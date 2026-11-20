@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot } from './helpers';
+import { boot, openNav } from './helpers';
 
 test('UX149-01: רמז "לחיצה נוספת" — אלמנט מאחור; סרגל צף בלי כפתורי היקף', async ({ page }) => {
   const errors = await boot(page);
@@ -87,7 +87,7 @@ test('UX151-01: עריכת חיבור — המבט מתקרב לצומת; "חז�
   expect(await cam()).toEqual(before);
   // אריחי סוג גדולים: קשיחות קירות וקושרות גג
   await page.evaluate(() => (window as any).__ksp.store.set({ activeConn: null }));
-  await page.getByTestId('nav-b:roof').click();
+  await openNav(page, 'b:roof');
   const add = page.getByTestId('off-roof'); if (await add.count()) await add.click();
   await page.getByTestId('br-roof-ed-tab-sec').click();
   await page.getByTestId('br-roof-type-rhs').click();
@@ -108,7 +108,7 @@ test('UX152-01: פרט טיפוסי בכרטיס החיבור / בעורך / ב�
   await page.evaluate(() => (window as any).__ksp.store.set({ activeConn: null }));
   // אלכסונים: רק במסגרות הקצה, ואז טווח 2–3
   await page.evaluate(() => (window as any).__ksp.store.select([]));
-  await page.getByTestId('nav-b:knee').click();
+  await openNav(page, 'b:knee');
   if (await page.getByTestId('kb-on').count()) await page.getByTestId('kb-on').check();
   await page.getByTestId('kb-ed-tab-plan').click();
   await page.getByTestId('kb-ends').click();
@@ -126,7 +126,7 @@ test('UX152-01: פרט טיפוסי בכרטיס החיבור / בעורך / ב�
 test('UX153-01: טבלת מופעים — שורה לכל מכלול, ריחוף מדגיש, לחיצה בוחרת ומתמקדת', async ({ page }) => {
   const errors = await boot(page);
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, bracing: { ...p.building.bracing, walls: { ...p.building.bracing.walls, enabled: true, type: 'portal' } } } }) }); });
-  await page.getByTestId('nav-b:walls').click();
+  await openNav(page, 'b:walls');
   await page.getByTestId('br-walls-ed-tab-table').click();
   const rows = page.locator('[data-testid^="ctab-walls-row-"]');
   const nAsm = await page.evaluate(() => new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => /^BB\./.test(m.id)).map((m: any) => m.id.split('.').slice(0, 3).join('.'))).size);

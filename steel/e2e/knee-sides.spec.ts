@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot, pickProfile } from './helpers';
+import { boot, shot, pickProfile, openNav } from './helpers';
 
 test('KB-02: אלכסוני עמוד-קורה — תוכנית איפה יש: תא, מסגרת, מפתח; מידות לכל מפתח (שורה אחת)', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-b:knee').click();
+  await openNav(page, 'b:knee');
   await page.getByTestId('kb-on').check();
   await page.getByTestId('kb-ed-tab-plan').click();
   await expect(page.getByTestId('kb-grid')).toBeVisible();
@@ -37,7 +37,7 @@ test('KB-02: אלכסוני עמוד-קורה — תוכנית איפה יש: ת
 test('KB-03: קונזולה — עמוד הקצה מופיע עם שני צדדיו; פרט חיבור ניתן לשינוי בעורך החיבור', async ({ page }) => {
   const errors = await boot(page);
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, rafterOverhangLeft: 1500, rafterOverhangRight: 1500 } }) }); });
-  await page.getByTestId('nav-b:knee').click();
+  await openNav(page, 'b:knee');
   await page.getByTestId('kb-on').check();
   await page.getByTestId('kb-ed-tab-plan').click();
   await expect(page.getByTestId('kb-cell-0-L.L.L')).toBeVisible();
@@ -83,9 +83,9 @@ test('HUB-01: לחיצה על עמוד — חתך (סוג ← מידה) עם ה�
 
 test('HUB-02: לחיצה על אלכסון אגד B — שרטוט סכמטי עם מידות לעריכה בלחיצה', async ({ page }) => {
   await boot(page);
-  await page.getByTestId('nav-b:walls').click();
+  await openNav(page, 'b:walls');
   await page.getByTestId('br-walls-portal').click();
-  await page.getByTestId('nav-b:knee').click(); // תפריט אחר פתוח — ההגדרות של האגד בפאנל האלמנט
+  await openNav(page, 'b:knee'); // תפריט אחר פתוח — ההגדרות של האגד בפאנל האלמנט
   const id = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BB.'))?.id);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), id);
   await page.getByTestId('pscope-asmall').click(); // היקף (1.48): כל המכלולים במודל
@@ -101,7 +101,7 @@ test('HUB-02: לחיצה על אלכסון אגד B — שרטוט סכמטי ע
 
 test('HUB-03: שינוי חתך מפאנל אלכסון — "רק האלמנט הזה" ו"כל האלכסונים" עובדים; קושרת גג משנה את כל הקושרות', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-b:knee').click();
+  await openNav(page, 'b:knee');
   await page.getByTestId('kb-on').check();
   const prof = (id: string) => page.evaluate((i) => (window as any).__ksp.store.state.derived.byId.get(i)?.profile, id);
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, openNav } from './helpers';
 
 const st = (page: any) => page.evaluate(() => (window as any).__ksp.store.state.project.building);
 async function editDim(page: any, id: string, v: string) {
@@ -10,7 +10,7 @@ async function editDim(page: any, id: string, v: string) {
 test('SCH-01: שרטוטים אינטראקטיביים — פטות, תומך, רכס, קושרות, פח, חיפוי', async ({ page }) => {
   await boot(page);
   // פטות: מרחק ראשון ומרווח
-  await page.getByTestId('nav-r:left').click();
+  await openNav(page, 'r:left');
   await expect(page.getByTestId('sch-purlins-left')).toBeVisible();
   await editDim(page, 'sch-left-s0', '350');
   expect((await st(page)).purlins.left.first).toBe(350);
@@ -19,13 +19,13 @@ test('SCH-01: שרטוטים אינטראקטיביים — פטות, תומך, 
   expect((await st(page)).purlins.left.cleat.base).toBe(90);
   await shot(page, 'SCH_01_purlins');
   // רכס
-  await page.getByTestId('nav-b:ridge').click();
+  await openNav(page, 'b:ridge');
   await page.getByTestId('ridge-reinf').selectOption('plate');
   await editDim(page, 'sch-rr-depth', '200');
   expect((await st(page)).ridgeReinf.depth).toBe(200);
   await shot(page, 'SCH_02_ridge');
   // קושרות גג — מפתח בלחיצה; פח חיבור
-  await page.getByTestId('nav-b:roof').click();
+  await openNav(page, 'b:roof');
   const before = (await st(page)).bracing.roof.bays.length;
   await page.getByTestId('br-grid-2-L').click();
   expect((await st(page)).bracing.roof.bays.length).not.toBe(before);
@@ -35,7 +35,7 @@ test('SCH-01: שרטוטים אינטראקטיביים — פטות, תומך, 
   await shot(page, 'SCH_03_roofX');
   // חיפוי קיר
   await page.getByTestId('tab-clad').click();
-  await page.getByTestId('nav-w:walls').click();
+  await openNav(page, 'w:walls');
   if (await page.getByTestId('clad-enable').count()) await page.getByTestId('clad-enable').click();
   if (!(await page.getByTestId('clad-walls').isChecked())) await page.getByTestId('clad-walls').check();
   if (!(await page.getByTestId('clad-side-L').isChecked())) await page.getByTestId('clad-side-L').check();
@@ -50,7 +50,7 @@ test('SCH-01: שרטוטים אינטראקטיביים — פטות, תומך, 
 
 test('SCH-02: מסבך "מספריים" — הגבהה בלחיצה; גיליון מכלול שני לרשימת חלקים', async ({ page }) => {
   await boot(page);
-  await page.getByTestId('nav-b:truss').click();
+  await openNav(page, 'b:truss');
   await page.getByTestId('rt-on').check();
   await page.getByTestId('rt-shape').selectOption('scissor');
   await editDim(page, 'tw-roof-rise', '800');
@@ -62,7 +62,7 @@ test('SCH-02: מסבך "מספריים" — הגבהה בלחיצה; גיליו�
 
 test('SCH-03: הגדלת שרטוט, עריכה בחלון המוגדל; פתחים בקיר על השרטוט', async ({ page }) => {
   await boot(page);
-  await page.getByTestId('nav-r:left').click();
+  await openNav(page, 'r:left');
   await page.getByTestId('sch-purlins-left-zoom').click();
   await expect(page.getByTestId('sch-purlins-left-big')).toBeVisible();
   await page.getByTestId('sch-purlins-left-L').getByTestId('sch-left-s0').dispatchEvent('click');
@@ -73,7 +73,7 @@ test('SCH-03: הגדלת שרטוט, עריכה בחלון המוגדל; פתח�
   await page.getByTestId('sch-purlins-left-close').click();
   // פתחים
   await page.getByTestId('tab-clad').click();
-  await page.getByTestId('nav-w:openings').click();
+  await openNav(page, 'w:openings');
   if (await page.getByTestId('clad-enable').count()) await page.getByTestId('clad-enable').click();
   await page.getByTestId('op-add-door').click();
   await expect(page.getByTestId('sch-op-F')).toBeVisible();

@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, openNav } from './helpers';
 
 const openStudio = async (page: import('@playwright/test').Page) => {
-  await page.getByTestId('nav-b:knee').click();
+  await openNav(page, 'b:knee');
   await page.getByTestId('kb-on').check();
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
   await page.getByTestId('studio-start').click();

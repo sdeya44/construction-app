@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, openNav } from './helpers';
 
 const B = (page: any) => page.evaluate(() => (window as any).__ksp.store.state.project.building);
 async function editDim(page: any, id: string, v: string) {
@@ -9,10 +9,10 @@ async function editDim(page: any, id: string, v: string) {
 
 test('V135-01: חיבור המשך פטות בשרטוט; קונזולות, מפלס בסיס וקונזולות פטות על השרטוטים', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-r:splices').click();
+  await openNav(page, 'r:splices');
   await editDim(page, 'sch-ps-off', '80');
   expect((await B(page)).purlins.splice.jointOffset).toBe(80);
-  await page.getByTestId('nav-s:geometry').click();
+  await openNav(page, 's:geometry');
   await expect(page.getByTestId('ovh-left')).toHaveCount(0);
   await page.getByTestId('isec-base').dispatchEvent('click');
   await page.getByTestId('isec-input').fill('0.15'); await page.getByTestId('isec-input').press('Enter');
@@ -30,7 +30,7 @@ test('V135-01: חיבור המשך פטות בשרטוט; קונזולות, מפ
 test('V135-02: פטות קיר ועמודי רוח בחזית; פנל גג בחתך; כתב כמויות מקובץ', async ({ page }) => {
   const errors = await boot(page);
   await page.getByTestId('tab-clad').click();
-  await page.getByTestId('nav-w:walls').click();
+  await openNav(page, 'w:walls');
   await page.getByText('הוספת חיפוי למבנה').first().click();
   await editDim(page, 'sch-clad-L-g-sp', '1200');
   expect((await B(page)).cladding.girts.spacing).toBe(1200);
@@ -38,10 +38,10 @@ test('V135-02: פטות קיר ועמודי רוח בחזית; פנל גג בח�
   await editDim(page, 'sch-clad-F-p-max', '4000');
   expect((await B(page)).cladding.posts.maxSpacing).toBe(4000);
   await shot(page, 'V135_02_wall');
-  await page.getByTestId('nav-w:roof').click();
+  await openNav(page, 'w:roof');
   await editDim(page, 'sch-rp-ext', '120');
   expect((await B(page)).cladding.roof.eaveExt).toBe(120);
-  await page.getByTestId('nav-w:takeoff').click();
+  await openNav(page, 'w:takeoff');
   const rows = await page.getByTestId('clad-sheets').locator('tbody tr').count();
   expect(rows).toBeLessThanOrEqual(6);
   expect(errors).toEqual([]);
@@ -49,7 +49,7 @@ test('V135-02: פטות קיר ועמודי רוח בחזית; פנל גג בח�
 
 test('V135-03: מסבכי גג — בחירה ברצועה וקביעת שדה על השרטוט; עורך חיבור בלשוניות; כנף בציור', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-b:truss').click();
+  await openNav(page, 'b:truss');
   if (await page.getByTestId('off-rt-add').count()) await page.getByTestId('off-rt-add').click();
   await expect(page.getByTestId('rt-f-strip')).toBeVisible();
   await page.getByTestId('rt-f-3').click();
@@ -59,13 +59,13 @@ test('V135-03: מסבכי גג — בחירה ברצועה וקביעת שדה �
   await lock.click();
   await expect(lock).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('tab-conns').click();
-  await page.getByTestId('nav-c:eave').click();
+  await openNav(page, 'c:eave');
   await page.getByTestId('cvar-open-eave-0').click();
   await expect(page.getByTestId('pw-bolt')).toBeVisible();
   await page.getByTestId('conn-tab-bolts').click();
   await expect(page.getByTestId('conn-bolts')).toBeVisible();
   await expect(page.getByTestId('pw-bolt')).toHaveCount(0);
-  await page.getByTestId('nav-b:wing').click();
+  await openNav(page, 'b:wing');
   await expect(page.getByTestId('wing-add-gable').locator('svg')).toBeVisible();
   expect(errors).toEqual([]);
 });

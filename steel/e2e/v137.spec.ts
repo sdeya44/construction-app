@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, openNav } from './helpers';
 
 test('V137-01: סדר הקמה, סבולת מספור, חלוקת מפתח לאורך המבנה', async ({ page }) => {
   const errors = await boot(page);
@@ -12,7 +12,7 @@ test('V137-01: סדר הקמה, סבולת מספור, חלוקת מפתח לא�
   expect(await page.evaluate(() => (window as any).__ksp.store.state.project.settings.markTol)).toBe(5);
   await expect(page.getByRole('button', { name: 'סדר הקמה' })).toBeVisible();
   await page.getByRole('button', { name: 'מודל' }).first().click();
-  await page.getByTestId('nav-b:roof').click();
+  await openNav(page, 'b:roof');
   const add = page.getByTestId('off-roof'); if (await add.count()) await add.click();
   await page.getByTestId('br-ysplit').selectOption('3');
   expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('BR.S')).length)).toBeGreaterThan(0);
@@ -26,7 +26,7 @@ test('V137-02: מסבך נושא בין העמודים — סנפיר שוכב/�
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L', 'F3.COL.L', 'F4.COL.L']));
   await page.getByTestId('ctx-omit').click();
   await page.getByTestId('omit-apply').click();
-  await page.getByTestId('nav-b:tb').click();
+  await openNav(page, 'b:tb');
   await page.getByTestId('tb-grp-0-edit').click();
   const id = await page.evaluate(() => (window as any).__ksp.store.state.project.building.transfers[0].id);
   await page.getByTestId(`tb-kind-truss-${id}`).click();
@@ -53,7 +53,7 @@ test('V137-02: מסבך נושא בין העמודים — סנפיר שוכב/�
 
 test('V138-01: מפלס ייחוס לגבהים בשרטוט החתך; פירוט אורך חיתוך עמוד', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-s:geometry').click();
+  await openNav(page, 's:geometry');
   const sec = () => page.evaluate(() => (window as any).__ksp.store.state.project.building.section ?? null);
   await page.getByTestId('isec-datum').selectOption('purlin');
   const tid = await page.locator('[data-testid^="isec-z-"]').first().getAttribute('data-testid');

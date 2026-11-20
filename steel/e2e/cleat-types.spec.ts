@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, openNav } from './helpers';
 
 const st = (page: import('@playwright/test').Page) => page.evaluate(() => {
   const s = (window as any).__ksp.store.state, d = s.derived;
@@ -51,7 +51,7 @@ test('CT-01: תושבת פטה — בחירת סוג בכרטיסים (זווי�
 
 test('ET-01: קצה אלמנט — בחירת פרט מוכן בכרטיס, ושמירה כפרט חדש בסטודיו לא דורסת את הקיים', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-b:knee').click();
+  await openNav(page, 'b:knee');
   await page.getByTestId('kb-on').check();
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
   await page.getByTestId('et-start-open').click();
@@ -72,7 +72,7 @@ test('ET-01: קצה אלמנט — בחירת פרט מוכן בכרטיס, וש
 test('STEP-01: גג מדורג — זיז לקורה העליונה מעבר לעמוד בדירוג', async ({ page }) => {
   const errors = await boot(page);
   page.on('dialog', (d) => d.accept());
-  await page.getByTestId('nav-s:geometry').click();
+  await openNav(page, 's:geometry');
   await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-stepped').click();
   await page.getByTestId('geo-ed-tab-planes').click();

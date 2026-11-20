@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { boot, screenOf, selection, setView, pickProfile, profileSizes } from './helpers';
+import { boot, screenOf, selection, setView, pickProfile, profileSizes, openNav } from './helpers';
 
 /**
  * סימולציית משתמש בממשק — כל תבנית: אשף ← לחיצה על עמוד במודל ← שינוי חתך לכולם ← קורה אחת בחתך אחר ←
@@ -95,7 +95,7 @@ for (const t of TEMPLATES) {
     await page.keyboard.press('Escape');
 
     // גיליון פרמטרים: מסגרת נוספת
-    await page.getByTestId('nav-s:sheet').click();
+    await openNav(page, 's:sheet');
     const n = Number(await page.getByTestId('ps-מספר מסגרות').inputValue());
     await page.getByTestId('ps-מספר מסגרות').fill(String(n + 1)); await page.getByTestId('ps-מספר מסגרות').press('Enter');
     await acceptEave(page);

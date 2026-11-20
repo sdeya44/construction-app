@@ -1,4 +1,5 @@
 import { ComponentTable } from './ComponentTable';
+import { ConnPreview } from './ConnPreview';
 import { useRef, useState } from 'react';
 import { setBuilding, setKneeBraces, setSection, setSettings } from '../commands/commands';
 import { tryProfile } from '../profiles/library';
@@ -266,6 +267,8 @@ export function KneeEditor() {
   const d = useStore((s) => s.derived);
   const set = (patch: Parameters<typeof setKneeBraces>[0]) => store.exec(setKneeBraces(patch));
   const ed = useEdit();
+  const [prevOpen, setPrevOpen] = useState(() => { try { return localStorage.getItem('ksp-kb-prev') !== '0'; } catch { return true; } });
+  const firstKb = d.connections.find((c) => c.type === 'knee' && c.id.startsWith('C.KB.'))?.id;
   // פרט החיבור — שדות החיבור (בחלון האלמנט: בסעיף "חיבורים"; בתפריט הצד: ב"מתקדם")
   const connFields = <>
     <KneeDetailField />
@@ -285,7 +288,7 @@ export function KneeEditor() {
       {kb.enabled && ed.embed && <><>
         <KneeSchematic />
         {ed.showProfile && <div className="field prof"><label>חתך</label><ProfilePicker testId="kb-profile" value={kb.profile} families={['RHS', 'SHS', 'CHS', 'L', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>}
-        <div className="field"><label>קביעת הנקודה על הקורה</label>
+        <div className="field"><label>מה נעול</label>
           <div className="seg">
             <button className={`tbtn${(kb.mode ?? 'angle') === 'angle' ? ' on' : ''}`} data-testid="kb-mode-angle" onClick={() => set({ mode: 'angle' })}>זווית</button>
             <button className={`tbtn${kb.mode === 'reach' ? ' on' : ''}`} data-testid="kb-mode-reach" onClick={() => set({ mode: 'reach' })}>מרחק אופקי</button>
@@ -296,9 +299,13 @@ export function KneeEditor() {
         <SumCard testId="kb-sum" editLabel="פרט ✎" onEdit={() => { const c = d.connections.find((x) => x.id.startsWith('C.KB.')); if (c) store.set({ connWizard: c.id }); }} title={`${n} אלכסונים · ${kb.profile}`} sub={`${(kb.mode ?? 'angle') === 'angle' ? `${kb.angle ?? 45}°` : `מרחק ${kb.reach}`} · ירידה ${kb.drop} · ${({ fin: 'פח + לשונית', angle: 'זוויתן מוברג לפח', flange: 'פלטת קצה לאגף' } as const)[kneeDetail(kb.detail, tryProfile(kb.profile)?.family ?? 'RHS')]}`}
           pills={Object.values(kb.sides ?? {}).some((o) => o && Object.keys(o).some((x) => x !== 'on')) ? [{ text: 'יש ערכים חריגים למפתחים', tone: 'warn' }] : []} />
         <PanelAlerts issues={d.issues.filter((i) => /^KNEE_|^BOLT_ACCESS|^PLATE_WIDE/.test(i.code) && /אלכסון/.test(i.message))} testId="kb-alerts" />
+        {/* 1.54: תצוגה מקדימה מתקפלת מעל הלשוניות — שרטוט עם מידות לעריכה + פרט החיבור החי */}
+        <details className="kb-prev" open={prevOpen || undefined} onToggle={(e) => { const o = (e.currentTarget as HTMLDetailsElement).open; setPrevOpen(o); try { localStorage.setItem('ksp-kb-prev', o ? '1' : '0'); } catch { /* */ } }} data-testid="kb-prev">
+          <summary>תצוגה מקדימה</summary>
+          {prevOpen && <KneeSchematic />}
+        </details>
         <TabbedEditor testId="kb-ed" title="" tabs={[
-          { key: 'shape', label: 'צורה וחתך', render: () => <>
-        <KneeSchematic />
+          { key: 'shape', label: 'כללי ומיקום', render: () => <>
         {ed.showProfile && <div className="field prof"><label>חתך</label><ProfilePicker testId="kb-profile" value={kb.profile} families={['RHS', 'SHS', 'CHS', 'L', 'UPN']} onCommit={(v) => set({ profile: v })} /></div>}
         <div className="field"><label>קביעת הנקודה על הקורה</label>
           <div className="seg">
@@ -306,11 +313,12 @@ export function KneeEditor() {
             <button className={`tbtn${kb.mode === 'reach' ? ' on' : ''}`} data-testid="kb-mode-reach" onClick={() => set({ mode: 'reach' })}>מרחק אופקי</button>
           </div>
         </div>
+        <div className="hint">ירידה, זווית ומרחק — לחיצה על המידה בתצוגה המקדימה. הערך הנעול קובע, השני מחושב.</div>
       </> },
-          { key: 'plan', label: 'איפה יש', render: () => <KneeSides /> },
-          { key: 'table', label: 'טבלה', render: () => <ComponentTable match={/^KB\./} testId="ctab-knee" /> },
-          { key: 'conn', label: 'פרט חיבור', render: () => connFields },
+          { key: 'conn', label: 'מחברים ופרט', render: () => <>{connFields}{firstKb && <ConnPreview connId={firstKb} compact />}</> },
+          { key: 'plan', label: 'לפי מסגרות', render: () => <><KneeSides /><div className="panel-title" style={{ marginTop: 12 }}>טבלת אלכסונים</div><ComponentTable match={/^KB\./} testId="ctab-knee" /></> },
         ]} />
+        <div className="live-note" data-testid="kb-live">כל שינוי מוצג מיד במודל ({n} אלכסונים) · Ctrl+Z לביטול · חריג לצד או למסגרת — בלשונית "לפי מסגרות"</div>
         <Help>בכל מפגש עמוד-קורה, לכל צד שבו הקורה ממשיכה. אין בדיקת חוזק.</Help>
       </>}
     </>

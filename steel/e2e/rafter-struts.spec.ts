@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, openNav } from './helpers';
 
 test('RS-01: תמוכות בין הקורות — שורה מציר א לכיוון ב, הקושרות מתחלקות לפיה, חלוקה ידנית מבוטלת עם התראה', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('nav-b:roof').click();
+  await openNav(page, 'b:roof');
   const S = () => page.evaluate(() => (window as any).__ksp.store.state);
   await page.getByTestId('br-roof-ed-tab-struts').click();
   await page.getByTestId('rs-add').click();

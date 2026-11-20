@@ -711,11 +711,12 @@ export class Viewport {
     // מזחלה/ירידה לפני כל אלמנט אחר בקרן — פתיחת אשף המזחלה
     const g = this.pickGutter(p, e.clientX, e.clientY);
     const lp0 = p.lastPick;
-    // לחיצה חוזרת באותה נקודה אחרי מזחלה — עוברים לאלמנט שמאחוריה (1.48.2; קודם המזחלה "תפסה" כל לחיצה)
-    const againAfterGutter = !!lp0?.gutter && Math.hypot(lp0.x - e.clientX, lp0.y - e.clientY) < 5 && r.ids.length > 0;
-    if (g && !againAfterGutter && (!r.points.length || g.d < r.points[0]!.distanceTo(p.camera.position) - 1)) {
+    // סבב בלחיצות חוזרות באותה נקודה: מזחלה (אם לפני) → אלמנט 1 → אלמנט 2 → … → חזרה למזחלה (1.54: קודם המזחלה "תפסה" שוב כבר בלחיצה השלישית)
+    const same = !!lp0 && Math.hypot(lp0.x - e.clientX, lp0.y - e.clientY) < 5 && lp0.ids.join() === r.ids.join();
+    const gFront = !!g && (!r.points.length || g.d < r.points[0]!.distanceTo(p.camera.position) - 1);
+    if (gFront && (!same || (!lp0!.gutter && lp0!.i >= r.ids.length - 1) || !r.ids.length)) {
       store.select([]);
-      store.set({ activeGutter: g.ref, activeConn: null, pickNext: r.ids[0] ?? null });
+      store.set({ activeGutter: g!.ref, activeConn: null, pickNext: r.ids[0] ?? null });
       p.lastPick = { x: e.clientX, y: e.clientY, ids: r.ids, i: -1, gutter: true };
       return;
     }
@@ -726,20 +727,11 @@ export class Viewport {
       return;
     }
     // לחיצה חוזרת באותה נקודה בוחרת את האלמנט הבא מאחור
-    let idx = 0;
-    const lp = p.lastPick;
-    if (lp && Math.hypot(lp.x - e.clientX, lp.y - e.clientY) < 5 && lp.ids.join() === r.ids.join()) idx = (lp.i + 1) % r.ids.length;
-    // סבב: אחרי האלמנט האחרון בקרן — חזרה למזחלה שלפניהם
-    if (g && lp && !lp.gutter && idx === 0 && lp.ids.join() === r.ids.join() && Math.hypot(lp.x - e.clientX, lp.y - e.clientY) < 5 && g.d < r.points[0]!.distanceTo(p.camera.position) - 1) {
-      store.select([]); store.set({ activeGutter: g.ref, activeConn: null, pickNext: r.ids[0] ?? null });
-      p.lastPick = { x: e.clientX, y: e.clientY, ids: r.ids, i: -1, gutter: true };
-      return;
-    }
+    const idx = same ? (lp0!.gutter ? 0 : (lp0!.i + 1) % r.ids.length) : 0;
     p.lastPick = { x: e.clientX, y: e.clientY, ids: r.ids, i: idx };
     const id = r.ids[idx];
     store.select([id], e.ctrlKey || e.metaKey ? 'toggle' : e.shiftKey ? 'add' : 'replace');
     // רמז: מה תבחר לחיצה נוספת באותה נקודה (אלמנט מאחור / המזחלה שלפני)
-    const gFront = !!g && g.d < r.points[0]!.distanceTo(p.camera.position) - 1;
     const nx = idx + 1 < r.ids.length ? r.ids[idx + 1] : gFront ? 'gutter' : r.ids.length > 1 ? r.ids[0] : null;
     if (nx) store.set({ pickNext: nx });
   }

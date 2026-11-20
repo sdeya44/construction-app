@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot, pickProfile } from './helpers';
+import { boot, shot, pickProfile, openNav } from './helpers';
 
 test('SIZE-01: בדיקת גדלים — צביעה, מקרא, הסבר לאלמנט, בוחר פרופילים צבוע', async ({ page }) => {
   await boot(page);
@@ -17,7 +17,7 @@ test('SIZE-01: בדיקת גדלים — צביעה, מקרא, הסבר לאלמ
   await expect(page.getByTestId('szc-live')).toBeVisible();
   // בוחר פרופילים: קורות גג עם תגית הערכה
   await page.getByTestId('tool-sizing').click();
-  await page.getByTestId('nav-s:profiles').click();
+  await openNav(page, 's:profiles');
   await expect(page.getByTestId('rafterProfile-sz')).toContainText('קטן');
   await pickProfile(page, 'rafterProfile', 'IPE400');
   await expect(page.getByTestId('rafterProfile-sz')).toContainText('סביר');
@@ -59,9 +59,9 @@ test('CLAD-01: פרויקט חדש עם חיפוי והתאמת חתכים — �
   expect((await st()).err).toBe(0);
   expect((await st()).girts).toBeGreaterThan(40);
   await page.getByTestId('tab-clad').click();
-  await page.getByTestId('nav-w:openings').click();
+  await openNav(page, 'w:openings');
   await page.getByTestId('op-add-door').click();
-  await page.getByTestId('nav-w:takeoff').click();
+  await openNav(page, 'w:takeoff');
   await expect(page.getByTestId('clad-takeoff')).toContainText('מ"ר');
   expect((await st()).err).toBe(0);
   await shot(page, 'CLAD_01');

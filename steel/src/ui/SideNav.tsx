@@ -2,7 +2,7 @@ import { IssueList } from './IssueList';
 import { DetailLibrary } from './DetailLibrary';
 import { ParamSheet } from './ParamSheet';
 import { WingPanel } from './WingPanel';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Connection, Member, MemberKind, Severity } from '../model/types';
 import { cutLength } from '../geometry/solid';
 import { massPerMeter, tryProfile } from '../profiles/library';
@@ -44,7 +44,7 @@ export function navGroupOf(nav: NavKey): string {
   return nav.includes(':') ? ({ s: 'structure', r: 'roof', b: 'brace', k: 'tree', c: 'conns', i: 'issues', w: 'clad' } as Record<string, string>)[nav[0]] : nav;
 }
 
-export function SideNav({ nav, setNav, onOpenConn, treeOnly }: { nav: NavKey; setNav: (k: NavKey) => void; onOpenConn: (id: string) => void; treeOnly?: boolean }) {
+export function SideNav({ nav, setNav, onOpenConn, treeOnly, ribbon }: { nav: NavKey; setNav: (k: NavKey) => void; onOpenConn: (id: string) => void; treeOnly?: boolean; /** 1.54: תצוגת ריבון (מסך רחב) */ ribbon?: boolean }) {
   const d = useStore((s) => s.derived);
   const roofType = useStore((s) => (s.project.building.section ? 'modular' : s.project.building.roofType));
   const [open, setOpen] = useState<Record<string, boolean>>({ structure: true, roof: true, brace: true, special: true });
@@ -89,49 +89,57 @@ export function SideNav({ nav, setNav, onOpenConn, treeOnly }: { nav: NavKey; se
   const grp = navGroupOf(nav);
   if (grp && !open[grp]) setTimeout(() => setOpen((o) => ({ ...o, [grp]: true })), 0);
 
+  // קבוצות העץ / לשוניות הריבון — מקור אחד (1.54)
+  type G = { key: NavKey; label: string; tab: string; testId: string; pic: string; items: Item[]; badge?: ReactNode; list?: boolean };
+  const G: G[] = [
+    { key: 'structure', label: '1 · מבנה', tab: 'מבנה', testId: 'tab-structure', pic: 'geometry', items: [
+      { key: 's:sheet', label: 'גיליון פרמטרים — הכל בטבלה', pic: 'project' },
+      { key: 's:project', label: 'פרויקט והגדרות', pic: 'project' }, { key: 's:geometry', label: 'צירים, מסגרות וגבהים', pic: 'geometry' },
+      { key: 's:profiles', label: 'חתכים וחומר', pic: 'profiles' },
+    ] },
+    { key: 'roof', label: '2 · גג ופטות', tab: 'גג ופטות', testId: 'tab-roof', pic: 'slope', items: [
+      ...(roofType === 'gable' ? [{ key: 'r:left' as NavKey, label: 'שיפוע שמאל — פטות ותושבות', pic: 'slopeL' }, { key: 'r:right' as NavKey, label: 'שיפוע ימין — פטות ותושבות', pic: 'slopeR' }] : [{ key: 'r:left' as NavKey, label: roofType === 'modular' ? 'שיפועי הגג — פטות ותושבות' : 'שיפוע הגג — פטות ותושבות', pic: 'slope' }]),
+      { key: 'r:splices', label: 'חיבורי המשך פטות', n: d.splices.filter((x) => x.memberId.startsWith('PL.')).length, pic: 'splice' },
+    ] },
+    { key: 'brace', label: '3 · חיזוקים', tab: 'חיזוקים', testId: 'tab-brace', pic: 'brace0', items: [
+      { key: 'b:knee', label: 'אלכסוני עמוד-קורה', n: connCount.get('knee') ? d.connections.filter((c) => c.id.startsWith('C.KB.')).length : undefined, pic: 'knee' },
+      { key: 'b:roof', label: 'קושרות גג', pic: 'roofX' },
+      { key: 'b:walls', label: 'קשיחות קירות', pic: 'walls' },
+      { key: 'b:ties', label: 'פטות: קשירה, מוטות, תמיכה', pic: 'ties' },
+      { key: 'b:ridge', label: 'חיזוק רכס', pic: 'ridge' },
+    ] },
+    { key: 'clad', label: '4 · קירות וחיפוי', tab: 'קירות וחיפוי', testId: 'tab-clad', pic: 'walls', items: [
+      { key: 'w:roof', label: 'חיפוי גג ומזחלות', pic: 'slope' },
+      { key: 'w:walls', label: 'חיפוי קירות ופטות קיר', pic: 'walls' },
+      { key: 'w:openings', label: 'פתחים', n: d.members.length ? (store.state.project.building.cladding?.openings.length || undefined) : undefined, pic: 'frames' },
+      { key: 'w:takeoff', label: 'כתב כמויות חיפוי', pic: 'project' },
+    ] },
+    { key: 'special', label: '5 · מיוחדים', tab: 'רכיבים מיוחדים', testId: 'tab-special', pic: 'frames', items: [
+      { key: 'b:tb', label: 'דילול עמודים — קורות נושאות', n: store.state.project.building.transfers?.length || undefined, pic: 'frames' },
+      { key: 'b:wing', label: 'כנף — סככת L', n: store.state.project.building.wing?.enabled ? 1 : undefined, pic: 'geometry' },
+      { key: 'b:truss', label: 'מסבכי גג', n: store.state.project.building.roofTruss?.enabled ? d.connections.filter((c) => c.type === 'truss' && c.id.startsWith('C.TR.')).length : undefined, pic: 'roofX' },
+    ] },
+    { key: 'tree', label: 'אלמנטים', tab: 'אלמנטים', testId: 'tab-tree', pic: 'elements', list: true, items: KINDS.filter((k) => kindCount.get(k)).map((k) => ({ key: `k:${k}` as NavKey, label: KIND_LABEL[k], n: kindCount.get(k), pic: k })) },
+    { key: 'conns', label: 'חיבורים', tab: 'חיבורים', testId: 'tab-conns', pic: 'conns', list: true, items: [
+      ...ORDER_C.filter((t) => connCount.get(t)).map((t) => ({ key: `c:${t}` as NavKey, label: CONN_TYPE[t], n: connCount.get(t), pic: t === 'ridge' ? 'ridge' : t === 'knee' ? 'knee' : t === 'brace' ? 'brace' : t })),
+      { key: 'c:library' as NavKey, label: 'ספריית פרטים', n: store.state.project.customDetails?.length || undefined, pic: 'project' },
+    ] },
+    { key: 'issues', label: 'בדיקות', tab: 'בדיקות', testId: 'tab-issues', pic: 'issues', list: true, items: (['error', 'warning', 'info'] as Severity[]).filter((s) => sevCount.get(s)).map((s) => ({ key: `i:${s}` as NavKey, label: SEV_LABEL[s], n: sevCount.get(s), cls: s === 'error' ? 'err' : s === 'warning' ? 'warn' : '', pic: s })),
+      badge: (errs + warns) > 0 ? <span className={`count ${errs ? 'err' : 'warn'}`}>{errs + warns}</span> : null },
+  ];
+  if (ribbon) return <Ribbon groups={G} nav={nav} setNav={setNav} stat={stat} />;
+
   return (
     <div className={`sidenav${treeOnly ? ' tree-only' : ''}`}>
       <nav className="nav-tree" aria-label="עץ תפריטים">
         {/* סדר העבודה: 1 מבנה ← 2 גג ופטות ← 3 חיזוקים ← 4 קירות וחיפוי ← 5 מיוחדים; אחריהם — רשימות ובדיקות */}
-        {group('structure', '1 · מבנה', 'tab-structure', 'geometry', [
-          { key: 's:sheet', label: 'גיליון פרמטרים — הכל בטבלה', pic: 'project' },
-          { key: 's:project', label: 'פרויקט והגדרות', pic: 'project' }, { key: 's:geometry', label: 'צירים, מסגרות וגבהים', pic: 'geometry' },
-          { key: 's:profiles', label: 'חתכים וחומר', pic: 'profiles' },
-        ])}
-        {group('roof', '2 · גג ופטות', 'tab-roof', 'slope', [
-          ...(roofType === 'gable' ? [{ key: 'r:left' as NavKey, label: 'שיפוע שמאל — פטות ותושבות', pic: 'slopeL' }, { key: 'r:right' as NavKey, label: 'שיפוע ימין — פטות ותושבות', pic: 'slopeR' }] : [{ key: 'r:left' as NavKey, label: roofType === 'modular' ? 'שיפועי הגג — פטות ותושבות' : 'שיפוע הגג — פטות ותושבות', pic: 'slope' }]),
-          { key: 'r:splices', label: 'חיבורי המשך פטות', n: d.splices.filter((x) => x.memberId.startsWith('PL.')).length, pic: 'splice' },
-        ])}
-        {group('brace', '3 · חיזוקים', 'tab-brace', 'brace0', [
-          { key: 'b:knee', label: 'אלכסוני עמוד-קורה', n: connCount.get('knee') ? d.connections.filter((c) => c.id.startsWith('C.KB.')).length : undefined, pic: 'knee' },
-          { key: 'b:roof', label: 'קושרות גג', pic: 'roofX' },
-          { key: 'b:walls', label: 'קשיחות קירות', pic: 'walls' },
-          { key: 'b:ties', label: 'פטות: קשירה, מוטות, תמיכה', pic: 'ties' },
-          { key: 'b:ridge', label: 'חיזוק רכס', pic: 'ridge' },
-        ])}
-        {group('clad', '4 · קירות וחיפוי', 'tab-clad', 'walls', [
-          { key: 'w:roof', label: 'חיפוי גג ומזחלות', pic: 'slope' },
-          { key: 'w:walls', label: 'חיפוי קירות ופטות קיר', pic: 'walls' },
-          { key: 'w:openings', label: 'פתחים', n: d.members.length ? (store.state.project.building.cladding?.openings.length || undefined) : undefined, pic: 'frames' },
-          { key: 'w:takeoff', label: 'כתב כמויות חיפוי', pic: 'project' },
-        ])}
-        {group('special', '5 · מיוחדים', 'tab-special', 'frames', [
-          { key: 'b:tb', label: 'דילול עמודים — קורות נושאות', n: store.state.project.building.transfers?.length || undefined, pic: 'frames' },
-          { key: 'b:wing', label: 'כנף — סככת L', n: store.state.project.building.wing?.enabled ? 1 : undefined, pic: 'geometry' },
-          { key: 'b:truss', label: 'מסבכי גג', n: store.state.project.building.roofTruss?.enabled ? d.connections.filter((c) => c.type === 'truss' && c.id.startsWith('C.TR.')).length : undefined, pic: 'roofX' },
-        ])}
+        {G.filter((g) => !g.list).map((g) => group(g.key, g.label, g.testId, g.pic, g.items, g.badge))}
         {(() => { const keys = [...new Set(addKeys)].filter((k) => k !== 'w:walls' && k !== 'w:openings' && k !== 'w:takeoff'); return keys.length > 0 && (
           <div className="nav-add" data-testid="nav-add"><span className="nav-add-t">+ הוסף רכיב</span>
             {keys.map((k) => <button key={k} className="nav-add-b" data-testid={`nav-${k}`} onClick={() => { setNav(k as NavKey); const g = navGroupOf(k as NavKey); setOpen((o) => ({ ...o, [g]: true })); }}>{ADD_LABEL[k] ?? k}</button>)}
           </div>); })()}
         <div className="nav-sep">רשימות ובדיקה</div>
-        {group('tree', 'אלמנטים', 'tab-tree', 'elements', KINDS.filter((k) => kindCount.get(k)).map((k) => ({ key: `k:${k}` as NavKey, label: KIND_LABEL[k], n: kindCount.get(k), pic: k })))}
-        {group('conns', 'חיבורים', 'tab-conns', 'conns', [
-          ...ORDER_C.filter((t) => connCount.get(t)).map((t) => ({ key: `c:${t}` as NavKey, label: CONN_TYPE[t], n: connCount.get(t), pic: t === 'ridge' ? 'ridge' : t === 'knee' ? 'knee' : t === 'brace' ? 'brace' : t })),
-          { key: 'c:library' as NavKey, label: 'ספריית פרטים', n: store.state.project.customDetails?.length || undefined, pic: 'project' },
-        ])}
-        {group('issues', 'בדיקות', 'tab-issues', 'issues', (['error', 'warning', 'info'] as Severity[]).filter((s) => sevCount.get(s)).map((s) => ({ key: `i:${s}` as NavKey, label: SEV_LABEL[s], n: sevCount.get(s), cls: s === 'error' ? 'err' : s === 'warning' ? 'warn' : '', pic: s })),
-          (errs + warns) > 0 ? <span className={`count ${errs ? 'err' : 'warn'}`}>{errs + warns}</span> : null)}
+        {G.filter((g) => g.list).map((g) => group(g.key, g.label, g.testId, g.pic, g.items, g.badge))}
       </nav>
       {!treeOnly && <div className="nav-content">
         <NavCrumb nav={nav} item={labels.get(nav)} />
@@ -309,6 +317,51 @@ function IssuesTable({ sev }: { sev: Severity }) {
     <div className="panel-body" data-testid={`itable-${sev}`}>
       <div className="panel-title">{SEV_LABEL[sev]} <span className="badge">{issues.length}</span></div>
       <IssueList issues={issues} />
+    </div>
+  );
+}
+
+/**
+ * ריבון לפי תחומים (1.54, עיצוב מחדש): לשונית לכל קבוצה, כלים עם ציור ושם, ערך ומצב לכל כלי.
+ * אותם מפתחות nav ואותם עורכים כמו בעץ — רק פריסה אחרת. ניתן לכיווץ (לשוניות בלבד).
+ */
+function Ribbon({ groups, nav, setNav, stat }: {
+  groups: { key: NavKey; tab: string; testId: string; pic: string; items: { key: NavKey; label: string; n?: number; cls?: string; pic: string }[]; badge?: ReactNode }[];
+  nav: NavKey; setNav: (k: NavKey) => void; stat: Record<string, { v?: string; n?: number; warn?: number; err?: number; off?: boolean }>;
+}) {
+  const navGrp = navGroupOf(nav);
+  const [tab, setTab] = useState<string>(navGrp || 'structure');
+  useEffect(() => { if (navGrp) setTab(navGrp); }, [navGrp]);
+  const [open, setOpenS] = useState(() => { try { return localStorage.getItem('ksp-ribbon') !== '0'; } catch { return true; } });
+  const setOpen = (v: boolean) => { setOpenS(v); try { localStorage.setItem('ksp-ribbon', v ? '1' : '0'); } catch { /* */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 30); };
+  const g = groups.find((x) => x.key === tab) ?? groups[0];
+  return (
+    <div className={`ribbon${open ? '' : ' closed'}`} data-testid="ribbon">
+      <div className="rb-tabs" role="tablist" aria-label="תחומי עבודה">
+        {groups.map((x) => (
+          <button key={x.key} role="tab" aria-selected={x.key === g.key} className={`rb-tab${x.key === g.key ? ' on' : ''}`} data-testid={x.testId}
+            onClick={() => { setTab(x.key); setNav(x.key); if (!open) setOpen(true); }}>{x.tab}{x.badge}</button>
+        ))}
+        <span className="rb-sp" />
+        <button className="rb-collapse" data-testid="ribbon-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? '▴ כווץ ריבון' : '▾ הצג כלים'}</button>
+      </div>
+      {open && (
+        <div className="rb-tools" role="toolbar" aria-label={g.tab}>
+          {g.items.map((c) => {
+            const st = stat[c.key];
+            const n = c.n ?? st?.n;
+            return (
+              <button key={c.key} className={`rb-tool${nav === c.key ? ' on' : ''}${st?.off ? ' off' : ''}`} data-testid={`nav-${c.key}`} title={st?.v ? `${c.label} — ${st.v}` : c.label} onClick={() => setNav(c.key)}>
+                <MenuPic name={c.pic} size={26} />
+                <span className="rb-l">{st?.off ? '+ ' : ''}{c.label.split(' — ')[0]}</span>
+                {st?.v ? <small className="rb-v" data-testid={`nav-v-${c.key}`}>{st.v}</small> : null}
+                {st?.err ? <i className="rb-b err">⚠ {st.err}</i> : st?.warn ? <i className="rb-b warn">⚠ {st.warn}</i> : n !== undefined ? <i className={`rb-b${c.cls ? ` ${c.cls}` : ''}`}>{n}</i> : null}
+              </button>
+            );
+          })}
+          {!g.items.length && <span className="hint" style={{ alignSelf: 'center' }}>אין פריטים בתחום הזה</span>}
+        </div>
+      )}
     </div>
   );
 }

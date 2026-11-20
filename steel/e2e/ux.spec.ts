@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, selection, setView, shot, pickProfile } from './helpers';
+import { boot, selection, setView, shot, pickProfile, openNav } from './helpers';
 
 /** חוויה ה׳: סרגל הקשרי, כרטיס פרט חיבור, בחירה מרובה עם "משתנה", תפריט מעגלי, לוח פקודות. */
 test('UX-01: סרגל הקשרי וכרטיס חיבור לאלמנט בודד; פתיחת עורך מהכרטיס', async ({ page }) => {
@@ -100,19 +100,19 @@ test('UX-04: לשונית חיבורים — חיבורי המשך ופחי קו
 test('UX-05: עץ תפריטים — בחירת צומת מציגה טבלה; שורה בוחרת אלמנט / פותחת חיבור', async ({ page }) => {
   await boot(page);
   await page.getByTestId('tab-tree').click();
-  await page.getByTestId('nav-k:column').click();
+  await openNav(page, 'k:column');
   await expect(page.getByTestId('table-column')).toContainText('F1.COL.L');
   await page.getByTestId('table-column').getByText('F3.COL.R', { exact: true }).click();
   expect(await selection(page)).toEqual(['F3.COL.R']);
   await page.getByTestId('tab-conns').click();
-  await page.getByTestId('nav-c:eave').click();
+  await openNav(page, 'c:eave');
   // כרטיס קבוצה (1.34): כל 12 החיבורים זהים — כרטיס אחד; ברשימה המלאה — שמות "מסגרת · ציר"
   await expect(page.getByTestId('cvariants-eave').locator('.conn-var')).toHaveCount(1);
   await expect(page.getByTestId('ctable-eave')).toContainText('מסגרת 2 · ציר א');
   await page.getByTestId('ctable-eave').locator('tr[title="C.EAVE.F2.L"]').click();
   await expect(page.getByTestId('conn-id')).toHaveText('C.EAVE.F2.L');
   await expect(page.getByTestId('cp-split')).toHaveValue('1');
-  await page.getByTestId('nav-s:geometry').click();
+  await openNav(page, 's:geometry');
   await page.getByTestId('geo-ed-tab-frames').click();
   await expect(page.getByTestId('frames-table')).toBeVisible(); // אורך ומסגרות — חלק מהגיאומטריה
   await expect(page.getByTestId('columnProfile')).toHaveCount(0); // צומת משני מציג רק את החלק שלו
@@ -138,7 +138,7 @@ test('UX-06: שינוי פרופיל עמוד/קורה — חלון בדיקת �
 test('SEC-01: חתך מודולרי — תבנית גג מדורג, הוספת ציר, אלכסונים; שגיאה כשמישור עובר דרך עמוד גבוה', async ({ page }) => {
   await boot(page);
   page.on('dialog', (d) => d.accept());
-  await page.getByTestId('nav-s:geometry').click();
+  await openNav(page, 's:geometry');
   await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-stepped').click();
   const n = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { cols: d.members.filter((m: any) => m.kind === 'column').length, side: d.connections.filter((c: any) => c.type === 'rafter-side').length, err: d.issues.filter((i: any) => i.severity === 'error').length, knee: d.connections.filter((c: any) => c.type === 'knee').length }; });
@@ -150,7 +150,7 @@ test('SEC-01: חתך מודולרי — תבנית גג מדורג, הוספת �
   expect((await n()).knee).toBe(0);
   await page.getByTestId('kb-on').check();
   expect((await n()).knee).toBe(24);
-  await page.getByTestId('nav-s:geometry').click();
+  await openNav(page, 's:geometry');
   // ציר חדש ב-26 מ' — מחוץ לכל מישור גג: שגיאת טופולוגיה מדווחת (ואין גיאומטריה עד לתיקון)
   await page.getByTestId('sec-add-line').click();
   expect((await n()).err).toBeGreaterThan(0);
@@ -193,7 +193,7 @@ test('VIS-01: שכבות תצוגה — הסתרת תומכים מוסיפה ח�
 
 test('PURL-FIX: מרחק ראשון 0 — תיקון אוטומטי, הצעה בלחיצה; שינוי ערכים אינו נחסם', async ({ page }) => {
   await boot(page);
-  await page.getByTestId('nav-r:left').click();
+  await openNav(page, 'r:left');
   await page.getByTestId('sch-left-s0').first().dispatchEvent('click');
   await page.getByTestId('sch-left-s0-inp').fill('0'); await page.getByTestId('sch-left-s0-inp').press('Enter');
   const issues = () => page.evaluate(() => (window as any).__ksp.store.state.derived.issues.map((i: any) => i.code));

@@ -13,6 +13,7 @@ import { ProfileDatalist } from './StructurePanel';
 import { DrawingsView } from './DrawingsView';
 import { CatalogDialog } from './CatalogDialog';
 import { ProductionView } from './ProductionView';
+import { StepsRail } from './StepsRail';
 import { CommandPalette, ConnCard, ContextBar, GutterPickHint, MarkingMenu, connectionsOf, type Cmd } from './Overlays';
 import { KIND_LABEL } from './TreePanel';
 import { moveLines, setPlaneSlope, shiftRoof, toCustomSection } from '../model/section';
@@ -48,7 +49,9 @@ export function App() {
   const [wide, setWide] = useState(() => !window.matchMedia('(max-width: 860px)').matches);
   useEffect(() => { const mq = window.matchMedia('(max-width: 860px)'); const on = () => setWide(!mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on); }, []);
   const [lp, setLp] = useState<'nav' | 'sel'>('nav');
-  const setNav = (k: NavKey) => { setNavRaw(k); setLp('nav'); setLpFull(k === 's:sheet' && !window.matchMedia('(max-width: 860px)').matches); };
+  // 1.54: פאנל העריכה סגור במצב רגיל (המודל ברוב המסך); נפתח מכלי בריבון / בחירה במודל, נסגר ב-✕
+  const [panelOpen, setPanelOpen] = useState(() => { try { return localStorage.getItem('ksp-panel') === '1'; } catch { return false; } });
+  const setNav = (k: NavKey) => { setNavRaw(k); setLp('nav'); setPanelOpen(true); setLpFull(k === 's:sheet' && !window.matchMedia('(max-width: 860px)').matches); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); };
   const [treeHidden, setTreeHiddenS] = useState(() => { try { return localStorage.getItem('ksp-tree-hidden') === '1'; } catch { return false; } });
   const setTreeHidden = (v: boolean) => { setTreeHiddenS(v); try { localStorage.setItem('ksp-tree-hidden', v ? '1' : '0'); } catch { /* */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 30); };
   const [lpFull, setLpFull] = useState(false);
@@ -57,6 +60,7 @@ export function App() {
   const selSig = `${selNow.join(',')}|${connNow ?? ''}`;
   useEffect(() => {
     setLp(selNow.length || connNow || gutNow ? 'sel' : 'nav');
+    if (selNow.length || connNow || gutNow) { setPanelOpen(true); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }
     // 1.44: הרכיב של הבחירה מסומן בעץ — ובחזרה להגדרות נפתח אותו כרטיס (סיכום + לשוניות) של הרכיב
     const id = connNow ?? selNow[0];
     if (id) { const k = settingsOf(id, store.state.derived.byId.get(id)?.kind ?? ''); if (k) setNavRaw(k[0] as NavKey); }
@@ -295,7 +299,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.53.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.54.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -320,9 +324,10 @@ export function App() {
 
       {mode === 'drawings' && <main className="mode-area"><DrawingsView /></main>}
       {mode === 'production' && <main className="mode-area"><ProductionView /></main>}
-      <main className={`workspace${!propsPinned ? ' props-collapsed' : ''}${!propsPinned && (sel.length || s.activeConn || lp === 'nav') ? ' props-float' : ''}${treeHidden ? ' tree-hidden' : ''}${lpFull ? ' lp-full' : ''}`} style={mode !== 'model' ? { display: 'none' } : undefined}>
+      <main className={`workspace${wide && !panelOpen ? ' panel-closed' : ''}${!propsPinned ? ' props-collapsed' : ''}${!propsPinned && (sel.length || s.activeConn || lp === 'nav') ? ' props-float' : ''}${treeHidden ? ' tree-hidden' : ''}${lpFull ? ' lp-full' : ''}`} style={mode !== 'model' ? { display: 'none' } : undefined}>
+        {wide && <div className="rb-wrap"><SideNav ribbon nav={nav} setNav={setNav} onOpenConn={openConn} /></div>}
         <aside className={`side side-start${sideOpen ? ' open' : ''}`} data-testid="nav-tree-pane">
-          <SideNav nav={nav} setNav={setNav} onOpenConn={openConn} treeOnly={wide} />
+          {wide ? <StepsRail nav={nav} setNav={setNav} setMode={setMode} onExport={exportProject} /> : <SideNav nav={nav} setNav={setNav} onOpenConn={openConn} treeOnly={wide} />}
         </aside>
         <div className="center">
           <section className="viewport-host" dir="ltr" ref={host} data-testid="viewport">
@@ -428,6 +433,7 @@ export function App() {
               {lp === 'sel'
                 ? <span className="lp-path"><button className="lp-crumb" data-testid="lp-crumb" title="הגדרות הרכיב כולו (כמו בעץ)" onClick={() => setLp('nav')}>→ {NAV_INDEX_LABEL(nav)}</button><span className="lp-sep">·</span><b className="lp-here" data-testid="lp-here">{s.activeConn ? 'חיבור' : s.activeGutter ? 'מזחלה' : ms.length === 1 ? ms[0]!.label : `${sel.length} אלמנטים`}</b></span>
                 : <span className="lp-path muted">הגדרות הרכיב</span>}
+              <button className="lp-close" data-testid="lp-close" title="סגירת הפאנל — המודל במסך מלא" aria-label="סגירת הפאנל" onClick={() => { setPanelOpen(false); setLpFull(false); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }}>✕</button>
               <button className="lp-full-btn" onClick={() => { setLpFull(!lpFull); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }} title={lpFull ? 'חזרה לגודל רגיל (Esc)' : 'פאנל במסך מלא — לעריכה של טבלאות ופרטים גדולים'} data-testid="lp-full">{lpFull ? '⤡' : '⤢'}</button>
             </div>
           )}

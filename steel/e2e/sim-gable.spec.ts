@@ -6,17 +6,23 @@ import { boot, shot } from './helpers';
  * רק בלחיצת עכבר אמיתית על אלמנט בתלת-ממד + בחירה בחלון האלמנט. נספרות הפעולות לכל משימה.
  */
 async function clickMember(page: Page, id: string) {
-  const p = await page.evaluate((i) => {
-    const k = (window as any).__ksp; const m = k.store.state.derived.byId.get(i);
-    return m ? k.viewport.screenOf({ x: (m.start.x + m.end.x) / 2, y: (m.start.y + m.end.y) / 2, z: (m.start.z + m.end.z) / 2 }) : null;
-  }, id);
-  expect(p, id).toBeTruthy();
+  // הפאנל נפתח/נסגר ומשנה את רוחב המודל — כמו משתמש: "התאמה למסך" לפני שמכוונים
+  await page.evaluate(() => (window as any).__ksp.viewport.fitAll()); await page.waitForTimeout(250);
   const pre = id.split('.').slice(0, 2).join('.');
   let clicks = 0, got = '';
-  // לחיצה חוזרת באותה נקודה = האלמנט הבא מאחור (פטה / חגורת קיר / מזחלה שלפניו)
-  for (; clicks < 6 && !got.startsWith(pre); clicks++) {
-    await page.mouse.click(p!.x, p!.y); await page.waitForTimeout(200);
-    got = (await page.evaluate(() => (window as any).__ksp.store.state.selection[0])) ?? '';
+  // נקודה על האלמנט: באמצע, ואם שם רווח (הצטלבות X) — ב-70% מאורכו
+  for (const t of [0.5, 0.7, 0.3]) {
+    const p = await page.evaluate(([i, tt]) => {
+      const k = (window as any).__ksp; const m = k.store.state.derived.byId.get(i);
+      return m ? k.viewport.screenOf({ x: m.start.x + (m.end.x - m.start.x) * tt, y: m.start.y + (m.end.y - m.start.y) * tt, z: m.start.z + (m.end.z - m.start.z) * tt }) : null;
+    }, [id, t] as const);
+    expect(p, id).toBeTruthy();
+    // לחיצה חוזרת באותה נקודה = האלמנט הבא מאחור (פטה / חגורת קיר / מזחלה שלפניו)
+    for (let k = 0; k < 5 && !got.startsWith(pre); k++, clicks++) {
+      await page.mouse.click(p!.x, p!.y); await page.waitForTimeout(200);
+      got = (await page.evaluate(() => (window as any).__ksp.store.state.selection[0])) ?? '';
+    }
+    if (got.startsWith(pre)) break;
   }
   expect(got.startsWith(pre), `${id} ← ${got}`).toBe(true);
   return clicks;
@@ -86,7 +92,10 @@ test('PICK-01 (1.48.2): מזחלה שלפני אלמנט — לחיצה ראשו
   test.skip(!hit.g, 'בזווית הזו המזחלה לא מסתירה את הקורה');
   await page.mouse.click(hit.p.x, hit.p.y); await page.waitForTimeout(200);
   expect(await page.evaluate(() => (window as any).__ksp.store.state.activeGutter)).toBeTruthy();
-  await page.mouse.click(hit.p.x, hit.p.y); await page.waitForTimeout(200);
-  expect(await page.evaluate(() => (window as any).__ksp.store.state.selection)).toEqual(['BB.1.L']);
+  // לחיצות חוזרות: כל אלמנט בקו הראייה בתורו (חגורת קיר שלפני הקורה — לפי זווית המבט), עד קורת האגד; אחריה — חזרה למזחלה
+  const seen: string[] = [];
+  for (let i = 0; i < 4; i++) { await page.mouse.click(hit.p.x, hit.p.y); await page.waitForTimeout(200); const sel = await page.evaluate(() => (window as any).__ksp.store.state.selection[0] ?? 'gutter'); seen.push(sel); if (sel === 'BB.1.L') break; }
+  expect(seen).toContain('BB.1.L');
+  expect(seen.filter((x) => x === 'gutter')).toEqual([]);
   expect(errors).toEqual([]);
 });

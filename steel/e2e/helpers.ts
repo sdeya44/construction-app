@@ -10,13 +10,26 @@ export async function boot(page: Page) {
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   // בבדיקות: קטעי "מתקדם" פתוחים (השדות נבדקים ישירות; אצל המשתמש — סגורים כברירת מחדל)
-  await page.addInitScript(() => { const g = Storage.prototype.getItem; Storage.prototype.getItem = function (k: string) { return k.startsWith('ksp-adv-') ? '1' : g.call(this, k); }; });
+  await page.addInitScript(() => { const g = Storage.prototype.getItem; Storage.prototype.getItem = function (k: string) { return k.startsWith('ksp-adv-') || k === 'ksp-panel' ? '1' : g.call(this, k); }; });
   await page.goto('/');
   await page.waitForFunction(() => !!(window as any).__ksp?.viewport?.model);
   // 1.45: היקף ברירת מחדל בבדיקות — "האלמנט הזה", בלי בידוד תלת-ממד (בדיקות של היקף אחר בוחרות אותו במפורש)
   await page.evaluate(() => { (window as any).__ksp.store.set({ propScope: 'one', scopeIsolate: false }); localStorage.setItem('ksp-prop-scope', 'one'); });
   await page.waitForTimeout(300);
   return errors;
+}
+
+/** 1.54: ריבון — פותח את לשונית התחום של הכלי (אם צריך) ולוחץ על הכלי. במסך צר — העץ (אותו testid). */
+const NAV_TAB: Record<string, string> = { s: 'structure', r: 'roof', b: 'brace', w: 'clad', k: 'tree', c: 'conns', i: 'issues' };
+export async function openNav(page: Page, key: string) {
+  const tool = page.getByTestId(`nav-${key}`).first();
+  if (!(await tool.isVisible().catch(() => false))) {
+    const grp = key === 'b:tb' || key === 'b:truss' || key === 'b:wing' ? 'special' : key === 'c:library' ? 'conns' : NAV_TAB[key[0]];
+    const tab = page.getByTestId(`tab-${grp}`).first();
+    if (await tab.count()) await tab.click();
+    if (!(await tool.isVisible().catch(() => false))) { const t = page.getByTestId('ribbon-toggle'); if (await t.count() && (await t.getAttribute('aria-expanded')) === 'false') await t.click(); }
+  }
+  await tool.click();
 }
 
 export async function shot(page: Page, name: string) {

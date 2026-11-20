@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, openNav } from './helpers';
 
 test('TR-01: מסבכי גג — הפעלה, עריכת שדה וצומת בלחיצה, גובה בלחיצה, ללא שגיאות', async ({ page }) => {
   await boot(page);
-  await page.getByTestId('nav-b:truss').click();
+  await openNav(page, 'b:truss');
   await page.getByTestId('rt-on').check();
   const st = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { err: d.issues.filter((i: any) => i.severity === 'error').map((i: any) => i.message), webs: d.members.filter((m: any) => m.id.startsWith('TR.')).length }; });
   let s = await st();
@@ -31,7 +31,7 @@ test('TR-02: מסבך נושא בדילול עמודים — מעבר "מסבך"
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L', 'F3.COL.L', 'F4.COL.L']));
   await page.getByTestId('ctx-omit').click();
   await page.getByTestId('omit-apply').click();
-  await page.getByTestId('nav-b:tb').click();
+  await openNav(page, 'b:tb');
   await page.getByTestId('tb-grp-0-edit').click();
   const id = await page.evaluate(() => (window as any).__ksp.store.state.project.building.transfers[0].id);
   await page.getByTestId(`tb-kind-truss-${id}`).click();
@@ -50,7 +50,7 @@ test('TR-03: מסבך נושא — חגורות RHS ושינוי אורך שדה
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L', 'F3.COL.L', 'F4.COL.L']));
   await page.getByTestId('ctx-omit').click();
   await page.getByTestId('omit-apply').click();
-  await page.getByTestId('nav-b:tb').click();
+  await openNav(page, 'b:tb');
   await page.getByTestId('tb-grp-0-edit').click();
   const id = await page.evaluate(() => (window as any).__ksp.store.state.project.building.transfers[0].id);
   await page.getByTestId(`tb-kind-truss-${id}`).click();
@@ -89,7 +89,7 @@ test('TR-04: מסבך נושא — שדות קבועים (שדה שנקבע נש
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L', 'F3.COL.L']));
   await page.getByTestId('ctx-omit').click();
   await page.getByTestId('omit-apply').click();
-  await page.getByTestId('nav-b:tb').click();
+  await openNav(page, 'b:tb');
   await page.getByTestId('tb-grp-0-edit').click();
   const id = await page.evaluate(() => (window as any).__ksp.store.state.project.building.transfers[0].id);
   await page.getByTestId(`tb-kind-truss-${id}`).click();
