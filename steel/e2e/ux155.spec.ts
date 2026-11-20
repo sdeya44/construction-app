@@ -18,9 +18,19 @@ test('CW-01: כלי "קשיחות קירות" בריבון פותח חלון ר�
   const win = page.getByTestId('cwin-walls');
   await expect(win).toBeVisible();
   await expect(win.getByTestId('live3d-canvas')).toBeVisible();
-  // החלון לא מסתיר את המודל — המודל רחב יותר מ-35% מהמסך
+  // 1.55.1: המודל נשאר במסך מלא — החלון צף מעליו
   const w = await page.evaluate(() => (window as any).__ksp.viewport.panes[0].el.getBoundingClientRect().width);
-  expect(w).toBeGreaterThan(1600 * 0.35);
+  expect(w).toBeGreaterThan(1600 * 0.85);
+  // מזעור: החלון הופך לפס, והמודל גלוי; לחיצה נוספת מחזירה
+  await win.getByTestId('cwin-min').click();
+  await expect(win.getByTestId('live3d-canvas')).toHaveCount(0);
+  await win.getByTestId('cwin-min').click();
+  await expect(win.getByTestId('live3d-canvas')).toBeVisible();
+  // גרירת הכותרת מזיזה את החלון
+  const b0 = (await win.boundingBox())!;
+  await page.mouse.move(b0.x + b0.width / 2, b0.y + 20); await page.mouse.down(); await page.mouse.move(b0.x + b0.width / 2 - 200, b0.y + 60, { steps: 5 }); await page.mouse.up();
+  const b1 = (await win.boundingBox())!;
+  expect(b0.x - b1.x).toBeGreaterThan(150);
   await win.getByTestId('br-walls-portal').click();
   await page.waitForTimeout(400);
   expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.members.some((m: any) => /^BB\./.test(m.id)))).toBe(true);

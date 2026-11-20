@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { store, useStore } from '../store';
 import type { Connection, DerivedModel, Member } from '../model/types';
 import { kneeSet, KNEE_RE, wallSet, WALL_RE } from '../view/realView';
@@ -53,10 +53,27 @@ function connGroups(d: DerivedModel, re: RegExp) {
   });
 }
 
-export function ComponentWindow({ kind, memberId, onClose, onFull, children }: { kind: CompKind; memberId?: string; onClose: () => void; onFull?: () => void; children: ReactNode }) {
+export function ComponentWindow({ kind, memberId, onClose, children }: { kind: CompKind; memberId?: string; onClose: () => void; children: ReactNode }) {
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
   const M = META[kind];
   const [wide, setWide] = useState(false);
+  // 1.55.1: חלון צף מעל המודל — הזזה בגרירת הכותרת, מזעור לפס, הגדלה
+  const [min, setMin] = useState(false);
+  const [max, setMax] = useState(false);
+  const [off, setOff] = useState({ x: 0, y: 0 });
+  useEffect(() => { setMin(false); }, [memberId, kind]);
+  const drag = (e: React.PointerEvent<HTMLElement>) => {
+    if ((e.target as HTMLElement).closest('button') || max) return;
+    const x0 = e.clientX, y0 = e.clientY, o0 = off, el = e.currentTarget.closest('.cwin') as HTMLElement | null;
+    const host = el?.parentElement?.getBoundingClientRect(), r0 = el?.getBoundingClientRect();
+    const mv = (ev: PointerEvent) => {
+      let x = o0.x + ev.clientX - x0, y = o0.y + ev.clientY - y0;
+      if (host && r0) { x = Math.max(host.left - r0.left + o0.x, Math.min(host.right - r0.right + o0.x, x)); y = Math.max(host.top - r0.top + o0.y, Math.min(host.bottom - r0.top - 48 + o0.y, y)); }
+      setOff({ x, y });
+    };
+    const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+  };
   // נפתח מלחיצה על אלמנט ועדיין לא נבחר היקף — ישר להגדרות הרכיב (בלי לשמור כהעדפה)
   useEffect(() => { if (memberId && !store.state.propScope) store.set({ propScope: kind === 'knee' ? 'asm' : 'asmall' }); }, [memberId, kind]);
   const set = useMemo(() => (kind === 'walls' ? wallSet(p, d, { memberId, whole: wide }) : kneeSet(p, d, { memberId, frame: wide })), [kind, p, d, memberId, wide]);
@@ -68,15 +85,17 @@ export function ComponentWindow({ kind, memberId, onClose, onFull, children }: {
     <button className={wide ? 'on' : ''} onClick={() => setWide(true)} data-testid="live3d-far">{kind === 'walls' ? 'כל הקיר' : 'מסגרת'}</button>
   </div>;
   return (
-    <section className={`cwin cwin-${M.tint}`} data-testid={`cwin-${kind}`} aria-label={M.title}>
-      <header className="cwin-h">
+    <section className={`cwin cwin-${M.tint}${min ? ' min' : ''}${max ? ' max' : ''}`} data-testid={`cwin-${kind}`} aria-label={M.title} style={max ? undefined : { transform: `translate(${off.x}px, ${off.y}px)` }}>
+      <header className="cwin-h" onPointerDown={drag} onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('button')) setMin(!min); }} title="גרירה מזיזה את החלון · לחיצה כפולה ממזערת">
         <span className="cwin-ic"><MenuPic name={M.pic} size={30} /></span>
         <div className="cwin-t"><small>{M.crumb} › {M.title}</small><b>{M.title}</b></div>
         <span className="cwin-pill" data-testid="cwin-count">{count ? `${count} אלמנטים` : 'לא בשימוש'}</span>
         <span className="sp" />
-        {onFull && <button className="cwin-x" onClick={onFull} title="חלון במסך מלא" aria-label="חלון במסך מלא" data-testid="cwin-full">⤢</button>}
+        <button className="cwin-x" onClick={() => setMin(!min)} title={min ? 'הצגת החלון' : 'מזעור — המודל כולו גלוי'} aria-label={min ? 'הצגת החלון' : 'מזעור החלון'} data-testid="cwin-min">{min ? '▢' : '–'}</button>
+        <button className="cwin-x" onClick={() => { setMax(!max); setMin(false); }} title={max ? 'חזרה לחלון צף' : 'הגדלה'} aria-label={max ? 'חזרה לחלון צף' : 'הגדלת החלון'} data-testid="cwin-full">{max ? '⤡' : '⤢'}</button>
         <button className="cwin-x" onClick={onClose} title="סגירה — המודל במסך מלא" aria-label="סגירת החלון" data-testid="cwin-close">✕</button>
       </header>
+      {!min && <>
       <div className="cwin-body">
         <div className="cwin-main" data-testid="cwin-main">{children}</div>
         <aside className="cwin-side">
@@ -97,7 +116,8 @@ export function ComponentWindow({ kind, memberId, onClose, onFull, children }: {
           </div>
         </aside>
       </div>
-      <footer className="cwin-f"><i />כל שינוי מוצג מיד בתצוגה ובמודל · Ctrl+Z לביטול</footer>
+      <footer className="cwin-f"><i />כל שינוי מוצג מיד בתצוגה ובמודל · Ctrl+Z לביטול · גרירת הכותרת מזיזה את החלון</footer>
+      </>}
     </section>
   );
 }

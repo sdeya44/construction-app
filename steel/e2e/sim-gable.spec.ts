@@ -7,6 +7,8 @@ import { boot, shot } from './helpers';
  */
 async function clickMember(page: Page, id: string) {
   // הפאנל נפתח/נסגר ומשנה את רוחב המודל — כמו משתמש: "התאמה למסך" לפני שמכוונים
+  // 1.55.1: חלון הרכיב צף מעל המודל — כמו משתמש: ממזערים אותו לפני שמכוונים לאלמנט שמתחתיו
+  const mn = page.getByTestId('cwin-min'); if (await mn.isVisible().catch(() => false) && (await mn.getAttribute('aria-label')) === 'מזעור החלון') await mn.click();
   await page.evaluate(() => (window as any).__ksp.viewport.fitAll()); await page.waitForTimeout(250);
   const pre = id.split('.').slice(0, 2).join('.');
   let clicks = 0, got = '';
