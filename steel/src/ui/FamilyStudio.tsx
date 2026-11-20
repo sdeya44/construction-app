@@ -22,6 +22,7 @@ import type { NavKey } from './SideNav';
 import { RoofTrussPanel, TransferPanel, TransferShape } from './TransferPanel';
 import { WingPanel } from './WingPanel';
 import { LSvg } from './Dialogs';
+import { ConnView } from './wizard/ConnView';
 import { WizardNavigation, WizardScopeSelector, WizardSection, WizardTypeSelector, WizardValidation, wizardClip, wizardCopy, type WzSec, type WzType } from './wizard/Wizard';
 
 /**
@@ -331,6 +332,7 @@ export function FamilyStudio({ fam, nav, memberId }: { fam: FamKey; nav: NavKey;
               <button className="btn" onClick={() => store.set({ connWizard: groups[Math.min(cg, groups.length - 1)][1][0].id })} data-testid="ks-wizard">אשף המחברים</button>
               <button className="btn" onClick={() => openConnStudio(groups[Math.min(cg, groups.length - 1)][1][0], d)} data-testid="ks-studio">סטודיו ✎</button>
             </div>}
+            {groups[Math.min(cg, groups.length - 1)] && <ConnView connId={groups[Math.min(cg, groups.length - 1)][1][0].id} />}
           </>}
         </WizardSection>}
       </>}

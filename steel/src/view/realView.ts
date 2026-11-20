@@ -55,6 +55,9 @@ export function buildRealScene(set: RealSet, envTex: THREE.Texture | null, shado
   const disp: { dispose(): void }[] = [];
   scene.background = sky();
   if (envTex) { scene.environment = envTex; scene.environmentIntensity = 0.75; }
+  // 1.60: הגנה — אלמנט באורך אפס לא נבנה (אחרת כל התצוגה נופלת)
+  const okLen = (m: Member) => len(sub(m.end, m.start)) >= 0.5;
+  set = { ...set, focus: set.focus.filter(okLen), context: set.context.filter(okLen), ghost: set.ghost?.filter(okLen) };
   const focusIds = new Set(set.focus.map((m) => m.id));
   const solidMat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.55, roughness: 0.38, side: THREE.DoubleSide }); disp.push(solidMat);
   const edgeMat = new THREE.LineBasicMaterial({ color: 0x1c242c, transparent: true, opacity: 0.22 }); disp.push(edgeMat);
@@ -161,6 +164,8 @@ function cropTo(m: Member, keep: (p: Vec3) => boolean): Member | null {
   for (let i = 0; i <= N; i++) { const t = i / N; const p = { x: m.start.x + d.x * t, y: m.start.y + d.y * t, z: m.start.z + d.z * t }; if (keep(p)) { if (a < 0) a = t; b = t; } }
   if (a < 0) return null;
   if (a <= 0 && b >= 1) return m;
+  // 1.60: קטע שנחתך לנקודה (נגיעה בקצה התחום) — אין מה להציג (וקטור באורך אפס מפיל את בניית הגוף)
+  if ((b - a) * L < 20) return null;
   const at = (t: number) => ({ x: m.start.x + d.x * t, y: m.start.y + d.y * t, z: m.start.z + d.z * t });
   return { ...m, start: at(a), end: at(b), startCut: a > 0 ? undefined : m.startCut, endCut: b < 1 ? undefined : m.endCut };
 }
@@ -295,4 +300,26 @@ export function familySet(_p: Project, d: DerivedModel, match: (m: Member) => bo
   const main = [...focusMain].sort((a, b) => len(sub(b.end, b.start)) - len(sub(a.end, a.start)))[0];
   if (main && !opt.wide) tags.push({ a: main.start, b: main.end, text: main.profile, hot: true });
   return { focus, context, ghost, tags, dir: { th: -0.55, ph: opt.wide ? 0.45 : 0.3 }, key: `f|${opt.key}|${opt.wide ? 'W' : ref.id}` };
+}
+
+/**
+ * 1.60: מחבר אחד בתצוגה מוגדלת — פלטות, ברגים וריתוכים של החיבור, וקצוות האלמנטים שהוא מחבר (חתוכים סביבו).
+ */
+export function connSet(d: DerivedModel, connId: string): RealSet | null {
+  const c = d.connById.get(connId);
+  if (!c) return null;
+  const parts = connParts(d, c.members).filter((m) => m.connId === connId || c.parts.includes(m.id) || m.id.startsWith(`${connId}.`) || c.bolts.some((b) => m.id.startsWith(`${b.id}.`)));
+  const own = parts.length ? parts : connParts(d, c.members).slice(0, 60);
+  if (!own.length) return null;
+  const bx = new THREE.Box3();
+  for (const m of own) { bx.expandByPoint(new THREE.Vector3(m.start.x, m.start.y, m.start.z)); bx.expandByPoint(new THREE.Vector3(m.end.x, m.end.y, m.end.z)); }
+  const pad = 450;
+  const inBox = (q: Vec3) => q.x >= bx.min.x - pad && q.x <= bx.max.x + pad && q.y >= bx.min.y - pad && q.y <= bx.max.y + pad && q.z >= bx.min.z - pad && q.z <= bx.max.z + pad;
+  const hosts: Member[] = [];
+  for (const id of c.members) { const m = d.byId.get(id); if (!m) continue; const k = cropTo(m, inBox); if (k) hosts.push(k); }
+  const tags: RealTag[] = [];
+  const b0 = c.bolts[0];
+  const pl = own.find((m) => m.kind === 'plate');
+  if (pl) tags.push({ a: pl.start, b: pl.end, text: `${pl.profile}${b0 ? ` · ${c.bolts.length}×M${b0.d}` : ''}`, hot: true });
+  return { focus: own, context: hosts, tags, dir: { th: -0.6, ph: 0.35 }, key: `c|${connId}` };
 }

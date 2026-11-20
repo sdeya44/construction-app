@@ -7,6 +7,7 @@ import { MenuPic } from './pics';
 import { useWizardTx, WizardActions } from './wizard/Wizard';
 import type { NavKey } from './SideNav';
 import { FAMILIES, famOfConn, famOfMember, famOfNav, type FamKey } from './FamilyStudio';
+import { stepExists } from './steps';
 
 /**
  * 1.55: חלון רכיב — אותו חלון לכל דרך הגעה (כלי בריבון, לחיצה על אלמנט במודל, גיליון הפרמטרים, סרגל השלבים).
@@ -72,6 +73,8 @@ function connGroups(d: DerivedModel, re: RegExp) {
 export function ComponentWindow({ kind, memberId, onClose, children, studio, step }: { kind: CompKind; memberId?: string; onClose: () => void; children?: ReactNode; /** 1.56: חלון במבנה האחיד (סוג → היקף → 3 כפתורים) — מחליף את התוכן והצד */ studio?: ReactNode; /** 1.59: שלב העבודה שהאישור משלים */ step?: string | null }) {
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
   const M = compMeta(kind);
+  // 1.60: מצב הוספה (הרכיב לא היה קיים כשהאשף נפתח) לעומת עריכה — כותרת, תווית ופעולות בהתאם
+  const [creating] = useState(() => !!step && !stepExists(step, store.state.project, store.state.derived));
   // 1.57: האשף פותח טרנזקציה — אישור = פעולת Undo אחת, ביטול = חזרה למצב שלפני
   useWizardTx(`אשף: ${M.title}`);
   const [wide, setWide] = useState(false);
@@ -117,8 +120,8 @@ export function ComponentWindow({ kind, memberId, onClose, children, studio, ste
     <section className={`cwin cwin-${M.tint}${min ? ' min' : ''}${max ? ' max' : ''}${side === 'l' ? ' at-l' : ''}`} data-side={side} data-testid={`cwin-${kind}`} aria-label={M.title} style={max ? undefined : { transform: `translate(${off.x}px, ${off.y}px)` }}>
       <header className="cwin-h" onPointerDown={drag} onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('button')) setMin(!min); }} title="גרירה מזיזה את החלון · לחיצה כפולה ממזערת">
         <span className="cwin-ic"><MenuPic name={M.pic} size={30} /></span>
-        <div className="cwin-t"><small>{M.crumb} › {M.title}</small><b>{M.title}</b></div>
-        <span className="cwin-pill" data-testid="cwin-count">{count ? `${count} אלמנטים` : 'לא בשימוש'}</span>
+        <div className="cwin-t"><small>{creating ? 'הוספת רכיב' : M.crumb} › {M.title}</small><b>{M.title}</b></div>
+        <span className={`cwin-pill${creating ? ' new' : ''}`} data-testid="cwin-count" data-mode={creating ? 'create' : 'edit'}>{creating ? (count ? `חדש · ${count} אלמנטים` : 'חדש — בחרו סוג') : count ? `${count} אלמנטים` : 'לא בשימוש'}</span>
         <span className="sp" />
         <button className="cwin-x" onClick={() => setMin(!min)} title={min ? 'הצגת החלון' : 'מזעור — המודל כולו גלוי'} aria-label={min ? 'הצגת החלון' : 'מזעור החלון'} data-testid="cwin-min">{min ? '▢' : '–'}</button>
         <button className="cwin-x" onClick={() => { setMax(!max); setMin(false); }} title={max ? 'חזרה לחלון צף' : 'הגדלה'} aria-label={max ? 'חזרה לחלון צף' : 'הגדלת החלון'} data-testid="cwin-full">{max ? '⤡' : '⤢'}</button>
@@ -147,7 +150,7 @@ export function ComponentWindow({ kind, memberId, onClose, children, studio, ste
         </aside>
       </div>
       </>}
-      {!min && (studio ? <WizardActions label={`אשף: ${M.title}`} onClose={onClose} step={step} /> : <footer className="cwin-f"><i />כל שינוי מוצג מיד בתצוגה ובמודל · Ctrl+Z לביטול · גרירת הכותרת מזיזה את החלון</footer>)}
+      {!min && (studio ? <WizardActions label={creating ? `הוספה: ${M.title}` : `אשף: ${M.title}`} onClose={onClose} step={step} create={creating} /> : <footer className="cwin-f"><i />כל שינוי מוצג מיד בתצוגה ובמודל · Ctrl+Z לביטול · גרירת הכותרת מזיזה את החלון</footer>)}
     </section>
   );
 }

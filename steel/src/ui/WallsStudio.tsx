@@ -10,6 +10,8 @@ import { openConnStudio } from './ComponentWindow';
 import { EditCtx, ProfilePicker } from './fields';
 import { DetailEnds, EndCards } from './PropertiesPanel';
 import { LiveView3D } from './LiveView3D';
+import { LockedDims } from './wizard/LockedDims';
+import { ConnView } from './wizard/ConnView';
 import { LineTiesEditor, LockTrussFields, PortalFields, WallLines, WallPic, WallXShape, XConnFields } from './StructurePanel';
 import { WizardNavigation, WizardScopeSelector, WizardSection, WizardTypeSelector, WizardValidation, wizardClip, wizardCopy, type WzSec } from './wizard/Wizard';
 
@@ -120,6 +122,9 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
               {type === 'truss' && <LockTrussFields lineId={lid} />}
               {type === 'x' && <WallXShape />}
             </EditCtx.Provider>
+            {/* 1.60: אלכסוני אגד B — שתי מידות קובעות את השאר */}
+            {type === 'portal' && <LockedDims v={portal.drop} ang={portal.angle} testPre="pb-ld" onCommit={(v, a) => setPortal({ drop: v, angle: a })}
+              labels={{ v: { t: portal.invert ? 'עלייה על העמוד' : 'ירידה על העמוד', sub: 'מקורת האגד לנקודת החיבור בעמוד' }, h: { t: 'אופקי', sub: 'מציר העמוד לנקודת החיבור בקורה' }, ang: { t: 'זווית', sub: 'מהאופק' }, L: { t: 'אורך צירי', sub: 'בין נקודות העבודה' } }} />}
           </div>
         </WizardSection>}
 
@@ -149,6 +154,7 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
               <button className="btn" onClick={() => store.set({ connWizard: groups[cg][1][0].id })} data-testid="ks-wizard">אשף המחברים</button>
               <button className="btn" onClick={() => openConnStudio(groups[cg][1][0], d)} data-testid="ks-studio">סטודיו ✎</button>
             </div>}
+            {groups[cg] && <ConnView connId={groups[cg][1][0].id} />}
           </div>
         </WizardSection>}
       </>}

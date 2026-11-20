@@ -122,3 +122,39 @@ test('ST-02 (1.59): פרויקט חדש — רכיבים כבויים, "להוס
   await expect(page.getByTestId('sr-1')).toHaveAttribute('data-state', /ok|warn/);
   expect(errors).toEqual([]);
 });
+
+test('FW-04 (1.60): מצב הוספה לעומת עריכה; עורך המחבר בתלת-ממד מוגדל; מידות נעולות באגד B', async ({ page }) => {
+  const errors = await boot(page);
+  // הוספה: חיזוק רכס לא קיים בפרויקט חדש
+  await page.getByTestId('btn-new').click();
+  await page.getByTestId('create').click();
+  await page.getByTestId('sr-10').click();
+  await page.getByTestId('sr-ask-add').click();
+  const rw = page.getByTestId('cwin-ridge');
+  await expect(rw.getByTestId('cwin-count')).toHaveAttribute('data-mode', 'create');
+  await expect(rw.getByTestId('wz-ok')).toHaveText('הוספה למבנה');
+  await rw.getByTestId('ridge-type-tie').click();
+  await rw.getByTestId('wz-cancel').click(); // ביטול ההוספה — הרכס לא מחוזק
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.ridgeReinf.type)).toBe('none');
+  // עריכה: קשיחות קירות (נוספה) — אגד B, מידות נעולות: זווית + אנכי → השאר נגזרות
+  await page.getByTestId('sr-8').click(); await page.getByTestId('sr-ask-add').click();
+  const w = page.getByTestId('cwin-walls');
+  await w.getByTestId('br-walls-portal').click();
+  await w.getByTestId('ks-sec-geo').click();
+  await expect(w.getByTestId('pb-ld-dims')).toBeVisible();
+  await w.getByTestId('pb-ld-lock-h').click(); // אופקי + זווית קובעות
+  await w.getByTestId('pb-ld-h').fill('900'); await w.getByTestId('pb-ld-h').press('Enter');
+  const pb = await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.walls.portal);
+  expect(Math.round(pb.drop / Math.tan(pb.angle * Math.PI / 180))).toBeGreaterThan(890);
+  await expect(w.getByTestId('pb-ld-h')).toHaveValue(/^(89\d|90\d)$/);
+  // צמד בלי פתרון: אורך קטן מהאופקי — לא נשמר
+  await w.getByTestId('pb-ld-L').fill('300'); await w.getByTestId('pb-ld-L').press('Enter');
+  await expect(w.getByTestId('pb-ld-bad')).toBeVisible();
+  // עורך המחבר: תלת-ממד של המחבר, הגדלה
+  await w.getByTestId('ks-sec-conn').click();
+  await expect(w.getByTestId('conn-view')).toBeVisible();
+  await w.getByTestId('conn-view-big').click();
+  await expect(w.getByTestId('conn-view')).toHaveClass(/big/);
+  await w.getByTestId('wz-ok').click();
+  expect(errors).toEqual([]);
+});

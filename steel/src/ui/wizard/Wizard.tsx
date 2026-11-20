@@ -89,7 +89,7 @@ export function markStepDone(step: string) {
   if (marks[step] === 'done' && st.project.meta.steps) return;
   try { store.exec(setMeta({ steps: { ...marks, [step]: 'done' } })); } catch { /* מהדורה נעולה — אין סימון */ }
 }
-export function WizardActions({ label, onClose, children, step }: { label: string; onClose: () => void; children?: ReactNode; step?: string | null }) {
+export function WizardActions({ label, onClose, children, step, create }: { label: string; onClose: () => void; children?: ReactNode; step?: string | null; /** 1.60: מצב הוספה — "הוספה למבנה" / "ביטול ההוספה" */ create?: boolean }) {
   const steps = useStore((s) => s.txSteps ?? 0);
   return (
     <div className="wz-actions" data-testid="wz-actions">
@@ -97,8 +97,8 @@ export function WizardActions({ label, onClose, children, step }: { label: strin
       {children}
       <span className="sp" />
       <button className="wz-btn" disabled={!steps} onClick={() => store.txUndo()} data-testid="wz-undo" title="ביטול הצעד האחרון בתוך האשף">↶ שחזור</button>
-      <button className="wz-btn" onClick={() => { store.txCancel(); onClose(); }} data-testid="wz-cancel" title="ביטול כל השינויים מאז פתיחת האשף">ביטול</button>
-      <button className="wz-btn pri" onClick={() => { if (step) markStepDone(step); store.txCommit(label); onClose(); }} data-testid="wz-ok" title={step ? 'שמירה וסימון השלב כהושלם' : undefined}>אישור</button>
+      <button className="wz-btn" onClick={() => { store.txCancel(); onClose(); }} data-testid="wz-cancel" title={create ? 'הרכיב לא יתווסף — המודל חוזר למצב שלפני' : 'ביטול כל השינויים מאז פתיחת האשף'}>{create ? 'ביטול ההוספה' : 'ביטול'}</button>
+      <button className="wz-btn pri" onClick={() => { if (step) markStepDone(step); store.txCommit(label); onClose(); }} data-testid="wz-ok" title={step ? 'שמירה וסימון השלב כהושלם' : undefined}>{create ? 'הוספה למבנה' : 'אישור'}</button>
     </div>
   );
 }

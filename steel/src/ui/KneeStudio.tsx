@@ -10,6 +10,7 @@ import { familySet, kneeSet, type RealTag } from '../view/realView';
 import { DetailTiles } from './DetailPicker';
 import { BoltSelect, EditCtx, NumField, ProfilePicker } from './fields';
 import { LiveView3D, LockIc } from './LiveView3D';
+import { ConnView } from './wizard/ConnView';
 import { HaunchEditor, KneePic, KneeSides } from './SectionEditor';
 import { DetailEnds, EndCards } from './PropertiesPanel';
 import { WizardNavigation, WizardScopeSelector, WizardSection, WizardTypeSelector, WizardValidation, wizardClip, wizardCopy } from './wizard/Wizard';
@@ -244,6 +245,7 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
               <button className="btn" disabled={!conn} onClick={() => conn && store.set({ connWizard: conn.id })} data-testid="ks-wizard">אשף המחברים</button>
               <button className="btn" disabled={!ref} onClick={() => ref && store.set({ detailStudio: `${ref}|${end === 'C' ? 'start' : 'end'}`, studioConn: conn?.id ?? null })} data-testid="ks-studio">סטודיו ✎ — {end === 'C' ? 'הקצה לעמוד' : 'הקצה לקורה'}</button>
             </div>
+            <ConnView connId={conn?.id} />
           </div>
         </WizardSection>}
       </>}

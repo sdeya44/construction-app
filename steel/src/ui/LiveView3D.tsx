@@ -76,7 +76,7 @@ export function LiveView3D({ set, rev, modes, height = 300 }: { set: RealSet | n
   useEffect(() => {
     const k = ctx.current; if (!k || !set) return;
     k.built?.dispose();
-    k.built = buildRealScene(set, k.rr.env, 2048);
+    try { k.built = buildRealScene(set, k.rr.env, 2048); } catch (e) { console.warn('תצוגה תלת-ממדית: לא ניתן לבנות', e); k.built = null; return; }
     // קווי מידה (כחול) — מתחת לתגיות
     const g = new THREE.Group();
     for (const t of set.tags ?? []) {

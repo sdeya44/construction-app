@@ -1403,3 +1403,10 @@ details.adv .adv-body { padding-bottom: 6px; }
 .sr-ask-a { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .step-done-b { margin-inline-start: auto; }
 span.step-done-b { color: #1f7a45; font-size: 12px; font-weight: 600; }
+/* 1.60: עורך המחבר — תלת-ממד מוגדל */
+.wz-connview { margin-top: var(--wz-s3); border: 1px solid var(--wz-line); border-radius: var(--wz-r-m); padding: var(--wz-s2); background: var(--wz-bg-2); }
+.wz-cv-h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-width: 0; }
+.wz-cv-h b { font-size: var(--wz-fs); white-space: nowrap; } .wz-cv-h small { color: var(--wz-muted); font-size: var(--wz-fs-s); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.wz-cv-h .sp { flex: 1; }
+.ld { margin-top: var(--wz-s3); }
+.cwin-pill.new { background: var(--wz-chg-soft); color: var(--wz-chg-ink); }
