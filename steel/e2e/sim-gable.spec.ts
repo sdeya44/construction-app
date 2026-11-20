@@ -55,8 +55,8 @@ test('SIM-03: דו-שיפועי 18×12 — אגד B, נעילה, חלוקת קו
   console.log('SIM-03 X→אגד B: פעולות', n);
   // 2. אגד B → מסבך נעילה: לחיצה על קורת האגד (המזחלה שלפניה — לחיצה חוזרת) → נעילה (ההיקף נשמר)
   n = await clickMember(page, 'BB.1.L');
-  await expect(page.getByTestId('pscope-asmall')).toHaveClass(/on/);
-  await act('br-walls-truss'); n += 1;
+  // 1.56: חלון קשיחות הקירות — היקף: כל המודל
+  await act('pscope-asmall'); await act('br-walls-truss'); n += 2;
   expect(await W(page, `({ lt: d.members.some(m => /^LT\\./.test(m.id)), bb: d.members.some(m => /^BB\\./.test(m.id)) })`)).toEqual({ lt: true, bb: false });
   console.log('SIM-03 אגד B→נעילה: פעולות', n);
   // 3. קושרות גג: מפתח 1 — שני פנלי X בכל שיפוע
@@ -67,7 +67,7 @@ test('SIM-03: דו-שיפועי 18×12 — אגד B, נעילה, חלוקת קו
   console.log('SIM-03 חלוקת קושרות: פעולות', n);
   // 4. אלכסוני עמוד-קורה רק במסגרות הקצה: לחיצה על אלכסון במסגרת 2 → המכלול → כיבוי מסגרת 2
   n = await clickMember(page, 'KB.F2.L.L.R');
-  await act('pscope-asm'); await act('kb-frame-1'); n += 2;
+  await act('pscope-asm'); await act('ks-sec-loc'); await act('kb-frame-1'); n += 3;
   expect(await W(page, `d.members.filter(m => m.id.startsWith('KB.')).map(m => m.id.split('.')[1]).sort()`)).toEqual(['F1', 'F1', 'F3', 'F3']);
   console.log('SIM-03 אלכסונים בקצוות: פעולות', n);
   await page.evaluate(() => (window as any).__ksp.store.select([]));

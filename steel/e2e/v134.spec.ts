@@ -58,7 +58,7 @@ test('V134-04: חיבורים מקובצים, קשיחות קירות בתוכנ
   // קשיחות קירות
   await openNav(page, 'b:walls');
   if (!(await page.getByTestId('br-walls').isChecked())) await page.getByTestId('off-walls-add').click();
-  await page.getByTestId('br-walls-ed-tab-lines').click();
+  await page.getByTestId('ks-sec-loc').click(); // 1.56: מיקום במבנה
   await expect(page.getByTestId('walls-plan')).toBeVisible();
   const lines = await page.evaluate(() => (window as any).__ksp.store.state.derived.section.lines.map((l: any) => l.id));
   const before = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('BR.W')).length);
@@ -92,14 +92,16 @@ test('V134-05: תבניות מקופלות, הסבר מאחורי ?, נעילה 
   await page.getByTestId('tpl-toggle').click();
   await expect(page.getByTestId('tpl-gable-2')).toBeVisible();
   // אפשרות כבויה: כרטיס עם ציור וכפתור הוספה
+  // 1.56: חלון האלכסונים — בחירת סוג במקום כרטיס כבוי
   await openNav(page, 'b:knee');
-  await expect(page.getByTestId('off-kb')).toBeVisible();
-  await page.getByTestId('off-kb-add').click();
+  await expect(page.getByTestId('ks-type-knee')).toHaveAttribute('aria-checked', 'false');
+  await page.getByTestId('ks-type-knee').click();
   expect((await B(page)).kneeBraces.enabled).toBe(true);
-  await expect(page.getByTestId('off-kb')).toHaveCount(0);
+  await expect(page.getByTestId('ks-type-knee')).toHaveAttribute('aria-checked', 'true');
   await openNav(page, 'b:walls');
   if (!(await page.getByTestId('br-walls').isChecked())) await page.getByTestId('br-walls').check();
   await page.getByTestId('br-walls-truss').click();
+  await page.getByTestId('ks-sec-geo').click();
   await editDim(page, 'sch-lt-height', '1200');
   expect((await B(page)).bracing.walls.truss.height).toBe(1200);
   await expect(page.locator('details.help').first()).not.toHaveAttribute('open', '');

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { setBuilding, setKneeBraces, setMemberProps } from '../commands/commands';
+import { resetOverrides, setBuilding, setKneeBraces, setMemberProps } from '../commands/commands';
 import { defaultHaunch } from '../geometry/haunch';
 import { defaultKneeBraces, kneeDetail } from '../geometry/knee';
 import { kneeKeyOf, measureKnee, solveKnee, type KDim, type KMeas } from '../geometry/kneeSolve';
@@ -8,9 +8,11 @@ import { tryProfile } from '../profiles/library';
 import { store, useStore } from '../store';
 import { kneeSet, type RealTag } from '../view/realView';
 import { DetailTiles } from './DetailPicker';
-import { EditCtx, ProfilePicker } from './fields';
+import { BoltSelect, EditCtx, NumField, ProfilePicker } from './fields';
 import { LiveView3D, LockIc } from './LiveView3D';
 import { HaunchEditor, KneePic, KneeSides } from './SectionEditor';
+import { ConnectionEditor } from './ConnectionEditor';
+import { DetailEnds, EndCards } from './PropertiesPanel';
 
 /**
  * 1.56: חלון אלכסונים — במבנה אחיד לכל הרכיבים:
@@ -44,6 +46,9 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
   const [scope, setScope] = useState<Scope>(selKb ? 'loc' : 'all');
   useEffect(() => { setScope(selKb ? 'loc' : 'all'); }, [selKb]);
   const [sec, setSec] = useState<Sec>('geo');
+  // עורך חיבור פתוח (מכרטיס החיבור במודל) — ישר ל"חתך ומחברים"
+  const activeConn = useStore((s) => s.activeConn);
+  useEffect(() => { if (activeConn && /^C\.KB\./.test(activeConn)) setSec('conn'); }, [activeConn]);
   const ov: KneeSideOverride | undefined = key ? kb.sides?.[key] : undefined;
   const mode = (scope === 'loc' ? ov?.mode : undefined) ?? kb.mode ?? 'angle';
   const [locks, setLocks] = useState<KDim[]>(() => (mode === 'reach' ? ['v', 'h'] : ['v', 'ang']));
@@ -98,7 +103,12 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
   const setProf = (v: string) => {
     if (scope === 'one' && ref) store.exec(setMemberProps([ref], { profile: v }));
     else if (scope === 'loc' && key) store.exec(setKneeBraces({ sides: { ...(kb.sides ?? {}), [key]: { ...(kb.sides?.[key] ?? {}), profile: v } } }));
-    else store.exec(setKneeBraces({ profile: v, sides: Object.fromEntries(Object.entries(kb.sides ?? {}).map(([kk, o]) => { const { profile: _p, ...rest } = o; void _p; return [kk, rest]; }).filter(([, o]) => Object.keys(o as object).length)) }));
+    else {
+      // כל האלכסונים במודל: גובר גם על חתך שנקבע לאלכסון בודד
+      const ovIds = kbs.map((m) => m.id).filter((id) => p.memberOverrides[id]?.profile);
+      if (ovIds.length) store.exec(resetOverrides(ovIds));
+      store.exec(setKneeBraces({ profile: v, sides: Object.fromEntries(Object.entries(kb.sides ?? {}).map(([kk, o]) => { const { profile: _p, ...rest } = o; void _p; return [kk, rest]; }).filter(([, o]) => Object.keys(o as object).length)) }));
+    }
   };
   const fam = tryProfile(profNow)?.family ?? 'RHS';
   const detNow = kneeDetail((scope !== 'all' ? ov?.detail : undefined) ?? kb.detail, fam);
@@ -195,7 +205,16 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
               { key: 'angle', title: 'זוויתן מוברג', desc: 'פח מרותך למארח; רגל הזוויתן מוברגת לפח', pic: <KneePic k="angle" />, hidden: fam !== 'L' },
               { key: 'flange', title: 'פלטת קצה', desc: 'פלטה מרותכת לאלכסון, מוברגת לאגף', pic: <KneePic k="flange" /> },
             ]} />
-            <div className="hint">הפרט חל על שני הקצוות{scope !== 'all' ? ' — במיקום הזה' : ''}. עובי פלטות, ברגים וריתוך — באשף או בסטודיו של המחבר.</div>
+            <div className="hint">הפרט חל על שני הקצוות{scope !== 'all' ? ' — במיקום הזה' : ''}.</div>
+            {detNow !== 'flange'
+              ? <div className="field"><label>ברגים בקצה {end === 'C' ? '(לעמוד)' : '(לקורה)'}</label>
+                  <select className="inp" data-testid="kb-bolts" value={kb.boltsPerEnd ?? 2} onChange={(e) => store.exec(setKneeBraces({ boltsPerEnd: Number(e.target.value) }))}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}×M{kb.bolt.d} — {n / 2} {n === 2 ? 'שורה' : 'שורות'} של 2</option>)}</select></div>
+              : <div className="field"><label>פלטת קצה / ברגים</label><span className="readonly">{kb.plateT}×{kb.plateW}×{kb.plateL} · 4×M{kb.bolt.d}</span></div>}
+            <div className="field"><label>עובי פלטות</label><NumField testId="kb-t" value={kb.plateT} suffix='מ"מ' onCommit={(v) => store.exec(setKneeBraces({ plateT: Math.max(6, v) }))} /></div>
+            <div className="field"><label>קוטר בורג</label><BoltSelect d={kb.bolt.d} onChange={(dd) => store.exec(setKneeBraces({ bolt: { ...kb.bolt, d: dd } }))} /></div>
+            <div className="hint">ברגים, עובי וקוטר — לכל האלכסונים (שני הקצוות). שינוי למחבר בודד: באשף או בסטודיו.</div>
+            {activeConn && /^C\.KB\./.test(activeConn) && <div className="ks-connedit"><ConnectionEditor /></div>}
+            {ref && d.byId.get(ref) && <div className="ks-elend"><div className="ks-note">קצוות האלכסון שנבחר — פרט מוכן לכל קצה, או פרט חדש בסטודיו:</div><EndCards m={d.byId.get(ref)!} /><DetailEnds m={d.byId.get(ref)!} /></div>}
             <div className="ks-acts">
               <button className="btn" disabled={!conn} onClick={() => conn && store.set({ connWizard: conn.id })} data-testid="ks-wizard">אשף המחברים</button>
               <button className="btn" disabled={!ref} onClick={() => ref && store.set({ detailStudio: `${ref}|${end === 'C' ? 'start' : 'end'}`, studioConn: conn?.id ?? null })} data-testid="ks-studio">סטודיו ✎ — {end === 'C' ? 'הקצה לעמוד' : 'הקצה לקורה'}</button>

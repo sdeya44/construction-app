@@ -12,7 +12,7 @@ test('UX154-01: מצב רגיל — פאנל סגור והמודל ברוב המ
   await page.getByTestId('tab-brace').click();
   await page.getByTestId('nav-b:walls').click();
   await expect(page.getByTestId('props')).toBeVisible();
-  await expect(page.getByTestId('lp-nav-content')).toContainText('קשיחות');
+  await expect(page.getByTestId('walls-studio')).toBeVisible();
   // 1.55: קשיחות קירות נפתחת בחלון רכיב — ה-✕ שלו סוגר
   await page.getByTestId('cwin-close').click();
   await expect(page.getByTestId('props')).toBeHidden();

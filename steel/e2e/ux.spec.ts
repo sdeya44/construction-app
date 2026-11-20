@@ -145,7 +145,7 @@ test('SEC-01: חתך מודולרי — תבנית גג מדורג, הוספת �
   expect(await n()).toEqual({ cols: 18, side: 6, err: 0, knee: 24 }); // תבנית מדליקה אלכסוני עמוד-קורה
   await page.getByTestId('geo-ed-tab-planes').click();
   await page.getByTestId('goto-knee').click(); // מעבר לחיזוקים וקשיחות ← אלכסוני עמוד-קורה
-  await expect(page.getByTestId('nav-crumb')).toContainText('אלכסוני עמוד-קורה');
+  await expect(page.getByTestId('knee-studio')).toBeVisible(); // 1.56: חלון האלכסונים
   await page.getByTestId('kb-on').uncheck();
   expect((await n()).knee).toBe(0);
   await page.getByTestId('kb-on').check();

@@ -5,6 +5,7 @@ const openStudio = async (page: import('@playwright/test').Page) => {
   await openNav(page, 'b:knee');
   await page.getByTestId('kb-on').check();
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
+  await page.getByTestId('ks-sec-conn').click(); // 1.56: חתך ומחברים — קצוות האלכסון
   await page.getByTestId('studio-start').click();
   await expect(page.getByTestId('detail-studio')).toBeVisible();
 };

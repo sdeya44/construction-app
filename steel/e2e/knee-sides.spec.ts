@@ -5,7 +5,7 @@ test('KB-02: אלכסוני עמוד-קורה — תוכנית איפה יש: ת
   const errors = await boot(page);
   await openNav(page, 'b:knee');
   await page.getByTestId('kb-on').check();
-  await page.getByTestId('kb-ed-tab-plan').click();
+  await page.getByTestId('ks-sec-loc').click();
   await expect(page.getByTestId('kb-grid')).toBeVisible();
   const n = () => page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('KB.')).length);
   const n0 = await n();
@@ -39,7 +39,7 @@ test('KB-03: קונזולה — עמוד הקצה מופיע עם שני צדד�
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, rafterOverhangLeft: 1500, rafterOverhangRight: 1500 } }) }); });
   await openNav(page, 'b:knee');
   await page.getByTestId('kb-on').check();
-  await page.getByTestId('kb-ed-tab-plan').click();
+  await page.getByTestId('ks-sec-loc').click();
   await expect(page.getByTestId('kb-cell-0-L.L.L')).toBeVisible();
   await expect(page.getByTestId('kb-cell-0-L.L.R')).toBeVisible();
   await expect(page.getByTestId('kb-cell-0-R.R.R')).toBeVisible();
@@ -50,22 +50,24 @@ test('KB-03: קונזולה — עמוד הקצה מופיע עם שני צדד�
   await page.getByTestId('kb-cell-0-L.L.L').click();
   expect(await n()).toBe(n0);
   await shot(page, 'KB_03_console');
-  // עורך החיבור: פרט חיבור — בחירה (לא קבוע)
+  // 1.56: חיבור של אלכסון נפתח בחלון האלכסונים — "חתך ומחברים"; פרט לכל האלכסונים או חריג למיקום
   const cid = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => c.type === 'knee').id);
   await page.evaluate((i) => (window as any).__ksp.store.set({ activeConn: i }), cid);
-  await page.getByTestId('conn-editor').getByTestId('kb-detail-flange').click();
+  const win = page.getByTestId('cwin-knee');
+  await win.getByTestId('pscope-asm').click();
+  await win.getByTestId('ks-sec-conn').click();
+  await win.getByTestId('kb-detail-flange').click();
   expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.kneeBraces.detail)).toBe('flange');
-  await expect(page.getByTestId('pw-kb-n')).toHaveCount(0);
   // חריג למיקום הזה בלבד: חזרה ל"פח + לשונית" רק במפתח-צד של החיבור
-  await page.getByTestId('conn-editor').getByTestId('kb-scope-one').click();
-  await page.getByTestId('conn-editor').getByTestId('kb-detail-fin').click();
+  await win.getByTestId('pscope-loc').click();
+  await win.getByTestId('kb-detail-fin').click();
   const kb = await page.evaluate(() => (window as any).__ksp.store.state.project.building.kneeBraces);
   expect(kb.detail).toBe('flange');
   expect(Object.values(kb.sides ?? {}).some((o: any) => o.detail === 'fin')).toBe(true);
   // זוויתן: אריח "לשונית" לא מוצג
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, kneeBraces: { ...p.building.kneeBraces, profile: 'L50x5', detail: 'fin', sides: {} } } }) }); });
-  await expect(page.getByTestId('conn-editor').getByTestId('kb-detail-fin')).toHaveCount(0);
-  await expect(page.getByTestId('conn-editor').getByTestId('kb-detail-angle')).toHaveAttribute('aria-checked', 'true');
+  await expect(win.getByTestId('kb-detail-fin')).toHaveCount(0);
+  await expect(win.getByTestId('kb-detail-angle')).toHaveAttribute('aria-checked', 'true');
   expect(errors).toEqual([]);
 });
 
@@ -88,12 +90,12 @@ test('HUB-02: לחיצה על אלכסון אגד B — שרטוט סכמטי ע
   await openNav(page, 'b:knee'); // תפריט אחר פתוח — ההגדרות של האגד בפאנל האלמנט
   const id = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BB.'))?.id);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), id);
-  await page.getByTestId('pscope-asmall').click(); // היקף (1.48): כל המכלולים במודל
-  await expect(page.getByTestId('hub-settings')).toBeVisible();
-  await page.getByTestId('hub-settings').getByTestId('sch-pb-drop').click();
+  await page.getByTestId('pscope-asmall').click(); // היקף: כל המודל
+  await page.getByTestId('ks-sec-geo').click(); // 1.56: גיאומטריה — שרטוט עם מידות לעריכה
+  await page.getByTestId('sch-pb-drop').click();
   await page.getByTestId('sch-pb-drop-inp').fill('900'); await page.getByTestId('sch-pb-drop-inp').press('Enter');
   expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.walls.portal.drop)).toBe(900);
-  await page.getByTestId('hub-settings').getByTestId('sch-pb-angle').click();
+  await page.getByTestId('sch-pb-angle').click();
   await page.getByTestId('sch-pb-angle-inp').fill('40'); await page.getByTestId('sch-pb-angle-inp').press('Enter');
   expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.walls.portal.angle)).toBe(40);
   await shot(page, 'HUB_02_portal');
@@ -105,12 +107,13 @@ test('HUB-03: שינוי חתך מפאנל אלכסון — "רק האלמנט �
   await page.getByTestId('kb-on').check();
   const prof = (id: string) => page.evaluate((i) => (window as any).__ksp.store.state.derived.byId.get(i)?.profile, id);
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
+  await page.getByTestId('pscope-one').click(); await page.getByTestId('ks-sec-conn').click(); // 1.56: האלכסון שנבחר · חתך ומחברים
   await pickProfile(page, 'prop-profile', 'SHS100x5', 'SHS'); // היקף "האלמנט הזה"
   expect(await prof('KB.F2.L.L.R')).toBe('SHS100x5');
   expect(await prof('KB.F3.L.L.R')).toBe('RHS80x80x4');
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F3.L.L.R']));
-  await page.getByTestId('pscope-similar').click();
-  await pickProfile(page, 'grp-profile', 'SHS90x4', 'SHS');
+  await page.getByTestId('pscope-asm').click(); await page.getByTestId('ks-sec-conn').click(); // כל האלכסונים במודל
+  await pickProfile(page, 'kb-profile', 'SHS90x4', 'SHS');
   const all = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('KB.')).map((m: any) => m.profile))]);
   expect(all).toEqual(['SHS90x4']);
   // קושרת גג

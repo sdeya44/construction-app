@@ -25,6 +25,7 @@ test('USE-02: אגד B בקירות דרך הממשק — קורה + 2 אלכס�
   await boot(page);
   await openNav(page, 'b:walls');
   await page.getByTestId('br-walls-portal').click();
+  await page.getByTestId('ks-sec-geo').click(); // 1.56: גיאומטריה
   const q = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { beams: d.members.filter((m: any) => /^BB\.[^K]*$/.test(m.id)).length, k: d.members.filter((m: any) => /^BB\..*\.K\d$/.test(m.id)).length, x: d.members.filter((m: any) => m.id.startsWith('BR.W')).length, clash: d.issues.filter((i: any) => i.code === 'CLASH').length }; });
   expect(await q()).toEqual({ beams: 10, k: 8, x: 0, clash: 0 }); // קורת אגד רציפה בכל המפתחים, אלכסונים רק במפתחי האגד
   await page.getByTestId('pb-cont').uncheck();
@@ -190,6 +191,7 @@ test('USE-19: אגד B הפוך — האלכסונים עולים מקורת ה�
   await boot(page);
   await openNav(page, 'b:walls');
   await page.getByTestId('br-walls-portal').click();
+  await page.getByTestId('ks-sec-geo').click();
   await page.getByTestId('pb-dir-up').click();
   const r = await page.evaluate(() => {
     const k = (window as any).__ksp.store.state;

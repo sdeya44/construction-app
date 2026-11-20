@@ -116,7 +116,7 @@ export function ComponentWindow({ kind, memberId, onClose, children, studio }: {
         <button className="cwin-x" onClick={() => { setMax(!max); setMin(false); }} title={max ? 'חזרה לחלון צף' : 'הגדלה'} aria-label={max ? 'חזרה לחלון צף' : 'הגדלת החלון'} data-testid="cwin-full">{max ? '⤡' : '⤢'}</button>
         <button className="cwin-x" onClick={onClose} title="סגירה — המודל במסך מלא" aria-label="סגירת החלון" data-testid="cwin-close">✕</button>
       </header>
-      {!min && studio && <div className="cwin-body cwin-studio">{studio}</div>}
+      {studio && <div className="cwin-body cwin-studio" hidden={min}>{studio}</div>}
       {!min && !studio && <>
       <div className="cwin-body">
         <div className="cwin-main" data-testid="cwin-main">{children}</div>

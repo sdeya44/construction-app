@@ -29,10 +29,10 @@ test('SCOPE-01: לחיצה על אלמנט — בחירת היקף; האלמנט
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, bracing: { ...p.building.bracing, walls: { ...p.building.bracing.walls, enabled: true, type: 'portal' } } } }) }); });
   const bb = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => /^BB\..*\.K1$/.test(m.id)).id);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), bb);
-  await page.getByTestId('pscope-asm').click();
-  await expect(page.getByTestId('asm-title')).toContainText('אגד B');
-  await expect(page.getByTestId('ptab-conns')).toBeVisible();
-  expect((await S()).isolated.length).toBeGreaterThan(5);
+  // 1.56: אלמנט של קשיחות הקירות — חלון קשיחות הקירות (היקף: הציר שלו)
+  await expect(page.getByTestId('walls-studio')).toBeVisible();
+  await expect(page.getByTestId('pscope-asm')).toHaveClass(/on/);
+  await expect(page.getByTestId('br-walls-portal')).toHaveAttribute('aria-checked', 'true');
   await shot(page, 'SCOPE_01_portal');
   // ביטול בחירה — הבידוד מוסר
   await page.evaluate(() => (window as any).__ksp.store.select([]));
@@ -66,30 +66,28 @@ test('SCOPE-03 (1.48): אלמנט במכלול קשיחות — רק "המכלו
   const [a, b] = lines;
   const bbK = (l: string) => page.evaluate((ll) => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith(`BB.`) && m.id.split('.')[2] === ll && /\.K1$/.test(m.id)).id, l);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), await bbK(a));
-  // אין "רק האלמנט הזה" / "כל הדומים" — רק מכלולים
+  // אין "רק האלמנט הזה" / "כל הדומים" — רק ציר / כל המודל (1.56: חלון קשיחות הקירות)
   await expect(page.getByTestId('pscope-one')).toHaveCount(0);
   await expect(page.getByTestId('pscope-similar')).toHaveCount(0);
   await page.getByTestId('pscope-asm').click();
-  await expect(page.getByTestId('asm-applies')).toContainText('המכלולים בציר');
-  await expect(page.getByTestId('asm-scope-line')).toHaveCount(0); // ההיקף נקבע למעלה
+  await expect(page.getByTestId('ks-line')).toHaveValue(a);
   // חתך האלכסונים — לציר הזה בלבד
-  await pickProfile(page, 'prop-profile', 'SHS100x5', 'SHS');
+  await page.getByTestId('ks-sec-conn').click();
+  await pickProfile(page, 'pb-brace', 'SHS100x5', 'SHS');
   const prof = (l: string) => page.evaluate((ll) => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BB.') && m.id.split('.')[2] === ll && /\.K1$/.test(m.id)).profile, l);
   expect(await prof(a)).toBe('SHS100x5');
   expect(await prof(b)).not.toBe('SHS100x5');
   // סוג — לציר הזה בלבד
-  await page.getByTestId('asm-type-truss').click();
+  await page.getByTestId('br-walls-truss').click();
   let w = (await S()).project.building.bracing.walls;
   expect(w.lineType[a]).toBe('truss');
   expect(w.lineType[b] ?? w.type).toBe('portal');
-  // מכלול בציר השני → כל המכלולים במודל → X לכולם
+  // מכלול בציר השני → כל המודל → X לכולם
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), await bbK(b));
   await page.getByTestId('pscope-asmall').click();
-  await expect(page.getByTestId('asm-applies')).toContainText('כל המכלולים במודל');
-  // כל המכלולים = העורך המלא כמו בתפריט הימני (סוג, צירים ומפתחים, סיב רציף)
-  const full = page.getByTestId('hub-settings');
-  await expect(full.getByTestId('br-walls-ed-tab-lines')).toBeVisible();
-  await full.getByTestId('br-walls-x').click();
+  await page.getByTestId('ks-sec-loc').click();
+  await expect(page.getByTestId('ks-loc')).toBeVisible();
+  await page.getByTestId('br-walls-x').click();
   w = (await S()).project.building.bracing.walls;
   expect(w.type).toBe('x');
   expect(w.lineType).toBeUndefined();
@@ -105,15 +103,14 @@ test('SCOPE-04 (1.48.1): "כל המכלולים במודל" — העורך המ�
   // ציר a: חתך אלכסון לציר בלבד
   await page.evaluate(async (i) => (window as any).__ksp.store.select([i]), (await bbK(a)).id);
   await page.getByTestId('pscope-asm').click();
-  await pickProfile(page, 'prop-profile', 'SHS100x5', 'SHS');
+  await page.getByTestId('ks-sec-conn').click();
+  await pickProfile(page, 'pb-brace', 'SHS100x5', 'SHS');
   expect((await bbK(a)).profile).toBe('SHS100x5');
   // מציר b: כל המכלולים — גם ציר a מתעדכן
   await page.evaluate(async (i) => (window as any).__ksp.store.select([i]), (await bbK(b)).id);
   await page.getByTestId('pscope-asmall').click();
-  const full = page.getByTestId('hub-settings');
-  await full.getByTestId('pb-brace-open').click();
-  await full.getByTestId('pb-brace-fam-SHS').click();
-  await full.getByTestId('pb-brace-opt-SHS120x5').click();
+  await page.getByTestId('ks-sec-conn').click();
+  await pickProfile(page, 'pb-brace', 'SHS120x5', 'SHS');
   await page.waitForTimeout(150);
   expect((await bbK(a)).profile).toBe('SHS120x5');
   expect((await bbK(b)).profile).toBe('SHS120x5');

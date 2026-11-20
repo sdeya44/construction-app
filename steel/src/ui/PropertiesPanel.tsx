@@ -461,7 +461,7 @@ function StudioPlateButton({ c }: { c: Connection }) {
 
 const DETAIL_KINDS = new Set(['column', 'rafter', 'beam', 'brace', 'purlin', 'girt']);
 /** פרט חיבור בכל קצה של האלמנט: הפרט הנוכחי (רגיל/מותאם) + פתיחת הסטודיו */
-function DetailEnds({ m }: { m: Member }) {
+export function DetailEnds({ m }: { m: Member }) {
   const p = useStore((s) => s.project);
   const d = useStore((s) => s.derived);
   if (!DETAIL_KINDS.has(m.kind)) return null;
@@ -706,7 +706,7 @@ function PartPreview({ m, mark }: { m: Member; mark?: string }) {
 }
 
 /** כרטיס חיבור לכל קצה: מה הפרט (פלטות, ברגים, סטטוס) + החלפת פרט באשף + עורך החיבור */
-function EndCards({ m }: { m: Member }) {
+export function EndCards({ m }: { m: Member }) {
   const d = useStore((s) => s.derived);
   const [drawOpen, setDrawOpen] = useState<string | null>(null);
   const own = d.connections.filter((c) => c.type !== 'custom' && (c.members.includes(m.id) || c.parts.includes(m.id)));

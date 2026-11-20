@@ -67,6 +67,7 @@ test('SC-01: שינוי חתך לאלמנט אחד — התוכנה שואלת "
   // אלכסון: רק אחד
   await openNav(page, 'b:knee'); await page.getByTestId('kb-on').check();
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
+  await page.getByTestId('pscope-one').click(); await page.getByTestId('ks-sec-conn').click(); // 1.56: האלכסון שנבחר
   await pickProfile(page, 'prop-profile', 'SHS100x5', 'SHS');
   expect(await prof('KB.F2.L.L.R')).toBe('SHS100x5');
   expect(await prof('KB.F3.L.L.R')).toBe('RHS80x80x4');

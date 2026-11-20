@@ -17,6 +17,8 @@ test('CW-01: כלי "קשיחות קירות" בריבון פותח חלון ר�
   await openNav(page, 'b:walls');
   const win = page.getByTestId('cwin-walls');
   await expect(win).toBeVisible();
+  await win.getByTestId('br-walls-portal').click();
+  await win.getByTestId('ks-sec-geo').click(); // 1.56: התלת-ממד החי — בגיאומטריה
   await expect(win.getByTestId('live3d-canvas')).toBeVisible();
   // 1.55.1: המודל נשאר במסך מלא — החלון צף מעליו
   const w = await page.evaluate(() => (window as any).__ksp.viewport.panes[0].el.getBoundingClientRect().width);
@@ -36,8 +38,9 @@ test('CW-01: כלי "קשיחות קירות" בריבון פותח חלון ר�
   expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.members.some((m: any) => /^BB\./.test(m.id)))).toBe(true);
   // אריחי הסוג: תמונה מרונדרת מהמודל (מחליפה את הציור כשמוכנה)
   await expect(win.locator('img[data-real]').first()).toBeVisible({ timeout: 15000 });
-  await expect(win.getByTestId('cwin-conn-0')).toBeVisible();
-  await win.getByTestId('cwin-conn-wiz-0').click();
+  await win.getByTestId('ks-sec-conn').click();
+  await expect(win.getByTestId('ks-cg-0')).toBeVisible();
+  await win.getByTestId('ks-wizard').click();
   expect(await page.evaluate(() => (window as any).__ksp.store.state.connWizard)).toMatch(/^C\.BB\./);
   await shot(page, 'CW_01_walls');
   expect(errors).toEqual([]);
@@ -50,12 +53,11 @@ test('CW-02: לחיצה על אלכסון עמוד-קורה במודל פותח�
   await page.evaluate(() => { const k = (window as any).__ksp; const id = k.store.state.derived.members.find((m: any) => m.id.startsWith('KB.') && m.kind !== 'plate' && m.kind !== 'bolt').id; k.store.select([id]); });
   const win = page.getByTestId('cwin-knee');
   await expect(win).toBeVisible();
-  await expect(win.getByTestId('props-single')).toBeVisible();
-  // היקף ברירת מחדל: הגדרות האלכסונים (בלי לשמור כהעדפה)
-  await expect(win.getByTestId('pscope-asm')).toHaveClass(/on/);
+  await expect(win.getByTestId('knee-studio')).toBeVisible();
+  // 1.56: היקף ברירת מחדל מאלמנט — המיקום שלו (בכל המסגרות)
+  await expect(win.getByTestId('pscope-loc')).toHaveClass(/on/);
+  await win.getByTestId('ks-sec-conn').click();
   await expect(win.getByTestId('kb-detail')).toBeVisible();
-  await win.getByTestId('live3d-far').click();
-  await expect(win.getByTestId('live3d-far')).toHaveClass(/on/);
   await shot(page, 'CW_02_knee');
   // סגירה — המודל במסך מלא
   await win.getByTestId('cwin-close').click();

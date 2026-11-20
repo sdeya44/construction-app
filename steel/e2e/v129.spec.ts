@@ -48,7 +48,9 @@ test('V129-02 נעילה אופקית — מסבך + סיב רציף', async ({ 
   let s = await state(page);
   expect(s.err).toEqual([]);
   expect(s.ids.some((id) => /^LT\..*\.D\d+$/.test(id))).toBe(true);
+  await page.getByTestId('ks-sec-geo').click(); // 1.56: גיאומטריה
   await page.getByTestId('lt-pos').selectOption('below');
+  await page.getByTestId('ks-sec-conn').click(); // חתך ומחברים
   await page.getByTestId('lt-conn').selectOption('tongue');
   await page.waitForTimeout(400);
   s = await state(page);
@@ -59,7 +61,7 @@ test('V129-02 נעילה אופקית — מסבך + סיב רציף', async ({ 
 test('V129-03 מכפל ומזחלה בפלטה', async ({ page }) => {
   const errors = await boot(page);
   await openNav(page, 'b:knee');
-  await page.getByTestId('hn-on').check();
+  await page.getByTestId('ks-type-haunch').click(); // 1.56: מכפל — אחד משני הסוגים
   await page.waitForTimeout(400);
   let s = await state(page);
   expect(s.err).toEqual([]);
@@ -106,13 +108,11 @@ test('V129-05 חלון מכלול: נעילה אופקית — צורה לציר
   const chord = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => /^LT\.\d+\.L\.S$/.test(m.id))?.id);
   expect(chord).toBeTruthy();
   await page.evaluate((id) => (window as any).__ksp.store.select([id]), chord);
-  await page.getByTestId('pscope-asm').click();
-  await expect(page.getByTestId('asm-card')).toBeVisible();
-  await expect(page.getByTestId('asm-title')).toContainText('נעילה');
-  await expect(page.getByTestId('asm-pic')).toBeVisible();
+  // 1.56: חלון קשיחות הקירות — היקף "כל הציר" (ברירת מחדל מלחיצה על אלמנט), סוג לציר הזה בלבד
+  await expect(page.getByTestId('walls-studio')).toBeVisible();
+  await expect(page.getByTestId('pscope-asm')).toHaveClass(/on/);
   await shot(page, 'v129-asm-lock');
-  await expect(page.getByTestId('asm-applies')).toContainText('המכלולים בציר'); // ההיקף נקבע בראש החלון (1.48)
-  await page.getByTestId('asm-type-portal').click();
+  await page.getByTestId('br-walls-portal').click();
   await page.waitForTimeout(400);
   const s = await page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { bbL: d.members.some((m: any) => /^BB\..*\.L$/.test(m.id)), ltR: d.members.some((m: any) => /^LT\..*\.R\./.test(m.id)), err: d.issues.filter((i: any) => i.severity === 'error').length }; });
   expect(s).toEqual({ bbL: true, ltR: true, err: 0 });

@@ -46,7 +46,7 @@ test('SIM-01/02: בניית סככה מאפס ושינויים — מספר פע
   });
   expect((await st(page)).bb).toBeGreaterThan(0);
   await task('אלכסוני עמוד-קורה: ירידה 700', 'חיזוקים וקשיחות ← אלכסוני עמוד-קורה', async () => {
-    await click('nav-b:knee'); await click('sch-kb-drop'); await fill('sch-kb-drop-inp', '700');
+    await click('nav-b:knee'); await click('ks-sec-geo'); await fill('kd-v', '700'); await expect(page.getByTestId('kd-v')).toHaveValue('700', { timeout: 15000 });
   });
   await task('בדיקות: תיקון כל ההצעות', 'בדיקות ← תקן הכל', async () => {
     await click('tab-issues');

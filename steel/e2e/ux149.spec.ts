@@ -110,7 +110,7 @@ test('UX152-01: פרט טיפוסי בכרטיס החיבור / בעורך / ב�
   await page.evaluate(() => (window as any).__ksp.store.select([]));
   await openNav(page, 'b:knee');
   if (await page.getByTestId('kb-on').count()) await page.getByTestId('kb-on').check();
-  await page.getByTestId('kb-ed-tab-plan').click();
+  await page.getByTestId('ks-sec-loc').click();
   await page.getByTestId('kb-ends').click();
   const frs = () => page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.id.startsWith('KB.')).map((m: any) => m.id.split('.')[1]))].sort());
   const nf = await page.evaluate(() => (window as any).__ksp.store.state.project.building.frames.length);
@@ -127,7 +127,7 @@ test('UX153-01: טבלת מופעים — שורה לכל מכלול, ריחוף
   const errors = await boot(page);
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, bracing: { ...p.building.bracing, walls: { ...p.building.bracing.walls, enabled: true, type: 'portal' } } } }) }); });
   await openNav(page, 'b:walls');
-  await page.getByTestId('br-walls-ed-tab-table').click();
+  await page.getByTestId('ks-sec-loc').click(); // 1.56: טבלת המופעים — במיקום במבנה
   const rows = page.locator('[data-testid^="ctab-walls-row-"]');
   const nAsm = await page.evaluate(() => new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => /^BB\./.test(m.id)).map((m: any) => m.id.split('.').slice(0, 3).join('.'))).size);
   await expect(rows).toHaveCount(nAsm);

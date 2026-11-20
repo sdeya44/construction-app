@@ -21,7 +21,7 @@ test('V141-01: מוטות תלייה, תמיכה צידית, סיב רציף, ב
   expect(await count(page, '^FB\\.')).toBeGreaterThan(0);
   // סיב רציף
   await openNav(page, 'b:walls');
-  if (await page.getByTestId('br-walls-ed-tab-ties').count()) await page.getByTestId('br-walls-ed-tab-ties').click();
+  await page.getByTestId('ks-sec-loc').click(); // 1.56: סיב רציף — במיקום במבנה
   await page.getByTestId('lt-on').check();
   expect(await count(page, '^LTIE\\.')).toBeGreaterThan(0);
   // בסיס בכלונס

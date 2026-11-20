@@ -8,6 +8,8 @@ import { wallLineOf, wallSet, WALL_RE } from '../view/realView';
 import { ComponentTable } from './ComponentTable';
 import { openConnStudio } from './ComponentWindow';
 import { EditCtx, ProfilePicker } from './fields';
+import { ConnectionEditor } from './ConnectionEditor';
+import { DetailEnds, EndCards } from './PropertiesPanel';
 import { LiveView3D } from './LiveView3D';
 import { LineTiesEditor, LockTrussFields, PortalFields, WallLines, WallPic, WallXShape, XConnFields } from './StructurePanel';
 
@@ -36,6 +38,8 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
   const [scope, setScope] = useState<'line' | 'all'>(selLine ? 'line' : 'all');
   useEffect(() => { if (selLine) { setLine(selLine); setScope('line'); } }, [selLine]);
   const [sec, setSec] = useState<Sec>('loc');
+  const activeConn = useStore((s) => s.activeConn);
+  useEffect(() => { if (activeConn && /^C\.(BR\.W|BB\.|LT\.)/.test(activeConn)) setSec('conn'); }, [activeConn]);
   const [whole, setWhole] = useState(false);
   const lid = scope === 'line' ? line : undefined;
   const type: WType = ((lid && w.lineType?.[lid]) ?? w.type ?? 'x') as WType;
@@ -98,8 +102,8 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
         {sec === 'loc' && <div className="ks-panel" data-testid="ks-loc">
           <div className="ks-note">באילו צירים ומפתחים יש קשיחות — לחיצה על מפתח מוסיפה או מסירה. הסוג לכל ציר נקבע למעלה ("כל הציר").</div>
           <WallLines nb={p.building.frames.length - 1} />
-          <details className="ks-more"><summary>סיב רציף לאורך הציר</summary><LineTiesEditor /></details>
-          <details className="ks-more"><summary>טבלת מופעים</summary><ComponentTable match={/^(BR\.W|BB\.|LT\.)/} testId="ctab-walls" /></details>
+          <details className="ks-more" open><summary>סיב רציף לאורך הציר</summary><LineTiesEditor /></details>
+          <details className="ks-more" open><summary>טבלת מופעים</summary><ComponentTable match={/^(BR\.W|BB\.|LT\.)/} testId="ctab-walls" /></details>
         </div>}
 
         {sec === 'geo' && <div className="ks-panel ks-geo" data-testid="ks-geo">
@@ -135,6 +139,8 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
               {type === 'truss' && <LockTrussFields lineId={lid} />}
               {type === 'x' && <XConnFields />}
             </EditCtx.Provider>
+            {activeConn && /^C\.(BR\.W|BB\.|LT\.)/.test(activeConn) && <div className="ks-connedit"><ConnectionEditor /></div>}
+            {selId && d.byId.get(selId) && <div className="ks-elend"><div className="ks-note">קצוות האלמנט שנבחר — פרט מוכן לכל קצה, או פרט חדש בסטודיו:</div><EndCards m={d.byId.get(selId)!} /><DetailEnds m={d.byId.get(selId)!} /></div>}
             {groups[cg] && <div className="ks-acts">
               <button className="btn" onClick={() => store.set({ connWizard: groups[cg][1][0].id })} data-testid="ks-wizard">אשף המחברים</button>
               <button className="btn" onClick={() => openConnStudio(groups[cg][1][0], d)} data-testid="ks-studio">סטודיו ✎</button>
