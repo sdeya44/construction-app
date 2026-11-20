@@ -71,7 +71,7 @@ test('CW-03 (1.55.2): מקום אחד לכל נושא — חיבור של הרכ
   const vpW = () => page.evaluate(() => (window as any).__ksp.viewport.panes[0].el.getBoundingClientRect().width);
   // פאנל המאפיינים צף — המודל לא מצטמצם
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
-  await expect(page.getByTestId('fpanel')).toBeVisible();
+  await expect(page.getByTestId('cwin-element')).toBeVisible(); // 1.64: אלמנט — חלון צף באותו מבנה
   expect(await vpW()).toBeGreaterThan(1600 * 0.8);
   // עורך חיבור של קשיחות קירות נפתח בתוך חלון הרכיב (לא בפאנל נפרד)
   const cid = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => /^C\.BR\.W/.test(c.id))?.id);

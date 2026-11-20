@@ -1,5 +1,6 @@
 import { settingsOf } from './navIndex';
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ConnectorBlock, type ConnTab } from './wizard/ConnectorBlock';
+import React, { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { resetOverrides, setBuilding, setKneeBraces, setMemberProps, setTransfers, type Command } from '../commands/commands';
 import { defaultLockTruss } from '../geometry/lockTruss';
 import { BracingEditor } from './StructurePanel';
@@ -32,6 +33,14 @@ import { Collapsed } from './summary';
 
 const f1 = (n: number, d = 1) => n.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
 
+/**
+ * 1.64: כרטיס האלמנט בתוך אשף אחיד — אותו תוכן, מחולק לקבוצות:
+ *   'top' = כותרת + היקף · 'loc' = הגדרות הרכיב/הקבוצה · 'geo' = צורה, שרטוט החלק, מתקדם · 'conn' = חתך + מחבר
+ * בלי הקשר (null) — הכרטיס המלא כמו קודם (מסך צר, בחירה מרובה).
+ */
+export const CardPartCtx = React.createContext<null | 'top' | 'loc' | 'geo' | 'conn'>(null);
+const PSEC_PART: Record<string, 'loc' | 'geo' | 'conn'> = { grp: 'conn', general: 'loc', framegeo: 'loc', asmplate: 'conn', shape: 'geo', part: 'geo', adv: 'geo', prof: 'conn', conns: 'conn' };
+
 export function PropertiesPanel() {
   const active = useStore((s) => s.activeConn);
   const gutter = useStore((s) => s.activeGutter);
@@ -41,6 +50,7 @@ export function PropertiesPanel() {
 }
 
 function PropertiesInner() {
+  const cardPartV = React.useContext(CardPartCtx);
   const [scope, setScope] = useState<AsmScope>('line');
   const scopeSel = useStore((s) => s.propScope ?? null);
   const fab = useFab().fab;
@@ -100,6 +110,7 @@ function PropertiesInner() {
   }
 
   const m = ms[0];
+  const cardPart = cardPartV;
   const pr = tryProfile(m.profile);
   const mat = getMaterial(m.material);
   const cl = cutLength(m);
@@ -203,8 +214,10 @@ function PropertiesInner() {
   );
   const connBlock = (
     <PSec id="conns" title={`חיבורים${conns ? ` (${conns})` : ''}`} testId="ptab-conns">
-      {!plateLike && <EndCards m={m} />}
-      {!plateLike && <DetailEnds m={m} />}
+      {!plateLike && !cardPart && <EndCards m={m} />}
+      {!plateLike && !cardPart && <DetailEnds m={m} />}
+      {/* 1.64: באשף — בלוק מחבר אחד: קצה התחלה / קצה סוף / לאורך האלמנט; פרט מובנה או מהספרייה */}
+      {!plateLike && cardPart && <ElementConnector m={m} />}
       {plateLike && m.kind !== 'cleat' && m.connId && (d.connById.get(m.connId)?.type === 'purlin-cleat' || d.connById.get(m.connId)?.custom?.site.includes('|x:')) && <div className="hub-set"><CleatTypePicker connId={m.connId} /></div>}
       {m.purlin && <div className="hub-set"><CleatTypePicker side={m.purlin.paramKey ?? (m.purlin.side === 'R' ? 'right' : 'left')} /></div>}
       {custom && (
@@ -212,7 +225,7 @@ function PropertiesInner() {
           <button className="btn primary" data-testid="open-studio-part" onClick={() => store.set({ detailStudio: custom.site })}>פתח בסטודיו פרטים</button></div>
       )}
       {plateLike && !custom && <HubSettings m={m} />}
-      <MemberConnections memberId={m.id} />
+      {(!cardPart || plateLike) && <MemberConnections memberId={m.id} />}
       {!conns && <div className="hint">אין חיבורים לאלמנט זה.</div>}
       {['column', 'rafter', 'beam', 'purlin', 'girt'].includes(m.kind) && !/(^|\.)TR\./.test(m.id) && <SpliceEditor m={m} />}
     </PSec>
@@ -225,13 +238,16 @@ function PropertiesInner() {
   const cur = opts.find((o) => o.key === scopeNow);
   const braceAsm = isBraceAsm(asm?.family);
   const asmScope: AsmScope = braceAsm ? (scopeNow === 'asmall' || !fam?.lineId ? 'all' : 'line') : scope;
+  if (cardPart === 'top') return <div className="el-top" data-testid="el-top">{head}<ScopeBar opts={opts} cur={scopeNow} />
+    {!scopeNow && <div className="hint" data-testid="pscope-hint">בחרו על מה לעבוד: האלמנט הזה בלבד, המכלול שלו, כל הציר או כל הדומים — ויוצגו ההגדרות של הבחירה.</div>}</div>;
+  const L0 = (x: ReactNode) => (!cardPart || cardPart === 'loc' ? x : null); // תוכן שאינו בקבוצה מסוימת — במיקום
   return (
     <div className="panel-body" data-testid="props-single">
-      {head}
-      <ScopeBar opts={opts} cur={scopeNow} />
-      {!scopeNow && <div className="hint" data-testid="pscope-hint">{braceAsm ? 'האלמנט הוא חלק ממכלול — בחר: המכלולים בציר הזה או כל המכלולים במודל, ויוצגו סוג המכלול, מידות, חתך ופרטי חיבור.' : 'בחר על מה לעבוד: האלמנט הזה בלבד, המכלול שלו, כל הציר או כל הדומים — ויוצגו ההגדרות של הבחירה.'}</div>}
+      {!cardPart && head}
+      {!cardPart && <ScopeBar opts={opts} cur={scopeNow} />}
+      {!scopeNow && L0(<div className="hint" data-testid="pscope-hint">{braceAsm ? 'האלמנט הוא חלק ממכלול — בחר: המכלולים בציר הזה או כל המכלולים במודל, ויוצגו סוג המכלול, מידות, חתך ופרטי חיבור.' : 'בחר על מה לעבוד: האלמנט הזה בלבד, המכלול שלו, כל הציר או כל הדומים — ויוצגו ההגדרות של הבחירה.'}</div>)}
       {scopeNow === 'one' && <>
-        {manualNote}
+        {L0(manualNote)}
         <PSec id="prof" title={plateLike ? 'חלק וחומר' : 'חתך וחומר — האלמנט הזה'} testId="psec-prof">
           {secCard}
           {m.partDesc && <div className="hint" style={{ marginTop: 0 }}>{m.partDesc}</div>}
@@ -250,21 +266,21 @@ function PropertiesInner() {
         {advanced}
       </>}
       {braceAsm && fam && scopeNow === 'asmall' && <>
-        <AssemblyCard m={m} />
-        <div className="hint" data-testid="asm-applies">חל על: <b>{cur?.label}</b> — כל ההגדרות כמו בתפריט הימני: סוג, צירים ומפתחים, חתכים, מידות ופרטים.</div>
+        {L0(<><AssemblyCard m={m} />
+        <div className="hint" data-testid="asm-applies">חל על: <b>{cur?.label}</b> — כל ההגדרות כמו בתפריט הימני: סוג, צירים ומפתחים, חתכים, מידות ופרטים.</div></>)}
         {plateLike && !custom && <PSec id="asmplate" title="הפלטה הזו — עריכה בסטודיו" testId="psec-plate"><HubSettings m={m} /></PSec>}
-        <div data-testid="hub-settings" className="asm-full"><BracingEditor part={fam.family === 'roofx' ? 'roof' : 'walls'} /></div>
+        {L0(<div data-testid="hub-settings" className="asm-full"><BracingEditor part={fam.family === 'roofx' ? 'roof' : 'walls'} /></div>)}
       </>}
       {braceAsm && fam && scopeNow === 'asm' && <>
-        <AssemblyCard m={m} />
-        <div className="hint" data-testid="asm-applies">חל על: <b>{cur?.label}</b> — כל שינוי למטה (צורה, מידות, חתך, פרטים) יחול על כולם.</div>
+        {L0(<><AssemblyCard m={m} />
+        <div className="hint" data-testid="asm-applies">חל על: <b>{cur?.label}</b> — כל שינוי (צורה, מידות, חתך, פרטים) יחול על כולם.</div></>)}
         <PSec id="shape" title={`סוג ומידות — ${fam.title.split(' — ')[0]}`} testId="psec-shape"><div data-testid="hub-settings"><AssemblyShape asm={fam} scope={asmScope} setScope={setScope} fixed /></div></PSec>
         {!plateLike && <PSec id="prof" title="חתך" testId="psec-prof">{secCard}<AsmProfile m={m} scope={asmScope} lineId={fam.lineId} ids={cur?.ids ?? []} /></PSec>}
         <PSec id="conns" title="פרטי חיבור" testId="ptab-conns"><AssemblyConn asm={fam} scope={asmScope} /><MemberConnections memberId={m.id} /></PSec>
         {plateLike && !custom && <PSec id="asmplate" title="הפלטה הזו — עריכה בסטודיו" testId="psec-plate"><HubSettings m={m} /></PSec>}
       </>}
       {!braceAsm && scopeNow === 'asm' && <>
-        <AssemblyCard m={m} />
+        {L0(<AssemblyCard m={m} />)}
         {(fam || inRT || tbDef) ? famShape : null}
         {!plateLike && <PSec id="prof" title="חתך — כל המכלול / כל הדומים" testId="psec-prof">{secCard}<ProfileScope m={m} />{matField(cur?.ids ?? [m.id])}</PSec>}
         {fam && <PSec id="conns" title="מחברי המכלול" testId="ptab-conns"><AssemblyConn asm={fam} scope={scope} /><MemberConnections memberId={m.id} /></PSec>}
@@ -275,14 +291,18 @@ function PropertiesInner() {
         {scopeNow === 'similar' && !plateLike && !fam && !tbDef && !inRT && <PSec id="general" title="הגדרות כלליות (לכל המבנה)" testId="psec-general" closed><EditCtx.Provider value={m.purlin ? { embed: true, part: 'shape' } : { embed: false }}><HubSettings m={m} /></EditCtx.Provider></PSec>}
         {scopeNow === 'similar' && famShape}
       </GroupView>}
-      <div className="hint">שינוי חל מיד · Ctrl+Z לביטול</div>
+      {!cardPart && <div className="hint">שינוי חל מיד · Ctrl+Z לביטול</div>}
     </div>
   );
 }
 
 function PSec({ id, title, testId, closed, children }: { id: string; title: string; testId?: string; closed?: boolean; children: ReactNode }) {
+  const part = React.useContext(CardPartCtx);
   const key = `ksp-psec-${id}`;
   const [open, setOpen] = useState(() => { let o = !closed; try { const v = localStorage.getItem(key); if (v !== null) o = v === '1'; } catch { /* */ } return o; });
+  if (part && part !== (PSEC_PART[id] ?? 'conn')) return null;
+  // באשף: הקבוצה כבר נבחרה בלשוניות — בלי קיפול נוסף
+  if (part) return <div className="psec flat"><div className="wz-sub" data-testid={testId}>{title}</div><div className="psec-b">{children}</div></div>;
   return (
     <details className="psec" open={open || undefined} onToggle={(e) => { const o = (e.currentTarget as HTMLDetailsElement).open; setOpen(o); try { localStorage.setItem(key, o ? '1' : '0'); } catch { /* */ } }}>
       <summary data-testid={testId}>{title}</summary>
@@ -707,7 +727,7 @@ function PartPreview({ m, mark }: { m: Member; mark?: string }) {
 }
 
 /** כרטיס חיבור לכל קצה: מה הפרט (פלטות, ברגים, סטטוס) + החלפת פרט באשף + עורך החיבור */
-export function EndCards({ m }: { m: Member }) {
+export function EndCards({ m, only }: { m: Member; only?: 'start' | 'end' | 'mid' }) {
   const d = useStore((s) => s.derived);
   const [drawOpen, setDrawOpen] = useState<string | null>(null);
   const own = d.connections.filter((c) => c.type !== 'custom' && (c.members.includes(m.id) || c.parts.includes(m.id)));
@@ -738,17 +758,20 @@ export function EndCards({ m }: { m: Member }) {
   if (!own.length) return null;
   return (
     <div className="hub-set" data-testid="end-cards">
-      {ends.map(({ e, list }) => (
+      {ends.filter(({ e }) => !only || only === e).map(({ e, list }) => (
         <div key={e} className="end-block"><div className="hub-set-h">{e === 'start' ? 'קצה התחלה' : 'קצה סוף'} <span className="muted mono">z {Math.round((e === 'start' ? m.start : m.end).z)}</span></div>
           {list.length ? list.map(card) : <div className="hint" style={{ margin: 0 }}>אין חיבור בקצה הזה</div>}</div>
       ))}
-      {mid.length > 0 && <div className="end-block"><div className="hub-set-h">לאורך האלמנט ({mid.length})</div>{mid.slice(0, 4).map(card)}{mid.length > 4 && <div className="hint">ועוד {mid.length - 4} — ברשימת החיבורים למטה</div>}</div>}
+      {mid.length > 0 && (!only || only === 'mid') && <div className="end-block"><div className="hub-set-h">לאורך האלמנט ({mid.length})</div>{mid.slice(0, 4).map(card)}{mid.length > 4 && <div className="hint">ועוד {mid.length - 4} — ברשימת החיבורים למטה</div>}</div>}
     </div>
   );
 }
 
 /** קבוצה (ציר / מסגרת / כל הדומים): חתך, חומר והיפוך לכולם; רשימה מקופלת */
 function GroupView({ m, ids, label, similar, route, children }: { m: Member; ids: string[]; label: string; similar: boolean; route: ReturnType<typeof profileRoute>; children?: ReactNode }) {
+  // 1.64: באשף — הסיכום והחתך של הקבוצה ב"חתך ומחברים"; בשאר הקבוצות רק ההגדרות שבתוכה
+  const part = React.useContext(CardPartCtx);
+  if (part && part !== 'conn') return <>{children}</>;
   const d = useStore((s) => s.derived), p = useStore((s) => s.project);
   const ms = ids.map((x) => d.byId.get(x)).filter((x): x is Member => !!x);
   const profiles = [...new Set(ms.map((x) => x.profile))];
@@ -777,4 +800,31 @@ function GroupView({ m, ids, label, similar, route, children }: { m: Member; ids
       {children}
     </>
   );
+}
+
+/** 1.64: מחברי האלמנט באשף — קצה התחלה / קצה סוף / לאורך האלמנט, בבלוק המחבר האחיד */
+function ElementConnector({ m }: { m: Member }) {
+  const d = useStore((s) => s.derived);
+  const [tab, setTab] = useState<'start' | 'end' | 'mid'>('start');
+  const own = d.connections.filter((c) => c.type !== 'custom' && (c.members.includes(m.id) || c.parts.includes(m.id)));
+  const near = (c: Connection, e: 'start' | 'end') => {
+    const ps = [...c.parts, ...c.bolts.map((b) => b.id)].map((x) => d.byId.get(x)).filter((x): x is Member => !!x);
+    if (!ps.length) return false;
+    const P = { x: ps.reduce((a, q) => a + (q.start.x + q.end.x) / 2, 0) / ps.length, y: ps.reduce((a, q) => a + (q.start.y + q.end.y) / 2, 0) / ps.length, z: ps.reduce((a, q) => a + (q.start.z + q.end.z) / 2, 0) / ps.length };
+    const len = dist(m.start, m.end), a = dist(P, m.start), b = dist(P, m.end);
+    return Math.min(a, b) <= Math.max(400, len * 0.2) && (e === 'start' ? a <= b : b < a);
+  };
+  const cStart = own.find((c) => near(c, 'start')), cEnd = own.find((c) => near(c, 'end'));
+  const nMid = own.filter((c) => !near(c, 'start') && !near(c, 'end')).length;
+  const tabs: ConnTab[] = [
+    { key: 'start', title: 'קצה התחלה', sub: cStart ? CONN_TYPE[cStart.type] : 'ללא חיבור', testId: 'el-end-start' },
+    { key: 'end', title: 'קצה סוף', sub: cEnd ? CONN_TYPE[cEnd.type] : 'ללא חיבור', testId: 'el-end-end' },
+    ...(nMid ? [{ key: 'mid', title: 'לאורך האלמנט', sub: `${nMid} חיבורים`, testId: 'el-end-mid' }] : []),
+  ];
+  const cid = tab === 'start' ? cStart?.id : tab === 'end' ? cEnd?.id : undefined;
+  if (!own.length && !DETAIL_KINDS.has(m.kind)) return null;
+  return <ConnectorBlock tabs={tabs} value={tab} onPick={(k) => setTab(k as 'start' | 'end' | 'mid')}
+    built={<EndCards m={m} only={tab} />} site={tab === 'mid' ? null : { memberId: m.id, end: tab }}
+    wizardConnId={cid && familyOf(d.connById.get(cid)!) ? cid : undefined}
+    onStudio={tab === 'mid' ? undefined : () => store.set({ detailStudio: `${m.id}|${tab}` })} />;
 }

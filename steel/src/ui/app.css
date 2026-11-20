@@ -1155,7 +1155,7 @@ details.adv .adv-body { padding-bottom: 6px; }
   /* 1.55.1: חלון הרכיב צף מעל המודל — המודל נשאר במסך מלא */
   .workspace.comp-open { --pw: 0px; }
   .workspace.comp-open:not(.panel-closed) > .side-end { display: flex; grid-column: 3; grid-row: 2; z-index: 8; pointer-events: none; background: transparent; border: 0; padding: calc(var(--vbh, 56px) + 8px) 12px 12px; box-sizing: border-box; flex-direction: row; justify-content: flex-start; align-items: flex-start; min-width: 0; overflow: hidden; box-shadow: none; position: relative; width: auto; }
-  .workspace.comp-open > .side-end > .cwin { pointer-events: auto; width: min(780px, 50%); min-width: min(680px, 100%); height: calc(100% - 66px); align-self: flex-start; }
+  .workspace.comp-open > .side-end > .cwin { pointer-events: auto; width: min(780px, calc(50% - 36px)); min-width: min(560px, 100%); height: calc(100% - 66px); align-self: flex-start; }
   .workspace.comp-open > .side-end > .cwin.at-l { margin-inline-start: auto; }
   .workspace.comp-open > .side-end > .cwin.min { height: auto; align-self: flex-start; width: min(460px, 100%); }
   .workspace.comp-open > .side-end > .cwin.max { width: 100%; }

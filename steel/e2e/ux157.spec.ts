@@ -74,7 +74,7 @@ test('WZ-02: תחולה מודגשת במודל, שחזור בתוך האשף, �
 test('WZ-03: תפריט ההקשר — "עריכה" פותח את חלון העריכה של האלמנט', async ({ page }) => {
   const errors = await boot(page);
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
-  await page.getByTestId('lp-close').click();
+  await page.getByTestId('cwin-close').click(); // 1.64: האלמנט — באותו חלון
   const pt = await page.evaluate(() => { const k = (window as any).__ksp; k.viewport.fitAll(); const m = k.store.state.derived.byId.get('F2.COL.L'); return k.viewport.screenOf({ x: m.start.x, y: m.start.y, z: (m.start.z + m.end.z) / 2 }); });
   await page.mouse.click(pt.x, pt.y, { button: 'right' });
   await page.getByTestId('mm-edit').click();

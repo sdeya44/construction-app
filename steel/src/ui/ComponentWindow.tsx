@@ -14,15 +14,15 @@ import { stepExists } from './steps';
  * מעטפת מעוצבת סביב העורך הקיים (כל ההגדרות נשמרות במקום אחד), עם תצוגה תלת-ממדית ריאליסטית וחיה
  * של הרכיב, וכרטיסי המחברים שלו (אשף המחברים / סטודיו הפרטים).
  */
-export type CompKind = 'walls' | 'knee' | FamKey;
+export type CompKind = 'walls' | 'knee' | 'element' | FamKey;
 const META0: Record<'walls' | 'knee', { title: string; crumb: string; pic: string; re: RegExp; nav: NavKey; tint: string }> = {
   walls: { title: 'קשיחות קירות', crumb: 'חיזוקים', pic: 'walls', re: WALL_RE, nav: 'b:walls', tint: 'teal' },
   knee: { title: 'אלכסוני עמוד-קורה', crumb: 'חיזוקים', pic: 'knee', re: KNEE_RE, nav: 'b:knee', tint: 'mustard' },
 };
 /** 1.58: כל משפחות הרכיבים — אותו חלון */
-export const compMeta = (k: CompKind) => (k === 'walls' || k === 'knee' ? META0[k] : { ...FAMILIES[k], re: new RegExp(FAMILIES[k].re.source.replace('^(C\\.)?', '^')), nav: FAMILIES[k].nav[0] });
+export const compMeta = (k: CompKind) => (k === 'element' ? { title: 'אלמנט', crumb: 'אלמנט', pic: 'elements', re: /^\b$/, nav: 'lists' as NavKey, tint: 'teal' } : k === 'walls' || k === 'knee' ? META0[k] : { ...FAMILIES[k], re: new RegExp(FAMILIES[k].re.source.replace('^(C\\.)?', '^')), nav: FAMILIES[k].nav[0] });
 /** ביטוי להעדפת הבחירה במודל כשהחלון פתוח */
-export const compPick = (k: CompKind | null): string | null => (k === 'walls' ? '^(C\\.)?(BR\\.W|BB\\.|LT\\.)' : k === 'knee' ? '^(C\\.)?KB\\.' : k ? FAMILIES[k].re.source : null);
+export const compPick = (k: CompKind | null): string | null => (k === 'element' ? null : k === 'walls' ? '^(C\\.)?(BR\\.W|BB\\.|LT\\.)' : k === 'knee' ? '^(C\\.)?KB\\.' : k ? FAMILIES[k].re.source : null);
 /** נקודת הלחיצה האחרונה במודל — החלון נפתח בצד השני, כדי לא לכסות את מה שנלחץ */
 let lastDown: { x: number; t: number } | null = null;
 if (typeof document !== 'undefined') document.addEventListener('pointerdown', (e) => { if ((e.target as HTMLElement)?.closest?.('.vp-pane')) lastDown = { x: e.clientX, t: Date.now() }; }, true);
@@ -70,7 +70,7 @@ function connGroups(d: DerivedModel, re: RegExp) {
   });
 }
 
-export function ComponentWindow({ kind, memberId, onClose, children, studio, step }: { kind: CompKind; memberId?: string; onClose: () => void; children?: ReactNode; /** 1.56: חלון במבנה האחיד (סוג → היקף → 3 כפתורים) — מחליף את התוכן והצד */ studio?: ReactNode; /** 1.59: שלב העבודה שהאישור משלים */ step?: string | null }) {
+export function ComponentWindow({ kind, memberId, onClose, children, studio, step, title, sub }: { kind: CompKind; memberId?: string; onClose: () => void; children?: ReactNode; /** 1.56: חלון במבנה האחיד (סוג → היקף → 3 כפתורים) — מחליף את התוכן והצד */ studio?: ReactNode; /** 1.59: שלב העבודה שהאישור משלים */ step?: string | null; /** 1.64: כותרת (אלמנט בודד) */ title?: string; sub?: string }) {
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
   const M = compMeta(kind);
   // 1.60: מצב הוספה (הרכיב לא היה קיים כשהאשף נפתח) לעומת עריכה — כותרת, תווית ופעולות בהתאם
@@ -120,8 +120,8 @@ export function ComponentWindow({ kind, memberId, onClose, children, studio, ste
     <section className={`cwin cwin-${M.tint}${min ? ' min' : ''}${max ? ' max' : ''}${side === 'l' ? ' at-l' : ''}`} data-side={side} data-testid={`cwin-${kind}`} aria-label={M.title} style={max ? undefined : { transform: `translate(${off.x}px, ${off.y}px)` }}>
       <header className="cwin-h" onPointerDown={drag} onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('button')) setMin(!min); }} title="גרירה מזיזה את החלון · לחיצה כפולה ממזערת">
         <span className="cwin-ic"><MenuPic name={M.pic} size={30} /></span>
-        <div className="cwin-t"><small>{creating ? 'הוספת רכיב' : M.crumb} › {M.title}</small><b>{M.title}</b></div>
-        <span className={`cwin-pill${creating ? ' new' : ''}`} data-testid="cwin-count" data-mode={creating ? 'create' : 'edit'}>{creating ? (count ? `חדש · ${count} אלמנטים` : 'חדש — בחרו סוג') : count ? `${count} אלמנטים` : 'לא בשימוש'}</span>
+        <div className="cwin-t"><small>{creating ? 'הוספת רכיב' : M.crumb} › {sub ?? M.title}</small><b>{title ?? M.title}</b></div>
+        <span className={`cwin-pill${creating ? ' new' : ''}`} data-testid="cwin-count" data-mode={creating ? 'create' : 'edit'}>{kind === 'element' ? 'אלמנט בודד' : creating ? (count ? `חדש · ${count} אלמנטים` : 'חדש — בחרו סוג') : count ? `${count} אלמנטים` : 'לא בשימוש'}</span>
         <span className="sp" />
         <button className="cwin-x" onClick={() => setMin(!min)} title={min ? 'הצגת החלון' : 'מזעור — המודל כולו גלוי'} aria-label={min ? 'הצגת החלון' : 'מזעור החלון'} data-testid="cwin-min">{min ? '▢' : '–'}</button>
         <button className="cwin-x" onClick={() => { setMax(!max); setMin(false); }} title={max ? 'חזרה לחלון צף' : 'הגדלה'} aria-label={max ? 'חזרה לחלון צף' : 'הגדלת החלון'} data-testid="cwin-full">{max ? '⤡' : '⤢'}</button>
@@ -150,7 +150,7 @@ export function ComponentWindow({ kind, memberId, onClose, children, studio, ste
         </aside>
       </div>
       </>}
-      {!min && (studio ? <WizardActions label={creating ? `הוספה: ${M.title}` : `אשף: ${M.title}`} onClose={onClose} step={step} create={creating} /> : <footer className="cwin-f"><i />כל שינוי מוצג מיד בתצוגה ובמודל · Ctrl+Z לביטול · גרירת הכותרת מזיזה את החלון</footer>)}
+      {!min && (studio ? <WizardActions label={kind === 'element' ? `עריכה: ${title ?? 'אלמנט'}` : creating ? `הוספה: ${M.title}` : `אשף: ${M.title}`} onClose={onClose} step={step} create={creating} /> : <footer className="cwin-f"><i />כל שינוי מוצג מיד בתצוגה ובמודל · Ctrl+Z לביטול · גרירת הכותרת מזיזה את החלון</footer>)}
     </section>
   );
 }

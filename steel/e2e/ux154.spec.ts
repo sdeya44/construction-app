@@ -17,7 +17,8 @@ test('UX154-01: מצב רגיל — פאנל סגור והמודל ברוב המ
   await expect(page.getByTestId('props')).toBeHidden();
   // בחירה במודל פותחת את הפאנל
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
-  await expect(page.getByTestId('props-single')).toBeVisible();
+  await expect(page.getByTestId('cwin-element')).toBeVisible(); // 1.64: אלמנט — אותו חלון צף
+  await expect(page.getByTestId('pscope-hint')).toBeVisible(); // בלי היקף שמור — קודם בוחרים על מה לעבוד
 });
 
 test('UX154-02 (1.61): אין ריבון — סרגל השלבים: שלב פותח את האשף שלו, "כלים" פותחים רשימות/גיליון/ספרייה; 16 שלבים, כיווץ', async ({ page }) => {

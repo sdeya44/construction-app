@@ -210,3 +210,37 @@ test('CB-01 (1.63): מקום אחד לבחירת חיבור — אלכסון ע�
   await expect(pw.getByText('תושבות פטה')).toHaveCount(1);
   expect(errors).toEqual([]);
 });
+
+test('EL-01 (1.64): לחיצה על עמוד — אותו חלון ואותו מבנה כמו האשפים; לחיצה על שטח ריק סוגרת', async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
+  const w = page.getByTestId('cwin-element');
+  await expect(w).toBeVisible();
+  await expect(w.getByTestId('wz-actions')).toBeVisible();          // שחזור / ביטול / אישור
+  await expect(w.getByTestId('pscope')).toBeVisible();              // "לעבוד על"
+  await expect(w.getByTestId('ks-sec-conn')).toHaveAttribute('aria-selected', 'true');
+  await expect(w.getByTestId('prop-profile-open')).toBeVisible();   // חתך
+  await expect(w.getByTestId('conn-block')).toBeVisible();          // מחבר אחד
+  await expect(w.getByTestId('detail-ends')).toHaveCount(0);
+  await w.getByTestId('ks-sec-geo').click();
+  await expect(w.getByTestId('part-preview')).toBeVisible();
+  await w.getByTestId('ks-sec-loc').click();
+  await expect(w.getByTestId('el-family')).toBeVisible();
+  // "כל המסגרת" — גיאומטריית המסגרת במיקום במבנה
+  await w.getByTestId('pscope-frame').click();
+  await expect(w.getByTestId('ks-sec-loc')).toHaveAttribute('aria-selected', 'true');
+  // ביטול מחזיר שינוי חתך
+  await w.getByTestId('pscope-one').click();
+  await w.getByTestId('ks-sec-conn').click();
+  const p0 = await page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('F2.COL.L').profile);
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 'x', run: (p: any) => ({ ...p, memberOverrides: { ...p.memberOverrides, 'F2.COL.L': { profile: 'HEB200' } } }) }); });
+  await w.getByTestId('wz-cancel').click();
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.byId.get('F2.COL.L').profile)).toBe(p0);
+  // שוב, ולחיצה על שטח ריק — החלון נסגר
+  await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
+  await expect(page.getByTestId('cwin-element')).toBeVisible();
+  await page.evaluate(() => (window as any).__ksp.store.select([]));
+  await expect(page.getByTestId('cwin-element')).toHaveCount(0);
+  await expect(page.locator('.cwin')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

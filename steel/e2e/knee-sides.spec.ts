@@ -75,8 +75,9 @@ test('HUB-01: לחיצה על עמוד — חתך (סוג ← מידה) עם ה�
   await boot(page);
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
   await page.getByTestId('pscope-similar').click(); // היקף: כל הדומים
-  await page.getByTestId('psec-general').click(); // הגדרות הגיאומטריה — סעיף מקופל באותו פאנל
+  await page.getByTestId('ks-sec-loc').click(); // 1.64: הגדרות הרכיב — מיקום במבנה
   await expect(page.getByTestId('hub-settings')).toBeVisible();
+  await page.getByTestId('ks-sec-conn').click();
   await pickProfile(page, 'grp-profile', 'HEB200', 'HEB');
   await shot(page, 'HUB_01_column');
   const p = await page.evaluate(() => [...new Set((window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind === 'column').map((m: any) => m.profile))]);

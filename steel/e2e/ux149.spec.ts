@@ -40,15 +40,15 @@ test('UX149-02: חיפוש — קבוצה "בחר הכל" לפני פחים; ח�
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.set({ propScope: 'one' }); k.store.select(['F2.COL.L']); });
   await expect(page.getByTestId('prop-profile-open')).toBeVisible();
   await expect(page.getByTestId('part-preview')).toHaveCount(0);
-  await page.getByTestId('psec-part').click();
+  await page.getByTestId('ks-sec-geo').click(); // 1.64: שרטוט החלק — גיאומטריה
   await expect(page.getByTestId('part-preview')).toBeVisible();
+  await page.getByTestId('ks-sec-conn').click();
   // היקף רחב — הדגשה כתומה + "יחול על"
   await page.getByTestId('pscope-similar').click();
   await expect(page.getByTestId('pscope-applies')).toContainText('יחול על');
   expect((await page.evaluate(() => (window as any).__ksp.store.state.scopeHi)).length).toBeGreaterThan(1);
   await page.evaluate(() => (window as any).__ksp.store.select([]));
-  await page.waitForTimeout(100);
-  expect(await page.evaluate(() => (window as any).__ksp.store.state.scopeHi)).toBeNull();
+  await expect.poll(() => page.evaluate(() => (window as any).__ksp.store.state.scopeHi)).toBeNull();
   expect(errors).toEqual([]);
 });
 
@@ -57,12 +57,12 @@ test('UX150-01: פאנל בלי לשוניות — שביל מהאלמנט לר�
   await expect(page.getByTestId('lp-nav')).toHaveCount(0);
   await expect(page.getByTestId('lp-sel')).toHaveCount(0);
   await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
+  // 1.64: האלמנט — באותו חלון כמו האשפים; "מיקום במבנה" ← "כל הרכיב" פותח את אשף המשפחה
+  await expect(page.getByTestId('cwin-element')).toBeVisible();
   await expect(page.getByTestId('props-single')).toBeVisible();
-  await expect(page.getByTestId('lp-crumb')).toContainText('חתכים');
-  await expect(page.getByTestId('lp-here')).toContainText('עמוד');
-  // שביל ← הגדרות הרכיב כולו; "חזרה לאלמנט" ← חלון האלמנט
-  // 1.58: הגדרות הרכיב כולו = האשף האחיד (מסגרות — חתכים)
-  await page.getByTestId('lp-crumb').click();
+  await page.getByTestId('ks-sec-loc').click();
+  await expect(page.getByTestId('el-family')).toContainText('חתכי');
+  await page.getByTestId('el-family').click();
   const win = page.getByTestId('cwin-frame');
   await expect(win).toBeVisible();
   await expect(win.getByTestId('ks-conn')).toBeVisible();

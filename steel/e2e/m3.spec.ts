@@ -49,7 +49,9 @@ test.describe('M3 – תומכים וחיבורים', () => {
   test('CONN-01: בחירת קורה ← חיבורים ← עריכה; שינוי פלטה/ברגים נשמר לאלמנט גם אחרי טעינה מחדש', async ({ page }) => {
     await boot(page);
     await page.evaluate(() => (window as any).__ksp.store.select(['F2.RAF.L']));
-    await page.getByTestId('open-conn-C.EAVE.F2.L').click();
+    // 1.64: בלוק המחבר — הקצה שבו חיבור הראש, "עורך החיבור"
+    if (!(await page.getByTestId('endc-open-C.EAVE.F2.L').count())) await page.getByTestId('el-end-end').click();
+    await page.getByTestId('endc-open-C.EAVE.F2.L').click();
     await expect(page.getByTestId('conn-id')).toHaveText('C.EAVE.F2.L');
     await page.getByTestId('cp-t').fill('25'); await page.getByTestId('cp-t').press('Enter');
     await page.getByTestId('cp-cols').fill('3'); await page.getByTestId('cp-cols').press('Enter');

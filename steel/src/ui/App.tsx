@@ -22,10 +22,11 @@ import { NavContent, NavCrumb, SideNav, NAV_INDEX_LABEL, navGroupOf, type NavKey
 import { EaveCheckDialog } from './EaveCheckDialog';
 import { ConnLibrary, ConnWizard } from './ConnWizard';
 import { DetailStudio } from './DetailStudio';
-import { ComponentWindow, compMeta, compOfConn, compOfMember, compOfNav, compPick } from './ComponentWindow';
+import { ComponentWindow, type CompKind, compMeta, compOfConn, compOfMember, compOfNav, compPick } from './ComponentWindow';
 import { stepMarks, stepOfNav } from './steps';
 import { markStepDone } from './wizard/Wizard';
 import { FamilyStudio } from './FamilyStudio';
+import { ElementStudio } from './ElementStudio';
 import { KneeStudio } from './KneeStudio';
 import { WallsStudio } from './WallsStudio';
 import { LayersMenu } from './LayersMenu';
@@ -64,9 +65,13 @@ export function App() {
   const selNow = useStore((x) => x.selection), connNow = useStore((x) => x.activeConn), gutNow = useStore((x) => x.activeGutter);
   // בחירה חדשה / חיבור פתוח ← הפאנל עובר למאפיינים; ניקוי הבחירה ← חזרה להגדרות
   const selSig = `${selNow.join(',')}|${connNow ?? ''}`;
+  // 1.64: אלמנט בודד שנסגר בלחיצה על שטח ריק — החלון נסגר (לא קופץ אשף של כל הרכיב)
+  const wasElement = useRef(false);
   useEffect(() => {
     setLp(selNow.length || connNow || gutNow ? 'sel' : 'nav');
     if (selNow.length || connNow || gutNow) { setPanelOpen(true); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }
+    else if (wasElement.current && lp === 'sel') { setPanelOpen(false); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }
+    { const d0 = store.state.derived, m0 = selNow.length === 1 ? d0.byId.get(selNow[0]) : undefined; wasElement.current = !connNow && !gutNow && !!m0 && !compOfMember(m0, d0); }
     // 1.44: הרכיב של הבחירה מסומן בעץ — ובחזרה להגדרות נפתח אותו כרטיס (סיכום + לשוניות) של הרכיב
     const id = connNow ?? selNow[0];
     if (id) { const k = settingsOf(id, store.state.derived.byId.get(id)?.kind ?? ''); if (k) setNavRaw(k[0] as NavKey); }
@@ -273,7 +278,8 @@ export function App() {
   // 1.59: סרגל השלבים — עם שמות (ברירת מחדל) או מכווץ לנקודות
   const [railWide, setRailWide] = useState(() => { try { return localStorage.getItem('ksp-rail-wide') !== '0'; } catch { return true; } });
   // 1.55: חלון רכיב (קשיחות קירות / אלכסוני עמוד-קורה) — מהריבון, מהשלבים או מלחיצה על אלמנט שלו
-  const comp = !wide ? null : lp === 'nav' || (!ms.length && !s.activeConn && !s.activeGutter) ? compOfNav(nav) : s.activeConn ? compOfConn(s.activeConn) : !s.activeGutter && ms.length === 1 ? compOfMember(ms[0]!, s.derived) : null;
+  // 1.64: אלמנט בודד שאינו שייך לאשף משפחה — חלון "אלמנט" באותו מבנה (במקום הכרטיס הנפרד)
+  const comp: CompKind | null = !wide ? null : lp === 'nav' || (!ms.length && !s.activeConn && !s.activeGutter) ? compOfNav(nav) : s.activeConn ? compOfConn(s.activeConn) : !s.activeGutter && ms.length === 1 ? (compOfMember(ms[0]!, s.derived) ?? 'element') : null;
   // 1.55.2: חלון/פאנל צף מעל המודל — מרכז התמונה עובר לחלק הגלוי של המודל
   useEffect(() => {
     const t = setInterval(() => {
@@ -461,8 +467,8 @@ export function App() {
         <aside className={`side side-end${propsOpen ? ' open' : ''}`} data-testid="props">
           <button className="props-pin desk-only" data-testid="props-pin" title={propsPinned ? 'כיווץ הפאנל — יותר מקום לתלת־ממד; בבחירה הפאנל נפתח כשכבה' : 'קיבוע הפאנל'} onClick={() => setPropsPinned(!propsPinned)}>{propsPinned ? '▸ כיווץ פאנל' : '◂ הגדרות ומאפיינים'}</button>
           {comp ? (!panelOpen ? null :
-            <ComponentWindow key={comp} kind={comp} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} onClose={closePanel} step={stepOfNav(compOfNav(nav) === comp ? nav : compMeta(comp).nav)}
-              studio={comp === 'knee' ? <KneeStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} /> : comp === 'walls' ? <WallsStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} /> : <FamilyStudio fam={comp} nav={nav} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} />}>
+            <ComponentWindow key={comp === 'element' ? `el|${sel[0]}` : comp} kind={comp} title={comp === 'element' ? ms[0]?.label : undefined} sub={comp === 'element' && ms[0] ? KIND_LABEL[ms[0].kind] : undefined} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} onClose={closePanel} step={stepOfNav(compOfNav(nav) === comp ? nav : compMeta(comp).nav)}
+              studio={comp === 'knee' ? <KneeStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} /> : comp === 'walls' ? <WallsStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} /> : comp === 'element' ? <ElementStudio memberId={sel[0]} /> : <FamilyStudio fam={comp} nav={nav} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} />}>
               {lp === 'nav' ? <div className="nav-content" data-testid="lp-nav-content"><NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div> : <PropertiesPanel />}
             </ComponentWindow>
           ) : <section className="fpanel" data-testid="fpanel">

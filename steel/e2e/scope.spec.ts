@@ -12,9 +12,11 @@ test('SCOPE-01: לחיצה על אלמנט — בחירת היקף; האלמנט
   // האלמנט הזה: בידוד, שרטוט חלק, כרטיס חיבור בכל קצה
   await page.getByTestId('pscope-one').click();
   expect((await S()).isolated).toContain('F3.COL.L');
-  await page.getByTestId('psec-part').click(); // שרטוט החלק מקופל (1.49) — החתך קודם
+  await page.getByTestId('ks-sec-geo').click(); // 1.64: שרטוט החלק — גיאומטריה
   await expect(page.getByTestId('part-preview')).toBeVisible();
+  await page.getByTestId('ks-sec-conn').click(); // חיבור בכל קצה — בלוק המחבר
   await expect(page.getByTestId('end-cards')).toContainText('פלטת בסיס');
+  await page.getByTestId('el-end-end').click();
   await expect(page.getByTestId('end-cards')).toContainText('עמוד-קורה');
   // כל הציר: שינוי חתך רק לעמודי הציר
   await page.getByTestId('pscope-line').click();

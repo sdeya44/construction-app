@@ -48,6 +48,7 @@ test('CW-01: אשף חיבורים — מעורך החיבור: מצב, הצעו
 test('CW-02: מכרטיס הקצה של עמוד — "החלף פרט" לעמוד-קורה: פלטה אחת לחיבור הזה בלבד; קושרת גג — רק "כולם"', async ({ page }) => {
   const errors = await boot(page);
   await page.evaluate(() => (window as any).__ksp.store.select(['F3.COL.L']));
+  await page.getByTestId('el-end-end').click(); // 1.64: בלוק המחבר — קצה סוף (ראש העמוד)
   await page.getByTestId('endc-wiz-C.EAVE.F3.L').click();
   await expect(page.getByTestId('conn-wizard')).toBeVisible();
   await expect(page.getByTestId('wiz-c-eave.split')).toContainText('נוכחי');
