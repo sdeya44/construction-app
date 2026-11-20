@@ -119,9 +119,10 @@ test('HUB-03: שינוי חתך מפאנל אלכסון — "רק האלמנט �
   // קושרת גג
   const br = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith('BR.R'))?.id);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), br);
-  await expect(page.getByTestId('pscope-asmall')).toHaveClass(/on/); // קושרות גג = מכלול (1.48): רק "כל קושרות הגג"
-  const full = page.getByTestId('hub-settings'); // העורך המלא של קושרות הגג (1.48.1)
-  await full.getByTestId('br-roof-ed-tab-sec').click();
+  // 1.58: לחיצה על קושרת גג — אשף קושרות הגג; "כל המודל" → חתך ומחברים
+  const full = page.getByTestId('cwin-roofx');
+  await full.getByTestId('pscope-asmall').click();
+  await full.getByTestId('ks-sec-conn').click();
   await full.getByTestId('br-roof-prof-open').click();
   await full.getByTestId('br-roof-prof-fam-L').click();
   await full.getByTestId('br-roof-prof-opt-L60x6').click();

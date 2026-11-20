@@ -61,15 +61,16 @@ test('UX150-01: פאנל בלי לשוניות — שביל מהאלמנט לר�
   await expect(page.getByTestId('lp-crumb')).toContainText('חתכים');
   await expect(page.getByTestId('lp-here')).toContainText('עמוד');
   // שביל ← הגדרות הרכיב כולו; "חזרה לאלמנט" ← חלון האלמנט
+  // 1.58: הגדרות הרכיב כולו = האשף האחיד (מסגרות — חתכים)
   await page.getByTestId('lp-crumb').click();
-  await expect(page.getByTestId('lp-nav-content')).toBeVisible();
-  await expect(page.getByTestId('sel-strip')).toContainText('הגדרות הרכיב כולו');
-  await page.getByTestId('sel-strip-props').click();
-  await expect(page.getByTestId('props-single')).toBeVisible();
-  // ביטול בחירה ← חזרה להגדרות הרכיב
+  const win = page.getByTestId('cwin-frame');
+  await expect(win).toBeVisible();
+  await expect(win.getByTestId('ks-conn')).toBeVisible();
+  await expect(win.getByTestId('columnProfile')).toBeVisible();
+  // לחיצה חוזרת על האלמנט ← כרטיס האלמנט
   await page.evaluate(() => (window as any).__ksp.store.select([]));
-  await expect(page.getByTestId('lp-nav-content')).toBeVisible();
-  await expect(page.getByTestId('lp-crumb')).toHaveCount(0);
+  await page.evaluate(() => (window as any).__ksp.store.select(['F2.COL.L']));
+  await expect(page.getByTestId('props-single')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -89,8 +90,7 @@ test('UX151-01: עריכת חיבור — המבט מתקרב לצומת; "חז�
   await page.evaluate(() => (window as any).__ksp.store.set({ activeConn: null }));
   await openNav(page, 'b:roof');
   const add = page.getByTestId('off-roof'); if (await add.count()) await add.click();
-  await page.getByTestId('br-roof-ed-tab-sec').click();
-  await page.getByTestId('br-roof-type-rhs').click();
+  await page.getByTestId('br-roof-type-rhs').click(); // 1.58: אריחי הסוג — בראש האשף
   expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.bracing.roof.type)).toBe('rhs');
   expect(errors).toEqual([]);
 });

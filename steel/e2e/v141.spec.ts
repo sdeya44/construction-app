@@ -13,10 +13,10 @@ test('V141-01: מוטות תלייה, תמיכה צידית, סיב רציף, ב
   expect((await S(page)).derived.section.lines[0].label).toBe('E');
   // מוטות תלייה ותמיכה צידית
   await openNav(page, 'b:ties');
-  await page.getByTestId('br-ties-ed-tab-sag').click();
+  await page.getByTestId('fam-sub-sag').click(); // 1.58: אשף הפטות — בחירת רכיב
   await page.getByTestId('sr-on').check();
   expect(await count(page, '^SR\\.')).toBeGreaterThan(0);
-  await page.getByTestId('br-ties-ed-tab-fly').click();
+  await page.getByTestId('fam-sub-fly').click();
   await page.getByTestId('fb-on').check();
   expect(await count(page, '^FB\\.')).toBeGreaterThan(0);
   // סיב רציף

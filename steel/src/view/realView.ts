@@ -272,7 +272,9 @@ export function familySet(_p: Project, d: DerivedModel, match: (m: Member) => bo
   const near = (m: Member) => { const q = mid(m); return Math.hypot(q.x - c0.x, q.y - c0.y, q.z - c0.z) < R; };
   const LIM = 260;
   const focusMain = (opt.wide ? own : own.filter(near)).slice(0, LIM);
-  const focus = [...focusMain, ...(opt.wide && own.length > 120 ? [] : connParts(d, focusMain.map((m) => m.id))), ...ownParts.filter((m) => opt.wide ? own.length <= 120 : near(m)).slice(0, 400)];
+  // בתצוגה של כל הרכיב — בלי ברגים (אלפי גופים קטנים שלא נראים במבט רחוק), ועם תקרה לחלקים — כדי שהתצוגה תישאר מהירה
+  const parts = (opt.wide && own.length > 120 ? [] : connParts(d, focusMain.map((m) => m.id))).filter((m) => !opt.wide || m.kind !== 'bolt').slice(0, 400);
+  const focus = [...focusMain, ...parts, ...ownParts.filter((m) => (opt.wide ? own.length <= 120 && m.kind !== 'bolt' : near(m))).slice(0, 400)];
   if (!focus.length) return null;
   const bx = new THREE.Box3();
   for (const m of focus) { bx.expandByPoint(new THREE.Vector3(m.start.x, m.start.y, m.start.z)); bx.expandByPoint(new THREE.Vector3(m.end.x, m.end.y, m.end.z)); }

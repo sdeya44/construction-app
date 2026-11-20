@@ -21,6 +21,7 @@ import { PurlinExtras, RafterStrutsEditor, RoofXConn, RoofXGrid, RoofXSplit, Str
 import type { NavKey } from './SideNav';
 import { RoofTrussPanel, TransferPanel, TransferShape } from './TransferPanel';
 import { WingPanel } from './WingPanel';
+import { LSvg } from './Dialogs';
 import { WizardNavigation, WizardScopeSelector, WizardSection, WizardTypeSelector, WizardValidation, wizardClip, wizardCopy, type WzSec, type WzType } from './wizard/Wizard';
 
 /**
@@ -161,7 +162,7 @@ export const FAMILIES: Record<FamKey, FamDef> = {
     scopes: ({ p, d }) => sides(p, d).map((s) => ({ key: s.key, title: s.title, ids: s.items.map((m) => m.id) })),
     loc: ({ p, d, scope }) => { const s = sides(p, d).find((x) => x.key === scope) ?? sides(p, d)[0]; return s ? <><Note>מיקומי הפטות לאורך השיפוע — פריסה אוטומטית או ידנית.</Note><SideEditor side={s.side} title={s.title} freeStart={s.free} items={s.items} part="positions" /></> : null; },
     geo: ({ p, d, scope }) => { const s = sides(p, d).find((x) => x.key === scope) ?? sides(p, d)[0]; return s ? <>{s.planeId && <PlaneStart planeId={s.planeId} />}<SideEditor side={s.side} title={s.title} freeStart={s.free} items={s.items} part="layout" /><details className="ks-more"><summary>חומר וצד התחלה — כל הגג</summary><RoofPanel section="system" /></details></> : null; },
-    conn: ({ p, d, scope }) => { const s = sides(p, d).find((x) => x.key === scope) ?? sides(p, d)[0]; return s ? <><SideEditor side={s.side} title={s.title} freeStart={s.free} items={s.items} part="cleat" /><details className="ks-more" open={false}><summary>חיבורי המשך פטות — כל הגג</summary><RoofPanel section="splices" /></details></> : null; },
+    conn: ({ p, d, scope }) => { const s = sides(p, d).find((x) => x.key === scope) ?? sides(p, d)[0]; return s ? <><SideEditor side={s.side} title={s.title} freeStart={s.free} items={s.items} part="cleat" /><div className="wz-sub">חיבורי המשך פטות — כל הגג</div><RoofPanel section="splices" /></> : null; },
     subs: ({ p, d, scope }) => { const s = sides(p, d).find((x) => x.key === scope) ?? sides(p, d)[0]; const prm = s ? purlinParams(p.building.purlins, s.side) : null; return { loc: `${s?.items.length ?? 0} פטות`, geo: prm ? `מרווח ${prm.spacing}` : '', conn: prm ? prm.profile : '' }; },
     copy: {
       get: ({ p, d, scope }) => { const s = sides(p, d).find((x) => x.key === scope) ?? sides(p, d)[0]; return s ? purlinParams(p.building.purlins, s.side) : null; },
@@ -197,7 +198,7 @@ export const FAMILIES: Record<FamKey, FamDef> = {
   wing: {
     title: 'כנף — סככת L', crumb: 'רכיבים מיוחדים', pic: 'geometry', tint: 'mustard', re: /^(C\.)?W\./, nav: ['b:wing'],
     types: ({ p }) => { const w = p.building.wing; return { label: 'סוג גג הכנף', value: w?.enabled ? w.roofType : null,
-      items: [{ key: 'gable', title: 'דו-שיפועי', sub: 'רכס ניצב לסככה', testId: 'wing-add-gable' }, { key: 'mono', title: 'חד-שיפועי', sub: 'יורד החוצה מהקיר', testId: 'wing-add-mono' }],
+      items: [{ key: 'gable', title: 'דו-שיפועי', sub: 'רכס ניצב לסככה', testId: 'wing-add-gable', pic: <LSvg gable /> }, { key: 'mono', title: 'חד-שיפועי', sub: 'יורד החוצה מהקיר', testId: 'wing-add-mono', pic: <LSvg /> }],
       pick: (k) => { const b = b0(); const cur = b.wing; store.exec(setBuilding({ wing: cur ? { ...defaultWing(b, k as 'gable' | 'mono'), side: cur.side, fromFrame: cur.fromFrame, enabled: true } : defaultWing(b, k as 'gable' | 'mono') })); },
       extra: w ? <label className="ks-off"><input type="checkbox" data-testid="wing-on" checked={w.enabled} onChange={(e) => store.exec(setBuilding({ wing: { ...w, enabled: e.target.checked } }))} />פעיל</label> : undefined }; },
     enabled: ({ p }) => !!p.building.wing?.enabled,
@@ -212,7 +213,7 @@ export const FAMILIES: Record<FamKey, FamDef> = {
     types: ({ p }) => { const rt = p.building.roofTruss; return { label: 'צורת המסבך', value: rt?.enabled ? rt.shape : null,
       items: [{ key: 'flat', title: 'חגורה אופקית', testId: 'rt-shape-flat' }, { key: 'parallel', title: 'מקבילה לגג', testId: 'rt-shape-parallel' }, { key: 'scissor', title: '"מספריים"', sub: 'מוגבהת ברכס', testId: 'rt-shape-scissor' }],
       pick: (k) => { const r = b0().roofTruss; if (r) store.exec(setBuilding({ roofTruss: { ...r, enabled: true, shape: k as 'flat', rise: r.rise ?? 1000 } })); },
-      extra: rt ? <label className="ks-off"><input type="checkbox" data-testid="rt-on" checked={rt.enabled} onChange={(e) => store.exec(setBuilding({ roofTruss: { ...rt, enabled: e.target.checked } }))} />פעיל</label> : undefined }; },
+      extra: rt?.enabled ? <label className="ks-off"><input type="checkbox" data-testid="rt-on" checked={rt.enabled} onChange={(e) => store.exec(setBuilding({ roofTruss: { ...rt, enabled: e.target.checked } }))} />פעיל</label> : undefined }; },
     enabled: ({ p }) => !!p.building.roofTruss?.enabled,
     off: () => <RoofTrussPanel />,
     loc: () => <RoofTrussPanel part="loc" />, geo: () => <RoofTrussPanel part="geo" />,
@@ -239,10 +240,8 @@ export function famOfMember(m: Member | undefined, d: DerivedModel): FamKey | nu
   const id = isPart(m) && m.connId ? d.connById.get(m.connId)?.members[0] ?? m.connId : m.id;
   return CLICK.find((f) => new RegExp(FAMILIES[f].re.source.replace('^(C\\.)?', '^')).test(id)) ?? null;
 }
-export function famOfConn(id: string | null | undefined): FamKey | null {
-  if (!id) return null;
-  return CLICK.find((f) => FAMILIES[f].re.test(id.replace(/^C\./, '')) && /^C\./.test(id)) ?? null;
-}
+/** חיבור פתוח (עורך החיבור) — נשאר בעורך החיבור עצמו; מהאשף מגיעים אליו דרך "מחברים ברכיב" */
+export function famOfConn(_id: string | null | undefined): FamKey | null { return null; }
 export const famMatch = (f: FamKey) => { const F = FAMILIES[f]; return (m: Member) => F.re.test(m.id) || (!!F.kinds && F.kinds.includes(m.kind)) || (!!m.connId && F.re.test(m.connId)); };
 
 export function FamilyStudio({ fam, nav, memberId }: { fam: FamKey; nav: NavKey; memberId?: string }) {
@@ -261,7 +260,7 @@ export function FamilyStudio({ fam, nav, memberId }: { fam: FamKey; nav: NavKey;
   useEffect(() => { const i = F.init?.(nav, store.state.project) ?? {}; if (i.sub) setSub(i.sub); if (i.scope) setScope(i.scope); if (i.sec) setSec(i.sec); }, [nav]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (sel && !custom) setScope('one'); }, [sel?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const activeConn = useStore((s) => s.activeConn);
-  useEffect(() => { if (activeConn && F.re.test(activeConn)) setSec('conn'); }, [activeConn, F.re]);
+  useEffect(() => { if (memberId && activeConn && F.re.test(activeConn)) setSec('conn'); }, [activeConn, F.re]); // eslint-disable-line react-hooks/exhaustive-deps
   const ctx: Ctx = { p, d, sub, setSub, scope, sel };
   const enabled = F.enabled ? F.enabled(ctx) : true;
   const types = F.types?.(ctx);

@@ -5,6 +5,7 @@ test('TR-01: מסבכי גג — הפעלה, עריכת שדה וצומת בלח
   await boot(page);
   await openNav(page, 'b:truss');
   await page.getByTestId('rt-on').check();
+  await page.getByTestId('ks-sec-geo').click(); // 1.58: אשף המסבך — בגיאומטריה
   const st = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { err: d.issues.filter((i: any) => i.severity === 'error').map((i: any) => i.message), webs: d.members.filter((m: any) => m.id.startsWith('TR.')).length }; });
   let s = await st();
   expect(s.err).toEqual([]);

@@ -55,6 +55,7 @@ test('V135-03: מסבכי גג — בחירה ברצועה וקביעת שדה �
   await page.getByTestId('rt-f-3').click();
   const rt = (await B(page)).roofTruss;
   expect(rt.frames === 'all' || rt.frames.length > 0).toBe(true);
+  await page.getByTestId('ks-sec-geo').click(); // 1.58: השרטוט — בגיאומטריה
   const lock = page.locator('[data-testid$="-lock-0"]').first();
   await lock.click();
   await expect(lock).toHaveAttribute('aria-pressed', 'true');

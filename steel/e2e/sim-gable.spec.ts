@@ -61,7 +61,7 @@ test('SIM-03: דו-שיפועי 18×12 — אגד B, נעילה, חלוקת קו
   console.log('SIM-03 אגד B→נעילה: פעולות', n);
   // 3. קושרות גג: מפתח 1 — שני פנלי X בכל שיפוע
   n = await clickMember(page, 'BR.R1.L.1');
-  await act('pscope-asmall'); await act('br-roof-ed-tab-plan'); await act('br-grid-0-L'); await act('br-grid-0-R'); n += 4;
+  await act('pscope-asmall'); await act('ks-sec-loc'); await act('br-grid-0-L'); await act('br-grid-0-R'); n += 4;
   expect(await W(page, `d.members.filter(m => /^BR\\.R1\\.L\\./.test(m.id)).length`)).toBe(4);
   expect(await W(page, `d.members.filter(m => /^BR\\.R2\\.L\\./.test(m.id)).length`)).toBe(2);
   console.log('SIM-03 חלוקת קושרות: פעולות', n);

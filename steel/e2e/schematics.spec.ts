@@ -14,13 +14,13 @@ test('SCH-01: שרטוטים אינטראקטיביים — פטות, תומך, 
   await expect(page.getByTestId('sch-purlins-left')).toBeVisible();
   await editDim(page, 'sch-left-s0', '350');
   expect((await st(page)).purlins.left.first).toBe(350);
-  await page.getByTestId('purl-ed-tab-cleat').click();
+  await page.getByTestId('ks-sec-conn').click(); // 1.58: תושבות — בחתך ומחברים
   await editDim(page, 'sch-left-cl-base', '90');
   expect((await st(page)).purlins.left.cleat.base).toBe(90);
   await shot(page, 'SCH_01_purlins');
   // רכס
   await openNav(page, 'b:ridge');
-  await page.getByTestId('ridge-reinf').selectOption('plate');
+  await page.getByTestId('ridge-type-plate').click(); await page.getByTestId('ks-sec-geo').click(); // 1.58
   await editDim(page, 'sch-rr-depth', '200');
   expect((await st(page)).ridgeReinf.depth).toBe(200);
   await shot(page, 'SCH_02_ridge');
@@ -29,7 +29,7 @@ test('SCH-01: שרטוטים אינטראקטיביים — פטות, תומך, 
   const before = (await st(page)).bracing.roof.bays.length;
   await page.getByTestId('br-grid-2-L').click();
   expect((await st(page)).bracing.roof.bays.length).not.toBe(before);
-  await page.getByTestId('br-roof-ed-tab-sec').click();
+  await page.getByTestId('ks-sec-conn').click();
   await editDim(page, 'sch-brc-end', '35');
   expect((await st(page)).bracing.conn.endDist).toBe(35);
   await shot(page, 'SCH_03_roofX');
@@ -52,6 +52,7 @@ test('SCH-02: מסבך "מספריים" — הגבהה בלחיצה; גיליו�
   await boot(page);
   await openNav(page, 'b:truss');
   await page.getByTestId('rt-on').check();
+  await page.getByTestId('ks-sec-geo').click(); // 1.58: צורה ואשף המסבך — בגיאומטריה
   await page.getByTestId('rt-shape').selectOption('scissor');
   await editDim(page, 'tw-roof-rise', '800');
   expect((await st(page)).roofTruss.rise).toBe(800);

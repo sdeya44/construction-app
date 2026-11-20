@@ -285,11 +285,11 @@ export function RoofTrussPanel({ part }: { part?: 'loc' | 'geo' } = {}) {
   const toggleFrame = (id: string) => { const s2 = new Set(sel); if (s2.has(id)) s2.delete(id); else s2.add(id); set({ frames: s2.size === fr.length ? 'all' : fr.filter((f) => s2.has(f.id)).map((f) => f.id) }); };
   return (
     <div className="panel-body" data-testid="rt-panel">
-      {ed.showTitle && <div className="panel-title">מסבכי גג
+      {ed.showTitle && !part && <div className="panel-title">מסבכי גג
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="rt-on" checked={!!rt?.enabled} onChange={(e) => set({ enabled: e.target.checked })} />פעיל</label>
       </div>}
-      {ed.showTitle && <Help>קורת הגג היא החגורה העליונה; חגורה תחתונה, אנכיים ואלכסונים מרותכים במסגריה; חיבורי המשך וחיבור החגורה לעמודים — ברגים בשטח. לחתך עם שני עמודים (מפתח אחד).</Help>}
-      {!rt?.enabled && ed.showTitle && <OffCard pic="roofX" title="מסבכי גג" desc="קורת הגג הופכת לחגורה עליונה של מסבך — למפתחים גדולים" onAdd={() => set({ enabled: true })} testId="off-rt" />}
+      {ed.showTitle && !part && <Help>קורת הגג היא החגורה העליונה; חגורה תחתונה, אנכיים ואלכסונים מרותכים במסגריה; חיבורי המשך וחיבור החגורה לעמודים — ברגים בשטח. לחתך עם שני עמודים (מפתח אחד).</Help>}
+      {!rt?.enabled && ed.showTitle && !part && <OffCard pic="roofX" title="מסבכי גג" desc="קורת הגג הופכת לחגורה עליונה של מסבך — למפתחים גדולים" onAdd={() => set({ enabled: true })} testId="off-rt" />}
       {rt?.enabled && <>
         {part !== 'geo' && <FramePickStrip frames={fr} sel={sel} onToggle={toggleFrame} testPre="rt-f-" label={`מסגרות עם מסבך: ${sel.length} מתוך ${fr.length} — לחיצה על מסגרת מוסיפה/מסירה`} />}
         {part !== 'loc' && <><div className="field"><label>צורה</label>
