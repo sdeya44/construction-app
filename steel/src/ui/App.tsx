@@ -300,7 +300,8 @@ export function App() {
   }, []);
   // חלון רכיב פתוח — לחיצה במודל מעדיפה את אלמנטי הרכיב
   useEffect(() => { const pf = compPick(comp); if ((store.state.pickPrefer ?? null) !== pf) store.set({ pickPrefer: pf }); }, [comp]);
-  const closePanel = () => { setPanelOpen(false); setLpFull(false); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); };
+  // 1.64: סגירת חלון אלמנט מנקה את הבחירה — לחיצה חוזרת על אותו אלמנט פותחת אותו שוב
+  const closePanel = () => { if (comp === 'element') store.select([]); setPanelOpen(false); setLpFull(false); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); };
   const menuItems = (): Cmd[] => {
     const one = ms.length === 1 ? ms[0]! : null;
     const conns = one ? connectionsOf(one, s.derived.connections, s.derived.connById) : [];
@@ -338,7 +339,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.63.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.64.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
