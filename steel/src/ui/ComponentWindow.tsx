@@ -4,6 +4,7 @@ import type { Connection, DerivedModel, Member } from '../model/types';
 import { kneeSet, KNEE_RE, wallSet, WALL_RE } from '../view/realView';
 import { LiveView3D } from './LiveView3D';
 import { MenuPic } from './pics';
+import { useWizardTx, WizardActions } from './wizard/Wizard';
 import type { NavKey } from './SideNav';
 
 /**
@@ -66,6 +67,8 @@ function connGroups(d: DerivedModel, re: RegExp) {
 export function ComponentWindow({ kind, memberId, onClose, children, studio }: { kind: CompKind; memberId?: string; onClose: () => void; children?: ReactNode; /** 1.56: חלון במבנה האחיד (סוג → היקף → 3 כפתורים) — מחליף את התוכן והצד */ studio?: ReactNode }) {
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
   const M = META[kind];
+  // 1.57: האשף פותח טרנזקציה — אישור = פעולת Undo אחת, ביטול = חזרה למצב שלפני
+  useWizardTx(`אשף: ${M.title}`);
   const [wide, setWide] = useState(false);
   // 1.55.1: חלון צף מעל המודל — הזזה בגרירת הכותרת, מזעור לפס, הגדלה
   const [min, setMin] = useState(false);
@@ -139,7 +142,7 @@ export function ComponentWindow({ kind, memberId, onClose, children, studio }: {
         </aside>
       </div>
       </>}
-      {!min && <footer className="cwin-f"><i />כל שינוי מוצג מיד בתצוגה ובמודל · Ctrl+Z לביטול · גרירת הכותרת מזיזה את החלון</footer>}
+      {!min && (studio ? <WizardActions label={`אשף: ${M.title}`} onClose={onClose} /> : <footer className="cwin-f"><i />כל שינוי מוצג מיד בתצוגה ובמודל · Ctrl+Z לביטול · גרירת הכותרת מזיזה את החלון</footer>)}
     </section>
   );
 }

@@ -675,7 +675,8 @@ export function ScopeIsolator() {
     // מארחים (עמוד / קורה / פטה) אינם משתנים בשינוי המכלול — לא מודגשים
     const host = (id: string) => { const k = d.byId.get(id); return !!k && (k.kind === 'column' || k.kind === 'rafter' || !!k.purlin) && k.kind !== m?.kind; };
     const hi = o && o.key !== 'one' ? (o.key === 'asm' || o.key === 'asmall' ? o.show.filter((x) => !host(x)) : o.ids) : null;
-    if ((hi ?? []).join(',') !== (st.scopeHi ?? []).join(',')) store.set({ scopeHi: hi });
+    // 1.57: אשף פתוח מנהל את ההדגשה בעצמו (לפי התחולה שבו)
+    if (!st.pickPrefer && (hi ?? []).join(',') !== (st.scopeHi ?? []).join(',')) store.set({ scopeHi: hi });
     // 1.51: הגדרות האלכסונים — המבט מתקרב לאלכסון הזה ולפחים שלו (כפתור "חזרה למודל המלא")
     // 1.55.2: בלי "צלילה" של המודל לצומת — הצומת מוצג בתלת-ממד החי שבחלון הרכיב, והמודל נשאר במבט המלא
     if (o && iso) { store.set({ isolated: o.show, scopeIsoOwned: true }); setTimeout(() => (o.key === 'one' ? window.__ksp?.viewport?.fitSelection?.() : window.__ksp?.viewport?.fitIds?.(o.show)), 40); return; }

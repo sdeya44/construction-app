@@ -11,12 +11,14 @@ import { EditCtx, ProfilePicker } from './fields';
 import { DetailEnds, EndCards } from './PropertiesPanel';
 import { LiveView3D } from './LiveView3D';
 import { LineTiesEditor, LockTrussFields, PortalFields, WallLines, WallPic, WallXShape, XConnFields } from './StructurePanel';
+import { WizardNavigation, WizardScopeSelector, WizardSection, WizardTypeSelector, WizardValidation, wizardClip, wizardCopy, type WzSec } from './wizard/Wizard';
 
 /**
  * 1.56: חלון קשיחות קירות במבנה האחיד: סוג → "השינויים יחולו על" (ציר / כל המודל) → 1 מיקום · 2 גיאומטריה · 3 חתך ומחברים.
  */
 type WType = 'x' | 'portal' | 'truss';
-type Sec = 'loc' | 'geo' | 'conn';
+type Sec = WzSec;
+type WCopy = { type: WType; portal: PortalBraceParams; truss: LockTrussParams; profile: string };
 const TNAME: Record<WType, string> = { x: 'קושרות X', portal: 'אגד B', truss: 'מסבך נעילה' };
 const TSUB: Record<WType, string> = { x: 'זוויתנים במתיחה', portal: 'קורה + שני אלכסונים', truss: 'מסבך + סיב רציף' };
 
@@ -66,46 +68,50 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
   }, [conns]);
   const [cg, setCg] = useState(0);
 
-  const secs: { k: Sec; n: number; t: string; sub: string }[] = [
-    { k: 'loc', n: 1, t: 'מיקום במבנה', sub: `${nOn} אלמנטים` },
-    { k: 'geo', n: 2, t: 'גיאומטריה', sub: TNAME[type] },
-    { k: 'conn', n: 3, t: 'חתך ומחברים', sub: type === 'x' ? w.profile : type === 'portal' ? `${portal.beam} · ${portal.brace}` : `${truss.chord} · ${truss.diag}` },
-  ];
+  // הדגשה כתומה במודל של מה שהשינוי יחול עליו (ציר / כל המודל) + המחברים שלו
+  const scopeIds = useMemo(() => {
+    const own = d.members.filter((m) => WALL_RE.test(m.id) && (scope === 'all' || wallLineOf(m.id) === line)).map((m) => m.id);
+    const S = new Set(own);
+    const parts = d.connections.filter((c) => c.members.some((x) => S.has(x))).flatMap((c) => c.parts);
+    return [...own, ...parts];
+  }, [d, scope, line]);
+  useEffect(() => { store.set({ scopeHi: w.enabled ? scopeIds : null }); }, [scopeIds, w.enabled]);
+  useEffect(() => () => { store.set({ scopeHi: null }); }, []);
+  const issues = useMemo(() => d.issues.filter((i) => /^(C\.)?(BR\.W|BB\.|LT\.)/.test(i.elementId ?? '') || ['TIE_PORTAL', 'TIE_TRUSS'].includes(i.code)), [d]);
+  // העתקת הגדרות: סוג + פרמטרים של הציר (או הכללי) — הדבקה לציר אחר / לכל המודל
+  const copyNow = () => wizardCopy('walls', { type, portal, truss, profile: w.profile } as WCopy);
+  const clipNow = wizardClip<WCopy>('walls');
+  const paste = () => {
+    const c = wizardClip<WCopy>('walls'); if (!c) return;
+    if (lid) putWalls({ ...w, enabled: true, lineType: { ...(w.lineType ?? {}), [lid]: c.type }, linePortal: { ...(w.linePortal ?? {}), [lid]: c.portal }, lineTruss: { ...(w.lineTruss ?? {}), [lid]: c.truss } });
+    else putWalls({ ...w, enabled: true, type: c.type, lineType: undefined, portal: c.portal, truss: c.truss, linePortal: undefined, lineTruss: undefined, profile: c.profile });
+  };
   return (
     <div className="ks" data-testid="walls-studio">
-      <div className="ks-types ks-types3" role="radiogroup" aria-label="סוג קשיחות הקיר">
-        {(['x', 'portal', 'truss'] as const).map((k) => (
-          <button key={k} role="radio" aria-checked={w.enabled && type === k} className={`ks-type ks-type-v${w.enabled && type === k ? ' on' : ''}`} onClick={() => setType(k)} data-testid={`br-walls-${k}`}>
-            <WallPic k={k} /><b>{TNAME[k]}</b><small>{TSUB[k]}</small>
-          </button>
-        ))}
-        <label className="ks-off"><input type="checkbox" data-testid="br-walls" checked={w.enabled} onChange={(e) => putWalls({ ...w, enabled: e.target.checked })} />פעיל</label>
-      </div>
+      <WizardTypeSelector label="סוג קשיחות הקיר" value={w.enabled ? type : null} onPick={setType}
+        types={(['x', 'portal', 'truss'] as const).map((k) => ({ key: k, title: TNAME[k], sub: TSUB[k], pic: <WallPic k={k} />, testId: `br-walls-${k}` }))}
+        extra={<label className="ks-off"><input type="checkbox" data-testid="br-walls" checked={w.enabled} onChange={(e) => putWalls({ ...w, enabled: e.target.checked })} />פעיל</label>} />
       {!w.enabled && <div className="ks-empty">בחרו סוג כדי להוסיף קשיחות לקירות.</div>}
       {w.enabled && <>
-        <div className="ks-scope" role="radiogroup" aria-label="השינויים יחולו על" data-testid="ks-scope">
-          <span className="ks-lbl">השינויים יחולו על:</span>
-          <button role="radio" aria-checked={false} disabled className="ks-sc" title="קשיחות הקיר נקבעת לכל ציר — לא למכלול בודד">המכלול שנבחר</button>
-          <button role="radio" aria-checked={scope === 'line'} className={`ks-sc${scope === 'line' ? ' on' : ''}`} onClick={() => setScope('line')} data-testid="pscope-asm">כל הציר<i>{nLine}</i></button>
-          {scope === 'line' && <select className="inp ks-linesel" value={line} onChange={(e) => setLine(e.target.value)} aria-label="ציר" data-testid="ks-line">{lines.map((l) => <option key={l.id} value={l.id}>ציר {l.label}</option>)}</select>}
-          <button role="radio" aria-checked={scope === 'all'} className={`ks-sc${scope === 'all' ? ' on' : ''}`} onClick={() => setScope('all')} data-testid="pscope-asmall">כל המודל<i>{nOn}</i></button>
-        </div>
-        <div className="ks-secs" role="tablist">
-          {secs.map((s) => (
-            <button key={s.k} role="tab" aria-selected={sec === s.k} className={`ks-sec${sec === s.k ? ' on' : ''}`} onClick={() => setSec(s.k)} data-testid={`ks-sec-${s.k}`}>
-              <span className="ks-n">{s.n}</span><span className="ks-st"><b>{s.t}</b><small>{s.sub}</small></span>
-            </button>
-          ))}
-        </div>
+        <WizardScopeSelector<'one' | 'line' | 'all'> value={scope} onPick={(k) => k !== 'one' && setScope(k)}
+          scopes={[
+            { key: 'one', title: 'המכלול שנבחר', disabled: 'קשיחות הקיר נקבעת לכל ציר — לא למכלול בודד (המנוע אינו שומר הגדרה למכלול)' },
+            { key: 'line', title: 'כל הציר', count: nLine, testId: 'pscope-asm' },
+            { key: 'all', title: 'כל המודל', count: nOn, testId: 'pscope-asmall' },
+          ]}
+          after={scope === 'line' ? <select className="inp ks-linesel" value={line} onChange={(e) => setLine(e.target.value)} aria-label="ציר" data-testid="ks-line">{lines.map((l) => <option key={l.id} value={l.id}>ציר {l.label}</option>)}</select> : undefined}
+          note={<>{scopeIds.length} אלמנטים וחלקים — מודגשים בכתום · <button className="wz-link" onClick={copyNow} data-testid="wz-copy">העתקת הגדרות</button>{clipNow && <> · <button className="wz-link" onClick={paste} data-testid="wz-paste">הדבקה {scope === 'line' ? `לציר ${lineLabel}` : 'לכל המודל'}</button></>}</>} />
+        <WizardNavigation value={sec} onPick={setSec} subs={{ loc: `${nOn} אלמנטים`, geo: TNAME[type], conn: type === 'x' ? w.profile : type === 'portal' ? `${portal.beam} · ${portal.brace}` : `${truss.chord} · ${truss.diag}` }} />
+        <WizardValidation issues={issues} />
 
-        {sec === 'loc' && <div className="ks-panel" data-testid="ks-loc">
+        {sec === 'loc' && <WizardSection id="loc">
           <div className="ks-note">באילו צירים ומפתחים יש קשיחות — לחיצה על מפתח מוסיפה או מסירה. הסוג לכל ציר נקבע למעלה ("כל הציר").</div>
           <WallLines nb={p.building.frames.length - 1} />
           <details className="ks-more" open><summary>סיב רציף לאורך הציר</summary><LineTiesEditor /></details>
           <details className="ks-more" open><summary>טבלת מופעים</summary><ComponentTable match={/^(BR\.W|BB\.|LT\.)/} testId="ctab-walls" /></details>
-        </div>}
+        </WizardSection>}
 
-        {sec === 'geo' && <div className="ks-panel ks-geo" data-testid="ks-geo">
+        {sec === 'geo' && <WizardSection id="geo" className="ks-geo">
           <LiveView3D set={set3d} rev={d} height={320} modes={<div className="seg-mini"><button className={whole ? '' : 'on'} onClick={() => setWhole(false)} data-testid="live3d-near">מפתח</button><button className={whole ? 'on' : ''} onClick={() => setWhole(true)} data-testid="live3d-far">כל הקיר</button></div>} />
           <div className="ks-dims">
             <div className="ks-note">{scope === 'line' ? `ציר ${lineLabel} בלבד` : 'כל הצירים'} — מידות על השרטוט ניתנות לעריכה בלחיצה.</div>
@@ -115,9 +121,9 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
               {type === 'x' && <WallXShape />}
             </EditCtx.Provider>
           </div>
-        </div>}
+        </WizardSection>}
 
-        {sec === 'conn' && <div className="ks-panel" data-testid="ks-conn">
+        {sec === 'conn' && <WizardSection id="conn">
           {type === 'x' && <div className="field prof"><label>חתך הקושרת</label><ProfilePicker value={w.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => putWalls({ ...w, profile: v })} /></div>}
           {type === 'portal' && <>
             <div className="field prof"><label>קורת אגד</label><ProfilePicker testId="pb-beam" value={portal.beam} families={['RHS', 'SHS']} onCommit={(v) => setPortal({ beam: v })} /></div>
@@ -144,7 +150,7 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
               <button className="btn" onClick={() => openConnStudio(groups[cg][1][0], d)} data-testid="ks-studio">סטודיו ✎</button>
             </div>}
           </div>
-        </div>}
+        </WizardSection>}
       </>}
     </div>
   );

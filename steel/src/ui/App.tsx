@@ -294,6 +294,8 @@ export function App() {
     const one = ms.length === 1 ? ms[0]! : null;
     const conns = one ? connectionsOf(one, s.derived.connections, s.derived.connById) : [];
     return [
+      // 1.57: פקודת עריכה מתפריט ההקשר — אותו אשף כמו לחיצה על האלמנט
+      { id: 'edit', group: '', label: 'עריכה', run: () => { setLp('sel'); setPanelOpen(true); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); } },
       { id: 'conns', group: '', label: 'חיבורים', disabled: !conns.length, run: () => conns.length && openConn(conns[0].id) },
       { id: 'profile', group: '', label: 'חתך', run: focusProfile },
       { id: 'isolate', group: '', label: 'בודד', run: isolate },
@@ -453,8 +455,8 @@ export function App() {
         </div>
         <aside className={`side side-end${propsOpen ? ' open' : ''}`} data-testid="props">
           <button className="props-pin desk-only" data-testid="props-pin" title={propsPinned ? 'כיווץ הפאנל — יותר מקום לתלת־ממד; בבחירה הפאנל נפתח כשכבה' : 'קיבוע הפאנל'} onClick={() => setPropsPinned(!propsPinned)}>{propsPinned ? '▸ כיווץ פאנל' : '◂ הגדרות ומאפיינים'}</button>
-          {comp ? (
-            <ComponentWindow kind={comp} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} onClose={closePanel}
+          {comp ? (!panelOpen ? null :
+            <ComponentWindow key={comp} kind={comp} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} onClose={closePanel}
               studio={comp === 'knee' ? <KneeStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} /> : <WallsStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} />}>
               {lp === 'nav' ? <div className="nav-content" data-testid="lp-nav-content"><NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div> : <PropertiesPanel />}
             </ComponentWindow>

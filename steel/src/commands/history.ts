@@ -40,7 +40,33 @@ export class History {
     this.current = e.p;
     return e.label;
   }
-  reset(p: Project) { this.past = []; this.future = []; this.current = p; }
+  reset(p: Project) { this.past = []; this.future = []; this.current = p; this.txMark = null; }
+
+  // ---- 1.57: טרנזקציה של אשף — שינוי חי, אישור = פעולת Undo אחת, ביטול = חזרה למצב שלפני ----
+  private txMark: number | null = null;
+  get inTx() { return this.txMark !== null; }
+  /** מספר הצעדים שבוצעו מאז פתיחת הטרנזקציה */
+  get txSteps() { return this.txMark === null ? 0 : Math.max(0, this.past.length - this.txMark); }
+  txBegin() { this.txMark = this.past.length; }
+  /** אישור: כל הצעדים מאז הפתיחה — צעד אחד בהיסטוריה (עם התווית הנתונה) */
+  txCommit(label: string) {
+    const m = this.txMark; this.txMark = null;
+    if (m === null) return;
+    const mk = Math.min(m, this.past.length);
+    if (this.past.length - mk > 1) this.past = [...this.past.slice(0, mk), { p: this.past[mk].p, label }];
+    else if (this.past.length - mk === 1) this.past[mk] = { ...this.past[mk], label };
+  }
+  /** ביטול: חזרה למצב שלפני פתיחת הטרנזקציה, בלי אפשרות "בצע שוב" לשינויים שבוטלו */
+  txCancel(): boolean {
+    const m = this.txMark; this.txMark = null;
+    if (m === null) return false;
+    const mk = Math.min(m, this.past.length);
+    if (this.past.length === mk) return false;
+    this.current = this.past[mk].p;
+    this.past = this.past.slice(0, mk);
+    this.future = [];
+    return true;
+  }
   get canUndo() { return this.past.length > 0; }
   get canRedo() { return this.future.length > 0; }
   get undoLabel() { return this.past[this.past.length - 1]?.label; }

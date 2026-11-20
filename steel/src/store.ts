@@ -57,6 +57,8 @@ export interface AppState {
   scopeIsolate?: boolean;
   /** לחיצה נוספת באותה נקודה בתלת-ממד תבחר את זה (רמז בסרגל הצף); 'gutter' = המזחלה שלפני */
   pickNext?: string | null;
+  /** 1.57: צעדים שבוצעו מאז פתיחת האשף (טרנזקציה) */
+  txSteps?: number;
   /** 1.55.2: חלון רכיב פתוח — לחיצה במודל מעדיפה את אלמנטי הרכיב (לפני חגורות/פטות שלפניהם) */
   pickPrefer?: string | null;
   /** הדגשת ההיקף שנבחר בחלון האלמנט (כתום) */
@@ -111,7 +113,7 @@ class Store {
       project, derived,
       selection: this.state.selection.filter((id) => exists.has(id)),
       canUndo: this.history.canUndo, canRedo: this.history.canRedo,
-      undoLabel: this.history.undoLabel, redoLabel: this.history.redoLabel,
+      undoLabel: this.history.undoLabel, redoLabel: this.history.redoLabel, txSteps: this.history.txSteps,
       saveState: dirty ? 'dirty' : this.state.saveState,
     });
     if (dirty) this.scheduleSave();
@@ -129,6 +131,12 @@ class Store {
       return false;
     }
   }
+  // 1.57: טרנזקציה של אשף (ראו History)
+  txBegin() { this.history.txBegin(); this.set({ txSteps: 0 }); }
+  txCommit(label: string) { this.history.txCommit(label); this.syncHistory(this.history.current); this.set({ txSteps: 0 }); }
+  txCancel() { if (this.history.txCancel()) { this.syncHistory(this.history.current, true); this.toast('info', 'השינויים בוטלו'); } this.set({ txSteps: 0 }); }
+  /** שחזור בתוך האשף — רק צעדים שבוצעו מאז שנפתח */
+  txUndo() { if (this.history.txSteps > 0) this.undo(); }
   undo() { const l = this.history.undo(); if (l) { this.syncHistory(this.history.current); this.toast('info', `בוטל: ${l}`); } }
   redo() { const l = this.history.redo(); if (l) { this.syncHistory(this.history.current); this.toast('info', `בוצע שוב: ${l}`); } }
 
