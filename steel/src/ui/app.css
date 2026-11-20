@@ -1234,3 +1234,67 @@ details.adv .adv-body { padding-bottom: 6px; }
 
 /* 1.55.2: החלונות הצפים מתחילים מתחת לסרגל התצוגה (התאמה, מבטים) ולא מכסים אותו */
 @media (max-width: 860px) { .side > .fpanel { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; width: 100%; } }
+
+/* 1.56: תגית מידה עם מנעול בתלת-ממד */
+.live3d-tag.lk { pointer-events: auto; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; border-color: #9fb1c6; color: #24364d; font-family: var(--font); direction: rtl; }
+.live3d-tag.lk i { font-style: normal; font-size: 11px; }
+.live3d-tag.lk.on { border-color: #e07b1a; background: #fff4e8; color: #9a4f08; box-shadow: 0 0 0 2px rgba(224, 123, 26, .25); font-weight: 700; }
+
+/* ===== 1.56: חלון במבנה אחיד — סוג → היקף → 3 כפתורים ===== */
+.cwin-studio { display: block; padding: 14px 16px 18px; }
+.ks { display: flex; flex-direction: column; gap: 12px; }
+.ks-types { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; gap: 10px; align-items: stretch; }
+.ks-type { display: grid; grid-template-columns: 112px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; align-items: center; text-align: start; border: 1.5px solid var(--line); background: #fff; border-radius: 14px; padding: 8px 10px; font: inherit; color: var(--text); cursor: pointer; }
+.ks-type > :first-child { grid-row: 1 / 3; width: 112px; border-radius: 9px; }
+.ks-type .real-pic { aspect-ratio: 3 / 2; }
+.ks-type b { font-size: 15px; align-self: end; } .ks-type small { color: var(--muted); font-size: 12px; align-self: start; }
+.ks-type:hover { border-color: #b8921b; }
+.ks-type.on { border-color: #b8921b; background: #fdf8e8; box-shadow: 0 0 0 3px rgba(201, 162, 39, .18); }
+.ks-hn { width: 112px; height: 74px; background: linear-gradient(180deg, #dfe7ef, #f2efe8); border-radius: 9px; }
+.ks-off { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 0 6px; }
+.ks-empty { padding: 18px; border: 1.5px dashed var(--line-strong); border-radius: 12px; color: var(--muted); text-align: center; }
+.ks-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; background: #fbf6ee; border: 1px solid #f0dfc4; border-radius: 12px; padding: 8px 10px; }
+.ks-lbl { font-weight: 800; font-size: 13px; color: #6b4a14; margin-inline-end: 4px; }
+.ks-sc { border: 1px solid #ead7b6; background: #fff; border-radius: 9px; padding: 6px 10px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text); display: inline-flex; gap: 6px; align-items: center; }
+.ks-sc i { font-style: normal; font-size: 11px; background: #f3ead9; border-radius: 999px; padding: 0 7px; color: #7a5a22; }
+.ks-sc.on { background: #e07b1a; border-color: #c96a10; color: #fff; }
+.ks-sc.on i { background: rgba(255, 255, 255, .25); color: #fff; }
+.ks-sc:disabled { opacity: .5; cursor: not-allowed; }
+.ks-sel { font-size: 12px; color: var(--muted); margin-top: -6px; }
+.ks-secs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ks-sec { display: flex; gap: 10px; align-items: center; text-align: start; border: 1.5px solid var(--line); background: #fff; border-radius: 12px; padding: 10px 12px; font: inherit; color: var(--text); cursor: pointer; min-height: 56px; }
+.ks-sec:hover { border-color: var(--brand); }
+.ks-sec.on { border-color: var(--brand); background: var(--brand-soft); box-shadow: 0 0 0 3px rgba(37, 99, 168, .12); }
+.ks-n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--panel-2); flex: none; }
+.ks-sec.on .ks-n { background: var(--brand); color: #fff; }
+.ks-st { display: flex; flex-direction: column; min-width: 0; }
+.ks-st b { font-size: 14px; } .ks-st small { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ks-panel { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: #fff; }
+.ks-geo { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 1300px) { .ks-geo { grid-template-columns: 1fr; } }
+.ks-dims { display: flex; flex-direction: column; gap: 6px; }
+.ks-dim { display: grid; grid-template-columns: 30px minmax(0, 1fr) 84px 22px; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 9px; }
+.ks-dim.lk { background: #fff4e8; }
+.ks-lock { width: 30px; height: 30px; border-radius: 8px; border: 1.5px solid var(--line); background: #fff; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+.ks-lock.on { border-color: #e07b1a; background: #e07b1a; color: #fff; }
+.ks-dl { display: flex; flex-direction: column; min-width: 0; } .ks-dl b { font-size: 13px; } .ks-dl small { font-size: 11px; color: var(--muted); }
+.ks-in { width: 100%; font-family: var(--mono, monospace); text-align: left; direction: ltr; }
+.ks-dim.lk .ks-in { border-color: #e07b1a; font-weight: 700; }
+.ks-u { font-size: 12px; color: var(--muted); }
+.ks-note { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 4px; }
+.ks-warn { font-size: 12px; color: #9a4f08; background: #fff4e8; border-radius: 8px; padding: 6px 8px; }
+.ks-ends { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.ks-end { display: flex; flex-direction: column; text-align: start; border: 1.5px solid var(--line); background: #fff; border-radius: 11px; padding: 8px 12px; font: inherit; color: var(--text); cursor: pointer; }
+.ks-end small { color: var(--muted); font-size: 11.5px; }
+.ks-end.on { border-color: var(--brand); background: var(--brand-soft); }
+.ks-endbody { border: 1px dashed var(--line); border-radius: 11px; padding: 10px; }
+.ks-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+.ks-types3 { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
+.ks-type-v { grid-template-columns: 1fr; grid-template-rows: auto auto auto; text-align: center; justify-items: center; }
+.ks-type-v > :first-child { grid-row: auto; width: 100%; }
+.ks-type-v.on { border-color: #0f9b8e; background: #effaf8; box-shadow: 0 0 0 3px rgba(15, 155, 142, .15); }
+.ks-linesel { width: auto; height: 32px; }
+.ks-more { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.ks-more > summary { cursor: pointer; font-weight: 700; font-size: 13px; color: var(--brand); }
+.ks-type-v .real-pic { aspect-ratio: 2 / 1; }

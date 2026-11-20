@@ -23,6 +23,8 @@ import { EaveCheckDialog } from './EaveCheckDialog';
 import { ConnLibrary, ConnWizard } from './ConnWizard';
 import { DetailStudio } from './DetailStudio';
 import { ComponentWindow, compOfConn, compOfMember, compOfNav } from './ComponentWindow';
+import { KneeStudio } from './KneeStudio';
+import { WallsStudio } from './WallsStudio';
 import { LayersMenu } from './LayersMenu';
 import { DeletedPanel } from './DeletedPanel';
 
@@ -452,7 +454,8 @@ export function App() {
         <aside className={`side side-end${propsOpen ? ' open' : ''}`} data-testid="props">
           <button className="props-pin desk-only" data-testid="props-pin" title={propsPinned ? 'כיווץ הפאנל — יותר מקום לתלת־ממד; בבחירה הפאנל נפתח כשכבה' : 'קיבוע הפאנל'} onClick={() => setPropsPinned(!propsPinned)}>{propsPinned ? '▸ כיווץ פאנל' : '◂ הגדרות ומאפיינים'}</button>
           {comp ? (
-            <ComponentWindow kind={comp} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} onClose={closePanel}>
+            <ComponentWindow kind={comp} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} onClose={closePanel}
+              studio={comp === 'knee' ? <KneeStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} /> : <WallsStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} />}>
               {lp === 'nav' ? <div className="nav-content" data-testid="lp-nav-content"><NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div> : <PropertiesPanel />}
             </ComponentWindow>
           ) : <section className="fpanel" data-testid="fpanel">

@@ -26,14 +26,14 @@ export function compOfMember(m: Member | undefined, d: DerivedModel): CompKind |
   if (!m) return null;
   const id = isPart(m) ? (m.connId ? d.connById.get(m.connId)?.members[0] ?? m.connId : m.id) : m.id;
   if (/^(C\.)?(BR\.W|BB\.|LT\.)/.test(id) && !/^(C\.)?LTIE/.test(id)) return 'walls';
-  if (/^(C\.)?KB\./.test(id)) return 'knee';
+  if (/^(C\.)?(KB|HN)\./.test(id)) return 'knee';
   return null;
 }
 /** חיבור (עורך החיבור) ששייך לרכיב — נפתח באותו חלון */
 export function compOfConn(id: string | null | undefined): CompKind | null {
   if (!id) return null;
   if (/^C\.(BR\.W|BB\.|LT\.)/.test(id) && !/^C\.LTIE/.test(id)) return 'walls';
-  if (/^C\.KB\./.test(id)) return 'knee';
+  if (/^C\.(KB|HN)\./.test(id)) return 'knee';
   return null;
 }
 export const compOfNav = (k: NavKey): CompKind | null => (k === 'b:walls' ? 'walls' : k === 'b:knee' ? 'knee' : null);
@@ -63,7 +63,7 @@ function connGroups(d: DerivedModel, re: RegExp) {
   });
 }
 
-export function ComponentWindow({ kind, memberId, onClose, children }: { kind: CompKind; memberId?: string; onClose: () => void; children: ReactNode }) {
+export function ComponentWindow({ kind, memberId, onClose, children, studio }: { kind: CompKind; memberId?: string; onClose: () => void; children?: ReactNode; /** 1.56: חלון במבנה האחיד (סוג → היקף → 3 כפתורים) — מחליף את התוכן והצד */ studio?: ReactNode }) {
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
   const M = META[kind];
   const [wide, setWide] = useState(false);
@@ -116,7 +116,8 @@ export function ComponentWindow({ kind, memberId, onClose, children }: { kind: C
         <button className="cwin-x" onClick={() => { setMax(!max); setMin(false); }} title={max ? 'חזרה לחלון צף' : 'הגדלה'} aria-label={max ? 'חזרה לחלון צף' : 'הגדלת החלון'} data-testid="cwin-full">{max ? '⤡' : '⤢'}</button>
         <button className="cwin-x" onClick={onClose} title="סגירה — המודל במסך מלא" aria-label="סגירת החלון" data-testid="cwin-close">✕</button>
       </header>
-      {!min && <>
+      {!min && studio && <div className="cwin-body cwin-studio">{studio}</div>}
+      {!min && !studio && <>
       <div className="cwin-body">
         <div className="cwin-main" data-testid="cwin-main">{children}</div>
         <aside className="cwin-side">
@@ -137,8 +138,8 @@ export function ComponentWindow({ kind, memberId, onClose, children }: { kind: C
           </div>
         </aside>
       </div>
-      <footer className="cwin-f"><i />כל שינוי מוצג מיד בתצוגה ובמודל · Ctrl+Z לביטול · גרירת הכותרת מזיזה את החלון</footer>
       </>}
+      {!min && <footer className="cwin-f"><i />כל שינוי מוצג מיד בתצוגה ובמודל · Ctrl+Z לביטול · גרירת הכותרת מזיזה את החלון</footer>}
     </section>
   );
 }

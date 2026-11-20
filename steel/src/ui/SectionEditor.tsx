@@ -263,7 +263,7 @@ export function KneeDetailField({ sideKey }: { sideKey?: string } = {}) {
 }
 
 /** 1.55: תמונה מרונדרת של פרט חיבור האלכסון (המבנה הזה עם הפרט) */
-function KneePic({ k }: { k: 'fin' | 'angle' | 'flange' }) {
+export function KneePic({ k }: { k: 'fin' | 'angle' | 'flange' }) {
   const p = useStore((s) => s.project);
   const t = kneeDetailThumb(p, k);
   return <RealPic id={t.id} make={t.make} fallback={PIC[k]} alt={k} />;
@@ -349,7 +349,7 @@ export function kneeLayout(keys: string[], lineIds: string[]) {
   return { cols, spans, nSpan };
 }
 
-function KneeSides() {
+export function KneeSides() {
   const kb = useStore((s) => s.project.building.kneeBraces) ?? defaultKneeBraces();
   const p = useStore((s) => s.project);
   const d = useStore((s) => s.derived);

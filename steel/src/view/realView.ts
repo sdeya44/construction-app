@@ -9,7 +9,8 @@ import { buildModel, groupColor } from './scene';
  * משמשת את התצוגה החיה בחלון הרכיב ואת התמונות באריחי הסוג. מקבלת את אלמנטי המודל עצמו (DerivedModel) —
  * מה שרואים כאן הוא בדיוק מה שהמנוע מייצר.
  */
-export interface RealTag { a: Vec3; b: Vec3; text: string; hot?: boolean; /** מיקום התגית (ברירת מחדל: אמצע הקטע) */ at?: Vec3 }
+export interface RealTag { a: Vec3; b: Vec3; text: string; hot?: boolean; /** מיקום התגית (ברירת מחדל: אמצע הקטע) */ at?: Vec3;
+  /** 1.56: תגית מידה עם נעילה — לחיצה על המנעול קובעת שהמידה הזו נקבעת (והשאר נגזרות) */ lock?: boolean; onLock?: () => void; id?: string }
 export interface RealSet {
   /** הרכיב עצמו (צבע הקבוצה) + חלקי החיבור שלו */
   focus: Member[];

@@ -38,6 +38,15 @@ export function LiveView3D({ set, rev, modes, height = 300 }: { set: RealSet | n
             el.style.left = `${((m.x + 1) / 2) * W}px`; el.style.top = `${((1 - m.y) / 2) * H}px`;
             el.style.display = m.z < 1 && Math.abs(m.x) < 1.05 && Math.abs(m.y) < 1.05 ? '' : 'none';
           });
+          // תגיות שעולות זו על זו — מזיזים למטה עד שאין חפיפה
+          const els = [...box.querySelectorAll<HTMLElement>('[data-i]')].filter((e) => e.style.display !== 'none');
+          const placed: { x: number; y: number; w: number; h: number }[] = [];
+          els.sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top)).forEach((el) => {
+            const w = el.offsetWidth + 6, h = el.offsetHeight + 4, x = parseFloat(el.style.left);
+            let y = parseFloat(el.style.top);
+            for (let it = 0; it < 12; it++) { const hit = placed.find((q) => Math.abs(q.x - x) < (q.w + w) / 2 && Math.abs(q.y - y) < (q.h + h) / 2); if (!hit) break; y = hit.y + (hit.h + h) / 2; }
+            el.style.top = `${Math.min(H - h / 2, y)}px`; placed.push({ x, y, w, h });
+          });
         }
       }
       k.raf = requestAnimationFrame(loop);
@@ -87,7 +96,9 @@ export function LiveView3D({ set, rev, modes, height = 300 }: { set: RealSet | n
       <div className="live3d-stage" style={{ height }}>
         <canvas ref={cv} className="live3d-cv" data-testid="live3d-canvas" aria-label="תצוגה תלת-ממדית חיה של הרכיב" />
         <div ref={tagBox} className="live3d-tags" aria-hidden="true">
-          {(set?.tags ?? []).map((t, i) => <span key={`${set?.key}-${i}`} data-i={i} className={`live3d-tag${t.hot ? ' hot' : ''}`}>{t.text}</span>)}
+          {(set?.tags ?? []).map((t, i) => t.onLock
+            ? <button key={`${set?.key}-${i}`} data-i={i} className={`live3d-tag lk${t.lock ? ' on' : ''}${t.hot ? ' hot' : ''}`} onClick={t.onLock} data-testid={t.id ? `tag-${t.id}` : undefined} title={t.lock ? 'מידה קובעת — לחיצה משחררת' : 'לחיצה: המידה הזו תקבע (ומשחררת את הקובעת הוותיקה)'}><LockIc on={!!t.lock} />{t.text}</button>
+            : <span key={`${set?.key}-${i}`} data-i={i} className={`live3d-tag${t.hot ? ' hot' : ''}`}>{t.text}</span>)}
         </div>
         {!set && <div className="live3d-empty">אין עדיין אלמנטים ברכיב — הוספה בהגדרות</div>}
         {!ok && <div className="live3d-empty">תצוגת תלת-ממד אינה זמינה בדפדפן זה</div>}
@@ -103,4 +114,9 @@ export function LiveView3D({ set, rev, modes, height = 300 }: { set: RealSet | n
       </div>
     </div>
   );
+}
+
+/** מנעול: סגור = המידה קובעת; פתוח = נגזרת */
+export function LockIc({ on }: { on: boolean }) {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" />{on ? <path d="M8 11V8a4 4 0 0 1 8 0v3" /> : <path d="M8 11V8a4 4 0 0 1 7.5-2" />}</svg>;
 }

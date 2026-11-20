@@ -204,7 +204,7 @@ function RhsFields() {
 }
 
 /** מפתחי קיר לכל ציר עמודים (כולל צירים פנימיים) */
-function WallLines({ nb }: { nb: number }) {
+export function WallLines({ nb }: { nb: number }) {
   const br = useStore((s) => s.project.building.bracing);
   const lines = useStore((s) => s.derived.section?.lines) ?? [];
   const ls = [...lines].sort((a, b) => a.x - b.x);
@@ -657,7 +657,7 @@ function PurlinExtras({ which }: { which?: 'sag' | 'fly' } = {}) {
 }
 
 /** סיב רציף בשורת עמודים (1.41) */
-function LineTiesEditor() {
+export function LineTiesEditor() {
   const br = useStore((s) => s.project.building.bracing);
   const d = useStore((s) => s.derived);
   const lines = [...(d.section?.lines ?? [])].sort((p, q) => p.x - q.x).filter((l) => !l.wall);
