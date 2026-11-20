@@ -34,7 +34,7 @@ test('V134-02: בורר פרופיל — חלונית עם סוגים וגדלי
 test('V134-03: תוכנית מסגרות ומרווחי פטות — עריכה על השרטוט', async ({ page }) => {
   await boot(page);
   await openNav(page, 's:geometry');
-  await page.getByTestId('geo-ed-tab-frames').click();
+  await page.getByTestId('ks-sec-loc').click(); // 1.62: המסגרות לאורך המבנה — מיקום במבנה
   await editDim(page, 'fs-bay-1', '5000');
   const fr = [...(await B(page)).frames].sort((a: any, b: any) => a.y - b.y);
   expect(fr[2].y - fr[1].y).toBe(5000);

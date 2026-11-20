@@ -22,6 +22,8 @@ import type { NavKey } from './SideNav';
 import { RoofTrussPanel, TransferPanel, TransferShape } from './TransferPanel';
 import { WingPanel } from './WingPanel';
 import { LSvg } from './Dialogs';
+import { FrameSectionDims } from './FrameSection';
+import { SecHeightsCtx, SectionEditor, TemplateBar } from './SectionEditor';
 import { ConnView } from './wizard/ConnView';
 import { WizardNavigation, WizardScopeSelector, WizardSection, WizardTypeSelector, WizardValidation, wizardClip, wizardCopy, type WzSec, type WzType } from './wizard/Wizard';
 
@@ -225,11 +227,17 @@ export const FAMILIES: Record<FamKey, FamDef> = {
   // ---------------- מסגרות: צירים, גבהים, חתכים ----------------
   frame: {
     title: 'מסגרות — צירים, גבהים וחתכים', crumb: 'מבנה', pic: 'geometry', tint: 'teal', re: /^(C\.)?(F\d+\.|C\.EAVE|C\.BASE|C\.RIDGE)/, kinds: ['column', 'rafter'], nav: ['s:geometry', 's:profiles'],
-    init: (nav) => ({ sec: nav === 's:profiles' ? 'conn' : 'loc' }),
-    loc: () => <StructurePanel section="geometry" />,
-    geo: ({ p }) => <Note>{p.building.section ? 'גבהים ושיפועים — בלשונית "מישורי גג וגבהים" (מיקום במבנה).' : 'רוחב, גובה ושיפוע — בלשונית "צירים" (מיקום במבנה). השרטוט למעלה מתעדכן מיד.'}</Note>,
+    // 1.62: חתך המסגרת (רוחב) — כל המידות על השרטוט; מיקום במבנה = המסגרות לאורך המבנה
+    init: (nav) => ({ sec: nav === 's:profiles' ? 'conn' : 'geo' }),
+    loc: () => <StructurePanel section="frames" />,
+    geo: () => <>
+      <TemplateBar />
+      <FrameSectionDims />
+      <details className="ks-more" data-testid="fs-adv"><summary>מתקדם — מישורי גג (טבלה), קונזולות</summary>
+        <SecHeightsCtx.Provider value={false}><SectionEditor part="planes" /></SecHeightsCtx.Provider></details>
+    </>,
     conn: () => <StructurePanel section="profiles" />,
-    subs: ({ p }) => ({ loc: `${p.building.frames.length} מסגרות`, conn: `${p.building.columnProfile} · ${p.building.rafterProfile}` }),
+    subs: ({ p, d }) => ({ loc: `${p.building.frames.length} מסגרות`, geo: `${(p.building.section?.lines ?? d.section?.lines ?? []).length} צירים`, conn: `${p.building.columnProfile} · ${p.building.rafterProfile}` }),
   },
 };
 
@@ -310,9 +318,9 @@ export function FamilyStudio({ fam, nav, memberId }: { fam: FamKey; nav: NavKey;
           {F.table && <details className="ks-more"><summary>טבלת מופעים</summary><ComponentTable match={F.table} testId={`ctab-${fam}`} /></details>}
         </WizardSection>}
 
-        {sec === 'geo' && <WizardSection id="geo" className="ks-geo">
-          <LiveView3D set={set3d} rev={d} height={300} modes={fam === 'frame' ? undefined : <div className="seg-mini"><button className={wide ? '' : 'on'} onClick={() => setWide(false)} data-testid="live3d-near">קרוב</button><button className={wide ? 'on' : ''} onClick={() => setWide(true)} data-testid="live3d-far">כל הרכיב</button></div>} />
-          <div className="ks-dims">{F.geo(ctx)}</div>
+        {sec === 'geo' && <WizardSection id="geo" className={fam === 'frame' ? 'fs-geo' : 'ks-geo'}>
+          {fam !== 'frame' && <LiveView3D set={set3d} rev={d} height={300} modes={<div className="seg-mini"><button className={wide ? '' : 'on'} onClick={() => setWide(false)} data-testid="live3d-near">קרוב</button><button className={wide ? 'on' : ''} onClick={() => setWide(true)} data-testid="live3d-far">כל הרכיב</button></div>} />}
+          {fam === 'frame' ? F.geo(ctx) : <div className="ks-dims">{F.geo(ctx)}</div>}
         </WizardSection>}
 
         {sec === 'conn' && <WizardSection id="conn">

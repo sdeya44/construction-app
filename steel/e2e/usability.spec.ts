@@ -50,8 +50,8 @@ test('USE-03: מידות בתלת-ממד — לחיצה על מרווח מסגר
   await openNav(page, 's:geometry');
   await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-gable-inner').click();
-  await page.getByTestId('isec-span-1').click();
-  await page.getByTestId('isec-input').fill('8'); await page.getByTestId('isec-input').press('Enter');
+  await page.getByTestId('fs-span-1').dispatchEvent('click'); // 1.62: מפתח בחתך המסגרת
+  await page.getByTestId('fs-input').fill('8'); await page.getByTestId('fs-input').press('Enter');
   const ls = (await st(page)).project.building.section.lines.map((l: any) => l.x).sort((a: number, b: number) => a - b);
   expect(ls[2] - ls[1]).toBe(8000);
   await shot(page, 'USE-03_isec');
@@ -100,38 +100,31 @@ test('USE-06: חתך אינטראקטיבי — מספר צירים, בחירת 
   await openNav(page, 's:geometry');
   await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-mono-multi').click();
-  await page.getByTestId('axis-n').fill('4'); await page.getByTestId('axis-n').press('Enter');
+  // 1.62: חתך המסגרת — מספר צירים (חלוקה שווה), שיפוע / גובה בציר על השרטוט
+  await page.getByTestId('fs-axis-n').fill('4'); await page.getByTestId('fs-axis-n').press('Enter');
   const sec = () => page.evaluate(() => (window as any).__ksp.store.state.project.building.section);
   expect((await sec()).lines.length).toBe(4);
-  const pid = (await sec()).planes[0].id;
-  // גובה ב-x (פני עליון) של המישור
   const zAt = (pl: any, x: number) => pl.z0 + ((pl.z1 - pl.z0) * (x - pl.x0)) / (pl.x1 - pl.x0);
   const xs = async () => (await sec()).lines.map((l: any) => l.x).sort((a: number, b: number) => a - b);
-  await page.getByTestId(`isec-pl-${pid}`).click();
-  await expect(page.getByTestId('pl-card')).toBeVisible();
-  await expect(page.locator('[data-testid="pl-card"] .lock-btn')).toHaveCount(0);
-  // ברירת מחדל: הגובה הגבוה מחושב — שינוי שיפוע שומר את גובה העמוד הנמוך
-  await expect(page.getByTestId('plc-calc-top')).toHaveAttribute('aria-checked', 'true');
+  const pid = (await sec()).planes[0].id;
   const [xa] = await xs(); const xd = (await xs())[3];
   const zA = zAt((await sec()).planes[0], xa);
-  await page.getByTestId('plc-slope').fill('8'); await page.getByTestId('plc-slope').press('Enter');
+  // שיפוע 8%: הגובה בציר הנמוך נשמר
+  await page.getByTestId(`fs-slope-${pid}`).dispatchEvent('click');
+  await page.getByTestId('fs-input').fill('8'); await page.getByTestId('fs-input').press('Enter');
   let p0 = (await sec()).planes[0];
   expect(Math.abs(zAt(p0, xa) - zA)).toBeLessThan(0.5);
   expect(Math.abs(((p0.z1 - p0.z0) / (p0.x1 - p0.x0)) * 100 - 8)).toBeLessThan(0.01);
-  // גובה עמוד + גובה עמוד גבוה ⇒ שיפוע מחושב
-  await page.getByTestId('plc-calc-slope').click();
-  await page.getByTestId('plc-col').fill('5'); await page.getByTestId('plc-col').press('Enter');
-  await page.getByTestId('plc-top').fill('6.6'); await page.getByTestId('plc-top').press('Enter');
+  // רק בציר הזה: ע.ע. בציר א 5.00, ובציר ד 6.60 ⇒ השיפוע נגזר
+  await page.getByTestId('fs-mode-local').click();
+  await page.getByTestId('fs-tos-0').dispatchEvent('click');
+  await page.getByTestId('fs-input').fill('5'); await page.getByTestId('fs-input').press('Enter');
+  await page.getByTestId('fs-tos-3').dispatchEvent('click');
+  await page.getByTestId('fs-input').fill('6.6'); await page.getByTestId('fs-input').press('Enter');
   p0 = (await sec()).planes[0];
   expect(Math.abs(zAt(p0, xa) - 5000)).toBeLessThan(0.5);
   expect(Math.abs(zAt(p0, xd) - 6600)).toBeLessThan(0.5);
-  await expect(page.getByTestId('plc-slope-out')).toContainText(((1600 / (xd - xa)) * 100).toFixed(2));
-  // גובה עמוד מחושב: שיפוע + גובה גבוה
-  await page.getByTestId('plc-calc-col').click();
-  await page.getByTestId('plc-slope').fill('5'); await page.getByTestId('plc-slope').press('Enter');
-  p0 = (await sec()).planes[0];
-  expect(Math.abs(zAt(p0, xd) - 6600)).toBeLessThan(0.5);
-  expect(Math.abs(zAt(p0, xa) - (6600 - 0.05 * (xd - xa)))).toBeLessThan(0.5);
+  await expect(page.getByTestId(`fs-slope-${pid}`)).toContainText(((1600 / (xd - xa)) * 100).toFixed(1));
   await shot(page, 'USE-06_roof_dims');
 });
 
@@ -141,7 +134,7 @@ test('USE-06b: דו-שיפועי סימטרי — גובה עמודים וגוב
   await openNav(page, 's:geometry');
   await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-gable-2').click();
-  await page.getByTestId('geo-ed-tab-planes').click();
+  await page.getByTestId('ks-sec-geo').click(); await page.locator('[data-testid="fs-adv"] > summary').click(); // 1.62: מישורי גג — מתקדם בגיאומטריה
   await expect(page.getByTestId('sec-plane-gable')).toBeVisible();
   await page.getByTestId('tri-gable-calc-slope').click();
   await page.getByTestId('tri-gable-col').fill('5.5'); await page.getByTestId('tri-gable-col').press('Enter');

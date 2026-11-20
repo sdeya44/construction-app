@@ -1,6 +1,9 @@
 import { ComponentTable } from './ComponentTable';
 import { ConnPreview } from './ConnPreview';
-import { useRef, useState } from 'react';
+import { createContext, useContext, useRef, useState } from 'react';
+
+/** 1.62: באשף המסגרות הגבהים נערכים בחתך המסגרת (גיאומטריה) — כאן (מיקום במבנה) רק צירים ומפתחים */
+export const SecHeightsCtx = createContext(true);
 import { setBuilding, setKneeBraces, setSection, setSettings } from '../commands/commands';
 import { tryProfile } from '../profiles/library';
 import { defaultKneeBraces } from '../geometry/knee';
@@ -29,15 +32,31 @@ export function SectionEditor({ part }: { part?: 'axes' | 'planes' } = {}) {
   const sec = b.section;
   const u = p.displayUnit;
   const apply = (s2: CustomSection | undefined, label?: string) => store.exec(setSection(s2, label));
+  return (
+    <>
+      {part !== 'planes' && <TemplateBar />}
+      {/* אין "קלאסי" נפרד: מבנה של 2 צירים מוצג ונערך באותו עורך (העריכה הראשונה שומרת אותו כחתך) */}
+      <ModularTables sec={sec ?? toCustomSection(b, d.roof)} unit={u} apply={apply} part={part} />
+      {part !== 'axes' && <button className="btn small link-nav" data-testid="goto-knee" onClick={() => window.dispatchEvent(new CustomEvent('ksp-nav', { detail: 'b:knee' }))}>אלכסוני עמוד-קורה, חיזוק רכס וקושרות ← חיזוקים וקשיחות</button>}
+    </>
+  );
+}
+
+/** 1.62: צורת הסככה — תבנית נוכחית + גלריית תבניות (משותף לעורך הצירים ולחתך המסגרת באשף) */
+export function TemplateBar() {
+  const p = useStore((s) => s.project);
+  const d = useStore((s) => s.derived);
+  const b = p.building;
+  const sec = b.section;
   const [tplOpen, setTplOpen] = useState(false);
   return (
     <>
       {/* גלריית התבניות מקופלת (1.34): פותחים רק כדי להחליף צורה */}
-      {part !== 'planes' && <div className="tpl-bar">
+      {<div className="tpl-bar">
         <span className="tpl-cur"><SectionPreview section={sec ?? toCustomSection(b, d.roof)} small /><span><small>צורת הסככה</small><b>{SECTION_TEMPLATES.find((t) => t.id === sec?.template)?.name ?? (sec ? 'מותאמת אישית' : b.roofType === 'gable' ? 'דו־שיפועי (2 צירים)' : 'חד־שיפועי (2 צירים)')}</b></span></span>
         <button className={`btn small${tplOpen ? ' primary' : ''}`} data-testid="tpl-toggle" aria-expanded={tplOpen} onClick={() => setTplOpen(!tplOpen)}>{tplOpen ? 'סגירה' : 'החלפת תבנית'}</button>
       </div>}
-      {tplOpen && part !== 'planes' && <div className="tpl-grid">
+      {tplOpen && <div className="tpl-grid">
         {SECTION_TEMPLATES.map((t) => (
           <button key={t.id} className={`tpl${sec?.template === t.id ? ' on' : ''}`} data-testid={`tpl-${t.id}`} title={t.desc}
             onClick={() => {
@@ -51,9 +70,6 @@ export function SectionEditor({ part }: { part?: 'axes' | 'planes' } = {}) {
           </button>
         ))}
       </div>}
-      {/* אין "קלאסי" נפרד: מבנה של 2 צירים מוצג ונערך באותו עורך (העריכה הראשונה שומרת אותו כחתך) */}
-      <ModularTables sec={sec ?? toCustomSection(b, d.roof)} unit={u} apply={apply} part={part} />
-      {part !== 'axes' && <button className="btn small link-nav" data-testid="goto-knee" onClick={() => window.dispatchEvent(new CustomEvent('ksp-nav', { detail: 'b:knee' }))}>אלכסוני עמוד-קורה, חיזוק רכס וקושרות ← חיזוקים וקשיחות</button>}
     </>
   );
 }
@@ -74,6 +90,7 @@ function ModularTables({ sec, unit: u, apply, part }: { sec: CustomSection; unit
   const [joint, setJoint] = useState<boolean | null>(null);
   const together = !!pair && (joint ?? pair.symmetric);
   const [bigSec, setBigSec] = useState(false);
+  const showZ = useContext(SecHeightsCtx);
   return (
     <>
       {part !== 'planes' && <>
@@ -83,7 +100,7 @@ function ModularTables({ sec, unit: u, apply, part }: { sec: CustomSection; unit
         <div className="hint" style={{ margin: 0 }}>הצירים מחולקים שווה; אחר כך אפשר לשנות כל מפתח בשרטוט (לחיצה על המידה) או לגרור ציר.</div>
       </div>
       </>}
-      <div className={`sec-prev${bigSec ? ' big' : ''}`}><button className="btn small sec-prev-x" data-testid="sec-enlarge" title={bigSec ? 'הקטנה' : 'הגדלת השרטוט'} onClick={() => setBigSec(!bigSec)}>{bigSec ? '⤡' : '⤢'}</button><InteractiveSection sec={sec} apply={apply} base={baseEl} onBase={(v) => store.exec(setBuilding({ baseElevation: v }))} calcOf={(id) => calcOf(together ? 'gable' : id)} setCalc={(id, c) => setCalc({ ...calc, [together ? 'gable' : id]: c })} together={together} /></div>
+      {showZ && <div className={`sec-prev${bigSec ? ' big' : ''}`}><button className="btn small sec-prev-x" data-testid="sec-enlarge" title={bigSec ? 'הקטנה' : 'הגדלת השרטוט'} onClick={() => setBigSec(!bigSec)}>{bigSec ? '⤡' : '⤢'}</button><InteractiveSection sec={sec} apply={apply} base={baseEl} onBase={(v) => store.exec(setBuilding({ baseElevation: v }))} calcOf={(id) => calcOf(together ? 'gable' : id)} setCalc={(id, c) => setCalc({ ...calc, [together ? 'gable' : id]: c })} together={together} /></div>}
       {part !== 'planes' && <>
       <div className="panel-title">צירי עמודים ({lines.length})
         <button className="btn small" data-testid="sec-add-line" onClick={() => {
@@ -504,6 +521,7 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
   /** מפלס בסיס (מ"מ) — מידה לחיצה בקו הקרקע */
   base?: number; onBase?: (v: number) => void;
 }) {
+  const showZ = useContext(SecHeightsCtx);
   const W = 300, H = 170, padX = 18, padTop = 26, padBot = 40;
   // מפלס ייחוס לגבהים (תצוגה והזנה): המודל שומר פני עליון קורת הגג; כאן מוסיפים/מפחיתים את שכבות הגג או הקורה והפלטות
   const proj = useStore((s) => s.project);
@@ -577,7 +595,8 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
   const yDim = H - padBot + 16, yOv = H - padBot + 30;
   return (
     <div className="isec" data-testid="isec">
-      <div className="isec-datum">
+      {!showZ && <div className="hint isec-zlink" data-testid="isec-zlink">גבהים ושיפועים — בחתך המסגרת: <button className="wz-link" onClick={() => document.querySelector<HTMLButtonElement>('[data-testid="ks-sec-geo"]')?.click()}>2 גיאומטריה ←</button></div>}
+      {showZ && <div className="isec-datum">
         <label htmlFor="isec-datum">הגבהים בשרטוט מתייחסים ל:</label>
         <select id="isec-datum" className="inp" data-testid="isec-datum" value={datum} onChange={(e) => store.exec(setSettings({ heightDatum: e.target.value as 'tos' | 'col' | 'purlin' | 'roof' }))}>
           <option value="tos">פני עליון קורת הגג (פלדה)</option>
@@ -585,7 +604,7 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
           <option value="purlin">פני עליון הפטות</option>
           <option value="roof">פני הגג הגמור (פטה + פנל)</option>
         </select>
-      </div>
+      </div>}
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="sec-svg isec-svg" onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} role="img" aria-label="עורך חתך">
         <line x1={0} y1={Y(0)} x2={W} y2={Y(0)} className="g" />
         {sec.planes.map((p) => (
@@ -617,7 +636,7 @@ export function InteractiveSection({ sec, apply, calcOf = () => 'top', setCalc =
             <g className="isec-dim" onClick={() => openEdit('ovr', '', (X(b) + X(R1)) / 2, yOv, R1 - b)} data-testid="isec-ovr"><line x1={X(b)} y1={yOv} x2={X(R1)} y2={yOv} /><text x={(X(b) + X(R1)) / 2} y={yOv - 2} className="t">{m(R1 - b)}</text></g>
           </>;
         })()}
-        {sec.planes.flatMap((p, pi) => (['x0', 'x1'] as const).map((e) => {
+        {showZ && sec.planes.flatMap((p, pi) => (['x0', 'x1'] as const).map((e) => {
           const x = p[e], z = e === 'x0' ? p.z0 : p.z1;
           // רכס/צומת משותף לשני מישורים באותו גובה: תווית אחת (שתיים היו נכתבות זו על זו)
           const dup = sec.planes.some((q, qi) => qi < pi && ((Math.abs(q.x0 - x) < 1 && Math.abs(q.z0 - z) < 1) || (Math.abs(q.x1 - x) < 1 && Math.abs(q.z1 - z) < 1)));

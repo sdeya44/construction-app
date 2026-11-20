@@ -76,7 +76,7 @@ test('STEP-01: גג מדורג — זיז לקורה העליונה מעבר ל�
   await openNav(page, 's:geometry');
   await page.getByTestId('tpl-toggle').click();
   await page.getByTestId('tpl-stepped').click();
-  await page.getByTestId('geo-ed-tab-planes').click();
+  await page.getByTestId('ks-sec-geo').click(); await page.locator('[data-testid="fs-adv"] > summary').click(); // 1.62: מישורי גג — מתקדם בגיאומטריה
   const inp = page.getByTestId('ovh-step-1');
   await expect(inp).toBeVisible();
   await inp.fill('0.6'); await inp.press('Enter');

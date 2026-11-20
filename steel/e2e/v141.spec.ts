@@ -8,8 +8,8 @@ test('V141-01: מוטות תלייה, תמיכה צידית, סיב רציף, ב
   const errors = await boot(page);
   // שם ציר
   await openNav(page, 's:geometry');
-  if (!(await page.getByTestId('sec-label-0').count())) await page.getByText('טבלת צירים — שם, מיקום').click();
-  await page.getByTestId('sec-label-0').fill('E'); await page.getByTestId('sec-label-0').press('Enter');
+  await page.getByTestId('fs-bub-0').dispatchEvent('click'); // 1.62: שם ציר — בלחיצה על הבועה בחתך
+  await page.getByTestId('fs-ax-name').fill('E'); await page.getByTestId('fs-ax-name').press('Enter');
   expect((await S(page)).derived.section.lines[0].label).toBe('E');
   // מוטות תלייה ותמיכה צידית
   await openNav(page, 'b:ties');

@@ -20,7 +20,6 @@ export async function boot(page: Page) {
 }
 
 /** 1.54: ריבון — פותח את לשונית התחום של הכלי (אם צריך) ולוחץ על הכלי. במסך צר — העץ (אותו testid). */
-const NAV_TAB: Record<string, string> = { s: 'structure', r: 'roof', b: 'brace', w: 'clad', k: 'tree', c: 'conns', i: 'issues' };
 export async function openNav(page: Page, key: string) {
   // 1.61: במסך רחב אין ריבון — הכניסה דרך הניווט של האפליקציה (כמו סרגל השלבים / חיפוש); במסך צר — העץ (אותו testid)
   const tool = page.getByTestId(`nav-${key}`).first();

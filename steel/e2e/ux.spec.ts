@@ -114,7 +114,7 @@ test('UX-05: עץ תפריטים — בחירת צומת מציגה טבלה; ש
   await expect(page.getByTestId('conn-id')).toHaveText('C.EAVE.F2.L');
   await expect(page.getByTestId('cp-split')).toHaveValue('1');
   await openNav(page, 's:geometry');
-  await page.getByTestId('geo-ed-tab-frames').click();
+  await page.getByTestId('ks-sec-loc').click(); // 1.62: המסגרות לאורך המבנה — מיקום במבנה
   await expect(page.getByTestId('frames-table')).toBeVisible(); // אורך ומסגרות — חלק מהגיאומטריה
   await expect(page.getByTestId('columnProfile')).toHaveCount(0); // צומת משני מציג רק את החלק שלו
   await page.getByTestId('bld-length').fill('36'); await page.getByTestId('bld-length').press('Enter');
@@ -144,7 +144,7 @@ test('SEC-01: חתך מודולרי — תבנית גג מדורג, הוספת �
   await page.getByTestId('tpl-stepped').click();
   const n = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { cols: d.members.filter((m: any) => m.kind === 'column').length, side: d.connections.filter((c: any) => c.type === 'rafter-side').length, err: d.issues.filter((i: any) => i.severity === 'error').length, knee: d.connections.filter((c: any) => c.type === 'knee').length }; });
   expect(await n()).toEqual({ cols: 18, side: 6, err: 0, knee: 24 }); // תבנית מדליקה אלכסוני עמוד-קורה
-  await page.getByTestId('geo-ed-tab-planes').click();
+  await page.getByTestId('ks-sec-geo').click(); await page.locator('[data-testid="fs-adv"] > summary').click(); // 1.62: מישורי גג — מתקדם בגיאומטריה
   await page.getByTestId('goto-knee').click(); // מעבר לחיזוקים וקשיחות ← אלכסוני עמוד-קורה
   await expect(page.getByTestId('knee-studio')).toBeVisible(); // 1.56: חלון האלכסונים
   await page.getByTestId('kb-on').uncheck();
@@ -152,12 +152,14 @@ test('SEC-01: חתך מודולרי — תבנית גג מדורג, הוספת �
   await page.getByTestId('kb-on').check();
   expect((await n()).knee).toBe(24);
   await openNav(page, 's:geometry');
-  // ציר חדש ב-26 מ' — מחוץ לכל מישור גג: שגיאת טופולוגיה מדווחת (ואין גיאומטריה עד לתיקון)
-  await page.getByTestId('sec-add-line').click();
-  expect((await n()).err).toBeGreaterThan(0);
-  await expect(page.getByTestId('chip-errors')).toBeVisible();
-  await page.getByTestId('btn-undo').click();
+  // 1.62: "+ ציר" בחתך המסגרת — ציר חדש במפתח זהה, מישור הגג הקיצוני מוארך אליו (אין שגיאת טופולוגיה)
+  const nl = () => page.evaluate(() => (window as any).__ksp.store.state.project.building.section.lines.length);
+  const l0 = await nl();
+  await page.getByTestId('fs-add-axis').click();
+  expect(await nl()).toBe(l0 + 1);
   expect((await n()).err).toBe(0);
+  await page.getByTestId('btn-undo').click();
+  expect(await nl()).toBe(l0);
   await setView(page, 'front');
   await shot(page, 'SEC-01_stepped');
 });

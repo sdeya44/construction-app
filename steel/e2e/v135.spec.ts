@@ -14,10 +14,10 @@ test('V135-01: חיבור המשך פטות בשרטוט; קונזולות, מפ
   expect((await B(page)).purlins.splice.jointOffset).toBe(80);
   await openNav(page, 's:geometry');
   await expect(page.getByTestId('ovh-left')).toHaveCount(0);
-  await page.getByTestId('isec-base').dispatchEvent('click');
-  await page.getByTestId('isec-input').fill('0.15'); await page.getByTestId('isec-input').press('Enter');
+  await page.getByTestId('fs-base-level').dispatchEvent('click'); // 1.62: מפלס בסיס — על חתך המסגרת
+  await page.getByTestId('fs-input').fill('0.15'); await page.getByTestId('fs-input').press('Enter');
   expect((await B(page)).baseElevation).toBe(150);
-  await page.getByTestId('geo-ed-tab-frames').click();
+  await page.getByTestId('ks-sec-loc').click(); // 1.62: המסגרות לאורך המבנה — מיקום במבנה
   await editDim(page, 'fs-po-start', '400');
   expect((await B(page)).purlinOverhangStart).toBe(400);
   await page.getByTestId('fs-po-end').first().dispatchEvent('click');

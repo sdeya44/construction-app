@@ -159,3 +159,25 @@ test('FW-04 (1.60): מצב הוספה לעומת עריכה; עורך המחבר
   await w.getByTestId('wz-ok').click();
   expect(errors).toEqual([]);
 });
+
+test('FS-02 (1.62): חתך המסגרת — ראש עמוד וע.ע. קורה בכל ציר, עריכה במקום, מידות אנכיות', async ({ page }) => {
+  const errors = await boot(page);
+  await page.getByTestId('sr-2').click();
+  const w = page.getByTestId('cwin-frame');
+  await expect(w.getByTestId('ks-geo')).toBeVisible(); // 1.62: נפתח ישר בחתך המסגרת
+  await expect(w.getByTestId('sec-lines')).toHaveCount(0); // אין טבלת צירים — הכל על השרטוט
+  await expect(w.getByTestId('frame-section')).toBeVisible();
+  await expect(w.getByTestId('fs-tos-0')).toContainText('ע.ע. קורה');
+  await expect(w.getByTestId('fs-col-0')).toContainText('ראש עמוד');
+  await expect(w.getByTestId('fs-tos-0')).toContainText('6.00');
+  await expect(w.getByTestId('fs-col-0')).toContainText('5.67');
+  await expect(w.getByTestId('fs-vdim-0')).toContainText('5674');
+  // כל הגג: ע.ע. בציר א 6.50 → גם ציר ב והרכס עולים
+  await w.getByTestId('fs-mode-all').click();
+  await w.getByTestId('fs-tos-0').dispatchEvent('click');
+  await page.getByTestId('fs-input').fill('6.5'); await page.getByTestId('fs-input').press('Enter');
+  await expect(w.getByTestId('fs-tos-1')).toContainText('6.50');
+  await expect(w.getByTestId('fs-col-0')).toContainText('6.17');
+  await expect(w.getByTestId('fs-ridge')).toContainText('7.40');
+  expect(errors).toEqual([]);
+});

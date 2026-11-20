@@ -83,7 +83,7 @@ test('V129-03 מכפל ומזחלה בפלטה', async ({ page }) => {
 test('V129-04 צורת תוכנית: מקבילית וטרפז', async ({ page }) => {
   const errors = await boot(page);
   await openNav(page, 's:geometry');
-  await page.getByTestId('geo-ed-tab-frames').click();
+  await page.getByTestId('ks-sec-loc').click(); // 1.62: המסגרות לאורך המבנה — מיקום במבנה
   await page.getByTestId('plan-shape').selectOption('skew');
   await page.waitForTimeout(500);
   let s = await state(page);
