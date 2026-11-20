@@ -539,7 +539,7 @@ select.inp { padding: 0 6px; }
 .vp-label.slope { background: #fff7e6; border-color: #d9a441; color: #8a5a00; font-weight: 700; }
 
 /* בדיקת גדלים */
-.sizing-box { position: absolute; right: 14px; top: 158px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px 12px; width: 300px; max-height: calc(100% - 140px); overflow: auto; direction: rtl; z-index: 3; font-size: 12.5px; }
+.sizing-box { position: absolute; right: calc(14px + var(--safe-r, 0px)); top: 158px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px 12px; width: 300px; max-height: calc(100% - 140px); overflow: auto; direction: rtl; z-index: 3; font-size: 12.5px; }
 .sizing-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .sizing-leg { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 6px; }
 .sizing-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-left: 4px; vertical-align: -1px; }
@@ -1154,7 +1154,7 @@ details.adv .adv-body { padding-bottom: 6px; }
 @media (min-width: 861px) {
   /* 1.55.1: חלון הרכיב צף מעל המודל — המודל נשאר במסך מלא */
   .workspace.comp-open { --pw: 0px; }
-  .workspace.comp-open:not(.panel-closed) > .side-end { display: flex; grid-column: 3; grid-row: 2; z-index: 8; pointer-events: none; background: transparent; border: 0; padding: 12px; box-sizing: border-box; flex-direction: row; justify-content: flex-start; align-items: flex-start; min-width: 0; overflow: hidden; box-shadow: none; position: relative; width: auto; }
+  .workspace.comp-open:not(.panel-closed) > .side-end { display: flex; grid-column: 3; grid-row: 2; z-index: 8; pointer-events: none; background: transparent; border: 0; padding: calc(var(--vbh, 56px) + 8px) 12px 12px; box-sizing: border-box; flex-direction: row; justify-content: flex-start; align-items: flex-start; min-width: 0; overflow: hidden; box-shadow: none; position: relative; width: auto; }
   .workspace.comp-open > .side-end > .cwin { pointer-events: auto; width: min(780px, 50%); min-width: min(680px, 100%); height: calc(100% - 66px); align-self: flex-start; }
   .workspace.comp-open > .side-end > .cwin.at-l { margin-inline-start: auto; }
   .workspace.comp-open > .side-end > .cwin.min { height: auto; align-self: flex-start; width: min(460px, 100%); }
@@ -1225,9 +1225,12 @@ details.adv .adv-body { padding-bottom: 6px; }
 /* 1.55.2: גם פאנל ההגדרות/המאפיינים צף מעל המודל — המודל תמיד במסך מלא */
 @media (min-width: 861px) {
   .workspace, .workspace.comp-open { --pw: 0px; }
-  .workspace:not(.panel-closed) > .side-end { display: flex; grid-column: 3; grid-row: 2; z-index: 8; pointer-events: none; background: transparent; border: 0; padding: 12px; box-sizing: border-box; flex-direction: row; justify-content: flex-start; align-items: flex-start; min-width: 0; overflow: hidden; box-shadow: none; position: relative; width: auto; left: auto; right: auto; top: auto; bottom: auto; }
+  .workspace:not(.panel-closed) > .side-end { display: flex; grid-column: 3; grid-row: 2; z-index: 8; pointer-events: none; background: transparent; border: 0; padding: calc(var(--vbh, 56px) + 8px) 12px 12px; box-sizing: border-box; flex-direction: row; justify-content: flex-start; align-items: flex-start; min-width: 0; overflow: hidden; box-shadow: none; position: relative; width: auto; left: auto; right: auto; top: auto; bottom: auto; }
   .workspace > .side-end > .props-pin { display: none; }
-  .side-end > .fpanel { pointer-events: auto; width: min(440px, 100%); max-height: calc(100% - 66px); display: flex; flex-direction: column; background: var(--panel); border-radius: 14px; box-shadow: 0 18px 44px rgba(15, 27, 45, .18), 0 0 0 1px rgba(15, 27, 45, .06); overflow: auto; }
+  .side-end > .fpanel { pointer-events: auto; width: min(440px, 100%); max-height: calc(100% - 66px); display: flex; flex-direction: column; background: var(--panel); border-radius: 14px; flex: none; box-shadow: 0 18px 44px rgba(15, 27, 45, .18), 0 0 0 1px rgba(15, 27, 45, .06); overflow: auto; }
   .side-end > .fpanel > .lp-head { position: sticky; top: 0; z-index: 2; background: var(--panel); }
   .workspace.lp-full > .side-end > .fpanel { width: 100%; max-height: none; height: calc(100% - 4px); }
 }
+
+/* 1.55.2: החלונות הצפים מתחילים מתחת לסרגל התצוגה (התאמה, מבטים) ולא מכסים אותו */
+@media (max-width: 860px) { .side > .fpanel { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; width: 100%; } }

@@ -270,13 +270,18 @@ export function App() {
   // 1.55.2: חלון/פאנל צף מעל המודל — מרכז התמונה עובר לחלק הגלוי של המודל
   useEffect(() => {
     const t = setInterval(() => {
+      // גובה סרגל התצוגה — החלונות הצפים מתחילים מתחתיו
+      const vb = document.querySelector('.workspace > .center .viewbar')?.getBoundingClientRect(), ce = document.querySelector('.workspace > .center')?.getBoundingClientRect(), ws = document.querySelector<HTMLElement>('.workspace');
+      if (vb && ce && ws) { const h = `${Math.round(vb.bottom - ce.top)}px`; if (ws.style.getPropertyValue('--vbh') !== h) ws.style.setProperty('--vbh', h); }
       const v = vp.current; const pane = v?.panes[0]?.el.getBoundingClientRect();
       const fl = document.querySelector<HTMLElement>('.workspace:not(.panel-closed) > .side-end > .cwin:not(.min), .workspace:not(.panel-closed) > .side-end > .fpanel');
       if (!v || !pane) return;
       const r = fl && fl.offsetParent ? fl.getBoundingClientRect() : null;
-      if (!r || r.width < 10 || r.width > pane.width * 0.8) { v.setSafe(0, 0); return; }
+      if (!r || r.width < 10 || r.width > pane.width * 0.8) { v.setSafe(0, 0); ws?.style.setProperty('--safe-r', '0px'); ws?.style.setProperty('--safe-l', '0px'); return; }
       const mid = (r.left + r.right) / 2;
       if (mid > pane.left + pane.width / 2) v.setSafe(0, pane.right - r.left + 8); else v.setSafe(r.right - pane.left + 8, 0);
+      // שכבות על המודל (בדיקת גדלים וכו') זזות הצידה כדי לא להיכנס מתחת לחלון הצף
+      if (ws) { ws.style.setProperty('--safe-r', `${v.safe.r}px`); ws.style.setProperty('--safe-l', `${v.safe.l}px`); }
     }, 200);
     return () => clearInterval(t);
   }, []);
