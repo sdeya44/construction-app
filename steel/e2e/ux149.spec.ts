@@ -135,7 +135,7 @@ test('UX153-01: טבלת מופעים — שורה לכל מכלול, ריחוף
   await rows.first().hover();
   expect((await page.evaluate(() => (window as any).__ksp.store.state.scopeHi))?.length).toBeGreaterThan(1);
   await rows.first().click();
-  await expect(page.getByTestId('props-single')).toBeVisible();
+  await expect(page.getByTestId('walls-studio')).toBeVisible(); // 1.56: אותו חלון
   expect((await page.evaluate(() => (window as any).__ksp.store.state.selection[0]))).toMatch(/^BB\./);
   await expect(page.getByTestId('view-restore')).toBeVisible();
   expect(errors).toEqual([]);

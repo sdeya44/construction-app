@@ -11,7 +11,6 @@ import { DetailTiles } from './DetailPicker';
 import { BoltSelect, EditCtx, NumField, ProfilePicker } from './fields';
 import { LiveView3D, LockIc } from './LiveView3D';
 import { HaunchEditor, KneePic, KneeSides } from './SectionEditor';
-import { ConnectionEditor } from './ConnectionEditor';
 import { DetailEnds, EndCards } from './PropertiesPanel';
 
 /**
@@ -213,7 +212,6 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
             <div className="field"><label>עובי פלטות</label><NumField testId="kb-t" value={kb.plateT} suffix='מ"מ' onCommit={(v) => store.exec(setKneeBraces({ plateT: Math.max(6, v) }))} /></div>
             <div className="field"><label>קוטר בורג</label><BoltSelect d={kb.bolt.d} onChange={(dd) => store.exec(setKneeBraces({ bolt: { ...kb.bolt, d: dd } }))} /></div>
             <div className="hint">ברגים, עובי וקוטר — לכל האלכסונים (שני הקצוות). שינוי למחבר בודד: באשף או בסטודיו.</div>
-            {activeConn && /^C\.KB\./.test(activeConn) && <div className="ks-connedit"><ConnectionEditor /></div>}
             {ref && d.byId.get(ref) && <div className="ks-elend"><div className="ks-note">קצוות האלכסון שנבחר — פרט מוכן לכל קצה, או פרט חדש בסטודיו:</div><EndCards m={d.byId.get(ref)!} /><DetailEnds m={d.byId.get(ref)!} /></div>}
             <div className="ks-acts">
               <button className="btn" disabled={!conn} onClick={() => conn && store.set({ connWizard: conn.id })} data-testid="ks-wizard">אשף המחברים</button>

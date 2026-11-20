@@ -9,7 +9,8 @@ test('CW-01: אשף חיבורים — מעורך החיבור: מצב, הצעו
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, kneeBraces: { ...(p.building.kneeBraces ?? {}), enabled: true, profile: 'L50x5', drop: 800, reach: 800, angle: 45, plateT: 10, plateW: 150, plateL: 250, bolt: { d: 16, grade: '8.8', standard: 'ISO 4017', clearance: 2 }, gauge: 80, pitch: 200, weldSize: 5, exclude: [] } } }) }); });
   const cid = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => c.id.startsWith('C.KB.')).id);
   await page.evaluate((i) => (window as any).__ksp.store.set({ activeConn: i }), cid);
-  await page.getByTestId('conn-wizard-open').click();
+  await page.getByTestId('ks-sec-conn').click(); // 1.56: המחבר — בחלון האלכסונים
+  await page.getByTestId('ks-wizard').click();
   await expect(page.getByTestId('conn-wizard')).toBeVisible();
   await expect(page.getByTestId('wiz-c-knee.angle')).toContainText('נוכחי');
   await expect(page.getByTestId('wiz-c-knee.fin')).toHaveCount(0); // לא מתאים — מוסתר כברירת מחדל
@@ -25,7 +26,7 @@ test('CW-01: אשף חיבורים — מעורך החיבור: מצב, הצעו
   expect(Object.values(kb.sides ?? {}).some((o: any) => o.detail === 'flange')).toBe(true);
   expect(kb.detail ?? 'fin').not.toBe('flange');
   // שוב: זוויתן, 2 ברגים לקצה — לכולם + שמירה לספרייה
-  await page.getByTestId('conn-wizard-open').click();
+  await page.getByTestId('ks-wizard').click();
   await page.getByTestId('wiz-c-knee.angle').click();
   await page.getByTestId('wiz-p-boltsPerEnd').selectOption('4');
   await page.getByTestId('wiz-save').click();

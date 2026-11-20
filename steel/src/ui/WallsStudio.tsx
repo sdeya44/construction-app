@@ -8,7 +8,6 @@ import { wallLineOf, wallSet, WALL_RE } from '../view/realView';
 import { ComponentTable } from './ComponentTable';
 import { openConnStudio } from './ComponentWindow';
 import { EditCtx, ProfilePicker } from './fields';
-import { ConnectionEditor } from './ConnectionEditor';
 import { DetailEnds, EndCards } from './PropertiesPanel';
 import { LiveView3D } from './LiveView3D';
 import { LineTiesEditor, LockTrussFields, PortalFields, WallLines, WallPic, WallXShape, XConnFields } from './StructurePanel';
@@ -139,7 +138,6 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
               {type === 'truss' && <LockTrussFields lineId={lid} />}
               {type === 'x' && <XConnFields />}
             </EditCtx.Provider>
-            {activeConn && /^C\.(BR\.W|BB\.|LT\.)/.test(activeConn) && <div className="ks-connedit"><ConnectionEditor /></div>}
             {selId && d.byId.get(selId) && <div className="ks-elend"><div className="ks-note">קצוות האלמנט שנבחר — פרט מוכן לכל קצה, או פרט חדש בסטודיו:</div><EndCards m={d.byId.get(selId)!} /><DetailEnds m={d.byId.get(selId)!} /></div>}
             {groups[cg] && <div className="ks-acts">
               <button className="btn" onClick={() => store.set({ connWizard: groups[cg][1][0].id })} data-testid="ks-wizard">אשף המחברים</button>

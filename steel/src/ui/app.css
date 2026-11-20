@@ -1299,3 +1299,4 @@ details.adv .adv-body { padding-bottom: 6px; }
 .ks-more > summary { cursor: pointer; font-weight: 700; font-size: 13px; color: var(--brand); }
 .ks-type-v .real-pic { aspect-ratio: 2 / 1; }
 .ks-connedit, .ks-elend { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.cwin-body[hidden] { display: none !important; }

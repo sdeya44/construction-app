@@ -104,5 +104,5 @@ test('V134-05: תבניות מקופלות, הסבר מאחורי ?, נעילה 
   await page.getByTestId('ks-sec-geo').click();
   await editDim(page, 'sch-lt-height', '1200');
   expect((await B(page)).bracing.walls.truss.height).toBe(1200);
-  await expect(page.locator('details.help').first()).not.toHaveAttribute('open', '');
+  await expect(page.getByTestId('walls-studio').locator('details.help[open]')).toHaveCount(0);
 });

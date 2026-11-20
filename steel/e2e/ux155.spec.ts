@@ -25,7 +25,7 @@ test('CW-01: כלי "קשיחות קירות" בריבון פותח חלון ר�
   expect(w).toBeGreaterThan(1600 * 0.85);
   // מזעור: החלון הופך לפס, והמודל גלוי; לחיצה נוספת מחזירה
   await win.getByTestId('cwin-min').click();
-  await expect(win.getByTestId('live3d-canvas')).toHaveCount(0);
+  await expect(win.getByTestId('live3d-canvas')).toBeHidden();
   await win.getByTestId('cwin-min').click();
   await expect(win.getByTestId('live3d-canvas')).toBeVisible();
   // גרירת הכותרת מזיזה את החלון
