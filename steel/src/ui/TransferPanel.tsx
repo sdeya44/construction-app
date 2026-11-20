@@ -272,7 +272,7 @@ export function TransferShape({ id }: { id: string }) {
 }
 
 /** מסבכי גג: הפעלה, מסגרות, צורה ואשף המסבך (חל על כל המסגרות שנבחרו) */
-export function RoofTrussPanel() {
+export function RoofTrussPanel({ part }: { part?: 'loc' | 'geo' } = {}) {
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
   const rt = p.building.roofTruss;
   const cols = d.members.filter((m) => m.kind === 'column' && m.frameId === p.building.frames[0]?.id).sort((a, b) => a.start.x - b.start.x);
@@ -291,8 +291,8 @@ export function RoofTrussPanel() {
       {ed.showTitle && <Help>קורת הגג היא החגורה העליונה; חגורה תחתונה, אנכיים ואלכסונים מרותכים במסגריה; חיבורי המשך וחיבור החגורה לעמודים — ברגים בשטח. לחתך עם שני עמודים (מפתח אחד).</Help>}
       {!rt?.enabled && ed.showTitle && <OffCard pic="roofX" title="מסבכי גג" desc="קורת הגג הופכת לחגורה עליונה של מסבך — למפתחים גדולים" onAdd={() => set({ enabled: true })} testId="off-rt" />}
       {rt?.enabled && <>
-        <FramePickStrip frames={fr} sel={sel} onToggle={toggleFrame} testPre="rt-f-" label={`מסגרות עם מסבך: ${sel.length} מתוך ${fr.length} — לחיצה על מסגרת מוסיפה/מסירה`} />
-        <div className="field"><label>צורה</label>
+        {part !== 'geo' && <FramePickStrip frames={fr} sel={sel} onToggle={toggleFrame} testPre="rt-f-" label={`מסגרות עם מסבך: ${sel.length} מתוך ${fr.length} — לחיצה על מסגרת מוסיפה/מסירה`} />}
+        {part !== 'loc' && <><div className="field"><label>צורה</label>
           <select className="inp" data-testid="rt-shape" value={rt.shape} onChange={(e) => set({ shape: e.target.value as 'flat' | 'parallel' | 'scissor', rise: rt.rise ?? 1000 })}>
             <option value="flat">חגורה תחתונה אופקית</option><option value="parallel">חגורה תחתונה מקבילה לגג</option><option value="scissor">"מספריים" — מוגבהת ברכס</option>
           </select></div>
@@ -300,7 +300,7 @@ export function RoofTrussPanel() {
         <TrussWizard spec={{ ...rt.spec, profiles: { ...rt.spec.profiles, top: p.building.rafterProfile } }} span={span} chordFamilies={['HEA', 'HEB', 'IPE', 'RHS', 'SHS']} loads={{ q: roofTrussLoad(p) }} testId="tw-roof" readOnlyProfiles={ed.embed}
           roof={{ ridge: hasRidge, shape: rt.shape, rise: rt.rise ?? 1000, onRise: (v) => set({ rise: v }) }}
           onChange={(sp) => { if (sp.profiles.top !== rt.spec.profiles.top) store.exec(setBuilding({ rafterProfile: sp.profiles.top, roofTruss: { ...rt, spec: sp } })); else set({ spec: sp }); }}
-          note="בגג דו-שיפועי: השדות ליד הרכס — אלכסונים לרכס, והחגורה התחתונה נחתכת ברכס (חיבור מוברג)." />
+          note="בגג דו-שיפועי: השדות ליד הרכס — אלכסונים לרכס, והחגורה התחתונה נחתכת ברכס (חיבור מוברג)." /></>}
       </>}
     </div>
   );

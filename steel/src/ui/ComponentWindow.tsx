@@ -6,17 +6,22 @@ import { LiveView3D } from './LiveView3D';
 import { MenuPic } from './pics';
 import { useWizardTx, WizardActions } from './wizard/Wizard';
 import type { NavKey } from './SideNav';
+import { FAMILIES, famOfConn, famOfMember, famOfNav, type FamKey } from './FamilyStudio';
 
 /**
  * 1.55: חלון רכיב — אותו חלון לכל דרך הגעה (כלי בריבון, לחיצה על אלמנט במודל, גיליון הפרמטרים, סרגל השלבים).
  * מעטפת מעוצבת סביב העורך הקיים (כל ההגדרות נשמרות במקום אחד), עם תצוגה תלת-ממדית ריאליסטית וחיה
  * של הרכיב, וכרטיסי המחברים שלו (אשף המחברים / סטודיו הפרטים).
  */
-export type CompKind = 'walls' | 'knee';
-const META: Record<CompKind, { title: string; crumb: string; pic: string; re: RegExp; nav: NavKey; tint: string }> = {
+export type CompKind = 'walls' | 'knee' | FamKey;
+const META0: Record<'walls' | 'knee', { title: string; crumb: string; pic: string; re: RegExp; nav: NavKey; tint: string }> = {
   walls: { title: 'קשיחות קירות', crumb: 'חיזוקים', pic: 'walls', re: WALL_RE, nav: 'b:walls', tint: 'teal' },
   knee: { title: 'אלכסוני עמוד-קורה', crumb: 'חיזוקים', pic: 'knee', re: KNEE_RE, nav: 'b:knee', tint: 'mustard' },
 };
+/** 1.58: כל משפחות הרכיבים — אותו חלון */
+export const compMeta = (k: CompKind) => (k === 'walls' || k === 'knee' ? META0[k] : { ...FAMILIES[k], re: new RegExp(FAMILIES[k].re.source.replace('^(C\\.)?', '^')), nav: FAMILIES[k].nav[0] });
+/** ביטוי להעדפת הבחירה במודל כשהחלון פתוח */
+export const compPick = (k: CompKind | null): string | null => (k === 'walls' ? '^(C\\.)?(BR\\.W|BB\\.|LT\\.)' : k === 'knee' ? '^(C\\.)?KB\\.' : k ? FAMILIES[k].re.source : null);
 /** נקודת הלחיצה האחרונה במודל — החלון נפתח בצד השני, כדי לא לכסות את מה שנלחץ */
 let lastDown: { x: number; t: number } | null = null;
 if (typeof document !== 'undefined') document.addEventListener('pointerdown', (e) => { if ((e.target as HTMLElement)?.closest?.('.vp-pane')) lastDown = { x: e.clientX, t: Date.now() }; }, true);
@@ -28,16 +33,16 @@ export function compOfMember(m: Member | undefined, d: DerivedModel): CompKind |
   const id = isPart(m) ? (m.connId ? d.connById.get(m.connId)?.members[0] ?? m.connId : m.id) : m.id;
   if (/^(C\.)?(BR\.W|BB\.|LT\.)/.test(id) && !/^(C\.)?LTIE/.test(id)) return 'walls';
   if (/^(C\.)?(KB|HN)\./.test(id)) return 'knee';
-  return null;
+  return famOfMember(m, d);
 }
 /** חיבור (עורך החיבור) ששייך לרכיב — נפתח באותו חלון */
 export function compOfConn(id: string | null | undefined): CompKind | null {
   if (!id) return null;
   if (/^C\.(BR\.W|BB\.|LT\.)/.test(id) && !/^C\.LTIE/.test(id)) return 'walls';
   if (/^C\.(KB|HN)\./.test(id)) return 'knee';
-  return null;
+  return famOfConn(id);
 }
-export const compOfNav = (k: NavKey): CompKind | null => (k === 'b:walls' ? 'walls' : k === 'b:knee' ? 'knee' : null);
+export const compOfNav = (k: NavKey): CompKind | null => (k === 'b:walls' ? 'walls' : k === 'b:knee' ? 'knee' : famOfNav(k));
 
 /** פותח את הסטודיו על חיבור (אותה פעולה כמו "עריכת הפלטה בסטודיו") */
 export function openConnStudio(c: Connection, d: DerivedModel) {
@@ -66,7 +71,7 @@ function connGroups(d: DerivedModel, re: RegExp) {
 
 export function ComponentWindow({ kind, memberId, onClose, children, studio }: { kind: CompKind; memberId?: string; onClose: () => void; children?: ReactNode; /** 1.56: חלון במבנה האחיד (סוג → היקף → 3 כפתורים) — מחליף את התוכן והצד */ studio?: ReactNode }) {
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
-  const M = META[kind];
+  const M = compMeta(kind);
   // 1.57: האשף פותח טרנזקציה — אישור = פעולת Undo אחת, ביטול = חזרה למצב שלפני
   useWizardTx(`אשף: ${M.title}`);
   const [wide, setWide] = useState(false);
@@ -97,11 +102,11 @@ export function ComponentWindow({ kind, memberId, onClose, children, studio }: {
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
   };
   // נפתח מלחיצה על אלמנט ועדיין לא נבחר היקף — ישר להגדרות הרכיב (בלי לשמור כהעדפה)
-  useEffect(() => { if (memberId && d.byId.has(memberId) && !store.state.propScope) store.set({ propScope: kind === 'knee' ? 'asm' : 'asmall' }); }, [memberId, kind]);
+  useEffect(() => { if ((kind === 'walls' || kind === 'knee') && memberId && d.byId.has(memberId) && !store.state.propScope) store.set({ propScope: kind === 'knee' ? 'asm' : 'asmall' }); }, [memberId, kind]); // eslint-disable-line react-hooks/exhaustive-deps
   // חיבור פתוח (עורך החיבור) — התצוגה מתמקדת באלמנט של הרכיב שבחיבור
   const focusId = memberId && !d.byId.has(memberId) ? d.connById.get(memberId)?.members.find((x) => M.re.test(x)) : memberId;
-  const set = useMemo(() => (kind === 'walls' ? wallSet(p, d, { memberId: focusId, whole: wide }) : kneeSet(p, d, { memberId: focusId, frame: wide })), [kind, p, d, focusId, wide]);
-  const count = d.members.filter((m) => M.re.test(m.id) && !isPart(m)).length;
+  const set = useMemo(() => (studio ? null : kind === 'walls' ? wallSet(p, d, { memberId: focusId, whole: wide }) : kneeSet(p, d, { memberId: focusId, frame: wide })), [kind, p, d, focusId, wide, !!studio]); // eslint-disable-line react-hooks/exhaustive-deps
+  const count = d.members.filter((m) => (M.re.test(m.id) || (((M as { kinds?: string[] }).kinds ?? []).includes(m.kind))) && !isPart(m)).length;
   const groups = useMemo(() => connGroups(d, M.re), [d, M.re]);
   const mainEnd = useMemo(() => { const m = d.members.find((x) => M.re.test(x.id) && !isPart(x)); return m ? `${m.id}|start` : null; }, [d, M.re]);
   const modes = <div className="seg-mini" role="group" aria-label="מה מוצג">

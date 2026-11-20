@@ -1360,3 +1360,6 @@ details.adv .adv-body { padding-bottom: 6px; }
 .wz-link { border: 0; background: none; padding: 0; font: inherit; color: var(--wz-sel); text-decoration: underline; cursor: pointer; }
 .ks-dim.bad { background: var(--wz-err-soft); } .ks-dim.bad .ks-lock.on { background: var(--wz-err); border-color: var(--wz-err); }
 .ks-bad { font-size: 12px; color: var(--wz-err); background: var(--wz-err-soft); border-radius: 8px; padding: 6px 8px; font-weight: 600; }
+/* 1.58: כותרת משנה בתוך קבוצת הגדרות (אשף אחיד) */
+.wz-sub { font-size: var(--wz-fs-s); font-weight: 700; color: var(--wz-muted); text-transform: none; margin: var(--wz-s3) 0 var(--wz-s1); padding-top: var(--wz-s2); border-top: 1px solid var(--wz-line); }
+.ks .wz-type:not(:has(img, svg, canvas)) { justify-content: center; min-height: 52px; }

@@ -189,7 +189,7 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
 }
 
 
-function RhsFields() {
+export function RhsFields() {
   const br = useStore((s) => s.project.building.bracing);
   const r = br.roof.rhs ?? defaultRhsTruss();
   const set = (patch: Partial<RhsTrussParams>) => store.exec(setBuilding({ bracing: { ...br, roof: { ...br.roof, rhs: { ...r, ...patch } } } }));
@@ -380,7 +380,7 @@ export function BracePanel({ part }: { part?: BraceSection }) {
  * קושרות גג — רשת אחת בתוכנית (בקשת משתמש 18.11.2026): המפתחים משמאל לימין כמו בתוכנית הגג (1, 2, 3…),
  * הקטעים לרוחב (בין צירי העמודים) מלמעלה למטה. לחיצה על תא: ללא → X אחד → 2 → 3 (לאורך השיפוע) → ללא.
  */
-function RoofXGrid() {
+export function RoofXGrid() {
   const b = useStore((s) => s.project.building);
   const d = useStore((s) => s.derived);
   const segs = [...(d.roofSegments ?? [])].sort((p, q) => p.x0 - q.x0 || p.id.localeCompare(q.id));
@@ -440,7 +440,7 @@ function RoofXGrid() {
 }
 
 /** חלוקת פנלי X (שווים / על הפטות) וקושרות ברצועת הקונזולה */
-function RoofXSplit() {
+export function RoofXSplit() {
   const br = useStore((s) => s.project.building.bracing);
   const frames = useStore((s) => s.project.building.frames);
   const set = (roof: Partial<BuildingParams['bracing']['roof']>) => store.exec(setBuilding({ bracing: { ...br, roof: { ...br.roof, ...roof } } }));
@@ -629,7 +629,7 @@ export function RafterStrutsEditor() {
 }
 
 /** מוטות תלייה ותמיכה צידית לפטות (1.41) */
-function PurlinExtras({ which }: { which?: 'sag' | 'fly' } = {}) {
+export function PurlinExtras({ which }: { which?: 'sag' | 'fly' } = {}) {
   const br = useStore((s) => s.project.building.bracing);
   const set = (patch: Partial<BuildingParams['bracing']>) => store.exec(setBuilding({ bracing: { ...br, ...patch } }));
   const sr = br.sagRods ?? { ...defaultSagRods(), enabled: false }, fb = br.flyBraces ?? { ...defaultFlyBraces(), enabled: false };

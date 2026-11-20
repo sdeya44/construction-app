@@ -13,7 +13,7 @@ import { tryProfile } from '../profiles/library';
 
 const OPENING: Record<'up' | 'down', string> = { up: 'לכיוון הרכס / הצד הגבוה', down: 'לכיוון המרזב / הצד הנמוך' };
 
-function SideEditor({ side, title, items, freeStart, part }: { side: string; title: string; items: Member[]; freeStart?: boolean; part?: 'layout' | 'cleat' | 'positions' }) {
+export function SideEditor({ side, title, items, freeStart, part }: { side: string; title: string; items: Member[]; freeStart?: boolean; part?: 'layout' | 'cleat' | 'positions' }) {
   const p = useStore((s) => s.project);
   const prm = purlinParams(p.building.purlins, side);
   const u = p.displayUnit;
@@ -150,7 +150,7 @@ function SideIssues({ pkey }: { pkey: string }) {
 }
 
 /** חתך מודולרי: מאיזה צד מתחילה פריסת הפטות במישור (הועבר לכאן מעורך החתך — החלטת משתמש) */
-function PlaneStart({ planeId }: { planeId: string }) {
+export function PlaneStart({ planeId }: { planeId: string }) {
   const sec = useStore((s) => s.project.building.section);
   const pl = sec?.planes.find((q) => q.id === planeId);
   if (!sec || !pl) return null;

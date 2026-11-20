@@ -211,7 +211,7 @@ function Overhangs({ sec, unit: u, apply }: { sec: CustomSection; unit: 'm' | 'm
   );
 }
 
-export function HaunchEditor() {
+export function HaunchEditor({ part }: { part?: 'geo' | 'conn' } = {}) {
   const ed = useEdit();
   const b = useStore((s) => s.project.building);
   const hp = b.haunch ?? { ...defaultHaunch(), enabled: false };
@@ -224,10 +224,10 @@ export function HaunchEditor() {
       </div>}
       {!hp.enabled && ed.showTitle && <OffCard pic="knee" title="מכפל בראש העמוד" desc="פח משולש מתחת לקורה ליד העמוד — מאפשר קורה קלה יותר במפתח גדול" onAdd={() => set({ enabled: true })} testId="off-hn" />}
       {hp.enabled && <>
-        <div className="field"><label>אורך מפני העמוד</label><NumField testId="hn-length" value={hp.length} suffix='מ"מ' onCommit={(v) => set({ length: Math.max(300, v) })} /></div>
-        <div className="field"><label>עומק בפני העמוד (0 = עומק הקורה)</label><NumField testId="hn-depth" value={hp.depth} suffix='מ"מ' onCommit={(v) => set({ depth: Math.max(0, v) })} /></div>
-        <div className="field"><label>עובי גוף / אגף (0 = כמו הקורה)</label><span className="row"><NumField value={hp.webT} suffix='מ"מ' onCommit={(v) => set({ webT: Math.max(0, v) })} /><NumField value={hp.flangeT} suffix='מ"מ' onCommit={(v) => set({ flangeT: Math.max(0, v) })} /></span></div>
-        <Help>פח גוף משולש + פח אגף משופע, מרותכים מתחת לקורת הגג במסגריה (מכלול אחד עם הקורה), בכל צד שבו הקורה ממשיכה מעבר לעמוד. מאפשר קורה קלה יותר במפתח גדול — ללא בדיקת חוזק בתוכנה.</Help>
+        {part !== 'conn' && <><div className="field"><label>אורך מפני העמוד</label><NumField testId="hn-length" value={hp.length} suffix='מ"מ' onCommit={(v) => set({ length: Math.max(300, v) })} /></div>
+        <div className="field"><label>עומק בפני העמוד (0 = עומק הקורה)</label><NumField testId="hn-depth" value={hp.depth} suffix='מ"מ' onCommit={(v) => set({ depth: Math.max(0, v) })} /></div></>}
+        {part !== 'geo' && <div className="field"><label>עובי גוף / אגף (0 = כמו הקורה)</label><span className="row"><NumField value={hp.webT} suffix='מ"מ' onCommit={(v) => set({ webT: Math.max(0, v) })} /><NumField value={hp.flangeT} suffix='מ"מ' onCommit={(v) => set({ flangeT: Math.max(0, v) })} /></span></div>}
+        {!part && <Help>פח גוף משולש + פח אגף משופע, מרותכים מתחת לקורת הגג במסגריה (מכלול אחד עם הקורה), בכל צד שבו הקורה ממשיכה מעבר לעמוד. מאפשר קורה קלה יותר במפתח גדול — ללא בדיקת חוזק בתוכנה.</Help>}
       </>}
     </>
   );

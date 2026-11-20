@@ -140,7 +140,7 @@ export function ParamSheet() {
             const id = `ps-${r.label}`;
             const k = r.kind;
             // 1.55.2: לרכיב עם חלון משלו (קשיחות קירות, אלכסוני עמוד-קורה) — מקום עריכה יחיד: החלון. כאן תצוגה + פתיחה
-            const win = r.nav === 'b:walls' || r.nav === 'b:knee';
+            const win = r.nav === 'b:walls' || r.nav === 'b:knee' || r.nav === 'b:roof';
             const cell = win ? <button className="ps-open" onClick={() => go(r.nav)} data-testid={id}>{k === 'bool' ? (v ? 'פעיל' : 'כבוי') : String(v || '—')} <span>פתיחת החלון ←</span></button>
               : !r.mut || k === 'ro' ? <span className="muted">{String(v)}</span>
               : k === 'len' ? <LenField mm={v as number} unit={u} onCommit={(x) => edit(r, x)} testId={id} />

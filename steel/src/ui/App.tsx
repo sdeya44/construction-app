@@ -22,7 +22,8 @@ import { NavContent, NavCrumb, SideNav, NAV_INDEX_LABEL, navGroupOf, type NavKey
 import { EaveCheckDialog } from './EaveCheckDialog';
 import { ConnLibrary, ConnWizard } from './ConnWizard';
 import { DetailStudio } from './DetailStudio';
-import { ComponentWindow, compOfConn, compOfMember, compOfNav } from './ComponentWindow';
+import { ComponentWindow, compOfConn, compOfMember, compOfNav, compPick } from './ComponentWindow';
+import { FamilyStudio } from './FamilyStudio';
 import { KneeStudio } from './KneeStudio';
 import { WallsStudio } from './WallsStudio';
 import { LayersMenu } from './LayersMenu';
@@ -288,7 +289,7 @@ export function App() {
     return () => clearInterval(t);
   }, []);
   // חלון רכיב פתוח — לחיצה במודל מעדיפה את אלמנטי הרכיב
-  useEffect(() => { const pf = comp === 'walls' ? '^(C\\.)?(BR\\.W|BB\\.|LT\\.)' : comp === 'knee' ? '^(C\\.)?KB\\.' : null; if ((store.state.pickPrefer ?? null) !== pf) store.set({ pickPrefer: pf }); }, [comp]);
+  useEffect(() => { const pf = compPick(comp); if ((store.state.pickPrefer ?? null) !== pf) store.set({ pickPrefer: pf }); }, [comp]);
   const closePanel = () => { setPanelOpen(false); setLpFull(false); setTimeout(() => window.dispatchEvent(new Event('resize')), 30); };
   const menuItems = (): Cmd[] => {
     const one = ms.length === 1 ? ms[0]! : null;
@@ -327,7 +328,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.57.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.58.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -457,7 +458,7 @@ export function App() {
           <button className="props-pin desk-only" data-testid="props-pin" title={propsPinned ? 'כיווץ הפאנל — יותר מקום לתלת־ממד; בבחירה הפאנל נפתח כשכבה' : 'קיבוע הפאנל'} onClick={() => setPropsPinned(!propsPinned)}>{propsPinned ? '▸ כיווץ פאנל' : '◂ הגדרות ומאפיינים'}</button>
           {comp ? (!panelOpen ? null :
             <ComponentWindow key={comp} kind={comp} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} onClose={closePanel}
-              studio={comp === 'knee' ? <KneeStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} /> : <WallsStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} />}>
+              studio={comp === 'knee' ? <KneeStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} /> : comp === 'walls' ? <WallsStudio memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} /> : <FamilyStudio fam={comp} nav={nav} memberId={lp === 'sel' ? (s.activeConn ?? sel[0]) : undefined} />}>
               {lp === 'nav' ? <div className="nav-content" data-testid="lp-nav-content"><NavCrumb nav={nav} item={NAV_INDEX_LABEL(nav, true)} /><NavContent nav={nav} onOpenConn={openConn} /></div> : <PropertiesPanel />}
             </ComponentWindow>
           ) : <section className="fpanel" data-testid="fpanel">

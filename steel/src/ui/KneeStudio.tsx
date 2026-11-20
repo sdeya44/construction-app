@@ -6,7 +6,7 @@ import { checkKneePair, kneeKeyOf, measureKnee, solveKnee, type KDim, type KMeas
 import type { KneeSideOverride } from '../model/types';
 import { tryProfile } from '../profiles/library';
 import { store, useStore } from '../store';
-import { kneeSet, type RealTag } from '../view/realView';
+import { familySet, kneeSet, type RealTag } from '../view/realView';
 import { DetailTiles } from './DetailPicker';
 import { BoltSelect, EditCtx, NumField, ProfilePicker } from './fields';
 import { LiveView3D, LockIc } from './LiveView3D';
@@ -63,6 +63,11 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
     return () => clearTimeout(t);
   }, [locks.join(','), ref, scope, key]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 1.58: מכפל — חלקים במודל (להדגשה ולתצוגה)
+  const hnConns = useMemo(() => d.connections.filter((c) => c.id.startsWith('C.HN.')), [d]);
+  const hnN = hnConns.length;
+  const hnIds = useMemo(() => hnConns.flatMap((c) => c.parts), [hnConns]);
+  const hn3d = useMemo(() => (type === 'haunch' ? familySet(p, d, (m) => hnIds.includes(m.id), { key: 'hn' }) : null), [type, p, d, hnIds]);
   const setType = (t: 'knee' | 'haunch' | 'none') => store.exec(setBuilding({
     kneeBraces: { ...kb, enabled: t === 'knee' },
     haunch: { ...hp, enabled: t === 'haunch' },
@@ -148,7 +153,7 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
     const S = new Set(own);
     return [...own, ...d.connections.filter((c) => c.parts.some((x) => S.has(x)) || c.members.some((x) => S.has(x))).flatMap((c) => c.parts.filter((x) => !S.has(x)))];
   }, [d, kbs, scope, ref, key]);
-  useEffect(() => { store.set({ scopeHi: type === 'knee' ? scopeIds : null }); }, [scopeIds, type]);
+  useEffect(() => { store.set({ scopeHi: type === 'knee' ? scopeIds : type === 'haunch' ? (hnIds.length ? hnIds : null) : null }); }, [scopeIds, type, hnIds]);
   useEffect(() => () => { store.set({ scopeHi: null }); }, []);
   const issues = useMemo(() => d.issues.filter((i) => /^(C\.)?KB\./.test(i.elementId ?? '') || /^KNEE_/.test(i.code)), [d]);
   type KCopy = { drop: number; angle: number; mode: 'angle' | 'reach'; reach: number; profile: string; detail?: 'fin' | 'flange' | 'angle' | 'stub' };
@@ -170,7 +175,15 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
         extra={<label className="ks-off"><input type="checkbox" data-testid="kb-on" checked={kb.enabled} onChange={(e) => setType(e.target.checked ? 'knee' : 'none')} />פעיל</label>} />
 
       {type === 'none' && <div className="ks-empty">בחרו סוג — אלכסון עמוד-קורה או מכפל. אי אפשר את שניהם באותו מבנה.</div>}
-      {type === 'haunch' && <div className="ks-panel"><EditCtx.Provider value={{ embed: false }}><HaunchEditor /></EditCtx.Provider></div>}
+      {/* 1.58: מכפל — אותו מבנה: היקף → מיקום · גיאומטריה · חתך ומחברים */}
+      {type === 'haunch' && <>
+        <WizardScopeSelector<'all'> value="all" onPick={() => undefined} scopes={[{ key: 'all', title: 'כל המכפלים במודל', count: hnN, testId: 'pscope-asm' }]} note={<>{hnIds.length} חלקים — מודגשים בכתום</>} />
+        <WizardNavigation value={sec} onPick={setSec} subs={{ loc: `${hnN} מכפלים`, geo: `אורך ${hp.length}`, conn: hp.webT ? `גוף ${hp.webT}` : 'כמו הקורה' }} />
+        <WizardValidation issues={d.issues.filter((i) => /^(C\.)?HN\./.test(i.elementId ?? ''))} />
+        {sec === 'loc' && <WizardSection id="loc"><div className="ks-note">המכפל נבנה בכל צד שבו קורת הגג ממשיכה מעבר לעמוד — {hnN} מקומות במודל.</div></WizardSection>}
+        {sec === 'geo' && <WizardSection id="geo" className="ks-geo"><LiveView3D set={hn3d} rev={d} height={300} /><div className="ks-dims"><EditCtx.Provider value={{ embed: true }}><HaunchEditor part="geo" /></EditCtx.Provider></div></WizardSection>}
+        {sec === 'conn' && <WizardSection id="conn"><EditCtx.Provider value={{ embed: true }}><HaunchEditor part="conn" /></EditCtx.Provider><div className="ks-note">פח גוף משולש + פח אגף משופע, מרותכים מתחת לקורת הגג במסגריה — מכלול אחד עם הקורה. ללא בדיקת חוזק.</div></WizardSection>}
+      </>}
 
       {type === 'knee' && <>
         {/* היקף — לפני שמשנים */}

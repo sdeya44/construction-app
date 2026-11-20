@@ -255,3 +255,42 @@ export function kneeSet(p: Project, d: DerivedModel, opt: { memberId?: string; f
   const inward = sel ? Math.sign(top.x - P.x) || 1 : 1;
   return { focus, context, tags, dir: opt.frame ? { th: -0.35, ph: 0.18 } : { th: inward > 0 ? -0.5 : 0.5, ph: 0.2 }, key: `k|${fid}|${opt.frame ? 'F' : ref.id}` };
 }
+
+/**
+ * 1.58: תצוגה ריאליסטית כללית לכל משפחת רכיבים (אשף אחיד): הרכיב סביב האלמנט שנבחר (או כולו — wide),
+ * עם המבנה הראשי שסביבו כהקשר והפטות/חגורות שקופות. match — אילו אלמנטים שייכים לרכיב.
+ */
+export function familySet(_p: Project, d: DerivedModel, match: (m: Member) => boolean, opt: { memberId?: string; wide?: boolean; key: string; radius?: number }): RealSet | null {
+  const isPartK = (m: Member) => m.kind === 'plate' || m.kind === 'bolt' || m.kind === 'cleat' || m.kind === 'anchor';
+  const own = d.members.filter((m) => match(m) && !isPartK(m));
+  const ownParts = d.members.filter((m) => match(m) && isPartK(m));
+  if (!own.length && !ownParts.length) return null;
+  const sel = opt.memberId ? d.byId.get(opt.memberId) : undefined;
+  const ref = sel && match(sel) ? sel : own[0] ?? ownParts[0];
+  const R = opt.radius ?? 3500;
+  const c0 = mid(ref);
+  const near = (m: Member) => { const q = mid(m); return Math.hypot(q.x - c0.x, q.y - c0.y, q.z - c0.z) < R; };
+  const LIM = 260;
+  const focusMain = (opt.wide ? own : own.filter(near)).slice(0, LIM);
+  const focus = [...focusMain, ...(opt.wide && own.length > 120 ? [] : connParts(d, focusMain.map((m) => m.id))), ...ownParts.filter((m) => opt.wide ? own.length <= 120 : near(m)).slice(0, 400)];
+  if (!focus.length) return null;
+  const bx = new THREE.Box3();
+  for (const m of focus) { bx.expandByPoint(new THREE.Vector3(m.start.x, m.start.y, m.start.z)); bx.expandByPoint(new THREE.Vector3(m.end.x, m.end.y, m.end.z)); }
+  const pad = opt.wide ? 600 : 1500;
+  const inBox = (q: Vec3) => q.x >= bx.min.x - pad && q.x <= bx.max.x + pad && q.y >= bx.min.y - pad && q.y <= bx.max.y + pad && q.z >= bx.min.z - pad && q.z <= bx.max.z + pad;
+  const context: Member[] = [], ghost: Member[] = [];
+  const fid = new Set(focus.map((m) => m.id));
+  for (const m of d.members) {
+    if (fid.has(m.id) || match(m) || isPartK(m)) continue;
+    const main = m.kind === 'column' || m.kind === 'rafter' || m.kind === 'beam';
+    if (!main && m.kind !== 'purlin' && m.kind !== 'girt') continue;
+    if (opt.wide && !main) continue;
+    const c = cropTo(m, inBox); if (!c) continue;
+    (main ? context : ghost).push(c);
+    if (context.length > 400) break;
+  }
+  const tags: RealTag[] = [];
+  const main = [...focusMain].sort((a, b) => len(sub(b.end, b.start)) - len(sub(a.end, a.start)))[0];
+  if (main && !opt.wide) tags.push({ a: main.start, b: main.end, text: main.profile, hot: true });
+  return { focus, context, ghost, tags, dir: { th: -0.55, ph: opt.wide ? 0.45 : 0.3 }, key: `f|${opt.key}|${opt.wide ? 'W' : ref.id}` };
+}
