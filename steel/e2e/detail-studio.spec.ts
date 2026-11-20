@@ -6,6 +6,7 @@ const openStudio = async (page: import('@playwright/test').Page) => {
   await page.getByTestId('kb-on').check();
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
   await page.getByTestId('ks-sec-conn').click(); // 1.56: חתך ומחברים — קצוות האלכסון
+  await page.getByTestId('ks-sec-conn').click(); await page.getByTestId('cb-lib').click(); // 1.63: פרט מהספרייה / סטודיו — בבלוק המחבר
   await page.getByTestId('studio-start').click();
   await expect(page.getByTestId('detail-studio')).toBeVisible();
 };
@@ -28,7 +29,7 @@ test('DS-01: סטודיו פרטים — פרט מוכן, בדיקות ירוק�
   expect(r.custom).toBe(r.assign);
   expect(r.clash).toBe(0);
   await page.getByTestId('ds-close').click();
-  await expect(page.getByTestId('detail-ends')).toContainText('סנפיר');
+  await expect(page.getByTestId('end-type-start')).toContainText('סנפיר'); // 1.63: הפרט שנבחר — בבלוק המחבר (מהספרייה)
   expect(errors).toEqual([]);
 });
 

@@ -1451,3 +1451,16 @@ span.step-done-b { color: #1f7a45; font-size: 12px; font-weight: 600; }
 .fs-pop .row { display: flex; align-items: center; gap: 6px; } .fs-pop .sp { flex: 1; }
 .fs-geo .fs-svg { max-height: 62vh; }
 .fs-num { display: inline-flex; align-items: center; gap: 4px; } .fs-num .inp { width: 74px; }
+/* 1.63: בלוק מחבר אחד */
+.cb { display: flex; flex-direction: column; gap: var(--wz-s3); margin-top: var(--wz-s2); }
+.cb-card { border: 1px solid var(--wz-line); border-radius: var(--wz-r-m); background: var(--wz-bg); padding: var(--wz-s3); }
+.cb-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: var(--wz-s2); }
+.cb-h b { font-size: var(--wz-fs-m); }
+.cb-body { display: flex; flex-direction: column; gap: 6px; }
+.cb-more { align-self: flex-start; margin-top: 4px; }
+/* 1.63: אריחי סוג קומפקטיים — התוכן (מיקום / גיאומטריה / מחברים) נשאר בגובה העין */
+.ks .wz-types .wz-type > :first-child { max-height: 92px; object-fit: cover; width: 100%; }
+.ks .wz-types .wz-type img.real-pic { height: 92px; object-fit: cover; }
+.ks .wz-types .wz-type svg { max-height: 92px; }
+.ks .wz-types .wz-type { padding: 6px; gap: 2px; }
+.cb .wz-type img.real-pic, .cb .dt-tile img.real-pic { height: 120px; object-fit: cover; }

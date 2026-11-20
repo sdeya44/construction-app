@@ -81,7 +81,7 @@ export function SideEditor({ side, title, items, freeStart, part }: { side: stri
             : <button className="btn small" data-testid={tid('manual')} onClick={() => set({ manualPositions: items.map((m) => m.purlin!.sSlope * (prm.measure === 'horizontal' ? 1 : 1)) })}>עריכה ידנית של המיקומים</button>}
         </div>
         </>}
-        {ed.showConn && part !== 'layout' && <>
+        {ed.showConn && (!part || part === 'cleat') && <>
         <div className="panel-title">תושבות פטה
           <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" checked={prm.cleat.enabled} data-testid={tid('cleat-enabled')} onChange={(e) => store.exec(setCleat(side, { enabled: e.target.checked }))} />פעיל</label>
         </div>

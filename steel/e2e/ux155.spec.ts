@@ -11,23 +11,24 @@ async function gable(page: import('@playwright/test').Page) {
   await page.waitForTimeout(600);
 }
 
-test('CW-01: כלי "קשיחות קירות" בריבון פותח חלון רכיב עם תלת-ממד חי, אריחי סוג עם תמונה מרונדרת ומחברים', async ({ page }) => {
+test('CW-01: כלי "קשיחות קירות" פותח חלון רכיב צף, אריחי סוג עם תמונה מרונדרת ומחברים', async ({ page }) => {
   const errors = await boot(page);
   await gable(page);
   await openNav(page, 'b:walls');
   const win = page.getByTestId('cwin-walls');
   await expect(win).toBeVisible();
   await win.getByTestId('br-walls-portal').click();
-  await win.getByTestId('ks-sec-geo').click(); // 1.56: התלת-ממד החי — בגיאומטריה
-  await expect(win.getByTestId('live3d-canvas')).toBeVisible();
+  await win.getByTestId('ks-sec-geo').click();
+  await expect(win.getByTestId('live3d-canvas')).toHaveCount(0); // 1.63: בלי תלת-ממד באשף — המודל הראשי מציג ומדגיש
+  await expect(win.getByTestId('ks-geo')).toBeVisible();
   // 1.55.1: המודל נשאר במסך מלא — החלון צף מעליו
   const w = await page.evaluate(() => (window as any).__ksp.viewport.panes[0].el.getBoundingClientRect().width);
   expect(w).toBeGreaterThan(1600 * 0.8); // 1.59: סרגל השלבים עם שמות
   // מזעור: החלון הופך לפס, והמודל גלוי; לחיצה נוספת מחזירה
   await win.getByTestId('cwin-min').click();
-  await expect(win.getByTestId('live3d-canvas')).toBeHidden();
+  await expect(win.getByTestId('ks-geo')).toBeHidden();
   await win.getByTestId('cwin-min').click();
-  await expect(win.getByTestId('live3d-canvas')).toBeVisible();
+  await expect(win.getByTestId('ks-geo')).toBeVisible();
   // גרירת הכותרת מזיזה את החלון
   const b0 = (await win.boundingBox())!;
   await page.mouse.move(b0.x + b0.width / 2, b0.y + 20); await page.mouse.down(); await page.mouse.move(b0.x + b0.width / 2 - 200, b0.y + 60, { steps: 5 }); await page.mouse.up();

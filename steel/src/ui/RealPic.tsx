@@ -4,7 +4,7 @@ import { defaultKneeBraces } from '../geometry/knee';
 import { defaultLockTruss } from '../geometry/lockTruss';
 import { defaultPortal } from '../geometry/portal';
 import type { Project } from '../model/types';
-import { kneeSet, renderThumb, wallSet, type RealSet } from '../view/realView';
+import { endCloseup, kneeSet, renderThumb, wallSet, type RealSet } from '../view/realView';
 
 /**
  * 1.55: תמונה ריאליסטית באריח בחירה — מרונדרת מהמודל עצמו בגרסה עם האפשרות של האריח
@@ -66,8 +66,10 @@ export function kneeDetailThumb(p: Project, detail: 'fin' | 'angle' | 'flange'):
       const q: Project = structuredClone(p);
       q.building.kneeBraces = { ...(q.building.kneeBraces ?? defaultKneeBraces()), enabled: true, detail, sides: undefined, exclude: [] };
       const d = generate(q);
-      const s = kneeSet(q, d, {});
-      return s ? { ...s, tags: [] } : null;
+      // 1.63: תקריב של המחבר בעמוד (פלטות, לשונית, ברגים) — בתמונה של כל הצומת הפרט לא נראה
+      const kbm = d.members.find((x) => /^KB\./.test(x.id) && x.kind === 'brace');
+      const s = (kbm ? endCloseup(d, kbm.id, 'low', 300) : null) ?? kneeSet(q, d, {});
+      return s ? { ...s, tags: [], key: `kd|${detail}` } : null;
     },
   };
 }

@@ -158,7 +158,7 @@ const mid = (m: Member) => ({ x: (m.start.x + m.end.x) / 2, y: (m.start.y + m.en
 const sub = (a: Vec3, b: Vec3) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
 const len = (a: Vec3) => Math.hypot(a.x, a.y, a.z);
 /** קיצוץ אלמנט ארוך לקטע שבתוך תיבה (לפי פרמטר לאורכו) */
-function cropTo(m: Member, keep: (p: Vec3) => boolean): Member | null {
+export function cropTo(m: Member, keep: (p: Vec3) => boolean): Member | null {
   const d = sub(m.end, m.start), L = len(d); if (L < 1) return null;
   let a = -1, b = -1; const N = 40;
   for (let i = 0; i <= N; i++) { const t = i / N; const p = { x: m.start.x + d.x * t, y: m.start.y + d.y * t, z: m.start.z + d.z * t }; if (keep(p)) { if (a < 0) a = t; b = t; } }
@@ -322,4 +322,20 @@ export function connSet(d: DerivedModel, connId: string): RealSet | null {
   const pl = own.find((m) => m.kind === 'plate');
   if (pl) tags.push({ a: pl.start, b: pl.end, text: `${pl.profile}${b0 ? ` · ${c.bolts.length}×M${b0.d}` : ''}`, hot: true });
   return { focus: own, context: hosts, tags, dir: { th: -0.6, ph: 0.35 }, key: `c|${connId}` };
+}
+
+/** 1.63: תקריב של קצה אחד של אלמנט: חלקי החיבור ליד הקצה + האלמנט והמארחים חתוכים סביבו (תמונת פרט) */
+export function endCloseup(d: DerivedModel, memberId: string, which: 'low' | 'high' = 'low', r = 380): RealSet | null {
+  const m = d.byId.get(memberId); if (!m) return null;
+  const P = (which === 'low') === (m.start.z <= m.end.z) ? m.start : m.end;
+  const near = (q: Vec3, rr: number) => Math.abs(q.x - P.x) < rr && Math.abs(q.y - P.y) < rr && Math.abs(q.z - P.z) < rr;
+  // האלמנט יכול להיות "חלק" של החיבור (אלכסון) או "מחובר" בו (קורה/עמוד)
+  const cs = d.connections.filter((x) => x.members.includes(memberId) || x.parts.includes(memberId));
+  const all = cs.flatMap((c) => [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`])]).filter((x) => x !== memberId).map((x) => d.byId.get(x)).filter((x): x is Member => !!x);
+  const parts = all.filter((x) => near(mid(x), r));
+  const c = cs.find((x) => x.parts.some((pp) => parts.some((q) => q.id === pp)));
+  const own = cropTo(m, (q) => near(q, r * 1.4));
+  const hosts = (c?.members ?? []).filter((x) => x !== memberId).map((x) => d.byId.get(x)).filter((x): x is Member => !!x).map((x) => cropTo(x, (q) => near(q, r * 1.4))).filter((x): x is Member => !!x);
+  if (!own && !parts.length) return null;
+  return { focus: [...(own ? [own] : []), ...parts], context: hosts, tags: [], dir: { th: -0.3, ph: 0.12 }, key: `ec|${memberId}|${which}` };
 }

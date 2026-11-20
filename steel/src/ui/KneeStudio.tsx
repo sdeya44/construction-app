@@ -6,13 +6,11 @@ import { checkKneePair, kneeKeyOf, measureKnee, solveKnee, type KDim, type KMeas
 import type { KneeSideOverride } from '../model/types';
 import { tryProfile } from '../profiles/library';
 import { store, useStore } from '../store';
-import { familySet, kneeSet, type RealTag } from '../view/realView';
 import { DetailTiles } from './DetailPicker';
 import { BoltSelect, EditCtx, NumField, ProfilePicker } from './fields';
-import { LiveView3D, LockIc } from './LiveView3D';
-import { ConnView } from './wizard/ConnView';
+import { LockIc } from './LiveView3D';
+import { ConnectorBlock } from './wizard/ConnectorBlock';
 import { HaunchEditor, KneePic, KneeSides } from './SectionEditor';
-import { DetailEnds, EndCards } from './PropertiesPanel';
 import { WizardNavigation, WizardScopeSelector, WizardSection, WizardTypeSelector, WizardValidation, wizardClip, wizardCopy } from './wizard/Wizard';
 
 /**
@@ -68,7 +66,6 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
   const hnConns = useMemo(() => d.connections.filter((c) => c.id.startsWith('C.HN.')), [d]);
   const hnN = hnConns.length;
   const hnIds = useMemo(() => hnConns.flatMap((c) => c.parts), [hnConns]);
-  const hn3d = useMemo(() => (type === 'haunch' ? familySet(p, d, (m) => hnIds.includes(m.id), { key: 'hn' }) : null), [type, p, d, hnIds]);
   const setType = (t: 'knee' | 'haunch' | 'none') => store.exec(setBuilding({
     kneeBraces: { ...kb, enabled: t === 'knee' },
     haunch: { ...hp, enabled: t === 'haunch' },
@@ -99,20 +96,6 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
   };
 
   // תמונה ריאלית: הצומת עם 6 מידות (2 קובעות — מנעול סגור)
-  const set3d = useMemo(() => {
-    if (!ref) return null;
-    const s = kneeSet(p, d, { memberId: ref });
-    if (!s || !meas) return s;
-    const m = d.byId.get(ref)!;
-    const P = m.start.z < m.end.z ? m.start : m.end, Q = m.start.z < m.end.z ? m.end : m.start;
-    const inw = Math.sign(Q.x - P.x) || 1;
-    const at = (t: number, du: number, dz: number) => ({ x: P.x + (Q.x - P.x) * t + inw * du, y: P.y, z: P.z + (Q.z - P.z) * t + dz });
-    const pos: Record<KDim, ReturnType<typeof at>> = {
-      v: at(0, -inw * 520 * inw, (meas.v) * 0.45), h: at(1, 0, 420), ang: at(0.12, 380, -60), face: at(0.5, 330, -260), ax: at(0.5, -320, 260), L: at(0.82, 380, -300),
-    };
-    const tags: RealTag[] = ORDER.map((k) => ({ a: P, b: P, at: pos[k], text: `${DIM[k].t} ${fmt(k, meas[k])}${k === 'ang' ? '°' : ''}`, lock: locks.includes(k), onLock: () => toggleLock(k), id: k }));
-    return { ...s, tags, key: `${s.key}|studio` };
-  }, [p, d, ref, meas, locks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const profNow = scope === 'one' && ref ? (p.memberOverrides[ref]?.profile ?? d.byId.get(ref)?.profile ?? kb.profile) : scope === 'loc' ? ov?.profile ?? kb.profile : kb.profile;
   const setProf = (v: string) => {
@@ -182,7 +165,7 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
         <WizardNavigation value={sec} onPick={setSec} subs={{ loc: `${hnN} מכפלים`, geo: `אורך ${hp.length}`, conn: hp.webT ? `גוף ${hp.webT}` : 'כמו הקורה' }} />
         <WizardValidation issues={d.issues.filter((i) => /^(C\.)?HN\./.test(i.elementId ?? ''))} />
         {sec === 'loc' && <WizardSection id="loc"><div className="ks-note">המכפל נבנה בכל צד שבו קורת הגג ממשיכה מעבר לעמוד — {hnN} מקומות במודל.</div></WizardSection>}
-        {sec === 'geo' && <WizardSection id="geo" className="ks-geo"><LiveView3D set={hn3d} rev={d} height={300} /><div className="ks-dims"><EditCtx.Provider value={{ embed: true }}><HaunchEditor part="geo" /></EditCtx.Provider></div></WizardSection>}
+        {sec === 'geo' && <WizardSection id="geo" className="fs-geo"><div className="ks-dims"><EditCtx.Provider value={{ embed: true }}><HaunchEditor part="geo" /></EditCtx.Provider></div></WizardSection>}
         {sec === 'conn' && <WizardSection id="conn"><EditCtx.Provider value={{ embed: true }}><HaunchEditor part="conn" /></EditCtx.Provider><div className="ks-note">פח גוף משולש + פח אגף משופע, מרותכים מתחת לקורת הגג במסגריה — מכלול אחד עם הקורה. ללא בדיקת חוזק.</div></WizardSection>}
       </>}
 
@@ -200,8 +183,7 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
           <KneeSides />
         </WizardSection>}
 
-        {sec === 'geo' && <WizardSection id="geo" className="ks-geo">
-          <LiveView3D set={set3d} rev={d} height={330} />
+        {sec === 'geo' && <WizardSection id="geo" className="fs-geo">
           <div className="ks-dims">
             <div className="ks-note">שתי מידות קובעות (מנעול סגור) — השאר נגזרות. לחיצה על מנעול בוחרת מידה קובעת; הקלדת ערך במידה פתוחה הופכת אותה לקובעת.</div>
             {ORDER.map((k) => (
@@ -221,12 +203,9 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
 
         {sec === 'conn' && <WizardSection id="conn">
           <div className="field prof"><label>חתך האלכסון</label><ProfilePicker testId={scope === 'one' ? 'prop-profile' : 'kb-profile'} value={profNow} families={['RHS', 'SHS', 'CHS', 'L', 'UPN']} onCommit={setProf} /></div>
-          <div className="ks-ends" role="tablist" aria-label="מחברים">
-            {([['C', 'מחבר 1 — לעמוד', 'קצה תחתון, לאגף העמוד'], ['R', 'מחבר 2 — לקורה', 'קצה עליון, לתחתית הקורה']] as const).map(([k, t, sub]) => (
-              <button key={k} role="tab" aria-selected={end === k} className={`ks-end${end === k ? ' on' : ''}`} onClick={() => setEnd(k)} data-testid={`ks-end-${k}`}><b>{t}</b><small>{sub}</small></button>
-            ))}
-          </div>
-          <div className="ks-endbody">
+          <ConnectorBlock value={end} onPick={(k) => setEnd(k as 'C' | 'R')}
+            tabs={[{ key: 'C', title: 'מחבר 1 — לעמוד', sub: 'קצה תחתון, לאגף העמוד', testId: 'ks-end-C' }, { key: 'R', title: 'מחבר 2 — לקורה', sub: 'קצה עליון, לתחתית הקורה', testId: 'ks-end-R' }]}
+            built={<>
             <DetailTiles label="פרט החיבור" testId="kb-detail" value={detNow} onChange={setDet} options={[
               { key: 'fin', title: 'פח + לשונית', desc: 'פח מרותך למארח, לשונית בחריץ ה-RHS; מוברג בשטח', pic: <KneePic k="fin" />, hidden: fam === 'L' },
               { key: 'angle', title: 'זוויתן מוברג', desc: 'פח מרותך למארח; רגל הזוויתן מוברגת לפח', pic: <KneePic k="angle" />, hidden: fam !== 'L' },
@@ -240,13 +219,10 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
             <div className="field"><label>עובי פלטות</label><NumField testId="kb-t" value={kb.plateT} suffix='מ"מ' onCommit={(v) => store.exec(setKneeBraces({ plateT: Math.max(6, v) }))} /></div>
             <div className="field"><label>קוטר בורג</label><BoltSelect d={kb.bolt.d} onChange={(dd) => store.exec(setKneeBraces({ bolt: { ...kb.bolt, d: dd } }))} /></div>
             <div className="hint">ברגים, עובי וקוטר — לכל האלכסונים (שני הקצוות). שינוי למחבר בודד: באשף או בסטודיו.</div>
-            {ref && d.byId.get(ref) && <div className="ks-elend"><div className="ks-note">קצוות האלכסון שנבחר — פרט מוכן לכל קצה, או פרט חדש בסטודיו:</div><EndCards m={d.byId.get(ref)!} /><DetailEnds m={d.byId.get(ref)!} /></div>}
-            <div className="ks-acts">
-              <button className="btn" disabled={!conn} onClick={() => conn && store.set({ connWizard: conn.id })} data-testid="ks-wizard">אשף המחברים</button>
-              <button className="btn" disabled={!ref} onClick={() => ref && store.set({ detailStudio: `${ref}|${end === 'C' ? 'start' : 'end'}`, studioConn: conn?.id ?? null })} data-testid="ks-studio">סטודיו ✎ — {end === 'C' ? 'הקצה לעמוד' : 'הקצה לקורה'}</button>
-            </div>
-            <ConnView connId={conn?.id} />
-          </div>
+            </>}
+            site={ref && d.byId.get(ref) ? { memberId: ref, end: end === 'C' ? 'start' : 'end' } : null}
+            connId={conn?.id} wizardConnId={conn?.id}
+            onStudio={ref ? () => store.set({ detailStudio: `${ref}|${end === 'C' ? 'start' : 'end'}`, studioConn: conn?.id ?? null }) : undefined} />
         </WizardSection>}
       </>}
     </div>

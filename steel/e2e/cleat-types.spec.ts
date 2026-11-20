@@ -55,6 +55,7 @@ test('ET-01: קצה אלמנט — בחירת פרט מוכן בכרטיס, וש
   await page.getByTestId('kb-on').check();
   await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
   await page.getByTestId('ks-sec-conn').click();
+  await page.getByTestId('cb-lib').click(); // 1.63: מהספרייה / פרט מוכן — בבלוק המחבר
   await page.getByTestId('et-start-open').click();
   await page.getByTestId('et-start-all').check();
   await page.getByTestId('et-start-preset-preset-fin').click();

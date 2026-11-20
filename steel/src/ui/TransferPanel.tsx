@@ -196,7 +196,8 @@ function tbTabs(t: TransferDef, onChange: (patch: Partial<TransferDef>) => void,
   ];
 }
 
-export function TransferPanel() {
+/** onPick (1.63, באשף): בחירת קבוצה/קורה לעריכה בקבוצות האשף (גיאומטריה / חתך ומחברים) — במקום עורך הלשוניות כאן */
+export function TransferPanel({ onPick, picked }: { onPick?: (ids: string[]) => void; picked?: string[] } = {}) {
   const p = useStore((s) => s.project), d = useStore((s) => s.derived);
   const lab = useLineLabel();
   const list = p.building.transfers ?? [];
@@ -245,12 +246,12 @@ export function TransferPanel() {
           const title = `ציר ${lab(t.lineId)} · ${g.items.length} ${g.items.length === 1 ? 'קורה' : 'קורות'} · מפתח ${fmtSpan(g.items)}`;
           return <SumCard key={g.key} testId={`tb-grp-${gi}`} hi={!minor && groups.length > 1} title={title} badge={minor ? { text: 'חריג', tone: 'warn' } : undefined}
             sub={<>{t.kind === 'truss' ? 'מסבך' : <span className="mono">{t.profile}</span>} · תמיכה {t.support} · קורת גג {t.seat}{t.knee?.enabled ? <> · אלכסוני Y <span className="mono">{t.knee.profile}</span></> : ''}</>}
-            pills={pills} editLabel={g.items.length > 1 ? 'ערוך את כולן' : 'ערוך'} onEdit={() => setEdit({ ids: g.items.map((x) => x.id), title: `ציר ${lab(t.lineId)} · ${g.items.length} ${g.items.length === 1 ? 'קורה' : 'קורות'}` })} />;
+            pills={pills} editLabel={g.items.length > 1 ? 'ערוך את כולן' : 'ערוך'} onEdit={() => (onPick ? onPick(g.items.map((x) => x.id)) : setEdit({ ids: g.items.map((x) => x.id), title: `ציר ${lab(t.lineId)} · ${g.items.length} ${g.items.length === 1 ? 'קורה' : 'קורות'}` }))} />;
         })}
         <div className="sum-group">פירוט — לחיצה על שורה עורכת קורה אחת</div>
         <Collapsed testId="tb-list" items={list} first={3} render={(t) => {
           const u = util.get(t.id);
-          return <div key={t.id} className="sum-row" data-testid={`tb-row-${t.id}`} onClick={() => setEdit({ ids: [t.id], title: `ציר ${lab(t.lineId)} · ${frameNo(t.from)}↔${frameNo(t.to)}` })}>
+          return <div key={t.id} className={`sum-row${picked?.length === 1 && picked[0] === t.id ? ' on' : ''}`} data-testid={`tb-row-${t.id}`} onClick={() => (onPick ? onPick([t.id]) : setEdit({ ids: [t.id], title: `ציר ${lab(t.lineId)} · ${frameNo(t.from)}↔${frameNo(t.to)}` }))}>
             <span>{lab(t.lineId)} {frameNo(t.from)}↔{frameNo(t.to)} <span className="k">({t.removed.length} עמוד{t.removed.length > 1 ? 'ים' : ''} מבוטל{t.removed.length > 1 ? 'ים' : ''})</span></span>
             <span className="k">{spanOf(t).toFixed(2)} מ'{u ? ` · ${u.util.toFixed(2)}` : ''}</span>
             <button className="link-btn" data-testid={`tb-restore-${t.id}`} onClick={(e) => { e.stopPropagation(); set(list.filter((x) => x.id !== t.id)); }}>החזר עמודים</button>

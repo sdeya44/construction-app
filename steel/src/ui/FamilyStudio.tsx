@@ -8,23 +8,21 @@ import { defaultWing } from '../geometry/wing';
 import { purlinParams } from '../geometry/purlins';
 import type { DerivedModel, Member, Project, ValidationIssue } from '../model/types';
 import { store, useStore } from '../store';
-import { familySet } from '../view/realView';
 import { ComponentTable } from './ComponentTable';
 import { openConnStudio } from './ComponentWindow';
 import { CladdingPanel } from './CladdingPanel';
 import { NumField, ProfilePicker } from './fields';
-import { LiveView3D } from './LiveView3D';
-import { DetailEnds, EndCards } from './PropertiesPanel';
 import { PlaneStart, RoofPanel, SideEditor } from './RoofPanel';
 import { RidgeSchematic } from './schematics';
 import { PurlinExtras, RafterStrutsEditor, RoofXConn, RoofXGrid, RoofXSplit, StructurePanel } from './StructurePanel';
 import type { NavKey } from './SideNav';
-import { RoofTrussPanel, TransferPanel, TransferShape } from './TransferPanel';
+import { RoofTrussPanel, TransferPanel, TransferRow } from './TransferPanel';
+import { setTransfers } from '../commands/commands';
 import { WingPanel } from './WingPanel';
 import { LSvg } from './Dialogs';
 import { FrameSectionDims } from './FrameSection';
 import { SecHeightsCtx, SectionEditor, TemplateBar } from './SectionEditor';
-import { ConnView } from './wizard/ConnView';
+import { ConnectorBlock, endOfConn } from './wizard/ConnectorBlock';
 import { WizardNavigation, WizardScopeSelector, WizardSection, WizardTypeSelector, WizardValidation, wizardClip, wizardCopy, type WzSec, type WzType } from './wizard/Wizard';
 
 /**
@@ -58,7 +56,13 @@ interface FamDef {
   off?: (c: Ctx) => ReactNode;
   /** היקפים מיוחדים (ברירת מחדל: האלמנט שנבחר / כל המודל) */
   scopes?: (c: Ctx) => { key: string; title: string; ids: string[]; disabled?: string }[];
-  loc: (c: Ctx) => ReactNode; geo: (c: Ctx) => ReactNode; conn: (c: Ctx) => ReactNode;
+  loc: (c: Ctx) => ReactNode; geo: (c: Ctx) => ReactNode;
+  /** 1.63: חתכים (פרופילים) — בראש "חתך ומחברים" */
+  prof?: (c: Ctx) => ReactNode;
+  /** פרט החיבור (פרמטרים) — בתוך בלוק המחבר */
+  conn: (c: Ctx) => ReactNode;
+  /** מחברים מוגדרים במפורש (במקום קיבוץ אוטומטי): לכל מחבר הפרט שלו */
+  connTabs?: (c: Ctx) => { key: string; title: string; sub?: string; body: ReactNode; connId?: string; single?: boolean }[];
   subs?: (c: Ctx) => Partial<Record<WzSec, string>>;
   codes?: string[];
   copy?: { get: (c: Ctx) => unknown; put: (c: Ctx, v: unknown) => void; label?: (c: Ctx) => string };
@@ -99,10 +103,8 @@ export const FAMILIES: Record<FamKey, FamDef> = {
       {r.endDetail === 'rod' && <div className="field"><label>מפתחים סמוכים — מוטות זה מעל זה</label><NumField testId="br-adjgap" value={r.adjGap ?? 40} suffix='מ"מ' onCommit={(v) => sr({ adjGap: Math.max(0, v) })} /></div>}
       <div className="field"><label>מרחק מפני עמוד שממשיך מעל הגג</label><NumField testId="br-colclear" value={r.colClear ?? 150} suffix='מ"מ' onCommit={(v) => sr({ colClear: Math.max(0, v) })} /></div>
     </>; },
-    conn: ({ p }) => { const r = p.building.bracing.roof; return <>
-      {(r.type ?? 'x') === 'x' && <div className="field prof"><label>חתך הקושרת</label><ProfilePicker testId="br-roof-prof" value={r.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => setBr({ roof: { ...b0().bracing.roof, profile: v } })} /></div>}
-      <RoofXConn />
-    </>; },
+    prof: ({ p }) => { const r = p.building.bracing.roof; return (r.type ?? 'x') === 'x' ? <div className="field prof"><label>חתך הקושרת</label><ProfilePicker testId="br-roof-prof" value={r.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => setBr({ roof: { ...b0().bracing.roof, profile: v } })} /></div> : null; },
+    conn: () => <RoofXConn />,
     subs: ({ p, d }) => ({ loc: `${Math.round(d.members.filter((m) => /^BR\.R/.test(m.id)).length / 2)} אלכסונים`, geo: `${p.building.bracing.rafterStruts?.rows.length ?? 0} שורות תמוכה`, conn: (p.building.bracing.roof.type ?? 'x') === 'x' ? p.building.bracing.roof.profile : 'RHS' }),
     copy: { get: ({ p }) => p.building.bracing.roof, put: (_c, v) => setBr({ roof: v as Project['building']['bracing']['roof'] }) },
   },
@@ -133,8 +135,8 @@ export const FAMILIES: Record<FamKey, FamDef> = {
     off: ({ sub }) => <div className="ks-empty">{sub === 'ties' ? 'זוויתן באמצע כל מפתח, צמוד לאגף התחתון של הפטות — מונע את הפיתול שלהן.' : sub === 'sag' ? 'מוט הברגה דרך ווב הפטות לאורך השיפוע — מקטין את מפתח הפטה בכיוון החלש.' : 'זוויתן ב-45° מהפטה אל תחתית קורת הגג — מייצב את האגף התחתון ברוח.'} סמנו "פעיל" כדי להוסיף.</div>,
     loc: ({ sub }) => <Note>{sub === 'ties' ? 'שורה באמצע כל מפתח, בכל השיפועים.' : sub === 'sag' ? 'מספר השורות בכל מפתח נקבע בגיאומטריה.' : 'תדירות (כל פטה / כל פטה שנייה…) נקבעת בגיאומטריה.'}</Note>,
     geo: ({ sub }) => (sub === 'ties' ? <Note>שורת הקשירה צמודה לאגף התחתון של הפטות, באמצע המפתח — אין מידות נוספות.</Note> : <PurlinExtras which={sub as 'sag' | 'fly'} />),
-    conn: ({ p, sub }) => (sub === 'ties' ? <div className="field prof"><label>חתך שורת הקשירה</label><ProfilePicker testId="br-ties-prof" value={p.building.bracing.purlinTies.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => setBr({ purlinTies: { ...b0().bracing.purlinTies, profile: v } })} /></div>
-      : <Note>{sub === 'sag' ? 'קוטר המוט — בגיאומטריה. אומים בשני צידי הווב.' : 'החתך והבורג — בגיאומטריה.'}</Note>),
+    prof: ({ p, sub }) => (sub === 'ties' ? <div className="field prof"><label>חתך שורת הקשירה</label><ProfilePicker testId="br-ties-prof" value={p.building.bracing.purlinTies.profile} families={['L', 'RHS', 'SHS', 'CHS']} onCommit={(v) => setBr({ purlinTies: { ...b0().bracing.purlinTies, profile: v } })} /></div> : null),
+    conn: ({ sub }) => <Note>{sub === 'ties' ? 'שורת הקשירה מוברגת לאגף התחתון של כל פטה.' : sub === 'sag' ? 'מוט הברגה דרך ווב הפטות, אומים בשני הצדדים; הקוטר — בגיאומטריה.' : 'זוויתן מוברג לפטה ולפח מתחת לקורה; החתך והבורג — בגיאומטריה.'}</Note>,
     subs: ({ p, sub }) => ({ conn: sub === 'ties' ? p.building.bracing.purlinTies.profile : sub === 'sag' ? `Ø${p.building.bracing.sagRods?.d ?? ''}` : p.building.bracing.flyBraces?.profile ?? '' }),
   },
 
@@ -152,20 +154,27 @@ export const FAMILIES: Record<FamKey, FamDef> = {
     off: ({ d }) => <div className="ks-empty">{d.connections.some((c) => c.type === 'ridge') ? 'בחרו שיטה כדי לחזק את חיבורי הרכס.' : 'אין רכס במודל (גג חד־שיפועי או רכס מעל עמוד) — אין מה לחזק.'}</div>,
     loc: ({ d }) => <><Note>החיזוק נבנה בכל חיבורי הרכס — {d.connections.filter((c) => c.type === 'ridge' && /^C\.RIDGE/.test(c.id)).length} מסגרות.</Note></>,
     geo: ({ p }) => { const rr = p.building.ridgeReinf ?? defaultRidgeReinf(); return <><RidgeSchematic />{rr.type === 'tie' && <div className="field"><label>מרווח מתחת לקורות ברכס</label><NumField testId="rr-gap" value={rr.tieGap} suffix='מ"מ' onCommit={(v) => store.exec(setBuilding({ ridgeReinf: { ...rr, tieGap: v } }))} /></div>}</>; },
-    conn: ({ p }) => { const rr = p.building.ridgeReinf ?? defaultRidgeReinf(); return rr.type === 'tie'
-      ? <div className="field prof"><label>חתך הפרופיל</label><ProfilePicker testId="rr-tie" value={rr.tieProfile} families={['IPE', 'UPN', 'HEA', 'RHS']} onCommit={(v) => store.exec(setBuilding({ ridgeReinf: { ...rr, tieProfile: v } }))} /></div>
-      : <Note>פלטות הקצה ברכס מוגבהות ונוספת שורת ברגים; פלטה משולשת מרותכת מתחת לכל קורה. המידות — על השרטוט בגיאומטריה.</Note>; },
+    prof: ({ p }) => { const rr = p.building.ridgeReinf ?? defaultRidgeReinf(); return rr.type === 'tie' ? <div className="field prof"><label>חתך הפרופיל</label><ProfilePicker testId="rr-tie" value={rr.tieProfile} families={['IPE', 'UPN', 'HEA', 'RHS']} onCommit={(v) => store.exec(setBuilding({ ridgeReinf: { ...rr, tieProfile: v } }))} /></div> : null; },
+    conn: ({ p }) => <Note>{p.building.ridgeReinf?.type === 'tie' ? 'הפרופיל מוברג לפחים מרותכים לתחתית הקורות.' : 'פלטות הקצה ברכס מוגבהות ונוספת שורת ברגים; פלטה משולשת מרותכת מתחת לכל קורה. המידות — על השרטוט בגיאומטריה.'}</Note>,
     subs: ({ p }) => ({ geo: p.building.ridgeReinf?.type === 'tie' ? 'פרופיל אופקי' : 'פלטה מוגבהת', conn: p.building.ridgeReinf?.type === 'tie' ? p.building.ridgeReinf.tieProfile : '' }),
   },
 
   // ---------------- פטות ותושבות ----------------
   purlins: {
     title: 'פטות ותושבות', crumb: 'גג ופטות', pic: 'slope', tint: 'mustard', re: /^(C\.)?(PL\.|CL\.|C\.PS\.|C\.PC\.)/, kinds: ['purlin'], nav: ['r:left', 'r:right', 'r:splices'], table: /^(PL\.|CL\.)/,
-    init: (nav, p) => ({ scope: nav === 'r:right' ? (p.building.section ? undefined : 'R') : undefined, sec: nav === 'r:splices' ? 'conn' : 'geo' }),
+    init: (nav, p) => ({ scope: nav === 'r:right' ? (p.building.section ? undefined : 'R') : undefined, sec: nav === 'r:splices' ? 'conn' : 'geo', sub: nav === 'r:splices' ? 'splice' : undefined }),
     scopes: ({ p, d }) => sides(p, d).map((s) => ({ key: s.key, title: s.title, ids: s.items.map((m) => m.id) })),
     loc: ({ p, d, scope }) => { const s = sides(p, d).find((x) => x.key === scope) ?? sides(p, d)[0]; return s ? <><Note>מיקומי הפטות לאורך השיפוע — פריסה אוטומטית או ידנית.</Note><SideEditor side={s.side} title={s.title} freeStart={s.free} items={s.items} part="positions" /></> : null; },
     geo: ({ p, d, scope }) => { const s = sides(p, d).find((x) => x.key === scope) ?? sides(p, d)[0]; return s ? <>{s.planeId && <PlaneStart planeId={s.planeId} />}<SideEditor side={s.side} title={s.title} freeStart={s.free} items={s.items} part="layout" /><details className="ks-more"><summary>חומר וצד התחלה — כל הגג</summary><RoofPanel section="system" /></details></> : null; },
-    conn: ({ p, d, scope }) => { const s = sides(p, d).find((x) => x.key === scope) ?? sides(p, d)[0]; return s ? <><SideEditor side={s.side} title={s.title} freeStart={s.free} items={s.items} part="cleat" /><div className="wz-sub">חיבורי המשך פטות — כל הגג</div><RoofPanel section="splices" /></> : null; },
+    conn: () => null,
+    connTabs: ({ p, d, scope }) => { const s = sides(p, d).find((x) => x.key === scope) ?? sides(p, d)[0]; if (!s) return [];
+      const ids = new Set(s.items.map((m) => m.id));
+      const pc = d.connections.find((c) => c.type === 'purlin-cleat' && c.members.some((x) => ids.has(x)));
+      const ps = d.connections.find((c) => c.type === 'purlin-splice' && c.members.some((x) => ids.has(x)));
+      return [
+        { key: 'cleat', title: 'מחבר 1 — תושבת פטה', sub: s.title, body: <SideEditor side={s.side} title={s.title} freeStart={s.free} items={s.items} part="cleat" />, connId: pc?.id, single: true },
+        { key: 'splice', title: 'מחבר 2 — חיבור המשך', sub: 'כל הגג', body: <RoofPanel section="splices" />, connId: ps?.id, single: true },
+      ]; },
     subs: ({ p, d, scope }) => { const s = sides(p, d).find((x) => x.key === scope) ?? sides(p, d)[0]; const prm = s ? purlinParams(p.building.purlins, s.side) : null; return { loc: `${s?.items.length ?? 0} פטות`, geo: prm ? `מרווח ${prm.spacing}` : '', conn: prm ? prm.profile : '' }; },
     copy: {
       get: ({ p, d, scope }) => { const s = sides(p, d).find((x) => x.key === scope) ?? sides(p, d)[0]; return s ? purlinParams(p.building.purlins, s.side) : null; },
@@ -191,9 +200,10 @@ export const FAMILIES: Record<FamKey, FamDef> = {
   // ---------------- דילול עמודים — קורות נושאות ----------------
   tb: {
     title: 'דילול עמודים — קורות נושאות', crumb: 'רכיבים מיוחדים', pic: 'frames', tint: 'mustard', re: /^(C\.)?(TB\.|KT\.|C\.TB|C\.KT)/, nav: ['b:tb'], table: /^(TB\.|KT\.)/,
-    loc: () => <><Note>הקורות הנושאות לפי ציר וקבוצה — "ערוך" פותח את כל הפרטים של הקבוצה. לביטול עמודים: בחירה במודל ← "בטל עמודים".</Note><TransferPanel /></>,
-    geo: ({ sel, p }) => { const id = sel ? (/^(?:TB|KT)\.([^.]+)/.exec(sel.id)?.[1]) : undefined; const t = id ? (p.building.transfers ?? []).find((x) => x.id === id || sel!.id.includes(x.id)) : undefined; return t ? <TransferShape id={t.id} /> : <Note>בחרו קורה נושאת במודל כדי לערוך אותה כאן, או "ערוך" בקבוצה (מיקום במבנה).</Note>; },
-    conn: () => <Note>התמיכה בעמוד, מושב קורת הגג ואלכסוני Y — בעורך הקבוצה (מיקום במבנה) ובחיבורים שלמטה.</Note>,
+    // 1.63: מיקום = הרשימה והקבוצות (בחירה בלבד); גיאומטריה = הקורה ואלכסוני Y; חתך ומחברים = תמיכה בעמוד ומושב קורת הגג
+    loc: ({ sub, setSub }) => <><Note>בחרו קבוצה ("ערוך") או קורה בשורה — העריכה בקבוצות 2 ו-3. לביטול עמודים: בחירה במודל ← "בטל עמודים".</Note><TransferPanel onPick={(ids) => setSub(ids.join(','))} picked={sub ? sub.split(',') : []} /></>,
+    geo: (c) => <TbParts c={c} parts={['beam', 'knee', 'adv']} />,
+    conn: (c) => <TbParts c={c} parts={['support', 'seat']} />,
     subs: ({ p }) => ({ loc: `${p.building.transfers?.length ?? 0} קורות` }),
   },
 
@@ -236,10 +246,36 @@ export const FAMILIES: Record<FamKey, FamDef> = {
       <details className="ks-more" data-testid="fs-adv"><summary>מתקדם — מישורי גג (טבלה), קונזולות</summary>
         <SecHeightsCtx.Provider value={false}><SectionEditor part="planes" /></SecHeightsCtx.Provider></details>
     </>,
-    conn: () => <StructurePanel section="profiles" />,
+    prof: () => <StructurePanel section="profiles" />,
+    conn: () => null,
+    // 1.63: המחברים של המסגרת — ראש עמוד, רכס, פלטת בסיס (חיבור טיפוסי אחד לכל סוג)
+    connTabs: ({ d }) => (([['eave', 'ראש עמוד (עמוד-קורה)'], ['ridge', 'רכס'], ['base', 'פלטת בסיס']] as const).map(([t, title], i) => {
+      const cs = d.connections.filter((c) => c.type === t && /^C\.(EAVE|RIDGE|BASE)\./.test(c.id));
+      const c0 = cs[0];
+      return c0 ? { key: t, title: `מחבר ${i + 1} — ${title}`, sub: `${cs.length} חיבורים`, connId: c0.id, single: true,
+        body: <><Note>פלטות, ברגים וריתוכים — בעורך החיבור (חל על כל החיבורים הזהים; חריג לחיבור בודד — מהמודל).</Note>
+          <button className="btn" onClick={() => store.set({ activeConn: c0.id, selection: c0.parts.filter((x) => d.byId.has(x)).concat(c0.members).slice(0, 80) })} data-testid={`frame-conn-${t}`}>פתיחת עורך החיבור ←</button></> } : null;
+    }).filter((x): x is NonNullable<typeof x> => !!x)),
     subs: ({ p, d }) => ({ loc: `${p.building.frames.length} מסגרות`, geo: `${(p.building.section?.lines ?? d.section?.lines ?? []).length} צירים`, conn: `${p.building.columnProfile} · ${p.building.rafterProfile}` }),
   },
 };
+
+/** עריכת הקורות הנושאות שנבחרו (ברשימה או במודל) — חלקים מתוך עורך הקורה */
+function TbParts({ c, parts }: { c: Ctx; parts: ('beam' | 'support' | 'seat' | 'knee' | 'adv')[] }) {
+  const list = c.p.building.transfers ?? [];
+  const fromSel = c.sel ? list.find((t) => c.sel!.id.includes(t.id))?.id : undefined;
+  const ids = c.sub ? c.sub.split(',') : fromSel ? [fromSel] : list[0] ? [list[0].id] : [];
+  const items = list.filter((t) => ids.includes(t.id));
+  if (!items.length) return <Note>אין קורות נושאות. לביטול עמודים: בחירה במודל ← "בטל עמודים".</Note>;
+  const set = (patch: Partial<(typeof list)[number]>) => store.exec(setTransfers(list.map((x) => (ids.includes(x.id) ? { ...x, ...patch } : x))));
+  return <>
+    <div className="ks-note" data-testid="tb-editing">{items.length > 1 ? `עריכה: ${items.length} קורות בקבוצה` : 'עריכה: קורה אחת'} — {c.sub ? 'נבחר ברשימה' : 'הראשונה ברשימה (בחירה: מיקום במבנה)'}</div>
+    {parts.map((pt) => { const t0 = items[0], sameLine = list.filter((x) => x.lineId === t0.lineId);
+      // "החל על כל הקורות בציר" — כמו בעורך הקבוצה
+      const onApplyLine = items.length < sameLine.length ? () => store.exec(setTransfers(list.map((x) => (x.lineId === t0.lineId && !ids.includes(x.id) ? { ...x, profile: t0.profile, kind: t0.kind, support: t0.support, seat: t0.seat, knee: t0.knee ? { ...t0.knee } : undefined, truss: t0.truss, trussFit: t0.trussFit, trussConn: t0.trussConn, finOrient: t0.finOrient } : x)))) : undefined;
+      return <TransferRow key={pt} t={t0} part={pt} onChange={set} lineCount={sameLine.length} onApplyLine={onApplyLine} />; })}
+  </>;
+}
 
 export const famOfNav = (k: NavKey): FamKey | null => (Object.keys(FAMILIES) as FamKey[]).find((f) => FAMILIES[f].nav.includes(k)) ?? null;
 /** לחיצה על אלמנט במודל — אילו משפחות נפתחות ישר באשף (השאר: כרטיס האלמנט) */
@@ -264,9 +300,9 @@ export function FamilyStudio({ fam, nav, memberId }: { fam: FamKey; nav: NavKey;
   const custom = F.scopes?.({ p, d, sub, setSub, scope: '', sel });
   const [scope, setScope] = useState<string>(init.scope ?? (custom ? custom[0]?.key ?? 'all' : sel ? 'one' : 'all'));
   const [sec, setSec] = useState<WzSec>(init.sec ?? 'loc');
-  const [wide, setWide] = useState(false);
+
   // כניסה חוזרת מהעץ/הריבון לאותה משפחה (למשל שיפוע שמאל → ימין) — הסוג, ההיקף והקבוצה מתעדכנים
-  useEffect(() => { const i = F.init?.(nav, store.state.project) ?? {}; if (i.sub) setSub(i.sub); if (i.scope) setScope(i.scope); if (i.sec) setSec(i.sec); }, [nav]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const i = F.init?.(nav, store.state.project) ?? {}; if (i.sub) { if (F.connTabs) setConnTab(i.sub); else setSub(i.sub); } if (i.scope) setScope(i.scope); if (i.sec) setSec(i.sec); }, [nav]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (sel && !custom) setScope('one'); }, [sel?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const activeConn = useStore((s) => s.activeConn);
   useEffect(() => { if (memberId && activeConn && F.re.test(activeConn)) setSec('conn'); }, [activeConn, F.re]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -288,7 +324,6 @@ export function FamilyStudio({ fam, nav, memberId }: { fam: FamKey; nav: NavKey;
   useEffect(() => { store.set({ scopeHi: enabled && scopeIds.length ? scopeIds : null }); }, [scopeIds, enabled]);
   useEffect(() => () => { store.set({ scopeHi: null }); }, []);
 
-  const set3d = useMemo(() => familySet(p, d, match, { memberId: sel?.id ?? (custom ? cur?.ids[0] : undefined), wide: wide || fam === 'frame', key: `${fam}|${scope}|${sub}` }), [p, d, match, sel?.id, wide, fam, scope, sub, cur?.ids[0]]); // eslint-disable-line react-hooks/exhaustive-deps
   const conns = useMemo(() => d.connections.filter((c) => F.re.test(c.id) || c.members.some((x) => { const m = d.byId.get(x); return !!m && match(m) && !isPart(m); })).filter((c) => !cur || scope === 'all' || !custom && scope === 'one' ? (scope !== 'one' || c.members.includes(sel?.id ?? '')) : c.members.some((x) => cur.ids.includes(x))), [d, F.re, match, scope, sel?.id, cur?.ids.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const groups = useMemo(() => {
     const g = new Map<string, typeof conns>();
@@ -296,6 +331,7 @@ export function FamilyStudio({ fam, nav, memberId }: { fam: FamKey; nav: NavKey;
     return [...g.entries()].slice(0, 8);
   }, [conns]);
   const [cg, setCg] = useState(0);
+  const [connTab, setConnTab] = useState(F.connTabs ? init.sub ?? '' : '');
   const issues = useMemo<ValidationIssue[]>(() => d.issues.filter((i) => F.re.test(i.elementId ?? '') || (F.codes ?? []).includes(i.code)), [d, F]);
   const clip = F.copy ? wizardClip<unknown>(fam) : undefined;
   const subs = { loc: `${own.filter((m) => !isPart(m)).length} אלמנטים`, ...(F.subs?.(ctx) ?? {}) };
@@ -318,30 +354,23 @@ export function FamilyStudio({ fam, nav, memberId }: { fam: FamKey; nav: NavKey;
           {F.table && <details className="ks-more"><summary>טבלת מופעים</summary><ComponentTable match={F.table} testId={`ctab-${fam}`} /></details>}
         </WizardSection>}
 
-        {sec === 'geo' && <WizardSection id="geo" className={fam === 'frame' ? 'fs-geo' : 'ks-geo'}>
-          {fam !== 'frame' && <LiveView3D set={set3d} rev={d} height={300} modes={<div className="seg-mini"><button className={wide ? '' : 'on'} onClick={() => setWide(false)} data-testid="live3d-near">קרוב</button><button className={wide ? 'on' : ''} onClick={() => setWide(true)} data-testid="live3d-far">כל הרכיב</button></div>} />}
-          {fam === 'frame' ? F.geo(ctx) : <div className="ks-dims">{F.geo(ctx)}</div>}
+        {sec === 'geo' && <WizardSection id="geo" className="fs-geo">
+          {F.geo(ctx)}
         </WizardSection>}
 
         {sec === 'conn' && <WizardSection id="conn">
-          {scope === 'one' && sel && !custom && <div className="ks-elend">
-            <div className="field prof"><label>חתך האלמנט שנבחר</label><ProfilePicker testId="prop-profile" value={p.memberOverrides[sel.id]?.profile ?? sel.profile} families={['L', 'RHS', 'SHS', 'CHS', 'UPN', 'IPE', 'HEA', 'C', 'Z']} onCommit={(v) => store.exec(setMemberProps([sel.id], { profile: v }))} /></div>
-            <div className="ks-note">קצוות האלמנט — פרט מוכן לכל קצה, או פרט חדש בסטודיו:</div><EndCards m={sel} /><DetailEnds m={sel} />
-          </div>}
-          {F.conn(ctx)}
-          {groups.length > 0 && <>
-            <div className="wz-sub">מחברים ברכיב</div>
-            <div className="ks-ends" role="tablist" aria-label="מחברים">
-              {groups.map(([label, cs], i) => (
-                <button key={label} role="tab" aria-selected={cg === i} className={`ks-end${cg === i ? ' on' : ''}`} onClick={() => setCg(i)} data-testid={`ks-cg-${i}`}><b>מחבר {i + 1} — {label}</b><small>{cs.length} חיבורים</small></button>
-              ))}
-            </div>
-            {groups[Math.min(cg, groups.length - 1)] && <div className="ks-acts">
-              <button className="btn" onClick={() => store.set({ connWizard: groups[Math.min(cg, groups.length - 1)][1][0].id })} data-testid="ks-wizard">אשף המחברים</button>
-              <button className="btn" onClick={() => openConnStudio(groups[Math.min(cg, groups.length - 1)][1][0], d)} data-testid="ks-studio">סטודיו ✎</button>
-            </div>}
-            {groups[Math.min(cg, groups.length - 1)] && <ConnView connId={groups[Math.min(cg, groups.length - 1)][1][0].id} />}
-          </>}
+          {/* 1.63: חתך — למעלה; פרט החיבור — במקום אחד (ConnectorBlock) */}
+          {scope === 'one' && sel && !custom && <div className="field prof"><label>חתך האלמנט שנבחר</label><ProfilePicker testId="prop-profile" value={p.memberOverrides[sel.id]?.profile ?? sel.profile} families={['L', 'RHS', 'SHS', 'CHS', 'UPN', 'IPE', 'HEA', 'C', 'Z']} onCommit={(v) => store.exec(setMemberProps([sel.id], { profile: v }))} /></div>}
+          {F.prof?.(ctx)}
+          {F.connTabs ? (() => { const tl = F.connTabs(ctx); const t = tl.find((x) => x.key === connTab) ?? tl[0]; return t ? (
+            <ConnectorBlock value={t.key} onPick={setConnTab} single={t.single} tabs={tl.map((x, i) => ({ key: x.key, title: x.title, sub: x.sub, testId: `ks-cg-${i}` }))}
+              built={t.body} connId={t.connId} wizardConnId={t.connId} onStudio={t.connId ? () => openConnStudio(d.connById.get(t.connId!)!, d) : undefined} />) : null; })()
+          : groups.length > 0 ? (() => { const gi = Math.min(cg, groups.length - 1), c0 = groups[gi][1][0]; return (
+            <ConnectorBlock value={String(gi)} onPick={(k) => setCg(Number(k))}
+              tabs={groups.map(([label, cs], i) => ({ key: String(i), title: `מחבר ${i + 1} — ${label}`, sub: `${cs.length} חיבורים`, testId: `ks-cg-${i}` }))}
+              built={F.conn(ctx)}
+              site={sel && !isPart(sel) ? { memberId: sel.id, end: endOfConn(d, sel.id, c0.id) } : null}
+              connId={c0.id} wizardConnId={c0.id} onStudio={() => openConnStudio(c0, d)} />); })() : F.conn(ctx)}
         </WizardSection>}
       </>}
     </div>

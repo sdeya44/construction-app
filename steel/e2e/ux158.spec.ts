@@ -124,7 +124,7 @@ test('ST-02 (1.59): פרויקט חדש — רכיבים כבויים, "להוס
   expect(errors).toEqual([]);
 });
 
-test('FW-04 (1.60): מצב הוספה לעומת עריכה; עורך המחבר בתלת-ממד מוגדל; מידות נעולות באגד B', async ({ page }) => {
+test('FW-04 (1.60/1.63): מצב הוספה לעומת עריכה; בלוק מחבר אחד; מידות נעולות באגד B', async ({ page }) => {
   const errors = await boot(page);
   // הוספה: חיזוק רכס לא קיים בפרויקט חדש
   await page.getByTestId('btn-new').click();
@@ -151,11 +151,14 @@ test('FW-04 (1.60): מצב הוספה לעומת עריכה; עורך המחבר
   // צמד בלי פתרון: אורך קטן מהאופקי — לא נשמר
   await w.getByTestId('pb-ld-L').fill('300'); await w.getByTestId('pb-ld-L').press('Enter');
   await expect(w.getByTestId('pb-ld-bad')).toBeVisible();
-  // עורך המחבר: תלת-ממד של המחבר, הגדלה
+  // 1.63: בלוק מחבר אחד — לשוניות מחברים, פרט מובנה / מהספרייה, סטודיו; בלי תלת-ממד באשף
   await w.getByTestId('ks-sec-conn').click();
-  await expect(w.getByTestId('conn-view')).toBeVisible();
-  await w.getByTestId('conn-view-big').click();
-  await expect(w.getByTestId('conn-view')).toHaveClass(/big/);
+  await expect(w.getByTestId('conn-block')).toHaveCount(1);
+  await expect(w.getByTestId('conn-view')).toHaveCount(0);
+  await expect(w.getByTestId('end-cards')).toHaveCount(0);
+  await expect(w.getByTestId('detail-ends')).toHaveCount(0);
+  await w.getByTestId('cb-lib').click();
+  await expect(w.getByTestId('cb-lib-nosel')).toBeVisible();
   await w.getByTestId('wz-ok').click();
   expect(errors).toEqual([]);
 });
@@ -179,5 +182,31 @@ test('FS-02 (1.62): חתך המסגרת — ראש עמוד וע.ע. קורה ב
   await expect(w.getByTestId('fs-tos-1')).toContainText('6.50');
   await expect(w.getByTestId('fs-col-0')).toContainText('6.17');
   await expect(w.getByTestId('fs-ridge')).toContainText('7.40');
+  expect(errors).toEqual([]);
+});
+
+test('CB-01 (1.63): מקום אחד לבחירת חיבור — אלכסון עמוד-קורה; פטות: התושבת רק ב"חתך ומחברים"', async ({ page }) => {
+  const errors = await boot(page);
+  await openNav(page, 'b:knee');
+  await page.getByTestId('kb-on').check();
+  await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
+  const w = page.getByTestId('cwin-knee');
+  await w.getByTestId('ks-sec-conn').click();
+  await expect(w.getByTestId('conn-block')).toHaveCount(1);
+  await expect(w.getByTestId('kb-detail')).toBeVisible(); // פרט מובנה
+  await expect(w.getByTestId('end-cards')).toHaveCount(0);
+  await expect(w.getByTestId('detail-ends')).toHaveCount(0);
+  await w.getByTestId('cb-lib').click();
+  await expect(w.getByTestId('end-type-start')).toBeVisible(); // מהספרייה — לקצה האלכסון שנבחר
+  await expect(w.getByTestId('kb-detail')).toHaveCount(0);
+  await w.getByTestId('ks-end-R').click();
+  await expect(w.getByTestId('end-type-end')).toBeVisible();
+  // פטות: התושבת לא מופיעה ב"מיקום במבנה"
+  await openNav(page, 'r:left');
+  const pw = page.getByTestId('cwin-purlins');
+  await pw.getByTestId('ks-sec-loc').click();
+  await expect(pw.getByText('תושבות פטה')).toHaveCount(0);
+  await pw.getByTestId('ks-sec-conn').click();
+  await expect(pw.getByText('תושבות פטה')).toHaveCount(1);
   expect(errors).toEqual([]);
 });

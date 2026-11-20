@@ -4,14 +4,12 @@ import { defaultLockTruss } from '../geometry/lockTruss';
 import { defaultPortal } from '../geometry/portal';
 import type { LockTrussParams, PortalBraceParams } from '../model/types';
 import { store, useStore } from '../store';
-import { wallLineOf, wallSet, WALL_RE } from '../view/realView';
+import { wallLineOf, WALL_RE } from '../view/realView';
 import { ComponentTable } from './ComponentTable';
 import { openConnStudio } from './ComponentWindow';
 import { EditCtx, ProfilePicker } from './fields';
-import { DetailEnds, EndCards } from './PropertiesPanel';
-import { LiveView3D } from './LiveView3D';
 import { LockedDims } from './wizard/LockedDims';
-import { ConnView } from './wizard/ConnView';
+import { ConnectorBlock, endOfConn } from './wizard/ConnectorBlock';
 import { LineTiesEditor, LockTrussFields, PortalFields, WallLines, WallPic, WallXShape, XConnFields } from './StructurePanel';
 import { WizardNavigation, WizardScopeSelector, WizardSection, WizardTypeSelector, WizardValidation, wizardClip, wizardCopy, type WzSec } from './wizard/Wizard';
 
@@ -43,7 +41,6 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
   const [sec, setSec] = useState<Sec>('loc');
   const activeConn = useStore((s) => s.activeConn);
   useEffect(() => { if (activeConn && /^C\.(BR\.W|BB\.|LT\.)/.test(activeConn)) setSec('conn'); }, [activeConn]);
-  const [whole, setWhole] = useState(false);
   const lid = scope === 'line' ? line : undefined;
   const type: WType = ((lid && w.lineType?.[lid]) ?? w.type ?? 'x') as WType;
   const lineLabel = lines.find((l) => l.id === line)?.label ?? line;
@@ -61,7 +58,6 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
     ? { ...w, lineTruss: { ...(w.lineTruss ?? {}), [lid]: { ...(w.lineTruss?.[lid] ?? {}), ...patch } } }
     : { ...w, truss: { ...(w.truss ?? defaultLockTruss()), ...patch }, lineTruss: stripKeys(w.lineTruss, Object.keys(patch)) });
 
-  const set3d = useMemo(() => wallSet(p, d, { memberId: selId ?? d.members.find((m) => WALL_RE.test(m.id) && wallLineOf(m.id) === line)?.id, whole }), [p, d, selId, line, whole]);
   const conns = useMemo(() => d.connections.filter((c) => c.members.some((x) => WALL_RE.test(x) && (scope === 'all' || wallLineOf(x) === line))), [d, scope, line]);
   const groups = useMemo(() => {
     const g = new Map<string, typeof conns>();
@@ -113,8 +109,7 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
           <details className="ks-more" open><summary>טבלת מופעים</summary><ComponentTable match={/^(BR\.W|BB\.|LT\.)/} testId="ctab-walls" /></details>
         </WizardSection>}
 
-        {sec === 'geo' && <WizardSection id="geo" className="ks-geo">
-          <LiveView3D set={set3d} rev={d} height={320} modes={<div className="seg-mini"><button className={whole ? '' : 'on'} onClick={() => setWhole(false)} data-testid="live3d-near">מפתח</button><button className={whole ? 'on' : ''} onClick={() => setWhole(true)} data-testid="live3d-far">כל הקיר</button></div>} />
+        {sec === 'geo' && <WizardSection id="geo" className="fs-geo">
           <div className="ks-dims">
             <div className="ks-note">{scope === 'line' ? `ציר ${lineLabel} בלבד` : 'כל הצירים'} — מידות על השרטוט ניתנות לעריכה בלחיצה.</div>
             <EditCtx.Provider value={{ embed: true, part: 'shape' }}>
@@ -138,24 +133,16 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
             <div className="field prof"><label>סיב וחגורה</label><ProfilePicker testId="lt-chord" value={truss.chord} families={['RHS', 'SHS']} onCommit={(v) => setTruss({ chord: v })} /></div>
             <div className="field prof"><label>אלכסונים</label><ProfilePicker testId="lt-diag" value={truss.diag} families={['RHS', 'SHS', 'CHS']} onCommit={(v) => setTruss({ diag: v })} /></div>
           </>}
-          <div className="ks-ends" role="tablist" aria-label="מחברים">
-            {groups.map(([label, cs], i) => (
-              <button key={label} role="tab" aria-selected={cg === i} className={`ks-end${cg === i ? ' on' : ''}`} onClick={() => setCg(i)} data-testid={`ks-cg-${i}`}><b>מחבר {i + 1} — {label.replace(/^(אגד B|קושרת קיר|מסבך נעילה|קשיחות)\s*[—–-]?\s*/, '') || label}</b><small>{cs.length} חיבורים</small></button>
-            ))}
-          </div>
-          <div className="ks-endbody">
-            <EditCtx.Provider value={{ embed: true, part: 'conn' }}>
+          {groups.length > 0 && (() => { const g = groups[Math.min(cg, groups.length - 1)]; const cid = g[1][0].id; return (
+          <ConnectorBlock value={String(Math.min(cg, groups.length - 1))} onPick={(k) => setCg(Number(k))}
+            tabs={groups.map(([label, cs], i) => ({ key: String(i), title: `מחבר ${i + 1} — ${label.replace(/^(אגד B|קושרת קיר|מסבך נעילה|קשיחות)\s*[—–-]?\s*/, '') || label}`, sub: `${cs.length} חיבורים`, testId: `ks-cg-${i}` }))}
+            built={<EditCtx.Provider value={{ embed: true, part: 'conn' }}>
               {type === 'portal' && <PortalFields lineId={lid} />}
               {type === 'truss' && <LockTrussFields lineId={lid} />}
               {type === 'x' && <XConnFields />}
-            </EditCtx.Provider>
-            {selId && d.byId.get(selId) && <div className="ks-elend"><div className="ks-note">קצוות האלמנט שנבחר — פרט מוכן לכל קצה, או פרט חדש בסטודיו:</div><EndCards m={d.byId.get(selId)!} /><DetailEnds m={d.byId.get(selId)!} /></div>}
-            {groups[cg] && <div className="ks-acts">
-              <button className="btn" onClick={() => store.set({ connWizard: groups[cg][1][0].id })} data-testid="ks-wizard">אשף המחברים</button>
-              <button className="btn" onClick={() => openConnStudio(groups[cg][1][0], d)} data-testid="ks-studio">סטודיו ✎</button>
-            </div>}
-            {groups[cg] && <ConnView connId={groups[cg][1][0].id} />}
-          </div>
+            </EditCtx.Provider>}
+            site={selId && d.byId.get(selId) ? { memberId: selId, end: endOfConn(d, selId, cid) } : null}
+            connId={cid} wizardConnId={cid} onStudio={() => openConnStudio(g[1][0], d)} />); })()}
         </WizardSection>}
       </>}
     </div>
