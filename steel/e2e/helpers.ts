@@ -22,14 +22,21 @@ export async function boot(page: Page) {
 /** 1.54: ריבון — פותח את לשונית התחום של הכלי (אם צריך) ולוחץ על הכלי. במסך צר — העץ (אותו testid). */
 const NAV_TAB: Record<string, string> = { s: 'structure', r: 'roof', b: 'brace', w: 'clad', k: 'tree', c: 'conns', i: 'issues' };
 export async function openNav(page: Page, key: string) {
+  // 1.61: במסך רחב אין ריבון — הכניסה דרך הניווט של האפליקציה (כמו סרגל השלבים / חיפוש); במסך צר — העץ (אותו testid)
   const tool = page.getByTestId(`nav-${key}`).first();
-  if (!(await tool.isVisible().catch(() => false))) {
-    const grp = key === 'b:tb' || key === 'b:truss' || key === 'b:wing' ? 'special' : key === 'c:library' ? 'conns' : NAV_TAB[key[0]];
-    const tab = page.getByTestId(`tab-${grp}`).first();
-    if (await tab.count()) await tab.click();
-    if (!(await tool.isVisible().catch(() => false))) { const t = page.getByTestId('ribbon-toggle'); if (await t.count() && (await t.getAttribute('aria-expanded')) === 'false') await t.click(); }
-  }
-  await tool.click();
+  if (await tool.isVisible().catch(() => false)) { await tool.click(); return; }
+  await page.evaluate((k) => window.dispatchEvent(new CustomEvent('ksp-nav', { detail: k })), key);
+  await page.waitForTimeout(150);
+}
+
+/** 1.61: לשוניות הריבון שהוסרו — אלמנטים/חיבורים/בדיקות נפתחים בחלון "רשימות"; תחומים — הניווט */
+export async function openGroup(page: Page, grp: string) {
+  const map: Record<string, string> = { 'tab-tree': 'lists', 'tab-conns': 'lists', 'tab-issues': 'issues', 'tab-structure': 'structure', 'tab-roof': 'roof', 'tab-brace': 'brace', 'tab-clad': 'clad', 'tab-special': 'special' };
+  const t = page.getByTestId(grp).first();
+  if (await t.isVisible().catch(() => false)) { await t.click(); return; }
+  await page.evaluate((k) => window.dispatchEvent(new CustomEvent('ksp-nav', { detail: k })), map[grp] ?? grp);
+  await page.waitForTimeout(150);
+  if (grp === 'tab-conns' && await page.getByTestId('lists-tab-conn').count()) await page.getByTestId('lists-tab-conn').click();
 }
 
 export async function shot(page: Page, name: string) {

@@ -1378,7 +1378,7 @@ details.adv .adv-body { padding-bottom: 6px; }
 .steps-rail:not(.wide) .sr-list { align-items: center; gap: 3px; }
 .sr-grp { font-size: 10.5px; font-weight: 700; color: var(--faint, #8a96a6); padding: 6px 6px 2px; letter-spacing: .02em; }
 .sr-sep { display: block; width: 18px; height: 1px; background: var(--line); margin: 4px auto; }
-.sr-item { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 3px 4px; border-radius: 8px; font: inherit; color: var(--text); cursor: pointer; text-align: start; min-height: 32px; }
+.sr-item { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 2px 4px; border-radius: 8px; font: inherit; color: var(--text); cursor: pointer; text-align: start; min-height: 30px; }
 .steps-rail:not(.wide) .sr-item { padding: 0; min-height: 0; border-radius: 50%; }
 .sr-item:hover { background: var(--panel-2); }
 .sr-item.on { background: var(--brand-soft); box-shadow: inset 3px 0 0 #e08a2e; }
@@ -1410,3 +1410,12 @@ span.step-done-b { color: #1f7a45; font-size: 12px; font-weight: 600; }
 .wz-cv-h .sp { flex: 1; }
 .ld { margin-top: var(--wz-s3); }
 .cwin-pill.new { background: var(--wz-chg-soft); color: var(--wz-chg-ink); }
+/* 1.61: כלים בסרגל השלבים + חלון רשימות */
+.sr-tools { flex: none; overflow: visible; }
+.sr-tic { font-size: 12px; color: var(--muted); }
+.sr-item.tool .sr-t b { font-weight: 500; }
+.lists-tabs { margin-bottom: 8px; }
+.lists .lists-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.lists .chip { border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; color: var(--text); }
+.lists .chip.on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-ink); }
+.lists .chip i { font-style: normal; color: var(--muted); margin-inline-start: 4px; }

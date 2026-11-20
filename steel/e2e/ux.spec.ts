@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, selection, setView, shot, pickProfile, openNav } from './helpers';
+import { boot, selection, setView, shot, pickProfile, openNav, openGroup } from './helpers';
 
 /** חוויה ה׳: סרגל הקשרי, כרטיס פרט חיבור, בחירה מרובה עם "משתנה", תפריט מעגלי, לוח פקודות. */
 test('UX-01: סרגל הקשרי וכרטיס חיבור לאלמנט בודד; פתיחת עורך מהכרטיס', async ({ page }) => {
@@ -87,24 +87,25 @@ test('UX-03: תפריט מעגלי בלחיצה ימנית ולוח פקודות
 
 test('UX-04: לשונית חיבורים — חיבורי המשך ופחי קושרות ברשימה; פתיחה בעורך', async ({ page }) => {
   await boot(page);
-  await page.getByTestId('tab-conns').click();
-  await expect(page.getByTestId('conns-panel')).toBeVisible();
-  await expect(page.getByTestId('conns-brace-end')).toContainText('32');
-  await expect(page.getByTestId('conns-brace-cross')).toContainText('8');
-  await page.getByTestId('conns-brace-cross').click();
-  await page.getByTestId('conns-panel').locator('.tree-item[title="C.BR.R1.L.X"]').click();
+  // 1.61: חלון "רשימות" ← חיבורים (במקום לשונית החיבורים בריבון)
+  await page.getByTestId('sr-tool-lists').click();
+  await page.getByTestId('lists-tab-conn').click();
+  await expect(page.getByTestId('lists-ctype-brace-end')).toContainText('32');
+  await expect(page.getByTestId('lists-ctype-brace-cross')).toContainText('8');
+  await page.getByTestId('lists-ctype-brace-cross').click();
+  await page.getByTestId('ctable-brace-cross').locator('tr[title="C.BR.R1.L.X"]').click();
   await expect(page.getByTestId('conn-id')).toHaveText('C.BR.R1.L.X');
   await shot(page, 'UX-04_brace_cross');
 });
 
 test('UX-05: עץ תפריטים — בחירת צומת מציגה טבלה; שורה בוחרת אלמנט / פותחת חיבור', async ({ page }) => {
   await boot(page);
-  await page.getByTestId('tab-tree').click();
+  await openGroup(page, 'tab-tree');
   await openNav(page, 'k:column');
   await expect(page.getByTestId('table-column')).toContainText('F1.COL.L');
   await page.getByTestId('table-column').getByText('F3.COL.R', { exact: true }).click();
   expect(await selection(page)).toEqual(['F3.COL.R']);
-  await page.getByTestId('tab-conns').click();
+  await openGroup(page, 'tab-conns');
   await openNav(page, 'c:eave');
   // כרטיס קבוצה (1.34): כל 12 החיבורים זהים — כרטיס אחד; ברשימה המלאה — שמות "מסגרת · ציר"
   await expect(page.getByTestId('cvariants-eave').locator('.conn-var')).toHaveCount(1);
@@ -123,7 +124,7 @@ test('UX-05: עץ תפריטים — בחירת צומת מציגה טבלה; ש
 
 test('UX-06: שינוי פרופיל עמוד/קורה — חלון בדיקת פלטת ראש עמוד עם התנגשות והצעה; החלה מתקנת', async ({ page }) => {
   await boot(page);
-  await page.getByTestId('tab-structure').click();
+  await openGroup(page, 'tab-structure');
   await page.getByTestId('columnProfile').fill('HEA300'); await page.getByTestId('columnProfile').press('Enter');
   await expect(page.getByTestId('eave-check')).toBeVisible();
   await expect(page.getByTestId('eave-cur')).toContainText('התנגשות');
@@ -163,7 +164,7 @@ test('SEC-01: חתך מודולרי — תבנית גג מדורג, הוספת �
 
 test('BR-02: סבכה אופקית RHS וחיזוק רכס בשתי השיטות דרך הממשק', async ({ page }) => {
   await boot(page);
-  await page.getByTestId('tab-brace').click();
+  await openGroup(page, 'tab-brace');
   await page.getByTestId('br-roof-ed-tab-sec').click();
   await page.getByTestId('br-roof-type-rhs').click(); // 1.51: אריחים
   const q = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { hb: d.members.filter((m: any) => m.id.startsWith('HB.') && m.kind === 'brace').length, x: d.members.filter((m: any) => m.id.startsWith('BR.R')).length, tie: d.connections.filter((c: any) => c.type === 'ridge-tie').length, st: d.members.filter((m: any) => /C\.RIDGE\..*\.ST/.test(m.id)).length, clash: d.issues.filter((i: any) => i.code === 'CLASH').length }; });

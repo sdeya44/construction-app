@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot, pickProfile, openNav } from './helpers';
+import { boot, shot, pickProfile, openNav, openGroup } from './helpers';
 
 test('SIZE-01: בדיקת גדלים — צביעה, מקרא, הסבר לאלמנט, בוחר פרופילים צבוע', async ({ page }) => {
   await boot(page);
@@ -58,7 +58,7 @@ test('CLAD-01: פרויקט חדש עם חיפוי והתאמת חתכים — �
   const st = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { err: d.issues.filter((i: any) => i.severity === 'error').length, girts: d.members.filter((m: any) => m.kind === 'girt').length }; });
   expect((await st()).err).toBe(0);
   expect((await st()).girts).toBeGreaterThan(40);
-  await page.getByTestId('tab-clad').click();
+  await openGroup(page, 'tab-clad');
   await openNav(page, 'w:openings');
   await page.getByTestId('op-add-door').click();
   await openNav(page, 'w:takeoff');

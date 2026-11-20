@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { EVIDENCE, boot, shot, openNav } from './helpers';
+import { EVIDENCE, boot, shot, openNav, openGroup } from './helpers';
 
 /**
  * סימולציית משתמש (בקשת משתמש): בניית סככה מאפס דרך הממשק בלבד, ואחר כך סדרת שינויים.
@@ -12,7 +12,7 @@ const log: Step[] = [];
 
 function journey(page: Page) {
   let n = 0;
-  const click = async (tid: string) => { n++; if (/^nav-[a-z]:/.test(tid)) await openNav(page, tid.slice(4)); else await page.getByTestId(tid).first().click(); };
+  const click = async (tid: string) => { n++; if (/^nav-[a-z]:/.test(tid)) await openNav(page, tid.slice(4)); else if (/^tab-/.test(tid)) await openGroup(page, tid); else await page.getByTestId(tid).first().click(); };
   const fill = async (tid: string, v: string) => { n++; const el = (tid.startsWith('[') ? page.locator(tid) : page.getByTestId(tid)).first(); await el.fill(v); await el.press('Enter'); };
   const select = async (tid: string, v: string) => { n++; await page.getByTestId(tid).first().selectOption(v); };
   const task = async (name: string, how: string, fn: () => Promise<void>) => { n = 0; await fn(); log.push({ task: name, actions: n, how }); };

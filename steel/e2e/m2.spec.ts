@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, screenOf, selection, setView, shot } from './helpers';
+import { boot, screenOf, selection, setView, shot, openGroup } from './helpers';
 
 const purl = (page: any, side: string) => page.evaluate((sd: string) => (window as any).__ksp.store.state.derived.members
   .filter((m: any) => m.purlin?.side === sd).map((m: any) => [m.id, m.start.x, m.start.z, m.purlin.sSlope]), side);
@@ -7,7 +7,7 @@ const purl = (page: any, side: string) => page.evaluate((sd: string) => (window 
 test.describe('M2 – פטות, מכלולים וחלקים', () => {
   test('ROOF-01/02/03/04 דרך הממשק: פריסה, שארית, עצמאות צדדים', async ({ page }) => {
     await boot(page);
-    await page.getByTestId('tab-roof').click();
+    await openGroup(page, 'tab-roof');
     // ברירת המחדל: חלוקה אוטומטית שווה; בדיקות ה-ROOF מהאפיון — במצב "מרווח קבוע + שארית"
     const E = await purl(page, 'L');
     const spans = E.slice(1).map((x: any, i: number) => x[3] - E[i][3]);
@@ -74,7 +74,7 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     expect(others.length).toBe(3); // פטה אחרת נשארת בחלוקה האוטומטית
     await shot(page, 'SPL_parts');
     // הצעה לכל הפטות מכפתור לשונית הגג
-    await page.getByTestId('tab-roof').click();
+    await openGroup(page, 'tab-roof');
     await page.getByTestId('propose-purlin-splices').click();
     await expect(page.getByTestId('purlin-splice-count')).toHaveText('28');
     await page.keyboard.press('Escape');
@@ -102,7 +102,7 @@ test.describe('M2 – פטות, מכלולים וחלקים', () => {
     await page.getByTestId('splice-auto').click();
     expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.parts.filter((p: any) => p.memberId === 'F1.RAF').length)).toBe(2);
     // ROOF-05 בממשק: גג חד־שיפועי, שני צדי התחלה
-    await page.getByTestId('tab-roof').click();
+    await openGroup(page, 'tab-roof');
     const M1 = await purl(page, 'M');
     await page.getByTestId('monoStart').selectOption('low');
     const M2 = await purl(page, 'M');

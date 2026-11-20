@@ -7,7 +7,8 @@ const FAMS: [string, string][] = [
   ['w:roof', 'clad'], ['w:walls', 'clad'], ['w:openings', 'clad'], ['b:tb', 'tb'], ['b:wing', 'wing'], ['b:truss', 'truss'], ['s:geometry', 'frame'], ['s:profiles', 'frame'],
 ];
 
-test('FW-01: כל כלי בריבון פותח את האשף האחיד של המשפחה — סוג/היקף/3 קבוצות/פעולות', async ({ page }) => {
+test('FW-01: כל כלי פותח את האשף האחיד של המשפחה — סוג/היקף/3 קבוצות/פעולות', async ({ page }) => {
+  test.setTimeout(180000); // 14 אשפים עם תלת-ממד
   const errors = await boot(page);
   for (const [nav, fam] of FAMS) {
     await openNav(page, nav);

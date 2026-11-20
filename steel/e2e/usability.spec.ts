@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, setView, shot, pickProfile, openNav } from './helpers';
+import { boot, setView, shot, pickProfile, openNav, openGroup } from './helpers';
 
 const st = (page: any) => page.evaluate(() => (window as any).__ksp.store.state);
 
@@ -79,7 +79,7 @@ test('USE-05: הודעות מקובצות — הסתרת סוג, תקן הכל, 
   await expect(page.getByTestId('cleat-face')).toBeVisible();
   await shot(page, 'USE-05_cleat_face');
   await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => { const n = structuredClone(p); n.building.purlins.left.cleat.width = 80; return n; } }); });
-  await page.getByTestId('tab-issues').click();
+  await openGroup(page, 'tab-issues');
   await expect(page.getByTestId('igroup-BOLT_EDGE')).toBeVisible();
   await page.getByTestId('info-toggle').click(); // "לידיעה" מקופל כברירת מחדל (1.44)
   await page.getByTestId('igroup-RAFTER_EXT').getByTestId('ghide-RAFTER_EXT').click();

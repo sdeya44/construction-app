@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, pickProfile, shot, openNav } from './helpers';
+import { boot, pickProfile, shot, openNav, openGroup } from './helpers';
 
 const B = (page: any) => page.evaluate(() => (window as any).__ksp.store.state.project.building);
 async function editDim(page: any, id: string, v: string) {
@@ -9,7 +9,7 @@ async function editDim(page: any, id: string, v: string) {
 
 test('V134-01: עורך חיבור עמוד-קורה — קוטר הבורג זהה באשף, בשדה ובטבלת הברגים', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('tab-conns').click();
+  await openGroup(page, 'tab-conns');
   await openNav(page, 'c:eave');
   await page.getByTestId('cvar-open-eave-0').click();
   const d = await page.evaluate(() => { const k = (window as any).__ksp.store.state; return k.derived.connById.get(k.activeConn).bolts[0].d; });
@@ -51,7 +51,7 @@ test('V134-03: תוכנית מסגרות ומרווחי פטות — עריכה 
 
 test('V134-04: חיבורים מקובצים, קשיחות קירות בתוכנית אחת, לשוניות חיפוי, מזחלה בתוכנית', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('tab-conns').click();
+  await openGroup(page, 'tab-conns');
   await openNav(page, 'c:purlin-cleat');
   const nv = await page.getByTestId('cvariants-purlin-cleat').locator('.conn-var').count();
   expect(nv).toBeGreaterThan(0); expect(nv).toBeLessThan(10);
@@ -67,7 +67,7 @@ test('V134-04: חיבורים מקובצים, קשיחות קירות בתוכנ
   expect(after).toBeGreaterThan(before);
   await shot(page, 'V134_04_walls_plan');
   // חיפוי: לשוניות וזמזחלה
-  await page.getByTestId('tab-clad').click();
+  await openGroup(page, 'tab-clad');
   await openNav(page, 'w:walls');
   await page.getByText('הוספת חיפוי למבנה').first().click();
   await page.getByTestId('clad-tab-F').click();

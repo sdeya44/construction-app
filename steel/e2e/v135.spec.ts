@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot, openNav } from './helpers';
+import { boot, shot, openNav, openGroup } from './helpers';
 
 const B = (page: any) => page.evaluate(() => (window as any).__ksp.store.state.project.building);
 async function editDim(page: any, id: string, v: string) {
@@ -29,7 +29,7 @@ test('V135-01: חיבור המשך פטות בשרטוט; קונזולות, מפ
 
 test('V135-02: פטות קיר ועמודי רוח בחזית; פנל גג בחתך; כתב כמויות מקובץ', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('tab-clad').click();
+  await openGroup(page, 'tab-clad');
   await openNav(page, 'w:walls');
   await page.getByText('הוספת חיפוי למבנה').first().click();
   await editDim(page, 'sch-clad-L-g-sp', '1200');
@@ -59,7 +59,7 @@ test('V135-03: מסבכי גג — בחירה ברצועה וקביעת שדה �
   const lock = page.locator('[data-testid$="-lock-0"]').first();
   await lock.click();
   await expect(lock).toHaveAttribute('aria-pressed', 'true');
-  await page.getByTestId('tab-conns').click();
+  await openGroup(page, 'tab-conns');
   await openNav(page, 'c:eave');
   await page.getByTestId('cvar-open-eave-0').click();
   await expect(page.getByTestId('pw-bolt')).toBeVisible();

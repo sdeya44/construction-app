@@ -10,6 +10,12 @@ import { STEPS, stepExists, stepMarks, stepState, type StepDef, type StepState }
  * רכיב שלא קיים — שאלה: הוספה / לא נדרש / ביטול. "הושלם" (ירוק) — רק אחרי "אישור" באשף.
  * ניתן לכווץ לנקודות (ההעדפה נשמרת בדפדפן).
  */
+const TOOLS: { key: NavKey; label: string; ic: string }[] = [
+  { key: 'lists', label: 'רשימות: אלמנטים, חיבורים, בדיקות', ic: '☰' },
+  { key: 's:sheet', label: 'גיליון פרמטרים', ic: '▦' },
+  { key: 'c:library', label: 'ספריית פרטים', ic: '◫' },
+  { key: 'w:takeoff', label: 'כתב כמויות חיפוי', ic: '∑' },
+];
 const MARK: Record<StepState, string> = { ok: '✓', warn: '!', skip: '–', todo: '' };
 const STATE_HE: Record<StepState, string> = { ok: 'הושלם', warn: 'הושלם — יש הערות', skip: 'לא נדרש', todo: 'לא הוגדר' };
 
@@ -51,6 +57,16 @@ export function StepsRail({ nav, setNav, setMode, onExport, wide, setWide }: { n
         {rows.filter((r) => !r.out).map(row)}
         {wide ? <div className="sr-grp">הפקה</div> : <i className="sr-sep" />}
         {rows.filter((r) => r.out).map(row)}
+      </div>
+      {/* 1.61: כלים — מה שהיה רק בריבון */}
+      <div className="sr-list sr-tools" role="list">
+        {wide ? <div className="sr-grp">כלים</div> : <i className="sr-sep" />}
+        {TOOLS.map((t) => (
+          <button key={t.key} className={`sr-item tool${nav === t.key ? ' on' : ''}`} onClick={() => setNav(t.key)} data-testid={`sr-tool-${t.key}`} title={t.label} aria-label={t.label}>
+            <span className="sr-dot out sr-tic" aria-hidden="true">{t.ic}</span>
+            {wide && <span className="sr-t"><b>{t.label}</b></span>}
+          </button>
+        ))}
       </div>
       {wide && <div className="sr-legend" aria-hidden="true"><span><i className="sr-dot ok" />הושלם</span><span><i className="sr-dot todo" />לא הוגדר</span><span><i className="sr-dot skip" />לא נדרש</span><span><i className="sr-dot warn" />הערות</span></div>}
       {ask && (

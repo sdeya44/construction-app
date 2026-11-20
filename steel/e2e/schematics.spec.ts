@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot, openNav } from './helpers';
+import { boot, shot, openNav, openGroup } from './helpers';
 
 const st = (page: any) => page.evaluate(() => (window as any).__ksp.store.state.project.building);
 async function editDim(page: any, id: string, v: string) {
@@ -34,7 +34,7 @@ test('SCH-01: שרטוטים אינטראקטיביים — פטות, תומך, 
   expect((await st(page)).bracing.conn.endDist).toBe(35);
   await shot(page, 'SCH_03_roofX');
   // חיפוי קיר
-  await page.getByTestId('tab-clad').click();
+  await openGroup(page, 'tab-clad');
   await openNav(page, 'w:walls');
   if (await page.getByTestId('clad-enable').count()) await page.getByTestId('clad-enable').click();
   if (!(await page.getByTestId('clad-walls').isChecked())) await page.getByTestId('clad-walls').check();
@@ -73,7 +73,7 @@ test('SCH-03: הגדלת שרטוט, עריכה בחלון המוגדל; פתח�
   await shot(page, 'SCH_06_zoom');
   await page.getByTestId('sch-purlins-left-close').click();
   // פתחים
-  await page.getByTestId('tab-clad').click();
+  await openGroup(page, 'tab-clad');
   await openNav(page, 'w:openings');
   if (await page.getByTestId('clad-enable').count()) await page.getByTestId('clad-enable').click();
   await page.getByTestId('op-add-door').click();

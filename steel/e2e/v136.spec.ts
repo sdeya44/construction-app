@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { boot, EVIDENCE, shot, openNav } from './helpers';
+import { boot, EVIDENCE, shot, openNav, openGroup } from './helpers';
 
 test('V136-01: תוכנית הרכבה ותוויות בשרטוטים; הצעות האחדה בייצור', async ({ page }) => {
   const errors = await boot(page);
@@ -29,7 +29,7 @@ test('V136-02: תמונה ריאליסטית ללקוח', async ({ page }) => {
   await page.getByTestId('client-image').click();
   const f = await (await dl).path();
   expect(fs.readFileSync(f).subarray(1, 4).toString()).toBe('PNG');
-  await page.getByTestId('tab-clad').click();
+  await openGroup(page, 'tab-clad');
   await openNav(page, 'w:walls');
   await page.getByText('הוספת חיפוי למבנה').first().click();
   const url2: string = await page.evaluate(() => (window as any).__ksp.viewport.presentationShot(1200, 750, true));

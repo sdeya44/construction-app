@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, shot } from './helpers';
+import { boot, shot, openGroup } from './helpers';
 
 const conn = (page: any, id: string) => page.evaluate((i: string) => { const c = (window as any).__ksp.store.state.derived.connById.get(i); return c && { bolts: c.bolts.length, status: c.status, overridden: c.overridden, parts: c.parts }; }, id);
 
@@ -30,19 +30,19 @@ test.describe('M3 – תומכים וחיבורים', () => {
 
   test('CLEAT-03/04: שינוי חתך פטה ושיפוע — התומכים מתעדכנים, אין התנגשות לא מדווחת', async ({ page }) => {
     await boot(page);
-    await page.getByTestId('tab-roof').click();
+    await openGroup(page, 'tab-roof');
     await page.getByTestId('left-profile').fill('C250x80x20x3'); await page.getByTestId('left-profile').press('Enter');
     const h = await page.evaluate(() => { const m = (window as any).__ksp.store.state.derived.byId.get('CL.PL.L.03.F3'); return m.profile; });
     expect(h).toBe('L250x80x8');
-    await page.getByTestId('tab-structure').click();
+    await openGroup(page, 'tab-structure');
     await page.getByTestId('slopeLeft').fill('25'); await page.getByTestId('slopeLeft').press('Enter');
     const res = await page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { clash: d.issues.filter((i: any) => i.code === 'CLASH').length, err: d.issues.filter((i: any) => i.severity === 'error').length }; });
     expect(res).toEqual({ clash: 0, err: 0 });
-    await page.getByTestId('tab-roof').click();
+    await openGroup(page, 'tab-roof');
     await page.getByTestId('left-profile').fill('Z200x70x20x2.5'); await page.getByTestId('left-profile').press('Enter');
     const zc = await page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { clash: d.issues.filter((i: any) => i.code === 'CLASH').length, prof: d.byId.get('CL.PL.L.03.F3').profile }; });
     expect(zc).toEqual({ clash: 0, prof: 'L185x80x8' }); // Z: גובה אוטומטי מתחת לאגף העליון
-    await page.getByTestId('tab-issues').click();
+    await openGroup(page, 'tab-issues');
     await shot(page, 'CLEAT_Z_auto');
   });
 

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
-import { boot, shot } from './helpers';
+import { boot, shot, openGroup } from './helpers';
 
 const PY = '/tmp/claude-0/-home-user-construction-app/1a50a160-0b21-5222-a7ee-30b6297ca40e/scratchpad/venv/bin/python';
 const save = async (page: any, testId: string, name: string) => {
@@ -46,7 +46,7 @@ test.describe('M4/M5 – שרטוטים, ייצור, מהדורות', () => {
     await expect(page.getByTestId('dwg-status')).toContainText('מאושר');
     await expect(page.getByTestId('dwg-changed')).toHaveCount(0);
     await page.getByTestId('mode-model').click();
-    await page.getByTestId('tab-roof').click();
+    await openGroup(page, 'tab-roof');
     await page.getByTestId('sch-left-g0').first().dispatchEvent('click');
     await page.getByTestId('sch-left-g0-inp').fill('1400'); await page.getByTestId('sch-left-g0-inp').press('Enter');
     await page.getByTestId('mode-drawings').click();
@@ -76,7 +76,7 @@ test.describe('M4/M5 – שרטוטים, ייצור, מהדורות', () => {
     }
     // שינוי חתך מעדכן משקל
     await page.getByTestId('mode-model').click();
-    await page.getByTestId('tab-structure').click();
+    await openGroup(page, 'tab-structure');
     await page.getByTestId('columnProfile').fill('HEB200'); await page.getByTestId('columnProfile').press('Enter');
     await page.getByTestId('mode-production').click();
     expect(await page.getByTestId('total-weight').textContent()).not.toBe(w0);

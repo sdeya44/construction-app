@@ -332,7 +332,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.60.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.61.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -358,7 +358,7 @@ export function App() {
       {mode === 'drawings' && <main className="mode-area"><DrawingsView /></main>}
       {mode === 'production' && <main className="mode-area"><ProductionView /></main>}
       <main className={`workspace${wide && !panelOpen ? ' panel-closed' : ''}${!propsPinned ? ' props-collapsed' : ''}${!propsPinned && (sel.length || s.activeConn || lp === 'nav') ? ' props-float' : ''}${treeHidden ? ' tree-hidden' : ''}${lpFull ? ' lp-full' : ''}${comp ? ' comp-open' : ''}${wide && railWide ? ' rail-wide' : ''}`} style={mode !== 'model' ? { display: 'none' } : undefined}>
-        {wide && <div className="rb-wrap"><SideNav ribbon nav={nav} setNav={setNav} onOpenConn={openConn} /></div>}
+        {/* 1.61: הריבון הוסר במסך רחב — הכניסה לכל רכיב מסרגל השלבים (ומחיפוש, מהמודל ומגיליון הפרמטרים) */}
         <aside className={`side side-start${sideOpen ? ' open' : ''}`} data-testid="nav-tree-pane">
           {wide ? <StepsRail nav={nav} setNav={setNav} setMode={setMode} onExport={exportProject} wide={railWide} setWide={(v) => { setRailWide(v); try { localStorage.setItem('ksp-rail-wide', v ? '1' : '0'); } catch { /* */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 30); }} /> : <SideNav nav={nav} setNav={setNav} onOpenConn={openConn} treeOnly={wide} />}
         </aside>

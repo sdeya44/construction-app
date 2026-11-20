@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { boot, shot, openNav } from './helpers';
+import { boot, shot, openNav, openGroup } from './helpers';
 
 /** v1.29: קושרת גג במוט הברגה + כיסוי חלקי, נעילה אופקית, מזחלה בפלטה, מכפל, תבניות חדשות, צורת תוכנית */
 const state = (page: Page) => page.evaluate(() => {
@@ -66,7 +66,7 @@ test('V129-03 מכפל ומזחלה בפלטה', async ({ page }) => {
   let s = await state(page);
   expect(s.err).toEqual([]);
   expect(s.conns.some((id) => id.startsWith('C.HN.'))).toBe(true);
-  if (!(await page.getByTestId('nav-w:roof').count())) await page.getByTestId('tab-clad').click();
+  if (!(await page.getByTestId('nav-w:roof').count())) await openGroup(page, 'tab-clad');
   await openNav(page, 'w:roof');
   if (await page.getByTestId('clad-enable').count()) await page.getByTestId('clad-enable').click();
   const g = page.getByTestId('clad-gutter');
@@ -128,7 +128,7 @@ test('V129-05 חלון מכלול: נעילה אופקית — צורה לציר
 
 test('V130-01 לחיצה על המזחלה בתלת־ממד פותחת את אשף המזחלה; מידה בשרטוט משנה את החתך', async ({ page }) => {
   const errors = await boot(page);
-  await page.getByTestId('tab-clad').click().catch(() => {});
+  await openGroup(page, 'tab-clad');
   await openNav(page, 'w:roof');
   if (await page.getByTestId('clad-enable').count()) await page.getByTestId('clad-enable').click();
   await page.waitForTimeout(500);

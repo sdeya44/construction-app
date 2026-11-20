@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, expectInside, paneRect, screenOf, selection, setView, shot } from './helpers';
+import { boot, expectInside, paneRect, screenOf, selection, setView, shot, openGroup } from './helpers';
 
 const RIDGE = 6900;
 
@@ -167,7 +167,7 @@ test.describe('M1 – ליבת מידול', () => {
     const n = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.filter((m: any) => m.kind === 'column' || m.kind === 'rafter').length);
     expect(n).toBe(23);
     // ערך לא חוקי נדחה והמודל לא משתנה
-    await page.getByTestId('tab-structure').click(); // אחרי בחירה העץ עבר לרכיב של האלמנט (1.44)
+    await openGroup(page, 'tab-structure'); // אחרי בחירה העץ עבר לרכיב של האלמנט (1.44)
     await page.getByTestId('ridgeX').fill('25'); await page.getByTestId('ridgeX').press('Enter');
     expect(await page.evaluate(() => (window as any).__ksp.store.state.project.building.ridgeX)).toBe(9000);
     await expect(page.getByTestId('toasts')).toContainText('מיקום הרכס');

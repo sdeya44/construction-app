@@ -31,7 +31,7 @@ export type NavKey =
   | 'conns' | `c:${Connection['type']}`
   | 'issues' | `i:${Severity}`
   | 'brace' | `b:${BraceSection}`
-  | 'clad' | `w:${CladSection}` | 'b:tb' | 'b:truss' | 'special' | 'c:library' | 's:sheet' | 'b:wing';
+  | 'clad' | `w:${CladSection}` | 'b:tb' | 'b:truss' | 'special' | 'c:library' | 's:sheet' | 'b:wing' | 'lists';
 
 const ORDER_C: Connection['type'][] = ['custom', 'eave', 'ridge', 'base', 'rafter-side', 'knee', 'ridge-tie', 'purlin-cleat', 'purlin-splice', 'beam-splice', 'brace-end', 'brace-cross', 'brace', 'tb-support', 'tb-seat', 'truss', 'truss-splice', 'truss-end'];
 const KINDS: MemberKind[] = ['column', 'rafter', 'purlin', 'girt', 'brace', 'cleat', 'plate', 'anchor', 'beam'];
@@ -150,7 +150,7 @@ export function SideNav({ nav, setNav, onOpenConn, treeOnly, ribbon }: { nav: Na
 }
 
 const GROUP_LABEL: Record<string, [string, string]> = {
-  structure: ['מבנה', 'geometry'], roof: ['גג ופטות', 'slope'], brace: ['חיזוקים', 'brace0'], clad: ['קירות וחיפוי', 'walls'], special: ['מיוחדים', 'frames'], tree: ['אלמנטים', 'elements'], conns: ['חיבורים', 'conns'], issues: ['בדיקות', 'issues'],
+  structure: ['מבנה', 'geometry'], roof: ['גג ופטות', 'slope'], brace: ['חיזוקים', 'brace0'], clad: ['קירות וחיפוי', 'walls'], special: ['מיוחדים', 'frames'], tree: ['אלמנטים', 'elements'], conns: ['חיבורים', 'conns'], issues: ['בדיקות', 'issues'], lists: ['רשימות', 'elements'],
 };
 /** פירורי לחם מעל התוכן: איפה אני (קבוצה › פריט) עם התמונה */
 /** שם קצר לסעיף בעץ (לכותרת הפאנל). item=true — רק שם הסעיף בלי הקבוצה */
@@ -187,6 +187,7 @@ export function NavContent({ nav, onOpenConn }: { nav: NavKey; onOpenConn: (id: 
   if (nav === 'special') return <><TransferPanel /><RoofTrussPanel /><WingPanel /></>;
   if (nav === 'c:library') return <DetailLibrary />;
   if (nav === 's:sheet') return <ParamSheet />;
+  if (nav === 'lists') return <ListsPanel onOpenConn={onOpenConn} />;
   const [g, k] = nav.split(':') as [string, string];
   if (g === 's') return <StructurePanel section={k as StructSection} />;
   if (g === 'r') return <RoofPanel section={k as RoofSection} />;
@@ -198,6 +199,38 @@ export function NavContent({ nav, onOpenConn }: { nav: NavKey; onOpenConn: (id: 
   if (g === 'k') return <ElementsTable kind={k as MemberKind} />;
   if (g === 'c') return <ConnTable type={k as Connection['type']} onOpen={onOpenConn} />;
   return <IssuesTable sev={k as Severity} />;
+}
+
+/**
+ * 1.61: רשימות — מקום אחד לרשימות המודל (במקום לשוניות "אלמנטים", "חיבורים", "בדיקות" שבריבון שהוסר):
+ * אלמנטים לפי סוג (אורך, משקל, לחיצה בוחרת), חיבורים לפי סוג (לחיצה פותחת את עורך החיבור), בדיקות.
+ */
+export function ListsPanel({ onOpenConn }: { onOpenConn: (id: string) => void }) {
+  const d = useStore((s) => s.derived);
+  const [tab, setTab] = useState<'el' | 'conn' | 'iss'>('el');
+  const kinds = KINDS.filter((k) => d.members.some((m) => m.kind === k));
+  const types = ORDER_C.filter((t) => d.connections.some((c) => c.type === t));
+  const [kind, setKind] = useState<MemberKind>(kinds[0] ?? 'column');
+  const [type, setType] = useState<Connection['type']>(types[0] ?? 'eave');
+  const nIss = d.issues.filter((i) => i.severity !== 'info').length;
+  return (
+    <div className="panel-body lists" data-testid="lists-panel">
+      <div className="seg lists-tabs" role="tablist" aria-label="רשימות">
+        {([['el', `אלמנטים (${d.members.filter((m) => m.kind !== 'bolt').length})`], ['conn', `חיבורים (${d.connections.length})`], ['iss', `בדיקות${nIss ? ` (${nIss})` : ''}`]] as const).map(([k, t]) => (
+          <button key={k} role="tab" aria-selected={tab === k} className={`tbtn${tab === k ? ' on' : ''}`} onClick={() => setTab(k)} data-testid={`lists-tab-${k}`}>{t}</button>
+        ))}
+      </div>
+      {tab === 'el' && <>
+        <div className="lists-chips" role="tablist" aria-label="סוג אלמנט">{kinds.map((k) => <button key={k} className={`chip${kind === k ? ' on' : ''}`} onClick={() => setKind(k)} data-testid={`lists-kind-${k}`}>{KIND_LABEL[k]} <i>{d.members.filter((m) => m.kind === k).length}</i></button>)}</div>
+        <ElementsTable kind={kinds.includes(kind) ? kind : kinds[0]} />
+      </>}
+      {tab === 'conn' && <>
+        <div className="lists-chips" role="tablist" aria-label="סוג חיבור">{types.map((t) => <button key={t} className={`chip${type === t ? ' on' : ''}`} onClick={() => setType(t)} data-testid={`lists-ctype-${t}`}>{CONN_TYPE[t]} <i>{d.connections.filter((c) => c.type === t).length}</i></button>)}</div>
+        {types.length > 0 && <ConnTable type={types.includes(type) ? type : types[0]} onOpen={onOpenConn} />}
+      </>}
+      {tab === 'iss' && <IssuesPanel />}
+    </div>
+  );
 }
 
 const f1 = (n: number, d = 1) => n.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
