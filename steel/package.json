@@ -12,7 +12,10 @@
     "test": "vitest run",
     "test:e2e": "playwright test --trace off",
     "test:all": "npm run typecheck && npm test && npm run build && npm run test:e2e",
-    "release": "vite build && node scripts-singlefile.mjs"
+    "release": "vite build && node scripts-singlefile.mjs",
+    "test:mod": "node scripts/test-mod.mjs",
+    "test:smoke": "vitest run tests/smoke.test.ts tests/modules.test.ts",
+    "test:full": "npm run typecheck && vitest run && npm run build && npm run test:e2e"
   },
   "dependencies": {
     "@fontsource/assistant": "^5.3.0",

@@ -40,20 +40,24 @@ const SHAPES: { id: string; make: () => BuildingParams }[] = [
   { id: 'L חד-שיפועי', make: () => { const b = full({ ...defaultBuilding(), roofType: 'mono', eaveRight: 7000 }); b.purlins = { ...b.purlins, left: { ...b.purlins.left, first: 0 } }; b.wing = defaultWing(b, 'mono'); return b; } },
 ];
 
-describe('CAD-01 ביקורת גיאומטריה במנוע CAD', () => {
-  for (const s of SHAPES) {
-    it(s.id, () => {
-      const d = generate(newProject(s.id, s.make()));
-      const r = cadAudit(K, d, sample(d));
-      const f = cadFindings(r);
-      console.log(`${s.id}: ${r.parts.length} חלקים · ${r.holes.length} חורים · ${r.welds.length} ריתוכים · ${f.length} ממצאים`);
-      if (f.length) console.log(f.slice(0, 40).join('\n'));
-      expect(r.parts.length).toBeGreaterThan(20);
-      expect(r.welds.length).toBeGreaterThan(5);
-      expect(f).toEqual([]);
-    }, 600000);
-  }
-});
+// בדיקה נפרדת לכל צורה × סוג חיבור — כך אפשר להריץ רק סוג אחד: -t "· rafter-side"
+for (const s of SHAPES) {
+  const d = generate(newProject(s.id, s.make()));
+  const byType = new Map<string, Connection[]>();
+  for (const c of sample(d)) { const a = byType.get(c.type) ?? []; a.push(c); byType.set(c.type, a); }
+  describe(`CAD-01 ${s.id}`, () => {
+    it('מבנה תקין עם חיבורים', () => { expect(byType.size).toBeGreaterThan(3); });
+    for (const [type, conns] of byType) {
+      it(`· ${type}`, () => {
+        const r = cadAudit(K, d, conns);
+        const f = cadFindings(r);
+        if (f.length) console.log(`${s.id} · ${type}:\n` + f.slice(0, 40).join('\n'));
+        expect(r.parts.length).toBeGreaterThan(0);
+        expect(f).toEqual([]);
+      }, 300000);
+    }
+  });
+}
 
 describe('CAD-02 תיקוני גיאומטריה שנמצאו בביקורת', () => {
   it('מוט עיגון בפלטה מבוטנת צמוד לפני הפלטה — לא בולט מתחת לעמוד', () => {
