@@ -1,5 +1,5 @@
 import { dot, sub, type Vec3 } from '../core/vec';
-import { approxMeasure } from './layoutAudit';
+import { approxMeasure, boxIsFree, type Box } from './layoutAudit';
 import { localFrame } from '../geometry/frame';
 import type { Fabrication, Hole, MarkedPart } from '../fab/marks';
 import type { DerivedModel } from '../model/types';
@@ -371,6 +371,7 @@ export function plateFaceInBox(sh: Sheet, part: MarkedPart, d: DerivedModel, box
   const ys = ch([g.y0, ...g.holes.map((h) => h.y), g.y1]);
   for (let i = 1; i < ys.length; i++) dimV(ys[i - 1], ys[i], P(g.x1, 0).x + 3.5, String(Math.round(ys[i] - ys[i - 1])));
   if (ys.length > 2) dimV(g.y0, g.y1, P(g.x1, 0).x + 7.5, String(Math.round(W)));
+  holeCallouts(E, g.holes.map((h) => ({ c: P(h.x, h.y), r: Math.max(h.d / 2 / sc, 0.5), d: h.d })), 1.8, { x0: box.x0, x1: box.x1, y0: box.y0, y1: box.y1 - 5 });
   const gd = new Map<number, number>(); for (const h of g.holes) gd.set(h.d, (gd.get(h.d) ?? 0) + 1);
   E.push({ k: 'text', p: { x: (box.x0 + box.x1) / 2, y: box.y1 - 2 }, s: `${part.mark} · PL${Math.round(g.T)}×${Math.round(W)}×${Math.round(Lp)}${gd.size ? ` · ${[...gd].map(([dd, q]) => `${q}×Ø${dd}`).join(', ')}` : ''} · 1:${sc}`, h: 1.9, align: 'center', layer: 'TEXT', bold: true });
 }
@@ -429,6 +430,7 @@ export function plateCell(sh: Sheet, part: MarkedPart, qty: number, d: DerivedMo
   for (let i = 1; i < ys.length; i++) dimV(ys[i - 1], ys[i], xR + 4, String(Math.round(ys[i] - ys[i - 1])));
   if (ys.length > 2) dimV(g.y0, g.y1, xR + 9, String(Math.round(W)));
   else dimV(g.y0, g.y1, xR + 4, String(Math.round(W)));
+  holeCallouts(E, g.holes.map((h) => ({ c: P(h.x, h.y), r: Math.max(h.d / 2 / sc, 0.6), d: h.d })), 2.5, { x0: box.x0 + 1, x1: box.x1 - 1, y0: box.y0 + 8, y1: box.y1 - 12 });
   // כותרת התא: בועת סימון + נתונים
   const bx = box.x1 - 7, by = box.y1 - 6;
   E.push({ k: 'circle', c: { x: bx, y: by }, r: 4.2, layer: 'MARK' });
@@ -438,4 +440,33 @@ export function plateCell(sh: Sheet, part: MarkedPart, qty: number, d: DerivedMo
   E.push({ k: 'text', p: { x: bx - 6, y: by - 4.4 }, s: `${part.material} · ${part.weight.toFixed(2)} ק"ג/יח'${gd.size ? ` · חורים ${[...gd].map(([dd, q]) => `${q}×Ø${dd}`).join(', ')}` : ''}`, h: 2.5, align: 'right', layer: 'TEXT' });
   if (g.studs.length) E.push({ k: 'text', p: { x: (box.x0 + box.x1) / 2, y: box.y0 + 6.5 }, s: `${g.studs.length} מוטות עיגון Φ${g.studs[0].d} מרותכים מתחת לפלטה (⊠)`, h: 2.5, align: 'center', layer: 'TEXT' });
   E.push({ k: 'text', p: { x: (box.x0 + box.x1) / 2, y: box.y0 + 2 }, s: `${part.desc}  ·  1:${sc}`, h: 2.5, align: 'center', layer: 'TEXT' });
+}
+
+/**
+ * 1.69: הפניה מקובצת לחורים — "n × Ød" עם קו מוביל מחור אחד בכל קבוצת קוטר, למקום פנוי ליד הפלטה.
+ * holes — מרכזים ורדיוסים במ"מ נייר.
+ */
+export function holeCallouts(E: Sheet['ents'], holes: { c: P; r: number; d: number }[], h: number, region: { x0: number; x1: number; y0: number; y1: number }) {
+  const gd = new Map<number, { c: P; r: number }[]>();
+  for (const x of holes) gd.set(x.d, [...(gd.get(x.d) ?? []), x]);
+  for (const [dd, hs] of gd) {
+    const lab = hs.length > 1 ? `${hs.length} × Ø${dd}` : `Ø${dd}`;
+    const w = approxMeasure(lab, h) * 1.15 + 0.6; // מרווח ביטחון לרוחב (× ו-Ø רחבים מההערכה)
+    // החור הקיצוני (ימני-עליון) — הקו יוצא החוצה מהפלטה
+    const src = hs.reduce((a, b) => (b.c.x + b.c.y > a.c.x + a.c.y ? b : a));
+    let best: { e: P; dx: number } | null = null;
+    for (const dist of [6, 9, 13, 18]) for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+      if (best) break;
+      const e = { x: src.c.x + dx * dist, y: src.c.y + dy * dist * 0.8 };
+      const tx = dx > 0 ? e.x + 0.5 : e.x - 0.5 - w;
+      const b: Box = { x: tx, r: tx + w, y: e.y + 0.1, t: e.y + 0.6 + h };
+      if (b.x < region.x0 || b.r > region.x1 || b.y < region.y0 || b.t > region.y1) continue;
+      if (boxIsFree(E, b, 0.9)) best = { e, dx };
+    }
+    if (!best) continue;
+    const { e, dx } = best, ang = Math.atan2(e.y - src.c.y, e.x - src.c.x);
+    E.push({ k: 'line', a: { x: src.c.x + Math.cos(ang) * src.r, y: src.c.y + Math.sin(ang) * src.r }, b: e, layer: 'DIM' });
+    E.push({ k: 'line', a: e, b: { x: e.x + dx * (w + 1), y: e.y }, layer: 'DIM' });
+    E.push({ k: 'text', p: { x: dx > 0 ? e.x + 0.5 : e.x - 0.5, y: e.y + 0.6 }, s: lab, h, align: dx > 0 ? 'left' : 'right', layer: 'DIM' });
+  }
 }

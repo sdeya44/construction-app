@@ -87,7 +87,7 @@ export const MODULES = {
   drawing: {
     title: 'שרטוטים: גיליונות, חלק, מכלול, PDF/DXF/SVG',
     src: ['src/drawing/'],
-    tests: ['tests/drawings.test.ts', 'tests/layout.test.ts'],
+    tests: ['tests/drawings.test.ts', 'tests/layout.test.ts', 'tests/unit.test.ts'],
     e2e: ['e2e/m4m5.spec.ts', 'e2e/schematics.spec.ts', 'e2e/v135.spec.ts'],
   },
   profiles: {

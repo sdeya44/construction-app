@@ -108,3 +108,21 @@ describe('מספור, מכלולים, כמויות', () => {
     expect(h.current.revision.log.map((x) => `${x.rev}:${x.status}`)).toEqual(['A:approved', 'B:draft']);
   });
 });
+
+describe('PLD-01 תיאור פלטה = מידות בפועל (1.69)', () => {
+  it('כותרת תא הפלטה, התיאור וכתב הכמויות — אותן מידות', async () => {
+    const { defaultBuilding, newProject } = await import('../src/model/defaults');
+    const { generate } = await import('../src/geometry/generate');
+    const { computeFabrication } = await import('../src/fab/marks');
+    const { numberParts } = await import('../src/commands/commands');
+    const { plateGeom } = await import('../src/drawing/part');
+    const p = numberParts().run(newProject('x', defaultBuilding())); const d = generate(p); const fab = computeFabrication(p, d);
+    const plates = fab.parts.filter((x) => x.kind === 'plate' && /PL\d/.test(x.desc));
+    expect(plates.length).toBeGreaterThan(5);
+    for (const pt of plates) {
+      const g = plateGeom(pt, d);
+      const want = `PL${Math.round(g.T)}×${Math.round(g.y1 - g.y0)}×${Math.round(g.x1 - g.x0)}`;
+      expect(pt.desc, pt.mark).toContain(want);
+    }
+  });
+});

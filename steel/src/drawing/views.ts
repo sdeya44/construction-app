@@ -1,10 +1,11 @@
 import { dedupeTexts, placeLabels } from './labels';
+import { braceUnits, braceUnitSheet } from './unit';
 import { approxMeasure } from './layoutAudit';
 import { gutterDev, gutterRuns, gutterSpec, gutterTakeoff } from '../geometry/gutter';
 import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import { cachedSolidPure, silhouetteEdges } from './solidCache';
-import { partSheet, plateCell, plateFaceInBox } from './part';
+import { partSheet, plateCell, plateFaceInBox, plateGeom } from './part';
 import { claddingTakeoff, WALL_HE } from '../geometry/cladding';
 import { assemblyListSheet, assemblySheet, renderIso } from './assembly';
 import { purlinParams } from '../geometry/purlins';
@@ -56,6 +57,8 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
     const nm = p.customDetails?.find((x) => x.id === c.custom!.detailId)?.name ?? 'פרט מותאם';
     out.push({ id: `D-CONN-cd-${c.custom!.detailId}`, type: 'connection', number: `D-${String(types.length + k + 1).padStart(2, '0')}`, title: `פרט ${nm}`, ref: c.id });
   });
+  // 1.69: מכלולי אגד — אגד B ואלכסוני Y בקורה נושאת (ריתוכים, בועות, פרטי פלטות)
+  braceUnits(p, d).forEach((u, i) => out.push({ id: `D-UNIT-${i + 1}`, type: 'brace-unit', number: `U-${String(i + 1).padStart(2, '0')}`, title: `מכלול ${u.id.startsWith('BB.') ? 'אגד B' : 'אלכסוני Y — קורה נושאת'}${u.refs.length > 1 ? ` (×${u.refs.length})` : ''}`, ref: u.id }));
   // משפחות פרטים נוספות באותו סוג חיבור (נעילה אופקית, מכפל, אגד B, עיגון לקיר, מוט הברגה) — גיליון פרט לכל משפחה
   {
     const firstIds = new Set(out.filter((x) => x.type === 'connection').map((x) => x.ref));
@@ -93,7 +96,16 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
   // מוטות עיגון — ללא גיליון חלק (מופיעים ברשימת החומרים ובתוכנית ברגי העיגון)
   const isAnchor = (mk: string) => d.byId.get(fab.parts.find((x) => x.mark === mk)?.memberId ?? '')?.kind === 'anchor';
   for (const m of parts.filter((x) => !isPlate(x) && !isAnchor(x))) out.push({ id: `D-PART-${m}`, type: 'part', number: `P-${m}`, title: `שרטוט חלק ${m}`, ref: m });
-  const plates = parts.filter(isPlate);
+  // 1.69: פלטה גדולה (מעל 600 מ"מ) או מסובכת (מתאר עם יותר מ-6 קודקודים / יותר מ-12 חורים) — גיליון משלה, בקנ"מ גדול
+  const bigPlate = (mk: string) => {
+    const pt = fab.parts.find((x) => x.mark === mk); if (!pt || !d.byId.get(pt.memberId)) return false;
+    const g = plateGeom(pt, d);
+    const verts = new Set(g.face.flatMap(([a, b]) => [a, b]).map((q) => `${Math.round(q.x)}|${Math.round(q.y)}`)).size;
+    return Math.max(g.x1 - g.x0, g.y1 - g.y0) > 600 || verts > 6 || g.holes.length > 12;
+  };
+  const allPlates = parts.filter(isPlate);
+  for (const mk of allPlates.filter(bigPlate)) out.push({ id: `D-PLATE-${mk}`, type: 'plates', number: `PL-${mk}`, title: `פלטה ${mk}`, ref: mk, refs: [mk] });
+  const plates = allPlates.filter((mk) => !bigPlate(mk));
   const per = (p.settings.paper ?? 'A4') === 'A4' ? 6 : 8;
   for (let i = 0; i * per < plates.length; i++) {
     const g = plates.slice(i * per, (i + 1) * per);
@@ -235,7 +247,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
 function buildSheetSized(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrication, bom: Bom, rec?: DrawingRecord): Sheet {
   if (rec?.sheet) return buildSheetOn(def, p, d, fab, bom, rec, rec.sheet);
   if (def.type === 'plates' || def.type === 'labels' || def.type === 'sequence') return buildSheetOn(def, p, d, fab, bom, rec, def.type === 'plates' ? p.settings.paper ?? 'A4' : 'A4');
-  if ((p.settings.paper ?? 'A4') === 'A4' && def.type !== 'assembly') {
+  if ((p.settings.paper ?? 'A4') === 'A4' && def.type !== 'assembly' && def.type !== 'brace-unit') {
     const sh = buildSheetOn(def, p, d, fab, bom, rec, 'A4');
     const partKind = def.type === 'part' ? d.byId.get(fab.parts.find((x) => x.mark === def.ref)?.memberId ?? '')?.kind : undefined;
     const max = def.type === 'part' && partKind !== 'plate' ? 50 : A4_MAX_SCALE[def.type];
@@ -660,7 +672,9 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
     }
     case 'plates': {
       const marks = def.refs ?? (def.ref ?? '').split(',');
-      const nC = sh.size === 'A4' ? 3 : 4, nR = 2;
+      // גיליון של פלטה אחת (גדולה/מסובכת): כל אזור השרטוט לתא אחד — קנ"מ גדול
+      const single = def.id.startsWith('D-PLATE-');
+      const nC = single ? 1 : sh.size === 'A4' ? 3 : 4, nR = single ? 1 : 2;
       const cw = (area.x1 - area.x0) / nC, chh = (area.y1 - area.y0) / nR;
       marks.forEach((mk, i) => {
         const pt = fab.parts.find((x) => x.mark === mk); if (!pt) return;
@@ -1118,6 +1132,10 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
         if (c.bolts.length === 4 && st === 'plate') T('תושבת בתפר פטה: 2 ברגים לכל פטה — שני קצות הפטות נפגשים מעל התושבת.');
       }
       T('גיאומטריה בלבד — אין בדיקת חוזק לברגים, ריתוכים ופלטות.');
+      break;
+    }
+    case 'brace-unit': {
+      scaleLabel = braceUnitSheet(sh, def, d, fab, braceUnits(p, d), area);
       break;
     }
     case 'assembly': {

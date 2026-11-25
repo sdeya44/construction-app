@@ -172,7 +172,7 @@ export function computeFabrication(project: Project, d: DerivedModel): Fabricati
     const tCanon = holes.filter((h) => h.face !== 'section').map((h) => (isRev ? p.length - h.t : h.t)).sort((a, b) => a - b);
     shapes.set(p.id, { key: [m.kind, p.profile, p.material, isRev ? cutEnd : cutStart, isRev ? cutStart : cutEnd, [...hShape].sort().join(';'), cont].join('|'), length: p.length, ts: tCanon });
     parts.push({
-      ...p, mark: '', provisional: false, kind: m.kind, desc: m.partDesc ?? `${m.profile}`,
+      ...p, mark: '', provisional: false, kind: m.kind, desc: plateDesc(m, m.partDesc ?? `${m.profile}`),
       weight: m.contour ? (contourArea(m.contour) * pr.dims.t * getMaterial(p.material).density) / 1e9 : (massPerMeter(pr, getMaterial(p.material).density) * p.length) / 1000,
       holes, cutStart, cutEnd, assembly: '', signature: sig,
     });
@@ -293,3 +293,15 @@ export function commitNumbering(project: Project, fab: Fabrication): Project['ma
 }
 
 void memberSolid;
+
+/**
+ * 1.69: תיאור פלטה עם המידות הגיאומטריות בפועל (מעטפת המוצק: עובי × רוחב × אורך) — מקור אחד לכותרת התא,
+ * לכיתוב, לכתב הכמויות ולטבלאות. קודם התיאור נשא את המידות שבמחולל (למשל משולש 159×434 מול 158×436 בפועל).
+ */
+export function plateDesc(m: Member, desc: string): string {
+  if (m.kind !== 'plate' || !/PL\d/.test(desc)) return desc;
+  const f = localFrame(m), s = memberSolid(m), pts = [...s.startRing, ...s.endRing];
+  const ext = [f.ex, f.u, f.v].map((a) => { const w = pts.map((q) => dot(q, a)); return Math.max(...w) - Math.min(...w); }).sort((a, b) => a - b);
+  const [T, W, L] = ext.map((x) => Math.round(x));
+  return desc.replace(/PL\d+(?:\.\d+)?[×x]\d+(?:\.\d+)?[×x]\d+(?:\.\d+)?/, `PL${T}×${W}×${L}`);
+}
