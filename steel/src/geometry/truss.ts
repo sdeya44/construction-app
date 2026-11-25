@@ -185,7 +185,8 @@ export function buildTrussPlane(t: TrussPlaneIn): { members: Member[]; connectio
   const angleTo = (w: Web, atTop: boolean) => {
     const sb = t.nodes[w.bot], st = t.nodes[w.top];
     const d = norm(sub(P(st, t.top.z(st)), P(sb, t.bot.z(sb))));
-    const c = atTop ? t.top : t.bot, s = atTop ? st : sb, m = slopeAt(c, s);
+    // שיפוע החגורה בצד של האלכסון (ברכס השיפוע משתנה — לוקחים את הצד שאליו האלכסון פונה)
+    const c = atTop ? t.top : t.bot, s = atTop ? st : sb, m = slopeAt(c, s + Math.sign((atTop ? sb : st) - s));
     const ch = norm(add(t.e, scale(Z, m)));
     return Math.max(0.2, Math.sqrt(Math.max(0, 1 - dot(d, ch) ** 2)));
   };
@@ -206,7 +207,7 @@ export function buildTrussPlane(t: TrussPlaneIn): { members: Member[]; connectio
   const sAt = (w: Web, atTop: boolean) => {
     const i = atTop ? w.top : w.bot, c = atTop ? t.top : t.bot;
     const o = offset.get(`${w.id}|${atTop}`) ?? 0;
-    const m = slopeAt(c, t.nodes[i]);
+    const m = slopeAt(c, t.nodes[i] + Math.sign(o));
     return t.nodes[i] + o / Math.hypot(1, m);
   };
   const cutPlane = (atTop: boolean, s: number): Plane => {
@@ -301,34 +302,47 @@ export function trussFrames(p: Project): string[] {
   return rt.frames === 'all' ? p.building.frames.map((f) => f.id) : rt.frames.filter((id) => p.building.frames.some((f) => f.id === id));
 }
 
-interface RoofLayout { x0: number; x1: number; xR: number | null; nodes: number[]; rafters: Member[]; colL: Member; colR: Member }
-/** צמתי המסבך לאורך X בין פני העמודים הפנימיים; ברכס — צומת */
-export function roofTrussLayout(p: Project, members: Member[], frameId: string): RoofLayout | null {
+interface RoofLayout { x0: number; x1: number; xR: number | null; nodes: number[]; rafters: Member[]; colL: Member; colR: Member; /** מספר המפתח (1…) במסגרת רב-מפתחית; 0 = מפתח יחיד */ bay: number }
+/**
+ * צמתי המסבך לאורך X בין פני העמודים; ברכס — צומת.
+ * מסגרת רב-מפתחית (1.66): מסבך נפרד בכל מפתח בין שני עמודים סמוכים.
+ */
+export function roofTrussLayouts(p: Project, members: Member[], frameId: string): RoofLayout[] {
   const rt = p.building.roofTruss!;
   const cols = members.filter((m) => m.kind === 'column' && m.frameId === frameId).sort((a, b) => a.start.x - b.start.x);
-  const rafters = members.filter((m) => m.kind === 'rafter' && m.frameId === frameId);
-  if (cols.length !== 2 || !rafters.length) return null;
-  const [colL, colR] = [cols[0], cols[cols.length - 1]];
-  const hc = (c: Member) => tryProfile(c.profile)?.props.h ?? 200;
-  const x0 = colL.start.x + hc(colL) / 2 + 20, x1 = colR.start.x - hc(colR) / 2 - 20;
-  // רכס: נקודה שבה שתי קורות נפגשות בתוך התחום
-  const ends = rafters.flatMap((r) => [r.start.x, r.end.x]).filter((x) => x > x0 + 500 && x < x1 - 500);
-  const xR = rafters.length >= 2 && ends.length ? ends.reduce((a, b) => a + b, 0) / ends.length : null;
-  let n = Math.max(2, Math.round(rt.spec.panels));
-  const nodes: number[] = [];
-  if (xR !== null) {
-    if (n % 2) n += 1;
-    // שדות לא אחידים: כל חצי לפי חציו של panelLens (הרכס תמיד צומת)
-    const L = hasPanelLens(rt.spec) && rt.spec.panelLens!.length === n ? rt.spec.panelLens! : null;
-    const half = (ls: number[] | null, a: number, b: number, first: boolean) => {
-      const m = n / 2, tot = ls ? ls.reduce((q, w) => q + w, 0) : m;
-      let acc = 0;
-      for (let i = first ? 0 : 1; i <= m; i++) { if (i > 0) acc += ls ? ls[i - 1] : 1; nodes.push(i === m ? b : a + ((b - a) * (i === 0 ? 0 : acc)) / tot); }
-    };
-    half(L ? L.slice(0, n / 2) : null, x0, xR, true);
-    half(L ? L.slice(n / 2) : null, xR, x1, false);
-  } else nodes.push(...trussNodes(rt.spec, x0, x1));
-  return { x0, x1, xR, nodes, rafters, colL, colR };
+  const allRafters = members.filter((m) => m.kind === 'rafter' && m.frameId === frameId);
+  if (cols.length < 2 || !allRafters.length) return [];
+  const out: RoofLayout[] = [];
+  for (let k = 0; k + 1 < cols.length; k++) {
+    const colL = cols[k]!, colR = cols[k + 1]!;
+    const hc = (c: Member) => tryProfile(c.profile)?.props.h ?? 200;
+    const x0 = colL.start.x + hc(colL) / 2 + 20, x1 = colR.start.x - hc(colR) / 2 - 20;
+    const rafters = allRafters.filter((m) => Math.max(m.start.x, m.end.x) > x0 + 1 && Math.min(m.start.x, m.end.x) < x1 - 1);
+    if (!rafters.length || x1 - x0 < 1000) continue;
+    // רכס: נקודה שבה שתי קורות נפגשות בתוך התחום
+    const ends = rafters.flatMap((r) => [r.start.x, r.end.x]).filter((x) => x > x0 + 500 && x < x1 - 500);
+    const xR = rafters.length >= 2 && ends.length ? ends.reduce((a, b) => a + b, 0) / ends.length : null;
+    let n = Math.max(2, Math.round(rt.spec.panels));
+    const nodes: number[] = [];
+    if (xR !== null) {
+      if (n % 2) n += 1;
+      // שדות לא אחידים: כל חצי לפי חציו של panelLens (הרכס תמיד צומת)
+      const L = hasPanelLens(rt.spec) && rt.spec.panelLens!.length === n ? rt.spec.panelLens! : null;
+      const half = (ls: number[] | null, a: number, b: number, first: boolean) => {
+        const m = n / 2, tot = ls ? ls.reduce((q, w) => q + w, 0) : m;
+        let acc = 0;
+        for (let i = first ? 0 : 1; i <= m; i++) { if (i > 0) acc += ls ? ls[i - 1]! : 1; nodes.push(i === m ? b : a + ((b - a) * (i === 0 ? 0 : acc)) / tot); }
+      };
+      half(L ? L.slice(0, n / 2) : null, x0, xR, true);
+      half(L ? L.slice(n / 2) : null, xR, x1, false);
+    } else nodes.push(...trussNodes(rt.spec, x0, x1));
+    out.push({ x0, x1, xR, nodes, rafters, colL, colR, bay: cols.length > 2 ? k + 1 : 0 });
+  }
+  return out;
+}
+/** מפתח יחיד / ראשון (תאימות לאחור) */
+export function roofTrussLayout(p: Project, members: Member[], frameId: string): RoofLayout | null {
+  return roofTrussLayouts(p, members, frameId)[0] ?? null;
 }
 
 /** קורת הגג (TOS על הקו) — גובה ציר ושיפוע ב-x */
@@ -345,12 +359,10 @@ function rafterAt(rafters: Member[], x: number) {
 export function roofTrussRafterSplices(p: Project, members: Member[]): Record<string, number[]> {
   const out: Record<string, number[]> = {};
   const stock = p.settings.stockLength - 30;
-  for (const fid of trussFrames(p)) {
-    const L = roofTrussLayout(p, members, fid);
-    if (!L) continue;
+  for (const fid of trussFrames(p)) for (const L of roofTrussLayouts(p, members, fid)) {
     for (const r of L.rafters) {
       const len = Math.hypot(r.end.x - r.start.x, r.end.z - r.start.z);
-      if (len <= stock || r.id in p.splices) continue;
+      if (len <= stock || r.id in p.splices || r.id in out) continue;
       const lo = Math.min(r.start.x, r.end.x), hi = Math.max(r.start.x, r.end.x);
       // תפר באמצע שדה (חופשי מצמתים), מוזז בתוך השדה הרחק מתומכי הפטות על הקורה
       const pxs = members.filter((m) => m.purlin).map((m) => m.start.x);
@@ -382,10 +394,14 @@ export function buildRoofTrusses(p: Project, members: Member[], splices: Record<
   if (!pb) { res.issues.push({ code: 'PROFILE', severity: 'error', message: `מסבך גג: חתך חגורה תחתונה לא מוכר ${spec.profiles.bottom}` }); return res; }
   for (const k of ['endDiag', 'diag', 'vert'] as const) if (!tryProfile(spec.profiles[k])) { res.issues.push({ code: 'PROFILE', severity: 'error', message: `מסבך גג: חתך לא מוכר ${spec.profiles[k]}` }); return res; }
   for (const fid of trussFrames(p)) {
-    const L = roofTrussLayout(p, members, fid);
+    const Ls = roofTrussLayouts(p, members, fid);
     const fi = p.building.frames.findIndex((f) => f.id === fid) + 1;
-    if (!L) { res.issues.push({ code: 'TRUSS_FRAME', severity: 'warning', message: `מסבך גג מסגרת ${fi}: נתמך רק בחתך עם שני עמודים (מפתח אחד)` }); continue; }
+    if (!Ls.length) { res.issues.push({ code: 'TRUSS_FRAME', severity: 'warning', message: `מסבך גג מסגרת ${fi}: לא נמצאו שני עמודים וקורת גג במפתח` }); continue; }
     res.skipKnee.add(fid);
+    for (const L of Ls) {
+    // מזהים: מפתח יחיד — כמו קודם; רב-מפתחי — סיומת .S<מפתח>
+    const sx = L.bay ? `.S${L.bay}` : '';
+    const bl = L.bay ? ` מפתח ${L.bay}` : '';
     const y = L.colL.start.y;
     const top = (x: number) => rafterAt(L.rafters, x).axis;
     const zEnd = Math.min(top(L.x0), top(L.x1)) - spec.depth;
@@ -419,11 +435,11 @@ export function buildRoofTrusses(p: Project, members: Member[], splices: Record<
     const bc: Member[] = [];
     for (let i = 1; i < segX.length; i++) {
       const xa = segX[i - 1], xb = segX[i];
-      const id = `${fid}.BC.${i}`;
+      const id = `${fid}${sx}.BC.${i}`;
       const zA = bz(xa), zB = bz(xb);
       const vertPlane = (x: number): Plane => ({ point: v3(x, y, 0), normal: v3(1, 0, 0) });
       const m: Member = {
-        id, kind: 'beam', label: `חגורה תחתונה מסבך מסגרת ${fi}${segX.length > 2 ? ` (${i}/${segX.length - 1})` : ''}`, start: v3(xa, y, zA), end: v3(xb, y, zB),
+        id, kind: 'beam', label: `חגורה תחתונה מסבך מסגרת ${fi}${bl}${segX.length > 2 ? ` (${i}/${segX.length - 1})` : ''}`, start: v3(xa, y, zA), end: v3(xb, y, zB),
         profile: spec.profiles.bottom, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: Z, source: 'generated', manualPlacement: false, frameId: fid,
         startCut: vertPlane(xa + (i === 1 ? 0 : 15.2)), endCut: vertPlane(xb - (i === segX.length - 1 ? 0 : 15.2)),
       };
@@ -436,9 +452,9 @@ export function buildRoofTrusses(p: Project, members: Member[], splices: Record<
       // חלק קורת הגג אחרי חיבור המשך — עדיין אותו אלמנט (הפיצול לחלקים לפי splices)
       return r.id;
     };
-    const cid = `C.TR.${fid}`;
+    const cid = `C.TR.${fid}${sx}`;
     const tp = buildTrussPlane({
-      idBase: `TR.${fid}`, connId: cid, label: `מסבך גג מסגרת ${fi}`, origin: v3(0, y, 0), e: v3(1, 0, 0), nodes: L.nodes,
+      idBase: `TR.${fid}${sx}`, connId: cid, label: `מסבך גג מסגרת ${fi}${bl}`, origin: v3(0, y, 0), e: v3(1, 0, 0), nodes: L.nodes,
       top: { z: top, h: rafterAt(L.rafters, L.x0).h, memberAt: rafAt },
       bot: { z: bz, h: pb.props.h, memberAt: bcAt }, spec: { ...spec, cells: fitCells(spec, L.nodes.length - 1, L.xR !== null), verts: fitVerts(spec, L.nodes.length - 1, L.xR !== null) }, mat,
     });
@@ -447,14 +463,14 @@ export function buildRoofTrusses(p: Project, members: Member[], splices: Record<
     for (let i = 1; i < bc.length; i++) {
       // פלטות אנכיות (החגורה נחתכת אנכית); בחגורה משופעת — גובה החתך האנכי h/cos
       const mx = Math.max(...[bc[i - 1], bc[i]].map((q) => Math.abs((q.end.z - q.start.z) / ((q.end.x - q.start.x) || 1))));
-      const sp = chordSplice(`C.TRS.${fid}.${i}`, `חיבור המשך חגורה תחתונה מסבך מסגרת ${fi}`, bc[i - 1], bc[i], v3(segX[i], y, bz(segX[i])), v3(1, 0, 0), mat, pb.props.h * Math.hypot(1, mx));
+      const sp = chordSplice(`C.TRS.${fid}${sx}.${i}`, `חיבור המשך חגורה תחתונה מסבך מסגרת ${fi}${bl}`, bc[i - 1], bc[i], v3(segX[i], y, bz(segX[i])), v3(1, 0, 0), mat, pb.props.h * Math.hypot(1, mx));
       res.members.push(...sp.members); res.connections.push(sp.connection);
     }
     // חגורה תחתונה ↔ עמוד: פלטת קצה מרותכת לחגורה, 4×M16 דרך אגף העמוד (שטח)
     for (const [col, m, sgn] of [[L.colL, bc[0], 1], [L.colR, bc[bc.length - 1], -1]] as const) {
       const cpr = getProfile(col.profile);
       const xF = col.start.x + sgn * cpr.props.h / 2;
-      const id = `C.TRE.${fid}.${sgn > 0 ? 'L' : 'R'}`;
+      const id = `C.TRE.${fid}${sx}.${sgn > 0 ? 'L' : 'R'}`;
       const z0 = sgn > 0 ? m.start.z : m.end.z;
       const T = 15, cb = cpr.props.b, hb = pb.props.h;
       const W = Math.min(cb, pb.props.b + 60), H = hb + 2 * 70;
@@ -470,10 +486,11 @@ export function buildRoofTrusses(p: Project, members: Member[], splices: Record<
         bolts.push(makeBolt(`${id}.B${++k}`, id, v3(xF + sgn * T, y + dy, z0 + dz), v3(-sgn, 0, 0), BOLT, T + (cpr.dims.tf ?? 10), 'site', [ep.id, col.id], Z, out));
       }
       res.members.push(...out);
-      res.connections.push({ id, type: 'truss-end', label: `חגורה תחתונה ↔ עמוד מסבך מסגרת ${fi}`, members: [col.id, m.id], parts: out.map((x) => x.id), bolts,
+      res.connections.push({ id, type: 'truss-end', label: `חגורה תחתונה ↔ עמוד מסבך מסגרת ${fi}${bl}`, members: [col.id, m.id], parts: out.map((x) => x.id), bolts,
         welds: [{ id: `${id}.W1`, connId: id, type: 'fillet', a: 5, length: Math.round(2 * (pb.props.b + hb)), location: 'shop', between: [m.id, ep.id], from: v3(xF + sgn * T, y, z0), to: v3(xF + sgn * T, y, z0) }],
         status: 'not-verified', fixity: 'pinned', overridden: false });
-      if (W / 2 - 30 < pb.props.b / 2 + 10 && hb + 70 > H) res.issues.push({ code: 'TRUSS_END', severity: 'warning', elementId: id, message: `מסבך מסגרת ${fi}: ברגי החגורה התחתונה קרובים לחגורה — בדוק גישה` });
+      if (W / 2 - 30 < pb.props.b / 2 + 10 && hb + 70 > H) res.issues.push({ code: 'TRUSS_END', severity: 'warning', elementId: id, message: `מסבך מסגרת ${fi}${bl}: ברגי החגורה התחתונה קרובים לחגורה — בדוק גישה` });
+    }
     }
   }
   if (res.skipKnee.size) res.issues.push({ code: 'TRUSS_INFO', severity: 'info', message: `מסבכי גג ב-${res.skipKnee.size} מסגרות: צמתים מרותכים במסגריה, חיבורי המשך וחגורה–עמוד מוברגים בשטח. גיאומטריה והערכת גודל בלבד — לאישור מהנדס` });

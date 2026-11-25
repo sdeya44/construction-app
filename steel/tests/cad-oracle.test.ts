@@ -84,4 +84,17 @@ describe('CAD-02 תיקוני גיאומטריה שנמצאו בביקורת', (
     for (const p of tilted) expect(Math.abs(p.refUp.y)).toBeGreaterThan(0.05);
     expect(cadFindings(cadAudit(K, d, seats))).toEqual([]);
   }, 120000);
+  it('מסבך גג רב-מפתחי (1.66) ואלכסוני הרכס: ריתוכים במגע, אין חדירות', async () => {
+    const { defaultTrussSpec } = await import('../src/geometry/truss');
+    const g = defaultBuilding();
+    g.roofTruss = { enabled: true, frames: [g.frames[0]!.id], shape: 'flat', spec: defaultTrussSpec(8, 1000, { top: g.rafterProfile }) };
+    const dg = generate(newProject('g', g));
+    expect(cadFindings(cadAudit(K, dg, dg.connections.filter((c) => c.type === 'truss'))), 'מפתח יחיד').toEqual([]);
+    const b = { ...defaultBuilding(), section: SECTION_TEMPLATES.find((t) => t.id === 'twin-gable')!.make() };
+    b.roofTruss = { enabled: true, frames: [b.frames[0]!.id], shape: 'flat', spec: defaultTrussSpec(8, 1000, { top: b.rafterProfile }) };
+    const d = generate(newProject('t', b));
+    const cs = d.connections.filter((c) => /^C\.TR[ES]?\./.test(c.id) && c.id.includes('.S2'));
+    expect(cs.length).toBeGreaterThan(1);
+    expect(cadFindings(cadAudit(K, d, cs))).toEqual([]);
+  }, 300000);
 });

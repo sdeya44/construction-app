@@ -289,7 +289,7 @@ export function RoofTrussPanel({ part }: { part?: 'loc' | 'geo' } = {}) {
       {ed.showTitle && !part && <div className="panel-title">מסבכי גג
         <label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="rt-on" checked={!!rt?.enabled} onChange={(e) => set({ enabled: e.target.checked })} />פעיל</label>
       </div>}
-      {ed.showTitle && !part && <Help>קורת הגג היא החגורה העליונה; חגורה תחתונה, אנכיים ואלכסונים מרותכים במסגריה; חיבורי המשך וחיבור החגורה לעמודים — ברגים בשטח. לחתך עם שני עמודים (מפתח אחד).</Help>}
+      {ed.showTitle && !part && <Help>קורת הגג היא החגורה העליונה; חגורה תחתונה, אנכיים ואלכסונים מרותכים במסגריה; חיבורי המשך וחיבור החגורה לעמודים — ברגים בשטח. בכל מפתח בין שני עמודים — גם במסגרת רב-מפתחית.</Help>}
       {!rt?.enabled && ed.showTitle && !part && <OffCard pic="roofX" title="מסבכי גג" desc="קורת הגג הופכת לחגורה עליונה של מסבך — למפתחים גדולים" onAdd={() => set({ enabled: true })} testId="off-rt" />}
       {rt?.enabled && <>
         {part !== 'geo' && <FramePickStrip frames={fr} sel={sel} onToggle={toggleFrame} testPre="rt-f-" label={`מסגרות עם מסבך: ${sel.length} מתוך ${fr.length} — לחיצה על מסגרת מוסיפה/מסירה`} />}

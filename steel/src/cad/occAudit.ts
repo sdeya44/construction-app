@@ -214,6 +214,8 @@ export function cadAudit(K: CadKernel, d: DerivedModel, conns: Connection[] = d.
       const bx = new Map(solids.map((id) => [id, box(d.byId.get(id)!)]));
       for (let i = 0; i < solids.length; i++) for (let j = i + 1; j < solids.length; j++) {
         const a = solids[i]!, b = solids[j]!;
+        // גוף בורג ואום — חומרה מושחלת זו על זו, לא התנגשות
+        if (d.byId.get(a)!.kind === 'bolt' && d.byId.get(b)!.kind === 'bolt') continue;
         if (welded.has([a, b].sort().join('|')) || !boxesTouch(bx.get(a)!, bx.get(b)!, 0.01)) continue;
         const r = pair(c.id, a, b);
         if (r && r.overlap > OVERLAP_TOL) res.clashes.push(r);

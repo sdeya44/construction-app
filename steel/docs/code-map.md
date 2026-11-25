@@ -38,7 +38,7 @@
 | ביקורת CAD (OpenCascade, בבדיקות בלבד) | `cad/occAudit.ts` | cad |
 
 ## תצוגה (`src/view/`)
-`viewport.ts` (**911 שורות**, סצנה ראשית, בחירה, מידות), `scene.ts` (צבעים), `realView.ts` (רינדור ריאליסטי, `familySet`/`connSet`/`endCloseup`) · מודול view.
+`viewport.ts` (**911 שורות**, סצנה ראשית, בחירה, מידות), `zoom.ts` (מהירות זום, כיוון ב-`ui/LayersMenu.tsx`), `scene.ts` (צבעים), `realView.ts` (רינדור ריאליסטי, `familySet`/`connSet`/`endCloseup`) · מודול view.
 
 ## ממשק (`src/ui/`) — מודול ui (+ e2e)
 | אזור | קבצים | בדיקות דפדפן |

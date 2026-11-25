@@ -179,3 +179,29 @@ describe('מסבכים', () => {
     expect(generate(newProject('x', bw)).issues.some((i) => i.code === 'PLATE_WIDE')).toBe(true);
   });
 });
+
+describe('TR-MS מסבך גג במסגרת רב-מפתחית (1.66)', () => {
+  it('מסבך נפרד בכל מפתח, מזהים .S<n>, ללא שגיאות', async () => {
+    const { defaultBuilding, newProject } = await import('../src/model/defaults');
+    const { generate } = await import('../src/geometry/generate');
+    const { SECTION_TEMPLATES } = await import('../src/model/section');
+    const { defaultTrussSpec } = await import('../src/geometry/truss');
+    for (const tpl of ['mono-multi', 'twin-gable', 'gable-inner']) {
+      const b = { ...defaultBuilding(), section: SECTION_TEMPLATES.find((t) => t.id === tpl)!.make() };
+      b.roofTruss = { enabled: true, frames: 'all', shape: 'flat', spec: defaultTrussSpec(8, 1000, { top: b.rafterProfile }) };
+      const d = generate(newProject(tpl, b));
+      expect(d.issues.filter((i) => i.severity === 'error').map((i) => `${tpl}: ${i.message}`)).toEqual([]);
+      const f1 = b.frames[0]!.id;
+      const cols = d.members.filter((m) => m.kind === 'column' && m.frameId === f1).length;
+      const tr = d.connections.filter((c) => c.type === 'truss' && (c.id === `C.TR.${f1}` || c.id.startsWith(`C.TR.${f1}.S`)));
+      expect(tr.length, tpl).toBe(cols - 1);
+      if (cols > 2) {
+        expect(tr.map((c) => c.id).sort()).toEqual(Array.from({ length: cols - 1 }, (_, i) => `C.TR.${f1}.S${i + 1}`).sort());
+        expect(d.members.some((m) => m.id === `${f1}.S1.BC.1`)).toBe(true);
+        // חגורה תחתונה מחוברת לשני העמודים בכל מפתח
+        expect(d.connections.filter((c) => c.type === 'truss-end' && c.id.startsWith(`C.TRE.${f1}.S`)).length).toBe(2 * (cols - 1));
+      }
+      expect(d.issues.some((i) => i.code === 'TRUSS_FRAME' && i.severity === 'warning')).toBe(false);
+    }
+  });
+});

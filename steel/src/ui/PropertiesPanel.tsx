@@ -123,7 +123,7 @@ function PropertiesInner() {
   const plateLike = m.kind === 'plate' || m.kind === 'cleat' || m.kind === 'bolt' || m.kind === 'anchor';
   const asm = assemblyOf(m, d);
   const fam = asm && asm.family !== 'frame' ? asm : null;
-  const inRT = !!p.building.roofTruss?.enabled && !plateLike && (/^TR\./.test(m.id) || /^F[^.]+\.BC\.\d+$/.test(m.id) || (m.kind === 'rafter' && !!m.frameId && trussFrames(p).includes(m.frameId)));
+  const inRT = !!p.building.roofTruss?.enabled && !plateLike && (/^TR\./.test(m.id) || /^F[^.]+(?:\.S\d+)?\.BC\.\d+$/.test(m.id) || (m.kind === 'rafter' && !!m.frameId && trussFrames(p).includes(m.frameId)));
   const tbDef = /^TB\./.test(m.id) && !plateLike ? (p.building.transfers ?? []).find((t) => t.id === m.id.split('.')[1]) ?? null : null;
   const custom = plateLike && m.connId?.startsWith('C.CD.') ? d.connById.get(m.connId)?.custom : undefined;
   const opts = scopeOptions(m, d);
@@ -347,7 +347,7 @@ function profileRoute(m: Member, p: Project): { all: (v: string) => Command; one
     }
   }
   const rt = b.roofTruss;
-  if (rt?.enabled && (/^TR\./.test(id) || /^F[^.]+\.BC\.\d+$/.test(id))) {
+  if (rt?.enabled && (/^TR\./.test(id) || /^F[^.]+(?:\.S\d+)?\.BC\.\d+$/.test(id))) {
     const n = rt.spec.panels, dm = /\.D(\d+)[ab]$/.exec(id);
     const g: keyof TrussSpec['profiles'] = /\.BC\.\d+$/.test(id) ? 'bottom' : /\.V\d+$/.test(id) ? 'vert' : dm ? (+dm[1] === 0 || +dm[1] === n - 1 ? 'endDiag' : 'diag') : 'diag';
     return { all: (v) => setBuilding({ roofTruss: { ...rt, spec: { ...rt.spec, profiles: { ...rt.spec.profiles, [g]: v } } } }), one: false, what: `${TRUSS_GROUP_HE[g]} במסבכי הגג` };

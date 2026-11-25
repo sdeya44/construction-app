@@ -208,8 +208,10 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
         setCut(rl!, e0, { point: sub(top, scale(X, prm.t)), normal: X });
         setCut(rr!, e1, { point: add(top, scale(X, prm.t)), normal: X });
         const pl = `${id}.PL1`, pr = `${id}.PL2`;
-        res.members.push(partMember(pl, 'plate', `PL${prm.w}x${Hp.toFixed(1)}`, sub(top, scale(X, prm.t)), top, Z, 'top', id, `פלטת קצה PL${prm.t}×${prm.w}×${Math.ceil(Hp)}`, mat));
-        res.members.push(partMember(pr, 'plate', `PL${prm.w}x${Hp.toFixed(1)}`, top, add(top, scale(X, prm.t)), Z, 'top', id, `פלטת קצה PL${prm.t}×${prm.w}×${Math.ceil(Hp)}`, mat));
+        // פלטה אנכית בעובי t אמיתי (נורמל X): לאורך Z מהרכס למטה Hp — עובי, חורים וקינון נכונים בייצור (1.66)
+        const pc = (k: number) => add(top, scale(X, k * prm.t / 2));
+        res.members.push(partMember(pl, 'plate', `PL${prm.w}x${prm.t}`, sub(pc(-1), scale(Z, Hp)), pc(-1), X, 'center', id, `פלטת קצה PL${prm.t}×${prm.w}×${Math.ceil(Hp)}`, mat));
+        res.members.push(partMember(pr, 'plate', `PL${prm.w}x${prm.t}`, sub(pc(1), scale(Z, Hp)), pc(1), X, 'center', id, `פלטת קצה PL${prm.t}×${prm.w}×${Math.ceil(Hp)}`, mat));
         const e = Math.max(40, 1.5 * (prm.bolt.d + prm.bolt.clearance));
         const zs = rows <= 1 ? [Hp / 2] : Array.from({ length: rows }, (_, i) => e + ((Hp - 2 * e) * i) / (rows - 1));
         const bolts: BoltInfo[] = [];

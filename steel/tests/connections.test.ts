@@ -173,3 +173,26 @@ describe('CONN – חיבורים', () => {
     expect(generate(p).issues.some((i) => i.code === 'BOLT_EDGE' && i.elementId === 'C.EAVE.F1.L' && i.severity === 'warning')).toBe(true);
   });
 });
+
+describe('RIDGE-PL פלטת רכס בעובי אמיתי (1.66)', () => {
+  it('חתך PL רוחב×עובי, פלטה אנכית, החורים בפני הפלטה', async () => {
+    const { defaultBuilding, newProject } = await import('../src/model/defaults');
+    const { generate } = await import('../src/geometry/generate');
+    const { computeFabrication } = await import('../src/fab/marks');
+    const { numberParts } = await import('../src/commands/commands');
+    const p = newProject('r', defaultBuilding());
+    const d = generate(p);
+    const c = d.connections.find((x) => x.type === 'ridge')!;
+    const prm = p.connectionDefaults.ridge;
+    for (const id of [`${c.id}.PL1`, `${c.id}.PL2`]) {
+      const m = d.byId.get(id)!;
+      expect(m.profile).toBe(`PL${prm.w}x${prm.t}`);
+      expect(Math.abs(m.end.z - m.start.z)).toBeGreaterThan(300); // לאורך Z — גובה הפלטה
+      expect(Math.abs(m.refUp.x)).toBe(1); // עובי לאורך X
+    }
+    const fab = computeFabrication(numberParts().run(p), d);
+    const part = fab.parts.find((x) => x.memberId === `${c.id}.PL1`)!;
+    expect(part.holes.length).toBe(c.bolts.length);
+    expect(part.holes.every((h) => h.face === 'flange')).toBe(true);
+  });
+});

@@ -63,7 +63,7 @@ export const MODULES = {
   truss: {
     title: 'מסבכים ונעילה',
     src: ['src/geometry/truss.ts', 'src/geometry/lockTruss.ts'],
-    tests: ['tests/truss.test.ts', 'tests/locktruss.test.ts', cad('· truss')],
+    tests: ['tests/truss.test.ts', 'tests/locktruss.test.ts', cad('· truss'), { file: 'tests/cad-oracle.test.ts', t: 'מסבך גג רב-מפתחי' }],
     e2e: ['e2e/truss.spec.ts'],
   },
   struts: {
@@ -104,9 +104,9 @@ export const MODULES = {
   },
   view: {
     title: 'תלת-ממד ותמונות',
-    src: ['src/view/', 'src/ui/LiveView3D.tsx', 'src/ui/RealPic.tsx'],
+    src: ['src/view/', 'src/ui/LiveView3D.tsx', 'src/ui/RealPic.tsx', 'src/ui/LayersMenu.tsx'],
     tests: ['tests/realview.test.ts'],
-    e2e: ['e2e/ux158.spec.ts'],
+    e2e: ['e2e/v166.spec.ts'],
   },
   ui: {
     title: 'ממשק: אשפים, שלבים, פאנלים',

@@ -1,4 +1,5 @@
 import { claddingTakeoff } from '../geometry/cladding';
+import { zoomSpeed } from './zoom';
 import type { Member } from '../model/types';
 import { sizingAll, SIZE_COLOR } from '../model/sizing';
 import * as THREE from 'three';
@@ -76,12 +77,14 @@ class Pane {
     c.target.copy(target);
     c.enableDamping = false;
     c.zoomToCursor = true;
+    c.zoomSpeed = zoomSpeed();
     c.screenSpacePanning = true;
     c.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
     c.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
     c.addEventListener('change', () => this.vp.requestRender());
     c.addEventListener('start', () => { this.vp.userMoved = true; });
     this.controls = c;
+    window.removeEventListener('ksp-zoom', this.onZoom); window.addEventListener('ksp-zoom', this.onZoom);
   }
 
   setProjection(p: 'ortho' | 'persp') {
@@ -228,7 +231,9 @@ class Pane {
     this.title.textContent = `${this.customDir ? "מבט מותאם" : VIEW_LABEL[this.view]} · ${this.projection === 'ortho' ? 'אורתוגרפי' : 'פרספקטיבה'}`;
   }
 
-  dispose() { this.controls.dispose(); this.el.remove(); }
+  /** שינוי מהירות זום מהתפריט — חל מיד על כל החלונות */
+  private onZoom = (e: Event) => { this.controls.zoomSpeed = (e as CustomEvent<number>).detail; };
+  dispose() { window.removeEventListener('ksp-zoom', this.onZoom); this.controls.dispose(); this.el.remove(); }
 }
 
 /** מנוע תצוגה תלת־ממדי: תצוגה בלבד; כל שינוי במודל עובר דרך store/פקודות. */
