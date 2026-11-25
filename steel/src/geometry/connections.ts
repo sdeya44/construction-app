@@ -382,8 +382,9 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
           // המוט עובר בחור בפלטה ומרותך מעליה (ריתוך היקפי בפני העליון) — במסגריה
           const pTop = add(top, v3(xx, yy, 0));
           const aid = `${id}.A${k}`;
-          const aLen = (prm.anchorLength ?? 800) + prm.t + 3;
-          res.members.push({ id: aid, kind: 'anchor', label: `מוט עיגון Φ${prm.bolt.d}`, start: add(pTop, v3(0, 0, 3)), end: add(pTop, v3(0, 0, 3 - aLen)), profile: `RD${prm.bolt.d}`, material: 'S235', rollDeg: 0, mirror: false, anchor: 'center', refUp: X, source: 'generated', manualPlacement: false, connId: id, partDesc: `מוט עיגון Φ${prm.bolt.d} L=${Math.round(aLen)} — עובר בפלטה, מרותך מעליה` });
+          // המוט צמוד לפני הפלטה (לא בולט) — העמוד יושב על הפלטה מעל המוטות; ריתוך בפני העליון סביב החור
+          const aLen = (prm.anchorLength ?? 800) + prm.t;
+          res.members.push({ id: aid, kind: 'anchor', label: `מוט עיגון Φ${prm.bolt.d}`, start: pTop, end: add(pTop, v3(0, 0, -aLen)), profile: `RD${prm.bolt.d}`, material: 'S235', rollDeg: 0, mirror: false, anchor: 'center', refUp: X, source: 'generated', manualPlacement: false, connId: id, partDesc: `מוט עיגון Φ${prm.bolt.d} L=${Math.round(aLen)} — עובר בפלטה, צמוד לפניה העליונים ומרותך סביב החור` });
           welds.push({ id: `${id}.WA${k}`, connId: id, type: 'fillet', a: prm.weldSize, length: Math.round(Math.PI * prm.bolt.d), location: 'shop', between: [pid, aid], from: pTop, to: pTop });
           (baseHoles[id] ??= []).push({ id: `${id}.H${k}`, memberId: pid, p: pTop, axis: v3(0, 0, -1), d: prm.bolt.d + 2 });
         }));

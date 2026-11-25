@@ -1,4 +1,4 @@
-import { add, v3, type Vec3 } from '../core/vec';
+import { add, norm, scale, v3, type Vec3 } from '../core/vec';
 import { uniformFrames } from '../model/defaults';
 import { normalizeSection } from '../model/section';
 import { derivedRoof, hasErrors } from '../model/validate';
@@ -236,19 +236,46 @@ function seats(project: Project, g: Geo, main: DerivedModel, wing: DerivedModel)
     const xFace = g.xLine + g.dir * (cp.props.h / 2);
     const xFar = g.mode === 'lean' ? g.xLine + g.dir * (g.face + 190) : g.xLine + g.dir * (g.off + rp.props.b / 2 + 30);
     const sid = `${id}.PL`, rid = `${id}.ST`;
-    const zc = zu - T / 2 - 0.5;
-    out.members.push({ id: sid, kind: 'plate', label: `כיסא כנף PL${T}×${sw}`, start: v3(xFace, fy, zc), end: v3(xFar, fy, zc), profile: `PL${sw}x${T}`, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: Z, source: 'generated', manualPlacement: false, connId: id, partDesc: `כיסא כנף PL${T}×${sw}×${Math.round(Math.abs(xFar - xFace))}` });
     const stH = 140;
     // בעמודי הקצה הצלע מוזזת לצד הכנף — בצד השני ממשיכות פטות הקיר של הראשית
     const ys = g.mode === 'lean' ? fy : f === g.frames[0] ? f.y + 45 : f === g.frames[g.frames.length - 1] ? f.y - 45 : f.y;
-    out.members.push({ id: rid, kind: 'plate', label: 'צלע כיסא PL10', start: v3(xFace, ys, zu - T - 1 - stH / 2), end: v3(xFar - g.dir * 20, ys, zu - T - 1 - stH / 2), profile: `PL${stH}x10`, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: v3(0, 1, 0), source: 'generated', manualPlacement: false, connId: id, partDesc: `צלע כיסא PL10×${stH}×${Math.round(Math.abs(xFar - xFace) - 20)}` });
     const xr = g.xLine + g.dir * g.off;
-    const bolts: BoltInfo[] = [];
     const tf = rp.dims.tf ?? 10;
-    for (const [k, dx] of [[1, -(rp.props.b / 2 - 30)], [2, rp.props.b / 2 - 30]] as const) {
-      const at = g.mode === 'lean' ? v3(xs, fy + dx * 0.8, zu - T - 1) : v3(xr + dx, f.y, zu - T - 1);
-      bolts.push(makeBolt(`${id}.B${k}`, id, at, Z, bolt, T + tf, 'site', [sid, r.id], v3(1, 0, 0), out.members));
+    // perp: הקורות שמעל הכיסא (שתיים = קודקוד הכנף מעל העמוד)
+    const over = g.mode === 'lean' ? [r] : rafters.filter((m) => Math.min(m.start.y, m.end.y) - 1 <= f.y && Math.max(m.start.y, m.end.y) + 1 >= f.y);
+    const ridge = over.length >= 2;
+    const lean = g.mode === 'lean';
+    // שיפוע תחתית הקורה מעל הכיסא: perp — לאורך y, lean — לאורך x (כיוון הקורה)
+    const k = lean ? (r.end.z - r.start.z) / (r.end.x - r.start.x || 1) : (r.end.z - r.start.z) / (r.end.y - r.start.y || 1);
+    const crd = (x: number, y: number) => (lean ? x - xs : y - fy);
+    // ברכס (perp, שתי קורות) — פלטה אופקית בתחתית הנמוכה ביותר (שפות הפלטה); אחרת פלטה בשיפוע הקורה, מגע מלא
+    const tilt = !ridge && Math.abs(k) > 1e-6;
+    const n = tilt ? norm(lean ? v3(-k, 0, 1) : v3(0, -k, 1)) : Z;
+    const zuP = ridge ? zu - Math.abs(k) * sw / 2 : zu;
+    const bottom = (x: number, y: number) => zuP + (tilt ? k * crd(x, y) : 0);
+    const pc = (x: number) => add(v3(x, fy, bottom(x, fy)), scale(n, -(T / 2 + 0.5)));
+    // ב-lean הפלטה והצלע נוטות לאורך x — קצה אנכי צמוד לאגף העמוד
+    const faceCut = lean && tilt ? (p: Vec3) => ({ startCut: { point: p, normal: v3(g.dir, 0, 0) } }) : () => ({});
+    out.members.push({ id: sid, kind: 'plate', label: `כיסא כנף PL${T}×${sw}`, start: pc(xFace), end: pc(xFar), ...faceCut(v3(xFace, fy, 0)), profile: `PL${sw}x${T}`, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: n, source: 'generated', manualPlacement: false, connId: id, partDesc: `כיסא כנף PL${T}×${sw}×${Math.round(Math.abs(xFar - xFace))}${tilt ? ' (בשיפוע הקורה)' : ''}` });
+    // פני התחתון של הפלטה; ראש הצלע מתחתיה לכל עובי הצלע (10) — ב-lean הצלע נוטה עם הפלטה
+    const plateBot = (x: number, y: number) => bottom(x, y) - (T + 0.5) / n.z;
+    const ribTop = (x: number) => Math.min(plateBot(x, ys - 5), plateBot(x, ys + 5)) - 1;
+    const xRib = xFar - g.dir * 20;
+    out.members.push({ id: rid, kind: 'plate', label: 'צלע כיסא PL10', start: v3(xFace, ys, ribTop(xFace) - stH / 2), end: v3(xRib, ys, ribTop(xRib) - stH / 2), ...faceCut(v3(xFace, ys, ribTop(xFace) - stH / 2)), profile: `PL${stH}x10`, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: v3(0, 1, 0), source: 'generated', manualPlacement: false, connId: id, partDesc: `צלע כיסא PL10×${stH}×${Math.round(Math.abs(xFar - xFace) - 20)}` });
+    const bolts: BoltInfo[] = [];
+    const head = (x: number, y: number) => add(v3(x, y, bottom(x, y)), scale(n, -(T + 1)));
+    if (lean) {
+      for (const [kk, dx] of [[1, -(rp.props.b / 2 - 30)], [2, rp.props.b / 2 - 30]] as const) bolts.push(makeBolt(`${id}.B${kk}`, id, head(xs, fy + dx * 0.8), n, bolt, T + tf, 'site', [sid, r.id], v3(1, 0, 0), out.members));
+    } else {
+      // בכל קורה שמעל הכיסא: 2 ברגים ברוחב האגף; ברכס — 45 מ"מ מהקודקוד לתוך כל קורה (לא בתפר)
+      for (const rr of over) {
+        const far = Math.abs(rr.start.y - f.y) > Math.abs(rr.end.y - f.y) ? rr.start.y : rr.end.y;
+        const y = ridge ? f.y + Math.sign(far - f.y) * 45 : f.y;
+        for (const dx of [-(rp.props.b / 2 - 30), rp.props.b / 2 - 30]) bolts.push(makeBolt(`${id}.B${bolts.length + 1}`, id, head(xr + dx, y), n, bolt, T + tf, 'site', [sid, rr.id], v3(1, 0, 0), out.members));
+      }
+      if (ridge) out.issues.push({ code: 'WING_RIDGE_SEAT', severity: 'info', elementId: id, message: `כיסא כנף ${f.id} מתחת לקודקוד הכנף: הקורות נשענות על שפות הפלטה — מרווח ${(Math.abs(k) * 30).toFixed(1)} מ"מ מתחת לברגים, נדרשת דסקית משופעת או מילוי` });
     }
+    const zc = (zuP - T / 2 - 0.5);
     const wc = v3(xFace, fy, zc);
     const welds: WeldInfo[] = [
       { id: `${id}.W1`, connId: id, type: 'fillet', a: 6, length: 300, location: 'shop', between: [col.id, sid], from: wc, to: add(wc, v3(0, 1, 0)) },

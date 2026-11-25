@@ -1,0 +1,83 @@
+/**
+ * CAD-01: ביקורת גיאומטריה במנוע CAD מלא (OpenCascade) — בדיקות פיתוח בלבד, המנוע לא נכנס לתוכנה.
+ * לכל צורת מבנה: שני חיבורים מייצגים מכל סוג → גופים תקינים, נפח תואם, חורים חותכים, ריתוכים במגע, אין חדירות.
+ */
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { defaultBuilding, newProject } from '../src/model/defaults';
+import { generate } from '../src/geometry/generate';
+import { SECTION_TEMPLATES } from '../src/model/section';
+import { defaultKneeBraces } from '../src/geometry/knee';
+import { defaultWing } from '../src/geometry/wing';
+import { cadAudit, cadFindings, type CadKernel } from '../src/cad/occAudit';
+import type { BuildingParams, Connection, DerivedModel } from '../src/model/types';
+
+let K: CadKernel;
+beforeAll(async () => {
+  const req = createRequire(import.meta.url);
+  const R = await import('replicad');
+  const init = (await import('replicad-opencascadejs')).default as (o: object) => Promise<unknown>;
+  const oc = await init({ wasmBinary: readFileSync(req.resolve('replicad-opencascadejs/wasm')) });
+  R.setOC(oc as never);
+  K = { R, oc };
+}, 60000);
+
+/** שני חיבורים מכל סוג (הראשון והאחרון — קצה ואמצע) */
+function sample(d: DerivedModel): Connection[] {
+  const by = new Map<string, Connection[]>();
+  for (const c of d.connections) { const a = by.get(c.type) ?? []; a.push(c); by.set(c.type, a); }
+  return [...by.values()].flatMap((a) => (a.length > 1 ? [a[0]!, a[a.length - 1]!] : a));
+}
+
+const full = (b: BuildingParams) => { b.kneeBraces = { ...defaultKneeBraces(), enabled: true }; b.bracing.walls.enabled = true; return b; };
+const SHAPES: { id: string; make: () => BuildingParams }[] = [
+  { id: 'דו-שיפועי', make: () => full(defaultBuilding()) },
+  { id: 'חד-שיפועי', make: () => full({ ...defaultBuilding(), roofType: 'mono', eaveRight: 7500, purlins: { ...defaultBuilding().purlins, left: { ...defaultBuilding().purlins.left, first: 0 } } }) },
+  { id: 'רב-מפתחי', make: () => full({ ...defaultBuilding(), section: SECTION_TEMPLATES.find((t) => t.id === 'mono-multi')!.make() }) },
+  { id: 'דו-שיפועי כפול', make: () => full({ ...defaultBuilding(), section: SECTION_TEMPLATES.find((t) => t.id === 'twin-gable')!.make() }) },
+  { id: 'L', make: () => { const b = full(defaultBuilding()); b.wing = defaultWing(b, 'gable'); return b; } },
+  { id: 'L חד-שיפועי', make: () => { const b = full({ ...defaultBuilding(), roofType: 'mono', eaveRight: 7000 }); b.purlins = { ...b.purlins, left: { ...b.purlins.left, first: 0 } }; b.wing = defaultWing(b, 'mono'); return b; } },
+];
+
+describe('CAD-01 ביקורת גיאומטריה במנוע CAD', () => {
+  for (const s of SHAPES) {
+    it(s.id, () => {
+      const d = generate(newProject(s.id, s.make()));
+      const r = cadAudit(K, d, sample(d));
+      const f = cadFindings(r);
+      console.log(`${s.id}: ${r.parts.length} חלקים · ${r.holes.length} חורים · ${r.welds.length} ריתוכים · ${f.length} ממצאים`);
+      if (f.length) console.log(f.slice(0, 40).join('\n'));
+      expect(r.parts.length).toBeGreaterThan(20);
+      expect(r.welds.length).toBeGreaterThan(5);
+      expect(f).toEqual([]);
+    }, 600000);
+  }
+});
+
+describe('CAD-02 תיקוני גיאומטריה שנמצאו בביקורת', () => {
+  it('מוט עיגון בפלטה מבוטנת צמוד לפני הפלטה — לא בולט מתחת לעמוד', () => {
+    const d = generate(newProject('a', defaultBuilding()));
+    const c = d.connections.find((x) => x.type === 'base')!;
+    const pl = d.byId.get(c.parts[0]!)!;
+    const rods = d.members.filter((m) => m.kind === 'anchor' && m.connId === c.id);
+    expect(rods.length).toBeGreaterThan(0);
+    for (const r of rods) expect(Math.max(r.start.z, r.end.z)).toBeCloseTo(pl.start.z, 6);
+    const r = cadAudit(K, d, [c]);
+    expect(r.clashes).toEqual([]);
+    for (const w of r.welds) expect(w.dist).toBeLessThanOrEqual(2);
+  }, 120000);
+  it('כיסא כנף: פלטה בשיפוע הקורה, וברכס ברגים בתוך כל קורה (לא בתפר)', () => {
+    const b = defaultBuilding(); b.wing = defaultWing(b, 'gable');
+    const d = generate(newProject('L', b));
+    const seats = d.connections.filter((c) => c.id.startsWith('C.WS.'));
+    expect(seats.length).toBe(3);
+    const ridge = seats.find((c) => c.bolts.length === 4)!;
+    expect(ridge).toBeTruthy();
+    expect(new Set(ridge.bolts.map((x) => x.holesIn[1])).size).toBe(2);
+    expect(d.issues.some((i) => i.code === 'WING_RIDGE_SEAT')).toBe(true);
+    const tilted = seats.filter((c) => c !== ridge).map((c) => d.byId.get(`${c.id}.PL`)!);
+    for (const p of tilted) expect(Math.abs(p.refUp.y)).toBeGreaterThan(0.05);
+    expect(cadFindings(cadAudit(K, d, seats))).toEqual([]);
+  }, 120000);
+});

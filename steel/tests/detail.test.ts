@@ -321,7 +321,8 @@ describe('סככת L — כנף', () => {
       expect(d.issues.filter((i) => i.severity === 'error').map((i) => `${rt}/${side}: ${i.message}`)).toEqual([]);
       const seats = d.connections.filter((c) => c.id.startsWith('C.WS.F'));
       expect(seats.length).toBe(3);
-      expect(seats.every((c) => c.bolts.length === 2 && c.welds.every((w) => w.location === 'shop'))).toBe(true);
+      // 2 ברגים לכיסא; בכיסא שמתחת לקודקוד כנף דו-שיפועית — 2 בכל אחת משתי הקורות (1.65)
+      expect(seats.every((c) => (c.bolts.length === 2 || (rt === 'gable' && c.bolts.length === 4)) && c.welds.every((w) => w.location === 'shop'))).toBe(true);
       expect(d.members.some((m) => m.id.startsWith('W.') && m.kind === 'rafter')).toBe(true);
       // אין עמודי כנף בצד הקיר הראשי
       const xl = side === 'R' ? 18000 : 0;
