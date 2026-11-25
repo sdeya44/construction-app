@@ -1,4 +1,6 @@
 import { dot, sub, type Vec3 } from '../core/vec';
+import { placeLabels, type LabelReq } from './labels';
+import { approxMeasure, boxIsFree } from './layoutAudit';
 import { localFrame } from '../geometry/frame';
 import { getProfile } from '../profiles/library';
 import type { Fabrication, MarkedPart } from '../fab/marks';
@@ -30,6 +32,13 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   const line = (a: P, b: P, layer: 'OUTLINE' | 'THIN' | 'DIM' | 'MARK' | 'AXIS' | 'HIDDEN' = 'OUTLINE') => E.push({ k: 'line', a, b, layer });
   const text = (p: P, s: string, h = 2.5, align: 'left' | 'center' | 'right' = 'center', layer: 'TEXT' | 'DIM' | 'MARK' = 'TEXT', bold = false, rot = 0) =>
     E.push({ k: 'text', p, s, h, align, layer, bold, rot });
+  // 1.68: תוויות שמוצבות בסוף, במקום פנוי (קצוות א/ב, כותרות חתכים) — לא על סימוני החלקים
+  const late: LabelReq[] = [];
+  const lateText = (p: P, s: string, h: number, align: 'left' | 'center' | 'right', layer: 'TEXT' | 'MARK', bold: boolean) => {
+    const w = approxMeasure(s, h, bold), dx = align === 'left' ? w / 2 : align === 'right' ? -w / 2 : 0;
+    late.push({ p: { x: p.x + dx, y: p.y }, s, h, bold, layer });
+  };
+  const flushLate = () => placeLabels(sh, late.splice(0), { x0: 6, x1: sh.w - 6, y0: 6, y1: sh.h - 6 });
 
   // ---- תחום המכלול בקואורדינטות המקומיות
   const allLoc = parts.flatMap((pt) => { const s = cachedSolidPure(memOf(pt)); return [...s.startRing, ...s.endRing].map(loc); });
@@ -122,7 +131,12 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     line({ x: xa, y }, { x: xb, y }, 'DIM');
     for (const x of [xa, xb]) line({ x: x - tick * 0.7, y: y - tick }, { x: x + tick * 0.7, y: y + tick }, 'DIM');
     const narrow = Math.abs(xb - xa) < 2 * label.length;
-    text({ x: (xa + xb) / 2, y: y + (narrow ? 3.2 : 1.1) }, label, 2, 'center', 'DIM');
+    // 1.68: ערך שנופל על טקסט קיים (מידות קצרות צפופות) — מורם שלב נוסף מעל הקו
+    const cx = (xa + xb) / 2, w = approxMeasure(label, 2);
+    const free = (yy: number) => boxIsFree(E, { x: cx - w / 2, r: cx + w / 2, y: yy - 0.36, t: yy + 1.56 });
+    const yt = [y + (narrow ? 3.2 : 1.1), y + 5.4, y + 7.6, y + 9.8, y + 12].find(free) ?? y + (narrow ? 3.2 : 1.1);
+    if (yt > y + 4) line({ x: cx, y: y + 0.3 }, { x: cx, y: yt - 0.5 }, 'DIM');
+    text({ x: cx, y: yt }, label, 2, 'center', 'DIM');
   };
   const dimV = (x: number, ya: number, yb: number, label: string) => {
     line({ x, y: ya }, { x, y: yb }, 'DIM');
@@ -178,8 +192,8 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   }
   text({ x: A.x0, y: yT - 12 }, `מבט עליון 1:${sc}`, 2.6, 'left', 'TEXT', true);
   line(PF(tMin, 0), PF(tMax, 0), 'AXIS');
-  text({ x: PF(tMin, 0).x - 2, y: PF(0, (vMin + vMax) / 2).y }, endA, 2.5, 'right', 'MARK', true);
-  text({ x: PF(tMax, 0).x + 2, y: PF(0, (vMin + vMax) / 2).y }, endB, 2.5, 'left', 'MARK', true);
+  lateText({ x: PF(tMin, 0).x - 2, y: PF(0, (vMin + vMax) / 2).y }, endA, 2.5, 'right', 'MARK', true);
+  lateText({ x: PF(tMax, 0).x + 2, y: PF(0, (vMin + vMax) / 2).y }, endB, 2.5, 'left', 'MARK', true);
 
   // מרכזי החלקים המשניים, בועות
   const cen = (pt: MarkedPart) => {
@@ -210,7 +224,7 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   const ext2 = (t: number, vFrom: number) => { const a = PF(t, vFrom), b = { x: a.x, y: yChain - 1.5 }; if (inSeg(t)) E.push({ k: 'line', a, b, layer: 'HIDDEN' }); };
   { let prev = 0; for (const it of firstH) { const t = Math.max(0, it.a); if (t - prev > 0.5) { dimH(PF(prev, 0).x, PF(t, 0).x, yChain, String(Math.round(t - prev))); ext2(t, it.vlo); prev = t; } } }
   { let prev = L; for (const it of secondH) { const t = Math.min(L, it.b); if (prev - t > 0.5) { dimH(PF(t, 0).x, PF(prev, 0).x, yChain, String(Math.round(prev - t))); ext2(t, it.vlo); prev = t; } } }
-  text({ x: PF(0, 0).x - 2, y: yChain - 4.5 }, `מידות מ${endA} / מ${endB} אל שפת החלק הקרובה (קו מקווקו)`, 1.9, 'left', 'DIM');
+  lateText({ x: PF(0, 0).x - 2, y: yChain - 4.5 }, `מידות מ${endA} / מ${endB} אל שפת החלק הקרובה (קו מקווקו)`, 1.9, 'left', 'TEXT', false);
   // כיוון המבט
   { const u = f.u; const dirTxt = Math.abs(u.y) > 0.7 ? 'לאורך המבנה (Y) — מבט על מישור המסגרת' : Math.abs(u.x) > 0.7 ? 'מהצד (X) — מבט על מישור הקיר' : 'מלמעלה';
     const xa = A.x0 + 1.5, ya = A.yTop - 5;
@@ -248,8 +262,11 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     }
     for (const [ta, tb, lab] of segs) {
       const xa = PF(ta, 0).x, xb = PF(tb, 0).x;
-      if (xb - xa >= 2 * lab.length + 1) { text({ x: (xa + xb) / 2, y: y + 1.1 }, lab, 2, 'center', 'DIM'); stag = 0; continue; }
-      const yl = y + 3.6 + (stag++ % 2) * 2.8, xm = (xa + xb) / 2;
+      const xm = (xa + xb) / 2, lw = approxMeasure(lab, 2);
+      const fr = (yy: number) => boxIsFree(E, { x: xm - lw / 2, r: xm + lw / 2, y: yy - 0.36, t: yy + 1.56 });
+      if (xb - xa >= lw + 1.5 && fr(y + 1.1)) { text({ x: xm, y: y + 1.1 }, lab, 2, 'center', 'DIM'); stag = 0; continue; }
+      // 1.68: קטע צר — התווית בשלב הפנוי הראשון מעל הקו (קודם: שני שלבים קבועים, תוויות צמודות חפפו)
+      const yl = [3.6, 6.4, 9.2, 12, 14.8].map((k) => y + k).find(fr) ?? y + 3.6 + (stag++ % 2) * 2.8;
       line({ x: xm, y: y + 0.3 }, { x: xm, y: yl - 0.4 }, 'DIM');
       text({ x: xm, y: yl }, lab, 2, 'center', 'DIM');
     }
@@ -290,13 +307,17 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     if (us.length > 2) dimH(PS({ t: 0, u: bx.u0, v: 0 }).x, PS({ t: 0, u: bx.u1, v: 0 }).x, yb - 6, String(Math.round(bx.u1 - bx.u0)));
     const xr = PS({ t: 0, u: bx.u1, v: 0 }).x + 3;
     dimV(xr, PS({ t: 0, u: 0, v: bx.v0 }).y, PS({ t: 0, u: 0, v: bx.v1 }).y, String(Math.round(bx.v1 - bx.v0)));
-    text({ x: cx, y: PS({ t: 0, u: 0, v: bx.v1 }).y + 3 }, `חתך ${nm}-${nm}  1:${ssc}`, 2.5, 'center', 'TEXT', true);
+    lateText({ x: cx, y: PS({ t: 0, u: 0, v: bx.v1 }).y + 3 }, `חתך ${nm}-${nm}  1:${ssc}`, 2.5, 'center', 'TEXT', true);
     // סימון קו החתך במבט החזית: קווים עבים קצרים מעל ומתחת + אות
-    const tc = k === 0 ? Math.min(tMin + 200, (tMin + tMax) / 2) : Math.max(tMax - 200, (tMin + tMax) / 2);
-    if (inSeg(tc)) for (const [vv, dy] of [[vMax, 1], [vMin, -1]] as const) {
+    const tcOf = (kk: number) => (kk === 0 ? Math.min(tMin + 200, (tMin + tMax) / 2) : Math.max(tMax - 200, (tMin + tMax) / 2));
+    const tc = tcOf(k);
+    // 1.68: מכלול קצר — שני החתכים באותו מקום: סימון אחד "A·B" (קודם שתי אותיות זו על זו ועל סימוני החלקים)
+    const same = Math.abs(PF(tcOf(0), 0).x - PF(tcOf(1), 0).x) < 8;
+    if (inSeg(tc) && !(same && k === 1)) for (const [vv, dy] of [[vMax, 1], [vMin, -1]] as const) {
       const q = PF(tc, vv);
       E.push({ k: 'line', a: { x: q.x, y: q.y + dy * 1.5 }, b: { x: q.x, y: q.y + dy * 5 }, layer: 'FRAME' });
-      text({ x: q.x + (k ? 2.2 : -2.2), y: q.y + dy * 4 - 1 }, nm, 2.8, 'center', 'MARK', true);
+      const lab = same ? 'A·B' : nm;
+      lateText({ x: q.x + (k ? 2.2 : -2.2) - (same ? approxMeasure(lab, 2.8, true) / 2 : 0), y: q.y + dy * 4 - 1 }, lab, 2.8, 'center', 'MARK', true);
     }
   });
   // מידות מצטברות (מנקודת אפס בקצה א): שפות החלקים המרותכים וכל החורים — לסימון במסגריה ממטר אחד
@@ -414,6 +435,7 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   if (mode === 'main') {
     const tx1m = sh.w - 12;
     text({ x: tx1m, y: 12 + 30 }, `מכלול ${asm.mark} · ${asm.weight.toFixed(1)} ק"ג · כמות בפרויקט ${fab.assemblies.filter((x) => x.mark === asm.mark).length} · ${parts.length} חלקים — רשימת החלקים בגיליון A-${asm.mark}.2`, 2.8, 'right', 'TEXT', true);
+    flushLate();
     return `1:${sc}`;
   }
   const tx1 = sh.w - 12, tx0 = 210, rowH = 4.6;
@@ -422,7 +444,8 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
   const cnt = new Map<string, { q: number; p: MarkedPart }>();
   for (const pt of parts) { const e = cnt.get(pt.mark) ?? { q: 0, p: pt }; e.q++; cnt.set(pt.mark, e); }
   const rows = [...cnt.values()].sort((a, b) => (a.p === mainPart ? -1 : b.p === mainPart ? 1 : a.p.mark.localeCompare(b.p.mark, 'en', { numeric: true })));
-  const tableTop = 12 + rb + rowH * (rows.length + 2) + 2;
+  // +3: מרווח להערת הסטטוס שמעל אבן הכותרת (1.68 — כותרת העמודה חפפה להערה)
+  const tableTop = 12 + rb + 3 + rowH * (rows.length + 2) + 2;
   let yy = tableTop;
   const hline = (y: number) => line({ x: tx0, y }, { x: tx1, y }, 'THIN');
   text({ x: tx1, y: yy + 2 }, `מכלול ${asm.mark} · ${asm.weight.toFixed(1)} ק"ג · כמות בפרויקט ${fab.assemblies.filter((x) => x.mark === asm.mark).length}`, 2.6, 'right', 'TEXT', true);
@@ -438,7 +461,9 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     let x = tx1;
     vals.forEach((v, i) => {
       const w = cols[i][1] * scaleW;
-      text({ x: x - 1, y: yy - rowH + 1.4 }, v, 2.5, 'right', 'TEXT', bold);
+      // 1.68: טקסט ארוך מרוחב העמודה — מקוצר (התיאור המלא ברשימת החלקים) במקום לגלוש לעמודה הבאה
+      const maxC = Math.max(3, Math.floor((w - 2) / (2.5 * 0.56)));
+      text({ x: x - 1, y: yy - rowH + 1.4 }, v.length > maxC ? `${v.slice(0, maxC - 1)}…` : v, 2.5, 'right', 'TEXT', bold);
       x -= w;
     });
     yy -= rowH; hline(yy);
@@ -456,6 +481,7 @@ export function assemblySheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark
     'מידות במ"מ; סמלי ריתוך לפי ISO 2553 (שיטה A) — ○ = ריתוך היקפי',
   ];
   notes.forEach((n2, i) => text({ x: tx1, y: tableTop + 10 + (notes.length - 1 - i) * 3.6 }, `${i + 1}. ${n2}`, 2.5, 'right'));
+  flushLate();
   return `1:${sc}`;
 }
 

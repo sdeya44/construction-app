@@ -1,3 +1,5 @@
+import { dedupeTexts, placeLabels } from './labels';
+import { approxMeasure } from './layoutAudit';
 import { gutterDev, gutterRuns, gutterSpec, gutterTakeoff } from '../geometry/gutter';
 import { dot, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
@@ -226,6 +228,11 @@ function fitsSheet(sh: Sheet): boolean {
  * ואם לא — A3. מכלולים תמיד A3 (מבט חזית + עליון + חתכים + פרטים).
  */
 export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrication, bom: Bom, rec?: DrawingRecord): Sheet {
+  const sh = buildSheetSized(def, p, d, fab, bom, rec);
+  dedupeTexts(sh);
+  return sh;
+}
+function buildSheetSized(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrication, bom: Bom, rec?: DrawingRecord): Sheet {
   if (rec?.sheet) return buildSheetOn(def, p, d, fab, bom, rec, rec.sheet);
   if (def.type === 'plates' || def.type === 'labels' || def.type === 'sequence') return buildSheetOn(def, p, d, fab, bom, rec, def.type === 'plates' ? p.settings.paper ?? 'A4' : 'A4');
   if ((p.settings.paper ?? 'A4') === 'A4' && def.type !== 'assembly') {
@@ -383,7 +390,8 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       { const [lx0, lx1] = lineSpan(d); v.dim({ x: lx0, y: bx.y0 + 1200 }, { x: lx1, y: bx.y0 + 1200 }, { x: 1, y: 0 }, -14); }
       // פריסת פטות: שרשרת מידות מעל, הטקסט = מרחק לאורך השיפוע (או אופקי, מסומן)
       const ytop = Math.max(...ys) + b.purlinOverhangEnd + 900;
-      for (const side of [...new Set(purl.map((m) => m.purlin!.side))]) {
+      // 1.68: שרשרת לכל צד בשורה משלה (קודם שתי המידות ליד הרכס נכתבו זו על זו)
+      for (const [sideK, side] of [...new Set(purl.map((m) => m.purlin!.side))].entries()) {
         const ls = purl.filter((m) => m.purlin!.side === side).sort((a1, a2) => a1.purlin!.index - a2.purlin!.index);
         const plS = d.section?.planes.find((q) => q.id === side);
         const free = ls[0]?.purlin!.startFree ?? side === 'M';
@@ -406,7 +414,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
           let j = i;
           if (tight) while (j + 1 < segs.length && segs[j + 1]!.t === segs[i]!.t) j++;
           const n = j - i + 1;
-          v.dim({ x: segs[i]!.x0, y: ytop }, { x: segs[j]!.x1, y: ytop }, { x: 1, y: 0 }, 4, n > 1 ? `${n}×${segs[i]!.t}` : segs[i]!.t);
+          v.dim({ x: segs[i]!.x0, y: ytop }, { x: segs[j]!.x1, y: ytop }, { x: 1, y: 0 }, 4 + 6 * (sideK % 2), n > 1 ? `${n}×${segs[i]!.t}` : segs[i]!.t);
           i = j + 1;
         }
       }
@@ -584,7 +592,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
         const sl = (gs.bracketSlope ?? 'horizontal') === 'roof' ? (r.dzdxOut ?? 0) : 0;
         const zz = (x: number) => r.zBottom + sl * (x - gx0);
         v.poly([{ x: -lap, y: zz(-lap) }, { x: gx1 + 20, y: zz(gx1 + 20) }, { x: gx1 + 20, y: zz(gx1 + 20) - lh }, { x: -lap, y: zz(-lap) - lh }], true, 'OUTLINE');
-        v.dim({ x: -lap, y: zz(-lap) - lh }, { x: 0, y: zz(0) - lh }, { x: 1, y: 0 }, -8, `חפיפה ${lap}`);
+        v.dim({ x: -lap, y: zz(-lap) - lh }, { x: 0, y: zz(0) - lh }, { x: 1, y: 0 }, -18, `חפיפה ${lap}`);
         v.text({ x: -lap - 40, y: zz(-lap) - lh / 2 }, 'ריתוך לווב', 2.2, 'right', 'TEXT');
       } else v.poly([{ x: pT, y: r.zBottom }, { x: gx1 + 20, y: r.zBottom }, { x: gx1 + 20, y: r.zBottom - 5 }, { x: pT + 5, y: r.zBottom - 5 }, { x: pT + 5, y: r.zBottom - lh }, { x: pT, y: r.zBottom - lh }], true, 'OUTLINE');
       // מידות
@@ -621,8 +629,10 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
         w.level({ x: 700, y: r.zBottom }, r.zBottom, 1, 10);
         w.level({ x: 900, y: z0 }, z0, 1, 10);
         w.text({ x: px + R + 1000, y: r.zBottom - 300 }, `שקע Ø${gs.pipeD} בתחתית המזחלה`, 2.4, 'left', 'TEXT');
-        w.text({ x: px + R + 1700, y: (dp.zTop + dp.zBottom) / 2 }, `ירידת מרזב Ø${gs.pipeD}`, 2.5, 'left', 'TEXT', 0, true);
-        w.text({ x: px + R + 1700, y: (dp.zTop + dp.zBottom) / 2 - 330 }, `שלות כל ${(gs.clampSpacing / 1000).toFixed(1)} מ' לעמוד`, 2.4, 'left', 'TEXT');
+        // 1.68: הערות הירידה — במקום פנוי (קודם עלו על מידת הגובה)
+        const n1 = `ירידת מרזב Ø${gs.pipeD}`, n2 = `שלות כל ${(gs.clampSpacing / 1000).toFixed(1)} מ' לעמוד`;
+        const q1 = w.p(px + R + 1700, (dp.zTop + dp.zBottom) / 2), q2 = w.p(px + R + 1700, (dp.zTop + dp.zBottom) / 2 - 330);
+        placeLabels(sh, [{ p: { x: q1.x + approxMeasure(n1, 2.5, true) / 2, y: q1.y }, s: n1, h: 2.5, bold: true, layer: 'TEXT' }, { p: { x: q2.x + approxMeasure(n2, 2.4) / 2, y: q2.y }, s: n2, h: 2.4, layer: 'TEXT' }], { x0: area.x0, x1: area.x1, y0: area.y0, y1: area.y1 }, approxMeasure, false);
         w.text({ x: px - 300, y: dp.zBottom - 480 }, 'קשת 90° לניקוז', 2.4, 'center', 'TEXT');
         sh.ents.push({ k: 'text', p: { x: area.x0 + half - 6, y: area.y1 - 3 }, s: `פרט ירידת מרזב — חזית  1:${w.scale}`, h: 3, align: 'right', layer: 'TEXT', bold: true });
       }
@@ -717,12 +727,26 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
         const g = grp.get(key) ?? { type: TYPE_HE[c.type] ?? c.type, d: bt.d, len: Math.round(bt.length), grade: bt.grade, std: bt.standard, n: 0 };
         g.n++; grp.set(key, g);
       }
-      const brows = [...grp.values()].sort((a1, b1) => a1.d - b1.d || a1.len - b1.len).map((g) => [g.type, `M${g.d}×${g.len}`, g.grade, g.std, String(g.n)]);
+      let brows = [...grp.values()].sort((a1, b1) => a1.d - b1.d || a1.len - b1.len).map((g) => [g.type, `M${g.d}×${g.len}`, g.grade, g.std, String(g.n)]);
       const tot = [...grp.values()].reduce((a1, g) => a1 + g.n, 0);
+      // 1.68: הטבלה חייבת להיכנס בין ההערות לתחתית האזור (קודם גלשה מחוץ לגיליון בסככת L).
+      // לא נכנסת — איחוד לפי מידת בורג (בלי סוג חיבור); עדיין לא — שורה אחרונה "ועוד…"
+      const fitRows = Math.floor((ny - 4 - area.y0 - 6) / 4.4) - 3;
+      if (brows.length > fitRows) {
+        const m2 = new Map<string, string[]>();
+        for (const r of brows) { const k = `${r[1]}|${r[2]}|${r[3]}`; const e = m2.get(k); if (e) e[4] = String(Number(e[4]) + Number(r[4])); else m2.set(k, ['כל החיבורים', r[1]!, r[2]!, r[3]!, r[4]!]); }
+        brows = [...m2.values()];
+      }
+      if (brows.length > fitRows && fitRows > 1) { const rest = brows.length - fitRows + 1; brows = [...brows.slice(0, fitRows - 1), [`ועוד ${rest} שורות — בכתב הכמויות`, '', '', '', '']]; }
       if (brows.length) {
         const bw = [30, 22, 12, 22, 12];
         const yTop = Math.min(ny - 4, area.y0 + 4.4 * (brows.length + 2) + 10);
-        table(sh, nx1, yTop, bw, 'רשימת ברגי שטח (בהזמנה להוסיף 10% רזרבה)', ['חיבור', 'בורג', 'דרגה', 'תקן', 'כמות'], brows, ['סה"כ', '', '', '', String(tot)]);
+        // 1.68: אזור ההערות צר (הרבה גיליונות ⇒ טבלאות רשימה רחבות) — טבלה מצומצמת: בורג+דרגה בעמודה אחת, בלי עמודת תקן (קודם גלשה מחוץ למסגרת)
+        if (nx1 - nx0 >= bw.reduce((a1, w) => a1 + w, 0)) table(sh, nx1, yTop, bw, 'רשימת ברגי שטח (בהזמנה להוסיף 10% רזרבה)', ['חיבור', 'בורג', 'דרגה', 'תקן', 'כמות'], brows, ['סה"כ', '', '', '', String(tot)]);
+        else {
+          const W = nx1 - nx0, cw = [W - 36, 24, 12];
+          table(sh, nx1, yTop, cw, 'ברגי שטח (+10% רזרבה)', ['חיבור', 'בורג', 'כמות'], brows.map((r) => [r[0]!.length > cw[0]! / 1.5 ? `${r[0]!.slice(0, Math.floor(cw[0]! / 1.5) - 1)}…` : r[0]!, r[1] ? `${r[1]} ${r[2]}` : '', r[4]!]), ['סה"כ', '', String(tot)]);
+        }
       }
       break;
     }
@@ -861,6 +885,15 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       }
       const loc = assemblyLocations(p, d, fab);
       const byMark = new Map<string, string[]>();
+      // 1.68: תוויות נאספות ומוצבות בסוף — סימונים באותו מקום בתוכנית (פטות קיר זו מעל זו) מאוחדים לתווית אחת,
+      // ותווית שחופפת לתווית אחרת זזה למקום פנוי קרוב עם קו מוביל
+      type Lb = { at: P; marks: string[]; h: number; rot: number; bold: boolean };
+      const labels = new Map<string, Lb>();
+      const addLabel = (atM: P, mark: string, h: number, rot: number, bold: boolean) => {
+        const at = v.p(atM.x, atM.y), k = `${Math.round(at.x * 2)}|${Math.round(at.y * 2)}|${rot}`;
+        const cur = labels.get(k);
+        if (cur) { if (!cur.marks.includes(mark)) cur.marks.push(mark); } else labels.set(k, { at, marks: [mark], h, rot, bold });
+      };
       for (const a of fab.assemblies) {
         const part = fab.byPart.get(a.main); const m = part ? d.byId.get(part.memberId) : undefined;
         if (!m || m.kind === 'plate' || m.kind === 'cleat' || m.kind === 'anchor') continue;
@@ -868,15 +901,20 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
         const mid = { x: (m.start.x + m.end.x) / 2, y: (m.start.y + m.end.y) / 2 };
         if (m.kind === 'column') {
           const s0 = 220; v.poly([{ x: m.start.x - s0, y: m.start.y - s0 }, { x: m.start.x + s0, y: m.start.y - s0 }, { x: m.start.x + s0, y: m.start.y + s0 }, { x: m.start.x - s0, y: m.start.y + s0 }], true, 'OUTLINE');
-          v.text({ x: m.start.x + 2.4 * v.scale, y: m.start.y + 2.4 * v.scale }, a.mark, 2.6, 'center', 'MARK', 0, true);
+          addLabel({ x: m.start.x + 2.4 * v.scale, y: m.start.y + 2.4 * v.scale }, a.mark, 2.6, 0, true);
         } else if (m.kind === 'rafter') {
           v.line(pr(m.start), pr(m.end), 'OUTLINE');
-          v.text({ x: m.start.x + (m.end.x - m.start.x) * 0.3, y: mid.y + 1.8 * v.scale }, a.mark, 2.4, 'center', 'MARK', 0, true);
+          addLabel({ x: m.start.x + (m.end.x - m.start.x) * 0.3, y: mid.y + 1.8 * v.scale }, a.mark, 2.4, 0, true);
         } else {
           v.line(pr(m.start), pr(m.end), 'THIN');
           const along = Math.abs(m.end.y - m.start.y) > Math.abs(m.end.x - m.start.x);
-          v.text({ x: mid.x + (along ? 0.9 * v.scale : 0), y: mid.y + (along ? 0 : 0.9 * v.scale) }, a.mark, 1.8, 'center', 'MARK', along ? 90 : 0);
+          addLabel({ x: mid.x + (along ? 0.9 * v.scale : 0), y: mid.y + (along ? 0 : 0.9 * v.scale) }, a.mark, 1.8, along ? 90 : 0, false);
         }
+      }
+      {
+        const ar2 = { x0: area.x0 + 1, x1: ar.x1 - 1, y0: area.y0 + 1, y1: area.y1 - 1 };
+        const items = [...labels.values()].map((l) => ({ ...l, s: l.marks.length > 3 ? `${l.marks[0]}…${l.marks[l.marks.length - 1]} (${l.marks.length})` : l.marks.join('/') }));
+        placeLabels(sh, items.map((l) => ({ p: l.at, s: l.s, h: l.h, rot: l.rot, bold: l.bold, layer: 'MARK' as const })), ar2);
       }
       // טבלה: סימון | כמות | מיקומים
       {

@@ -1,4 +1,5 @@
 import { dot, sub, type Vec3 } from '../core/vec';
+import { approxMeasure } from './layoutAudit';
 import { localFrame } from '../geometry/frame';
 import type { Fabrication, Hole, MarkedPart } from '../fab/marks';
 import type { DerivedModel } from '../model/types';
@@ -291,6 +292,9 @@ export type { MarkedPart };
 /** קיטומים (צלעות אלכסוניות קצרות בפני הפלטה): תווית "a×b" ליד אמצע הצלע */
 function chamferLabels(E: Sheet['ents'], face: [{ x: number; y: number }, { x: number; y: number }][], P: (x: number, y: number) => P, h: number) {
   const seen = new Set<string>();
+  // 1.68: התווית מחוץ לפלטה — מוזזת מהצלע בכיוון ממרכז הפלטה החוצה (קודם ישבה על קו המתאר)
+  const pts = face.flatMap(([a, b]) => [P(a.x, a.y), P(b.x, b.y)]);
+  const cen = { x: pts.reduce((t, q) => t + q.x, 0) / (pts.length || 1), y: pts.reduce((t, q) => t + q.y, 0) / (pts.length || 1) };
   for (const [a, b] of face) {
     const dx = Math.abs(b.x - a.x), dy = Math.abs(b.y - a.y);
     if (dx < 2 || dy < 2 || Math.max(dx, dy) > 120) continue;
@@ -298,7 +302,10 @@ function chamferLabels(E: Sheet['ents'], face: [{ x: number; y: number }, { x: n
     if (seen.has(k)) continue; seen.add(k);
     const m = P((a.x + b.x) / 2, (a.y + b.y) / 2);
     const lab = Math.round(dx) === Math.round(dy) ? `${Math.round(dx)}×45°` : `${Math.round(dx)}×${Math.round(dy)}`;
-    E.push({ k: 'text', p: { x: m.x, y: m.y + 1.2 }, s: lab, h, align: 'center', layer: 'DIM' });
+    const ox = m.x - cen.x, oy = m.y - cen.y, ol = Math.hypot(ox, oy) || 1, w = approxMeasure(lab, h);
+    // מרחק: חצי התיבה בכיוון היציאה + 1 מ"מ
+    const off = Math.abs(ox / ol) * (w / 2) + Math.abs(oy / ol) * (h * 0.6) + 1;
+    E.push({ k: 'text', p: { x: m.x + (ox / ol) * off, y: m.y + (oy / ol) * off - h * 0.3 }, s: lab, h, align: 'center', layer: 'DIM' });
   }
 }
 

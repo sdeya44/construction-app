@@ -3,6 +3,9 @@
  * יחידות: מ"מ על הנייר, ראשית בפינה השמאלית התחתונה, y כלפי מעלה.
  * מידות נגזרות מקואורדינטות המודל (לא מפיקסלים): הטקסט של מידה הוא המרחק במודל.
  */
+import { placeLabels } from './labels';
+import { approxMeasure } from './layoutAudit';
+
 export interface P { x: number; y: number }
 export type Layer = 'FRAME' | 'TITLE' | 'OUTLINE' | 'THIN' | 'HIDDEN' | 'AXIS' | 'DIM' | 'TEXT' | 'HOLE' | 'MARK' | 'CUT';
 
@@ -198,7 +201,8 @@ export function frameAndTitle(s: Sheet) {
     for (const r of [...revs].reverse()) row([r.rev, r.date, r.note.length > 48 ? r.note.slice(0, 47) + '…' : r.note]);
     let x = rx1; for (const w of cw.slice(0, -1)) { x -= w; L({ x, y: y0 }, { x, y: top }, 'TITLE'); }
   }
-  if (t.note) s.ents.push({ k: 'text', p: { x: bx + bw + 3, y: by + bh - 4 }, s: t.note, h: 2.2, align: 'left', layer: 'TITLE' });
+  // 1.68: הערת הסטטוס ליד אבן הכותרת — במקום הקרוב שלא עולה על מידות/סימונים של השרטוט
+  if (t.note) placeLabels(s, [{ p: { x: bx + bw + 3 + approxMeasure(t.note, 2.2) / 2, y: by + bh - 4 }, s: t.note, h: 2.2, layer: 'TITLE' }], { x0: x0 + 1, x1: x1 - 1, y0: y0 + 1, y1: y1 - 1 }, approxMeasure, false);
 }
 
 // -------------- סדר תצוגה דו־כיווני (לפלט שאינו תומך RTL: PDF/DXF) --------------
