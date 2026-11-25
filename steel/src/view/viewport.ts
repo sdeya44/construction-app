@@ -21,7 +21,12 @@ export const VIEW_LABEL: Record<ViewName, string> = {
   iso: 'איזומטרי', front: 'חזית', back: 'אחור', left: 'שמאל', right: 'ימין', top: 'תוכנית',
 };
 
-interface Label { p: THREE.Vector3; text: string; cls: string; dir?: THREE.Vector3; edit?: string; value?: number }
+/**
+ * מידה תלוית-מבט (1.70): הנקודות הנמדדות a,b על האלמנט; קו המידה מחושב מחדש בכל ציור — מוסט בפיקסלים קבועים
+ * בניצב לקו במסך, הרחק ממרכז המודל, עם קווי עזר אל הנקודות. level = שורה (שרשרת 0, סה"כ 1).
+ */
+interface DimSpec { a: THREE.Vector3; b: THREE.Vector3; level: number; /** אותה מידה בצד הנגדי של המבנה — מוצגת הקרובה למצלמה */ alt?: [THREE.Vector3, THREE.Vector3] }
+interface Label { p: THREE.Vector3; text: string; cls: string; dir?: THREE.Vector3; edit?: string; value?: number; dim?: DimSpec }
 
 class Pane {
   el: HTMLDivElement;
@@ -35,6 +40,13 @@ class Pane {
   rect = { x: 0, y: 0, w: 1, h: 1 };
   orthoHalfH = 10000;
   labelPool: HTMLDivElement[] = [];
+  dimSvg: SVGSVGElement;
+  hotDim: string | null = null;
+  setHotDim(i: string | null) {
+    this.hotDim = i;
+    for (const g of this.dimSvg.querySelectorAll('g[data-dim]')) g.classList.toggle('hot', g.getAttribute('data-dim') === i);
+    for (const el of this.labelPool) el.classList.toggle('hot', !!i && el.dataset.dim === i);
+  }
   down?: { x: number; y: number; t: number; b: number };
   lastPick?: { x: number; y: number; ids: string[]; i: number; /** הלחיצה הקודמת פגעה במזחלה שלפני האלמנטים */ gutter?: boolean };
 
@@ -50,7 +62,12 @@ class Pane {
     this.axes.setAttribute('viewBox', '-40 -40 80 80');
     this.title = document.createElement('div');
     this.title.className = 'vp-title';
-    this.el.append(this.labelLayer, this.axes, this.title);
+    this.dimSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    this.dimSvg.setAttribute('class', 'vp-dims');
+    this.el.append(this.dimSvg, this.labelLayer, this.axes, this.title);
+    // מעבר עכבר על ערך מידה — מדגיש את קו המידה, קווי העזר והנקודות הנמדדות
+    this.labelLayer.addEventListener('pointerover', (e) => { const i = (e.target as HTMLElement)?.dataset?.dim; this.setHotDim(i ?? null); });
+    this.labelLayer.addEventListener('pointerout', () => this.setHotDim(null));
     for (const c of [this.persp, this.ortho]) c.up.set(0, 0, 1);
     this.makeControls();
     this.el.addEventListener('pointerdown', (e) => { this.down = { x: e.clientX, y: e.clientY, t: performance.now(), b: e.button }; });
@@ -193,13 +210,57 @@ class Pane {
     // מניעת חפיפה: עדיפות (מדידה > בועות > מידות ניתנות לעריכה > מידות > מידות פטות > חיבורי המשך), כל תווית שחופפת לתווית שכבר הוצבה — מוסתרת
     const prio = (c: string) => (c.includes('measure') || c.includes('tag') ? 0 : c.includes('bubble') ? 1 : c.includes('slope') ? 2 : c.includes('small') || c.includes('rem') ? 4 : c.includes('dim') ? 3 : c.includes('splice') ? 6 : 5);
     const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
-    const order = labels.map((l, k) => ({ l, k, pr: prio(l.cls) })).sort((a, b) => a.pr - b.pr || a.k - b.k);
-    for (const { l, pr } of order) {
+    const order = labels.map((l, k) => ({ l, k, pr: prio(l.cls) })).sort((a, b) => a.pr - b.pr || (a.l.dim?.level ?? 0) - (b.l.dim?.level ?? 0) || a.k - b.k);
+    const svg: string[] = [];
+    const C = this.vp.modelCenter ? this.toScreen(this.vp.modelCenter) : { x: this.rect.w / 2, y: this.rect.h / 2 };
+    const f1 = (v: number) => v.toFixed(1);
+    for (const { l, pr, k } of order) {
       // מידה שנצפית בקצה (כיוונה מקביל לכיוון המבט) אינה מוצגת — היא מתנוונת לנקודה
       if (l.dir && Math.abs(l.dir.dot(viewDir)) > 0.97) continue;
-      const s = this.toScreen(l.p);
+      let s = this.toScreen(l.p);
+      let rot = 0;
+      if (l.dim) {
+        // מידה תלוית-מבט: קו המידה בניצב לקטע במסך, הרחק ממרכז המודל; לא נכנס — שורה הבאה; עדיין לא — לא מוצג
+        // הצד הקרוב למצלמה (מידה על קצה קדמי — לא עוברת מעל המודל)
+        let da = l.dim.a, db = l.dim.b;
+        if (l.dim.alt) {
+          const cam = this.camera.position;
+          const dm = (a: THREE.Vector3, b: THREE.Vector3) => a.clone().add(b).multiplyScalar(0.5).distanceTo(cam);
+          if (dm(l.dim.alt[0], l.dim.alt[1]) < dm(da, db)) [da, db] = l.dim.alt;
+        }
+        const A = this.toScreen(da), B = this.toScreen(db);
+        if (!A.visible || !B.visible) continue;
+        const L = Math.hypot(B.x - A.x, B.y - A.y);
+        const tw = l.text.length * 6.6 + 8;
+        if (L < Math.min(tw, 40)) continue; // קטע קצר מדי במבט הזה
+        const ux = (B.x - A.x) / L, uy = (B.y - A.y) / L;
+        let nx = -uy, ny = ux;
+        const M = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+        if ((M.x - C.x) * nx + (M.y - C.y) * ny < 0) { nx = -nx; ny = -ny; }
+        let ang = (Math.atan2(uy, ux) * 180) / Math.PI;
+        if (ang > 90) ang -= 180; else if (ang < -90) ang += 180;
+        const ca = Math.abs(Math.cos((ang * Math.PI) / 180)), sa = Math.abs(Math.sin((ang * Math.PI) / 180));
+        const hw = (tw / 2) * ca + 8 * sa, hh = (tw / 2) * sa + 8 * ca;
+        let ok: { off: number; r: { x0: number; x1: number; y0: number; y1: number } } | null = null;
+        for (let lv = l.dim.level; lv <= l.dim.level + 3 && !ok; lv++) {
+          const off = 26 + 22 * lv;
+          const q = { x: M.x + nx * off, y: M.y + ny * off };
+          const r = { x0: q.x - hw, x1: q.x + hw, y0: q.y - hh, y1: q.y + hh };
+          if (!placed.some((z) => r.x0 < z.x1 && r.x1 > z.x0 && r.y0 < z.y1 && r.y1 > z.y0)) ok = { off, r };
+        }
+        if (!ok) continue;
+        placed.push(ok.r);
+        const { off } = ok;
+        const A2 = { x: A.x + nx * off, y: A.y + ny * off }, B2 = { x: B.x + nx * off, y: B.y + ny * off };
+        const tk = (P: { x: number; y: number }) => `<line x1="${f1(P.x - (ux + nx) * 4)}" y1="${f1(P.y - (uy + ny) * 4)}" x2="${f1(P.x + (ux + nx) * 4)}" y2="${f1(P.y + (uy + ny) * 4)}" class="t"/>`;
+        svg.push(`<g data-dim="${k}"><line x1="${f1(A.x + nx * 4)}" y1="${f1(A.y + ny * 4)}" x2="${f1(A2.x + nx * 5)}" y2="${f1(A2.y + ny * 5)}" class="x"/><line x1="${f1(B.x + nx * 4)}" y1="${f1(B.y + ny * 4)}" x2="${f1(B2.x + nx * 5)}" y2="${f1(B2.y + ny * 5)}" class="x"/>`
+          + `<line x1="${f1(A2.x)}" y1="${f1(A2.y)}" x2="${f1(B2.x)}" y2="${f1(B2.y)}"/>${tk(A2)}${tk(B2)}<circle cx="${f1(A.x)}" cy="${f1(A.y)}" r="3.2" class="p"/><circle cx="${f1(B.x)}" cy="${f1(B.y)}" r="3.2" class="p"/></g>`);
+        s = { x: (A2.x + B2.x) / 2, y: (A2.y + B2.y) / 2, visible: true };
+        rot = ang;
+      } else {
       if (!s.visible || s.x < -50 || s.y < -50 || s.x > this.rect.w + 50 || s.y > this.rect.h + 50) continue;
-      if (pr > 0) {
+      }
+      if (pr > 0 && !l.dim) {
         const hw = l.cls.includes('bubble') ? 13 : l.cls.includes('splice') ? 5 : l.text.length * 3.6 + 5, hh = l.cls.includes('bubble') ? 13 : l.cls.includes('splice') ? 5 : 8;
         const r = { x0: s.x - hw, x1: s.x + hw, y0: s.y - hh, y1: s.y + hh };
         if (placed.some((q) => r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0)) continue;
@@ -210,11 +271,15 @@ class Pane {
       el.className = `vp-label ${l.cls}${l.edit ? ' editable' : ''}`;
       el.textContent = l.text;
       if (l.edit) { el.dataset.edit = l.edit; el.dataset.value = String(l.value ?? 0); el.title = 'לחיצה לשינוי המידה'; } else { delete el.dataset.edit; el.removeAttribute('title'); }
-      el.style.transform = `translate(${s.x}px, ${s.y}px) translate(-50%, -50%)`;
+      el.style.transform = `translate(${s.x}px, ${s.y}px) translate(-50%, -50%)${rot ? ` rotate(${rot.toFixed(1)}deg)` : ''}`;
+      if (l.dim) el.dataset.dim = String(k); else delete el.dataset.dim;
+      el.classList.toggle('hot', !!l.dim && this.hotDim === String(k));
       el.style.display = '';
       i++;
     }
     for (; i < this.labelPool.length; i++) this.labelPool[i].style.display = 'none';
+    this.dimSvg.innerHTML = svg.join('');
+    if (this.hotDim) for (const g of this.dimSvg.querySelectorAll('g[data-dim]')) g.classList.toggle('hot', g.getAttribute('data-dim') === this.hotDim);
     // מחוון צירים
     const q = this.camera.quaternion.clone().invert();
     const parts: string[] = [];
@@ -258,6 +323,8 @@ export class Viewport {
   selGroup = new THREE.Group();
   measureGroup = new THREE.Group();
   labels: Label[] = [];
+  /** מרכז המודל — מידות תלויות-מבט מוסטות הרחק ממנו */
+  modelCenter: THREE.Vector3 | null = null;
   private dirty = true;
   private lastDerived?: unknown;
   private lastVisKey = '';
@@ -446,6 +513,7 @@ export class Viewport {
     const xs = d.grid.filter((g) => g.dir === 'X').map((g) => g.pos);
     const y0 = Math.min(...ys), y1 = Math.max(...ys), x0 = Math.min(...xs), x1 = Math.max(...xs);
     const ext = 2500, z = b.baseElevation;
+    this.modelCenter = new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, z + (Math.max(...d.members.map((m) => Math.max(m.start.z, m.end.z))) - z) / 2);
     if (s.view.grid) {
       const pts: number[] = [];
       for (const g of d.grid) {
@@ -467,26 +535,27 @@ export class Viewport {
     }
     if (s.view.dims) {
       const pts: number[] = [];
-      const dimLine = (a: Vec3, c: Vec3, tick: Vec3, text: string, edit?: string, value?: number) => {
-        pts.push(a.x, a.y, a.z, c.x, c.y, c.z);
-        for (const p of [a, c]) pts.push(p.x - tick.x, p.y - tick.y, p.z - tick.z, p.x + tick.x, p.y + tick.y, p.z + tick.z);
-        const dir = new THREE.Vector3(c.x - a.x, c.y - a.y, c.z - a.z).normalize();
-        this.labels.push({ p: new THREE.Vector3((a.x + c.x) / 2, (a.y + c.y) / 2, (a.z + c.z) / 2), text, cls: 'dim', dir, edit, value });
+      // 1.70: מידה = שתי נקודות על המבנה + שורה; הקו עצמו מצויר לפי המבט (Pane.drawLabels)
+      const dimLine = (a: Vec3, c: Vec3, _tick: Vec3, text: string, edit?: string, value?: number, level = 0, alt?: [Vec3, Vec3]) => {
+        const A = new THREE.Vector3(a.x, a.y, a.z), B = new THREE.Vector3(c.x, c.y, c.z);
+        const dir = B.clone().sub(A).normalize();
+        const al = alt ? [new THREE.Vector3(alt[0].x, alt[0].y, alt[0].z), new THREE.Vector3(alt[1].x, alt[1].y, alt[1].z)] as [THREE.Vector3, THREE.Vector3] : undefined;
+        this.labels.push({ p: A.clone().add(B).multiplyScalar(0.5), text, cls: 'dim', dir, edit, value, dim: { a: A, b: B, level, alt: al } });
       };
-      const off = 1400;
+      const off = 0; // הנקודות על המבנה עצמו — ההיסט נקבע במסך
       // מרווחים בין צירי העמודים (לחיצה = עריכה) ורוחב כולל, לפני המסגרת הראשונה
       const xsS = [...xs].sort((p, q) => p - q);
-      if (xsS.length > 2) for (let i = 1; i < xsS.length; i++) dimLine({ x: xsS[i - 1], y: y0 - off, z }, { x: xsS[i], y: y0 - off, z }, { x: 0, y: 200, z: 0 }, fmt(xsS[i] - xsS[i - 1]), `x:${i - 1}`, xsS[i] - xsS[i - 1]);
-      dimLine({ x: x0, y: y0 - off * (xsS.length > 2 ? 2 : 1), z }, { x: x1, y: y0 - off * (xsS.length > 2 ? 2 : 1), z }, { x: 0, y: 200, z: 0 }, fmt(x1 - x0), xsS.length > 2 ? undefined : 'w', x1 - x0);
+      if (xsS.length > 2) for (let i = 1; i < xsS.length; i++) dimLine({ x: xsS[i - 1], y: y0 - off, z }, { x: xsS[i], y: y0 - off, z }, { x: 0, y: 200, z: 0 }, fmt(xsS[i] - xsS[i - 1]), `x:${i - 1}`, xsS[i] - xsS[i - 1], 0, [{ x: xsS[i - 1], y: y1, z }, { x: xsS[i], y: y1, z }]);
+      dimLine({ x: x0, y: y0, z }, { x: x1, y: y0, z }, { x: 0, y: 200, z: 0 }, fmt(x1 - x0), xsS.length > 2 ? undefined : 'w', x1 - x0, xsS.length > 2 ? 1 : 0, [{ x: x0, y: y1, z }, { x: x1, y: y1, z }]);
       // מרווחי מסגרות (לחיצה = עריכה) וסה"כ אורך לאורך ציר א
-      for (let i = 1; i < ys.length; i++) dimLine({ x: x0 - off, y: ys[i - 1], z }, { x: x0 - off, y: ys[i], z }, { x: 200, y: 0, z: 0 }, fmt(ys[i] - ys[i - 1]), `y:${i - 1}`, ys[i] - ys[i - 1]);
-      if (ys.length > 2) dimLine({ x: x0 - 2 * off, y: y0, z }, { x: x0 - 2 * off, y: y1, z }, { x: 200, y: 0, z: 0 }, fmt(y1 - y0));
+      for (let i = 1; i < ys.length; i++) dimLine({ x: x0 - off, y: ys[i - 1], z }, { x: x0 - off, y: ys[i], z }, { x: 200, y: 0, z: 0 }, fmt(ys[i] - ys[i - 1]), `y:${i - 1}`, ys[i] - ys[i - 1], 0, [{ x: x1, y: ys[i - 1], z }, { x: x1, y: ys[i], z }]);
+      if (ys.length > 2) dimLine({ x: x0, y: y0, z }, { x: x0, y: y1, z }, { x: 200, y: 0, z: 0 }, fmt(y1 - y0), undefined, undefined, 1, [{ x: x1, y: y0, z }, { x: x1, y: y1, z }]);
       // גבהים במסגרת הראשונה
       // גובה פני עליון בכל ציר עמודים במסגרת הראשונה, וגובה רכס
       const f0 = b.frames[0]?.id;
       for (const c of d.members.filter((m) => m.kind === 'column' && m.frameId === f0)) {
         const outside = c.start.x <= x0 + 1 ? -off : c.start.x >= x1 - 1 ? off : 0;
-        dimLine({ x: c.start.x + outside, y: y0 - (outside ? 0 : off), z }, { x: c.start.x + outside, y: y0 - (outside ? 0 : off), z: c.end.z }, { x: 200, y: 0, z: 0 }, fmt(c.end.z - z), 'hz', c.end.z - z);
+        dimLine({ x: c.start.x + outside, y: y0 - (outside ? 0 : off), z }, { x: c.start.x + outside, y: y0 - (outside ? 0 : off), z: c.end.z }, { x: 200, y: 0, z: 0 }, fmt(c.end.z - z), 'hz', c.end.z - z, 0, [{ x: c.start.x, y: y1, z }, { x: c.start.x, y: y1, z: c.end.z }]);
       }
       // שיפוע כל מישור גג — על הקורה במסגרת הראשונה (לחיצה = שינוי; הקצה הנעול נשאר)
       for (const r of d.members.filter((m) => m.kind === 'rafter' && m.frameId === f0)) {
@@ -496,7 +565,7 @@ export class Viewport {
         this.labels.push({ p: mid, text: `${sl.toFixed(1)}%`, cls: 'dim slope', edit: `sl:${pid}`, value: sl * 1000 });
       }
       for (const nd of d.nodes.filter((n) => n.frameId === f0 && n.role === 'רכס')) {
-        dimLine({ x: nd.p.x, y: y0 - off, z }, { x: nd.p.x, y: y0 - off, z: nd.p.z }, { x: 200, y: 0, z: 0 }, fmt(nd.p.z - z));
+        dimLine({ x: nd.p.x, y: y0, z }, { x: nd.p.x, y: y0, z: nd.p.z }, { x: 200, y: 0, z: 0 }, fmt(nd.p.z - z), undefined, undefined, 1, [{ x: nd.p.x, y: y1, z }, { x: nd.p.x, y: y1, z: nd.p.z }]);
       }
       // פריסת פטות: מידות לאורך השיפוע, לפני המסגרת הראשונה, מעט מעל מישור הגג
       const purl = d.members.filter((m) => m.purlin).sort((a, b) => a.purlin!.index - b.purlin!.index);
@@ -514,13 +583,12 @@ export class Viewport {
           const cur = { x: m.start.x, z: m.start.z };
           if (prev) {
             const a = at(prev.x, prev.z), c = at(cur.x, cur.z);
-            pts.push(a.x, a.y, a.z, c.x, c.y, c.z);
-            for (const q of [a, c]) pts.push(q.x - n.x * 120, q.y, q.z - n.z * 120, q.x + n.x * 120, q.y, q.z + n.z * 120);
             const span = Math.hypot(cur.x - prev.x, cur.z - prev.z);
             const rem = m.purlin!.isLast && m.purlin!.index > 1 && Math.abs(span - (side === 'R' ? b.purlins.right : b.purlins.left).spacing) > 0.5;
             const dir = new THREE.Vector3(c.x - a.x, 0, c.z - a.z).normalize();
             const pkey = m.purlin!.paramKey ?? (side === 'R' ? 'right' : 'left');
-            this.labels.push({ p: new THREE.Vector3((a.x + c.x) / 2, yy, (a.z + c.z) / 2), text: fmt(span), cls: rem ? 'dim rem' : 'dim small', dir, edit: `ps:${pkey}`, value: span });
+            const pa = new THREE.Vector3(prev.x, y0, prev.z), pc = new THREE.Vector3(cur.x, y0, cur.z);
+            this.labels.push({ p: new THREE.Vector3((a.x + c.x) / 2, yy, (a.z + c.z) / 2), text: fmt(span), cls: rem ? 'dim rem' : 'dim small', dir, edit: `ps:${pkey}`, value: span, dim: { a: pa, b: pc, level: 0, alt: [new THREE.Vector3(prev.x, y1, prev.z), new THREE.Vector3(cur.x, y1, cur.z)] } });
           }
           prev = cur;
         }
