@@ -9,6 +9,8 @@ import { kneeFinRecipe } from '../src/geometry/convRecipes';
 import { assignDetail, setDetailParam } from '../src/commands/commands';
 import { computeFabrication } from '../src/fab/marks';
 import { partToNc1 } from '../src/fab/dstv';
+import { computeBom } from '../src/fab/bom';
+import { buildSheet, drawingCatalog } from '../src/drawing/views';
 import type { BoltInfo, DerivedModel, Member, Project, WeldInfo } from '../src/model/types';
 
 const TOL = 0.5;
@@ -89,5 +91,43 @@ describe('CONV-01 אלכסון עמוד-קורה פח+לשונית: הקוד ה�
     const total = (ps: typeof rel0) => ps.reduce((a, x) => a + x.weight, 0);
     expect(Math.abs(total(rel1) - total(rel0))).toBeLessThan(0.01);
     expect(f1.assemblies.length).toBe(f0.assemblies.length);
+  });
+});
+
+/**
+ * CONV-02: גיליונות השרטוט. אין זהות בייט-בייט (ראו docs/connector-mapping.md סעיף 6): מותר רק
+ *  (א) רעש עיגול ≤ 1 במספרי מידות (95 ↔ 96 בגבול חצי מ"מ), (ב) גיליון פרט האלכסון, שהוא גיליון פרט מותאם (שם ומספור שונים),
+ *  (ג) בחירת החלק המייצג בגיליון הפלטות (אותו סימון, צד קריאה הפוך של החורים).
+ * כל השאר — אותם גיליונות, אותה כמות ישויות מכל סוג, אותם טקסטים — חייב להיות זהה.
+ */
+describe('CONV-02 אלכסון עמוד-קורה: גיליונות השרטוט', () => {
+  it('אותם גיליונות, אותה כמות ישויות, אותם טקסטים (עד רעש עיגול)', () => {
+    const cfg = CFGS[0]!;
+    const p0 = oldProject(cfg), d0 = generate(p0), p1 = newProj(p0, d0, cfg), d1 = generate(p1);
+    const run = (p: Project, d: DerivedModel) => { const f = computeFabrication(p, d), bom = computeBom(d, f); return new Map(drawingCatalog(p, d, f).map((df) => [df.id, buildSheet(df, p, d, f, bom)])); };
+    const a = run(p0, d0), b = run(p1, d1);
+    expect(a.size).toBe(b.size);
+    const gone = [...a.keys()].filter((k) => !b.has(k)), added = [...b.keys()].filter((k) => !a.has(k));
+    expect(gone).toEqual(['D-CONN-knee']);
+    expect(added).toEqual([`D-CONN-cd-${kneeFinRecipe().id}`]);
+    const EXEMPT = new Set(['D-COVER', 'D-PLATES-3']);
+    const bad: string[] = [];
+    for (const [id, sa] of a) {
+      const sb = b.get(id); if (!sb) continue;
+      const ea = sa.ents.filter((e) => e.layer !== 'TITLE'), eb = sb.ents.filter((e) => e.layer !== 'TITLE');
+      if (ea.length !== eb.length) { bad.push(`${id}: ישויות ${ea.length}→${eb.length}`); continue; }
+      const hist = (es: typeof ea) => { const m: Record<string, number> = {}; for (const e of es) m[`${e.k}|${e.layer}`] = (m[`${e.k}|${e.layer}`] ?? 0) + 1; return JSON.stringify(Object.entries(m).sort()); };
+      if (hist(ea) !== hist(eb)) bad.push(`${id}: התפלגות ישויות שונה`);
+      if (EXEMPT.has(id)) continue;
+      const txt = (es: typeof ea) => es.filter((e) => e.k === 'text').map((e) => (/^-?\d+(\.\d+)?$/.test((e as { s: string }).s) ? '#' : (e as { s: string }).s)).sort();
+      if (JSON.stringify(txt(ea)) !== JSON.stringify(txt(eb))) bad.push(`${id}: טקסטים שונים`);
+      const num = (es: typeof ea) => es.filter((e) => e.k === 'text' && /^-?\d+(\.\d+)?$/.test((e as { s: string }).s)).map((e) => Number((e as { s: string }).s)).sort((x, y) => x - y);
+      const na = num(ea), nb = num(eb);
+      if (na.some((v, i) => Math.abs(v - nb[i]!) > 1)) bad.push(`${id}: ערך מידה שונה ביותר מ-1`);
+    }
+    expect(bad).toEqual([]);
+    // הגיליון המותאם מכיל את אותם חלקים: כמות פלטות וברגים בטבלה
+    const t = (sh: typeof a extends Map<string, infer S> ? S : never) => sh.ents.filter((e) => e.k === 'text').length;
+    expect(Math.abs(t(b.get(added[0]!)!) - t(a.get('D-CONN-knee')!))).toBeLessThan(40);
   });
 });

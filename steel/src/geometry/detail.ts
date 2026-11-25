@@ -285,7 +285,10 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
     else { const by = ev(shiftOp.by, shiftOp.id); vals[`${shiftOp.id}.by`] = by; sh = scale(s.w, by); cutPlane = { point: add(cutPlane.point, sh), normal: cutPlane.normal }; }
   }
   const endPt = add(add(s.P, scale(s.u, sEnd)), sh);
-  const main: Member = s.cross ? s.main : { ...s.main, ...(s.end === 'start' ? { start: endPt, startCut: cutPlane } : { end: endPt, endCut: cutPlane }), connId: s.main.connId };
+  // חיתוך ניצב לציר = קצה ישר (כמו בפרופיל רגיל) — בלי מישור חיתוך מפורש, כדי שהחלק, הגיליונות וה-NC1 יהיו זהים לקצה שנבנה בקוד
+  const squareEnd = cutOp?.kind === 'perp';
+  const cutFld = squareEnd ? undefined : cutPlane;
+  const main: Member = s.cross ? s.main : { ...s.main, ...(s.end === 'start' ? { start: endPt, startCut: cutFld } : { end: endPt, endCut: cutFld }), connId: s.main.connId };
   if (s.cross && cutOp) errors[cutOp.id] = 'בתושבת פטה הפטה רציפה — אין חיתוך';
   vals.send = sEnd;
   let endT = 0;
@@ -365,6 +368,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
           const cut = { point: s.P, normal: scale(s.n, -1) };
           if (dot(sub(pm.start, s.P), s.n) <= dot(sub(pm.end, s.P), s.n)) pm.startCut = cut; else pm.endCut = cut;
         }
+        if (op.clipHost && s.host && !s.cross) pm.partDesc = `${pm.partDesc ?? pm.label} (קצה חתוך בזווית)`;
         members.push(pm);
       } else if (op.k === 'endplate') {
         const t = ev(op.t, `${op.id}.t`, 15), w = ev(op.w, `${op.id}.w`, s.mh + 40), h = ev(op.h, `${op.id}.h`, s.mb + 40);
