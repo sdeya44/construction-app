@@ -101,3 +101,32 @@ test('DS-03: בונה נוסחה בלחצנים — "הגדול מבין" עם �
   expect(await page.evaluate(() => (window as any).__ksp.store.state.project.deleted.length)).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test('DS-05 (1.70): מידות בסטודיו לפי המבט — כל תגית על קו המידה שלה, בלי חפיפה; בחירת פלטה מצמצמת; מעבר עכבר מדגיש', async ({ page }) => {
+  await boot(page);
+  await openStudio(page);
+  await page.getByTestId('ds-preset-preset-fin').click();
+  await page.waitForTimeout(500);
+  const check = async () => {
+    const r = await page.evaluate(() => {
+      const pills = [...document.querySelectorAll<HTMLElement>('button.dim-tag')].filter((e) => e.style.display !== 'none' && e.style.visibility === 'visible');
+      const boxes = pills.map((e) => e.getBoundingClientRect());
+      const overlap = boxes.some((a, i) => boxes.some((b, j) => j < i && a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1));
+      const missing = pills.filter((e) => !document.querySelector(`.dim-svg g[data-k="${e.dataset.k}"]`)).length;
+      return { n: pills.length, overlap, missing };
+    });
+    expect(r.n).toBeGreaterThan(2); expect(r.overlap).toBe(false); expect(r.missing).toBe(0);
+  };
+  await check();
+  const st = (await page.locator('.studio-stage').boundingBox())!;
+  await page.mouse.move(st.x + 60, st.y + st.height - 80); await page.mouse.down(); await page.mouse.move(st.x + 320, st.y + st.height - 200, { steps: 8 }); await page.mouse.up();
+  await page.waitForTimeout(300);
+  await check();
+  await page.getByTestId('ds-op-T1').click(); await page.waitForTimeout(300);
+  const ks = await page.locator('button.dim-tag').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.k!));
+  expect(ks.every((k) => k.startsWith('T1.') || !k.includes('.'))).toBe(true);
+  const t = page.locator('button.dim-tag[data-k^="T1."]:visible').first();
+  const k = await t.getAttribute('data-k');
+  await t.hover();
+  await expect(page.locator(`.dim-svg g[data-k="${k}"]`)).toHaveClass(/hot/);
+});

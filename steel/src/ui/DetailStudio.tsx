@@ -49,7 +49,8 @@ const FACE_NAME: Record<string, string> = { end: 'קצה', 'a+': 'דופן במ�
 const r5 = (x: number) => Math.round(x / 5) * 5;
 /** פתיחת בונה הנוסחאות משדה כלשהו */
 const FxCtx = createContext<{ open: (t: FxTarget) => void; det: CustomDetail | null }>({ open: () => {}, det: null });
-interface Tag { k: string; a: Vec3; b: Vec3 }
+/** תגית מידה: a,b על הגיאומטריה; c = מרכז הבעלים (הקו מוסט הרחק ממנו במסך); grp = פעולה (P1…) או 'site' */
+interface Tag { k: string; a: Vec3; b: Vec3; c?: Vec3; grp?: string }
 const fmt = (x: number | undefined) => (x === undefined || !Number.isFinite(x) ? '—' : String(Math.round(x * 10) / 10));
 
 function Studio({ siteKey: key }: { siteKey: string }) {
@@ -92,10 +93,10 @@ function Studio({ siteKey: key }: { siteKey: string }) {
       if (hb > 0) { const o3 = add(s.P, scale(s.a, Math.max(160, s.mb * 1.8))); T.push({ k: 'hb', a: add(o3, scale(s.w, -hb / 2)), b: add(o3, scale(s.w, hb / 2)) }); }
       for (const [id2, g] of res.plates) {
         const top = add(g.center, scale(g.Z, g.t / 2));
-        T.push({ k: `${id2}.w`, a: add(add(top, scale(g.X, -g.w / 2)), scale(g.Y, -g.h / 2 - 25)), b: add(add(top, scale(g.X, g.w / 2)), scale(g.Y, -g.h / 2 - 25)) });
-        T.push({ k: `${id2}.h`, a: add(add(top, scale(g.Y, -g.h / 2)), scale(g.X, g.w / 2 + 25)), b: add(add(top, scale(g.Y, g.h / 2)), scale(g.X, g.w / 2 + 25)) });
+        T.push({ k: `${id2}.w`, a: add(add(top, scale(g.X, -g.w / 2)), scale(g.Y, -g.h / 2)), b: add(add(top, scale(g.X, g.w / 2)), scale(g.Y, -g.h / 2)), c: g.center, grp: id2 });
+        T.push({ k: `${id2}.h`, a: add(add(top, scale(g.Y, -g.h / 2)), scale(g.X, g.w / 2)), b: add(add(top, scale(g.Y, g.h / 2)), scale(g.X, g.w / 2)), c: g.center, grp: id2 });
       }
-      return T;
+      return T.map((t) => ({ ...t, c: t.c ?? s.P, grp: t.grp ?? 'site' }));
     }
     const c0 = add(s.P, scale(s.u, res.sEnd + Math.max(140, s.mh * 1.4)));
     T.push({ k: 'mh', a: add(c0, scale(s.a, -s.mh / 2)), b: add(c0, scale(s.a, s.mh / 2)) });
@@ -109,10 +110,11 @@ function Studio({ siteKey: key }: { siteKey: string }) {
     }
     for (const [id, g] of res.plates) {
       const top = add(g.center, scale(g.Z, g.t / 2));
-      T.push({ k: `${id}.w`, a: add(add(top, scale(g.X, -g.w / 2)), scale(g.Y, -g.h / 2 - 25)), b: add(add(top, scale(g.X, g.w / 2)), scale(g.Y, -g.h / 2 - 25)) });
-      T.push({ k: `${id}.h`, a: add(add(top, scale(g.Y, -g.h / 2)), scale(g.X, g.w / 2 + 25)), b: add(add(top, scale(g.Y, g.h / 2)), scale(g.X, g.w / 2 + 25)) });
+      // 1.70: הנקודות על שפות הפלטה עצמה — ההיסט נקבע במסך, הרחק ממרכז הפלטה
+      T.push({ k: `${id}.w`, a: add(add(top, scale(g.X, -g.w / 2)), scale(g.Y, -g.h / 2)), b: add(add(top, scale(g.X, g.w / 2)), scale(g.Y, -g.h / 2)), c: g.center, grp: id });
+      T.push({ k: `${id}.h`, a: add(add(top, scale(g.Y, -g.h / 2)), scale(g.X, g.w / 2)), b: add(add(top, scale(g.Y, g.h / 2)), scale(g.X, g.w / 2)), c: g.center, grp: id });
     }
-    return T;
+    return T.map((t) => ({ ...t, c: t.c ?? s.P, grp: t.grp ?? 'site' }));
   }, [site, res]);
   const fxGroups = useMemo(() => [
     { title: 'האלמנט', items: ['mh', 'mb', 'mt', 'mtf'] },
@@ -275,7 +277,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
         </aside>
         <section className="studio-stage">
           <Viewer res={res} site={site} others={others} sel={sel} armed={armed} onSelect={setSel} onPlace={(h) => { if (armed && place(armed, h)) setArmed(null); }} onMove={moveSel}
-            tags={showDims || fx ? tags : []} tagLabel={(k) => `${varLabel(k, det)} = ${fmt(res.values[k])}`} onTag={onTag} pickMode={!!fx} />
+            tags={showDims || fx ? (sel && !fx ? tags.filter((t) => t.grp === sel || t.grp === 'site') : tags) : []} tagLabel={(k) => `${varLabel(k, det)} = ${fmt(res.values[k])}`} onTag={onTag} pickMode={!!fx} />
           <button className={`btn small studio-dims${showDims ? ' on' : ''}`} onClick={() => setShowDims(!showDims)} data-testid="ds-dims">שמות מידות</button>
           <div className="studio-status" data-testid="ds-status">{msg || (fx ? 'בונה נוסחה: לחצו על תגית מידה בשרטוט כדי להוסיף אותה לנוסחה' : armed ? `כלי: ${TOOLS.flatMap((x) => x[1]).find((t) => t[0] === armed)?.[1]} — ${HINT[armed.split(':')[0]]} · לחיצה = הנחה, גרירה = סיבוב · Esc לביטול` : 'גררו כלי מהמחסן אל המודל, או לחצו על כלי ואז על המודל. גרירה על הרקע = סיבוב, גלגלת = זום')}</div>
           {preview !== key && <div className="studio-preview">תצוגה על קצה אחר: {base.byId.get(pKey.id)?.label} <button className="btn small" onClick={() => setPreview(key)}>חזרה</button></div>}
@@ -537,15 +539,42 @@ function Viewer({ res, site, others, sel, armed, onSelect, onPlace, onMove, tags
         cam.lookAt(P.x, P.y, P.z);
         R.render(scene, cam); c.dirty = false;
         // תגיות מידות (HTML) מעל קווי המידה
-        const box = tagBox.current;
-        if (box) {
+        // 1.70: מידות תלויות-מבט — קו מידה בניצב לקטע במסך, מוסט הרחק ממרכז הבעלים (הפלטה), קווי עזר לנקודות;
+        // תגית שחופפת לתגית אחרת עוברת לשורה הבאה (עד 4), אחרת מוסתרת. מעבר עכבר — הדגשה.
+        const box = tagBox.current, svgEl = box?.querySelector('svg');
+        if (box && svgEl) {
           const W = cv.clientWidth, H = cv.clientHeight;
-          box.querySelectorAll<HTMLElement>('[data-k]').forEach((el, i) => {
-            const tg = tagsRef.current[i]; if (!tg) return;
-            const m = new THREE.Vector3((tg.a.x + tg.b.x) / 2, (tg.a.y + tg.b.y) / 2, (tg.a.z + tg.b.z) / 2).project(cam);
-            el.style.left = `${((m.x + 1) / 2) * W}px`; el.style.top = `${((1 - m.y) / 2) * H}px`;
-            el.style.display = m.z < 1 ? '' : 'none';
+          const scr = (p: Vec3) => { const m = new THREE.Vector3(p.x, p.y, p.z).project(cam); return { x: ((m.x + 1) / 2) * W, y: ((1 - m.y) / 2) * H, ok: m.z < 1 }; };
+          const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
+          const parts: string[] = [];
+          const f1 = (v: number) => v.toFixed(1);
+          const byK = new Map(tagsRef.current.map((t) => [t.k, t]));
+          box.querySelectorAll<HTMLElement>('button.dim-tag[data-k]').forEach((el) => {
+            const tg = byK.get(el.dataset.k ?? ''); if (!tg) { el.style.display = 'none'; return; }
+            el.style.display = ''; // למדידת הרוחב (תגית חדשה מתחילה מוסתרת — visibility)
+            const A = scr(tg.a), B = scr(tg.b), Cc = scr(tg.c ?? tg.a);
+            const L = Math.hypot(B.x - A.x, B.y - A.y);
+            if (!A.ok || !B.ok || L < 18) { el.style.display = 'none'; return; }
+            const ux = (B.x - A.x) / L, uy = (B.y - A.y) / L;
+            let nx = -uy, ny = ux;
+            const Mx = (A.x + B.x) / 2, My = (A.y + B.y) / 2;
+            if ((Mx - Cc.x) * nx + (My - Cc.y) * ny < 0) { nx = -nx; ny = -ny; }
+            const hw = el.offsetWidth / 2 + 3, hh = el.offsetHeight / 2 + 2;
+            let off = -1;
+            for (let lv = 0; lv < 4 && off < 0; lv++) {
+              const o = 22 + lv * 24, qx = Mx + nx * o, qy = My + ny * o;
+              const r = { x0: qx - hw, x1: qx + hw, y0: qy - hh, y1: qy + hh };
+              if (!placed.some((z) => r.x0 < z.x1 && r.x1 > z.x0 && r.y0 < z.y1 && r.y1 > z.y0)) { placed.push(r); off = o; }
+            }
+            if (off < 0) { el.style.display = 'none'; return; }
+            const A2 = { x: A.x + nx * off, y: A.y + ny * off }, B2 = { x: B.x + nx * off, y: B.y + ny * off };
+            const hot = el.matches(':hover') ? ' hot' : '';
+            const tk = (P: { x: number; y: number }) => `<line x1="${f1(P.x - (ux + nx) * 4)}" y1="${f1(P.y - (uy + ny) * 4)}" x2="${f1(P.x + (ux + nx) * 4)}" y2="${f1(P.y + (uy + ny) * 4)}"/>`;
+            parts.push(`<g class="sd${hot}" data-k="${tg.k}"><line class="x" x1="${f1(A.x + nx * 3)}" y1="${f1(A.y + ny * 3)}" x2="${f1(A2.x + nx * 4)}" y2="${f1(A2.y + ny * 4)}"/><line class="x" x1="${f1(B.x + nx * 3)}" y1="${f1(B.y + ny * 3)}" x2="${f1(B2.x + nx * 4)}" y2="${f1(B2.y + ny * 4)}"/><line x1="${f1(A2.x)}" y1="${f1(A2.y)}" x2="${f1(B2.x)}" y2="${f1(B2.y)}"/>${tk(A2)}${tk(B2)}<circle cx="${f1(A.x)}" cy="${f1(A.y)}" r="3"/><circle cx="${f1(B.x)}" cy="${f1(B.y)}" r="3"/></g>`);
+            el.style.left = `${(A2.x + B2.x) / 2}px`; el.style.top = `${(A2.y + B2.y) / 2}px`;
+            el.style.visibility = 'visible';
           });
+          svgEl.innerHTML = parts.join('');
         }
       }
       c.raf = requestAnimationFrame(loop);
@@ -599,11 +628,7 @@ function Viewer({ res, site, others, sel, armed, onSelect, onPlace, onMove, tags
       const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(wd.from.x, wd.from.y, wd.from.z), new THREE.Vector3(wd.to.x, wd.to.y, wd.to.z)]);
       world.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: wd.location === 'shop' ? 0xd7891c : 0xc0392b, linewidth: 3 })));
     }
-    for (const tg of tags) {
-      const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(tg.a.x, tg.a.y, tg.a.z), new THREE.Vector3(tg.b.x, tg.b.y, tg.b.z)]);
-      world.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0x1f8a4c, depthTest: false })));
-      for (const p of [tg.a, tg.b]) { const dot3 = new THREE.Mesh(new THREE.SphereGeometry(4, 8, 6), new THREE.MeshBasicMaterial({ color: 0x1f8a4c, depthTest: false })); dot3.position.set(p.x, p.y, p.z); world.add(dot3); }
-    }
+    // קווי המידות מצוירים במסך (שכבת SVG) — לפי המבט
     c.dirty = true;
   }, [res, sel, site, others, tags]);
 
@@ -683,7 +708,9 @@ function Viewer({ res, site, others, sel, armed, onSelect, onPlace, onMove, tags
     <>
       <canvas ref={cvRef} className="studio-cv" data-testid="ds-canvas" />
       <div ref={tagBox} className={`dim-tags${pickMode ? ' pick' : ''}`}>
-        {tags.map((t) => <button key={t.k} data-k={t.k} className="dim-tag" onClick={() => onTag(t.k)} data-testid={`tag-${t.k}`} title={t.k}>{tagLabel(t.k)} <span className="mono">{t.k}</span></button>)}
+        <svg className="dim-svg" />
+        {tags.map((t) => <button key={t.k} data-k={t.k} className="dim-tag" style={{ visibility: 'hidden' }} onClick={() => onTag(t.k)} data-testid={`tag-${t.k}`} title={t.k}
+          onPointerEnter={() => { if (ctx.current) ctx.current.dirty = true; }} onPointerLeave={() => { if (ctx.current) ctx.current.dirty = true; }}>{tagLabel(t.k)} <span className="mono">{t.k}</span></button>)}
       </div>
     </>
   );

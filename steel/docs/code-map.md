@@ -57,7 +57,7 @@
 | כרטיס אלמנט (מחולק לחלקי אשף) | `PropertiesPanel.tsx` (**830 שורות**, `CardPartCtx`, `PSEC_PART`) | scope, ux |
 | חתך מסגרת עם מידות | `FrameSection.tsx` (`fs-*`), `SectionEditor.tsx` (**679**, `TemplateBar`, `SecHeightsCtx`), `TriDims.tsx` | ux158 FS-02 |
 | פאנלים של רכיבים | `StructurePanel.tsx` (**805**), `RoofPanel.tsx`, `TransferPanel.tsx`, `WingPanel.tsx`, `CladdingPanel.tsx` | transfer, truss |
-| עורך חיבור, אשף חיבורים, סטודיו פרטים | `ConnectionEditor.tsx`, `ConnWizard.tsx`, `DetailStudio.tsx` (**691**), `PlateWizard.tsx`, `EaveCheckDialog.tsx` | connwizard, detail-studio, plate-wizard |
+| עורך חיבור, אשף חיבורים, סטודיו פרטים (תגיות מידה תלויות-מבט — `Viewer` loop, `.dim-svg`) | `ConnectionEditor.tsx`, `ConnWizard.tsx`, `DetailStudio.tsx` (**~720**), `PlateWizard.tsx`, `EaveCheckDialog.tsx` | connwizard, detail-studio, plate-wizard |
 | פרויקט חדש, גיליון פרמטרים | `Dialogs.tsx`, `ParamSheet.tsx` | wizard-sheet |
 | שרטוטים וייצור במסך | `DrawingsView.tsx`, `ProductionView.tsx`, `schematics.tsx`, `Schematic.tsx` | m4m5, schematics |
 | שדות ויחידות | `fields.tsx` | — |
