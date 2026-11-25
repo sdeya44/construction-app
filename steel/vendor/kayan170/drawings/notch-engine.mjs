@@ -1,0 +1,3 @@
+// Explicit rectangular subtraction in the existing part-local coordinate system (u,v,s), mm.
+// This is a new opt-in source contract; legacy snip is not interpreted as a profile notch.
+export function validateNotches(p){const ns=p.notches??[];if(!Array.isArray(ns)||p.plate&&ns.length)throw Error('מגרעות נתמכות בפרופיל בלבד');const ids=new Set();for(const n of ns){if(typeof n.id!=='string'||!n.id||ids.has(n.id)||n.type!=='box'||![n.min,n.max].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||n.min.some((v,i)=>v>=n.max[i]))throw Error('מגרעת מלבנית לא תקינה');ids.add(n.id);}return ns;}
