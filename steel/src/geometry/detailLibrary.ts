@@ -24,6 +24,14 @@ export function importLibrary(text: string, existing: CustomDetail[]): { added: 
     if (!d || typeof d.id !== 'string' || typeof d.name !== 'string' || !Array.isArray(d.vars) || !Array.isArray(d.ops)) throw new Error(`פרט ${i + 1}: חסרים שדות (id, name, vars, ops)`);
     for (const op of d.ops) if (!OPS.has((op as { k?: string }).k ?? '')) throw new Error(`פרט "${d.name}": פעולה לא מוכרת ${(op as { k?: string }).k}`);
     for (const v of d.vars) if (typeof v?.name !== 'string' || typeof v?.expr !== 'string') throw new Error(`פרט "${d.name}": משתנה לא תקין`);
+    if (d.params !== undefined) {
+      if (!Array.isArray(d.params)) throw new Error(`פרט "${d.name}": params חייב להיות מערך`);
+      for (const q of d.params) {
+        if (typeof q?.name !== 'string' || typeof q?.label !== 'string' || !['number', 'select', 'toggle'].includes(q?.kind)) throw new Error(`פרט "${d.name}": פרמטר לא תקין`);
+        if (!d.vars.some((v) => v.name === q.name)) throw new Error(`פרט "${d.name}": הפרמטר "${q.name}" לא מתאים לאף משתנה`);
+        if (q.kind === 'select' && !(Array.isArray(q.options) && q.options.every((o) => typeof o?.value === 'number' && typeof o?.label === 'string'))) throw new Error(`פרט "${d.name}": אפשרויות הפרמטר "${q.name}" לא תקינות`);
+      }
+    }
     const c = structuredClone(d);
     if (have.has(c.id)) c.id = `cd-${Date.now().toString(36)}-${i}`;
     have.add(c.id);

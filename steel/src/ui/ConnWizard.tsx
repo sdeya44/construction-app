@@ -2,9 +2,9 @@ import { ConnPreview } from './ConnPreview';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { store, useStore } from '../store';
 import { generate } from '../geometry/generate';
-import { siteKey } from '../geometry/detail';
+import { detailParamValues, siteKey } from '../geometry/detail';
 import { uid } from '../core/ids';
-import { applyDetail, candidates, detailById, readCurrent, situationOf, type ConnFamily, type ConnPreset, type Params } from '../model/connRegistry';
+import { applyDetail, candidates, customParamDefs, detailById, readCurrent, situationOf, type ConnFamily, type ConnPreset, type Params } from '../model/connRegistry';
 import type { Project } from '../model/types';
 import { Dialog } from './Dialogs';
 import { PIC } from './DetailPicker';
@@ -45,6 +45,11 @@ function WizardBody({ connId }: { connId: string }) {
   const [check, setCheck] = useState<ReturnType<typeof evalCandidate> | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (pick?.preset) setParams({ ...(cur?.params ?? {}), ...pick.preset.params }); }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
+  // פרט מהסטודיו (מתכון v2): שדות דינמיים מההגדרות של הפרט; ערכי המופע הקיימים — רק אם זה הפרט המשויך כרגע
+  const detCustom = pick?.studio ? (p.customDetails ?? []).find((x) => `custom:${x.id}` === pick.detail) : undefined;
+  const cdefs = useMemo(() => (detCustom ? customParamDefs(detCustom) : []), [detCustom]);
+  const cinfo = useMemo(() => (detCustom && sit?.site ? detailParamValues(d.members, sit.site.key, detCustom, params as Record<string, number>) : null), [detCustom, sit, d, params]);
+  useEffect(() => { if (pick?.studio && sit?.site) setParams(p.detailAssign?.[sit.site.key] === pick.detail.slice(7) ? { ...(p.detailParams?.[sit.site.key] ?? {}) } : {}); }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
   const next = useMemo(() => (sit && pick && pick.fit.status !== 'no' ? applyDetail(p, sit, pick.detail, params, scope) : null), [p, sit, pick, params, scope]);
   useEffect(() => {
     if (!next || !sit) { setCheck(null); return; }
@@ -100,6 +105,19 @@ function WizardBody({ connId }: { connId: string }) {
                   : <input className="inp num" data-testid={`wiz-p-${q.key}`} type="number" defaultValue={String(params[q.key] ?? '')} key={`${sel}-${q.key}`} onBlur={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) setParams({ ...params, [q.key]: Math.max(q.min ?? -Infinity, v) }); }} />}
               </div>))}
             {dt && !dt.params.length && <div className="hint">לפרט הזה אין פרמטרים.</div>}
+            {cdefs.map((q) => {
+              const val = cinfo?.values[q.key] ?? 0, dflt = cinfo?.defaults[q.key] ?? 0, own = q.key in params;
+              const set = (v: number) => { const x = Math.min(q.max ?? Infinity, Math.max(q.min ?? -Infinity, v)); const n = { ...params }; if (Math.abs(x - dflt) < 1e-9) delete n[q.key]; else n[q.key] = x; setParams(n); };
+              return (
+                <div className="field" key={q.key} data-testid={`wiz-cf-${q.key}`}><label>{q.label}{q.unit ? ` (${q.unit})` : ''}{own && <span className="sum-pill" style={{ marginInlineStart: 6 }}>שונה</span>}</label>
+                  {q.toggle
+                    ? <input type="checkbox" checked={val >= 0.5} data-testid={`wiz-p-${q.key}`} onChange={(e) => set(e.target.checked ? 1 : 0)} />
+                    : q.options
+                      ? <select className="inp" data-testid={`wiz-p-${q.key}`} value={String(val)} onChange={(e) => set(Number(e.target.value))}>{!q.options.some((o) => Number(o.v) === val) && <option value={String(val)}>{val}</option>}{q.options.map((o) => <option key={o.v} value={String(o.v)}>{o.t}</option>)}</select>
+                      : <input className="inp num" type="number" data-testid={`wiz-p-${q.key}`} min={q.min} max={q.max} defaultValue={String(Math.round(val * 100) / 100)} key={`${sel}-${q.key}-${Math.round(val * 100)}`} onBlur={(e) => { const v = Number(e.target.value); if (e.target.value !== '' && Number.isFinite(v)) set(v); }} />}
+                  {q.hint && <small className="hint">{q.hint}</small>}
+                </div>);
+            })}
             {pick?.studio && <div className="hint" data-testid="wiz-studio-note">פרט מהסטודיו — המידות והברגים מוגדרים בפרט עצמו. {scope === 'all' ? `יוחל על ${sit.site?.similar.length ?? 0} קצוות דומים.` : 'יוחל על הקצה הזה.'} לעריכה: "פתח בסטודיו".</div>}
             <div className="wiz-check" data-testid="wiz-check">
               {busy ? <div className="hint">בודק…</div> : check && <>

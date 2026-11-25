@@ -754,7 +754,9 @@ export function deleteDetail(id: string): Command {
     run: (p) => {
       const n = clone(p);
       n.customDetails = (n.customDetails ?? []).filter((x) => x.id !== id);
+      const released = Object.entries(n.detailAssign ?? {}).filter(([, v]) => v === id).map(([k]) => k);
       n.detailAssign = Object.fromEntries(Object.entries(n.detailAssign ?? {}).filter(([, v]) => v !== id));
+      n.detailParams = dropKeys(n.detailParams, released);
       return n;
     },
   };
@@ -767,8 +769,63 @@ export function assignDetail(keys: string[], det: CustomDetail | null): Command 
       let n = det ? saveDetail(det).run(p) : clone(p);
       if (n === p) n = clone(p);
       const a = { ...(n.detailAssign ?? {}) };
-      for (const k of keys) { if (det) a[k] = det.id; else delete a[k]; }
+      const changed: string[] = [];
+      for (const k of keys) { if (a[k] !== det?.id) changed.push(k); if (det) a[k] = det.id; else delete a[k]; }
       n.detailAssign = a;
+      // ערכי מופע שייכים לפרט שנבחר — החלפת פרט (או חזרה לפרט הרגיל) מאפסת אותם
+      n.detailParams = dropKeys(n.detailParams, changed);
+      return n;
+    },
+  };
+}
+
+/** הסרת מפתחות אתר מאובייקט ערכי המופע (מחזיר undefined כשנשאר ריק — השדה אופציונלי) */
+function dropKeys(m: Project['detailParams'], keys: string[]): Project['detailParams'] {
+  if (!m) return m;
+  const r = Object.fromEntries(Object.entries(m).filter(([k]) => !keys.includes(k)));
+  return Object.keys(r).length ? r : undefined;
+}
+
+/**
+ * ערך פרמטר למופע (מתכון v2) בקצוות נתונים. value=null — חזרה לברירת המחדל של הפרט.
+ * הערך נשמר רק עבור הקצוות האלה; תבנית הפרט בספרייה לא משתנה.
+ */
+export function setDetailParam(keys: string[], name: string, value: number | null): Command {
+  return {
+    label: value === null ? `פרמטר "${name}" — חזרה לברירת מחדל` : `פרמטר "${name}" = ${value} (${keys.length > 1 ? `${keys.length} קצוות` : 'קצה אחד'})`,
+    run: (p) => {
+      if (value !== null && !Number.isFinite(value)) throw new CommandError('ערך הפרמטר חייב להיות מספר');
+      const n = clone(p);
+      const all = { ...(n.detailParams ?? {}) };
+      for (const k of keys) {
+        if (!n.detailAssign?.[k]) continue; // אין פרט מותאם בקצה — אין למה לשמור ערכים
+        const cur = { ...(all[k] ?? {}) };
+        if (value === null) delete cur[name]; else cur[name] = value;
+        if (Object.keys(cur).length) all[k] = cur; else delete all[k];
+      }
+      n.detailParams = Object.keys(all).length ? all : undefined;
+      return n;
+    },
+  };
+}
+/** איפוס כל ערכי המופע בקצוות — חזרה לברירות המחדל של הפרט */
+export function resetDetailParams(keys: string[]): Command {
+  return { label: `איפוס פרמטרי פרט ב-${keys.length} קצוות`, run: (p) => { const n = clone(p); n.detailParams = dropKeys(n.detailParams, keys); return n; } };
+}
+/**
+ * "עדכן תבנית": קובע את ברירת המחדל של משתנה בפרט בספרייה (כל הקצוות שאין להם ערך משלהם משתנים).
+ * הנוסחה מוחלפת במספר — לכן רק לפרמטרים מסוג מספר/בחירה/מתג.
+ */
+export function setDetailTemplateVar(detailId: string, name: string, value: number): Command {
+  return {
+    label: `עדכון תבנית: ${name} = ${value}`,
+    run: (p) => {
+      if (!Number.isFinite(value)) throw new CommandError('ערך הפרמטר חייב להיות מספר');
+      const n = clone(p);
+      const det = (n.customDetails ?? []).find((x) => x.id === detailId);
+      const v = det?.vars.find((x) => x.name === name);
+      if (!det || !v) throw new CommandError('הפרט או המשתנה לא נמצאו בספרייה');
+      v.expr = String(value);
       return n;
     },
   };
@@ -797,6 +854,7 @@ export function withDetailCleared(keys: string[], inner: Command | null, label: 
     run: (p) => {
       let n = clone(p);
       if (n.detailAssign) n.detailAssign = Object.fromEntries(Object.entries(n.detailAssign).filter(([k]) => !keys.includes(k)));
+      n.detailParams = dropKeys(n.detailParams, keys);
       if (inner) n = inner.run(n);
       return n;
     },

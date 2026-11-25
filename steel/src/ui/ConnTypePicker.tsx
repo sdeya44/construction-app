@@ -4,6 +4,7 @@ import { effCleat } from '../geometry/connections';
 import { detailPresets, findSite, presetFits, similarSites } from '../geometry/detail';
 import type { CleatParams, CustomDetail } from '../model/types';
 import { store, useStore } from '../store';
+import { DetailParamsForm } from './wizard/DetailParams';
 
 /**
  * בחירת סוג חיבור בכרטיסים: סוגים מובנים + פרטים מהספרייה + "פרט חדש בסטודיו".
@@ -94,6 +95,7 @@ export function CleatTypePicker({ connId: connId0, side: side0 }: { connId?: str
         בתפר פטה מעל התומך: פלטה + משולש עם 4 חורים (2 לכל פטה) במקום פלטת המשך
       </label>
       {assigned && <div className="hint">התושבת הזו מוחלפת בפרט מהספרייה. <button className="btn small" onClick={openStudio}>עריכה בסטודיו</button></div>}
+      {assigned && siteKeyCur && <DetailParamsForm siteKey={siteKeyCur} testId="dpf-cleat" />}
     </div>
   );
 }

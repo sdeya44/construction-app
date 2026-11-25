@@ -18,7 +18,7 @@
 | קושרות, סבכה, אגד B | `bracing.ts`, `hbrace.ts`, `portal.ts` | bracing |
 | אלכסוני עמוד-קורה, מכפל, פרט פח+לשונית | `knee.ts`, `kneeSolve.ts`, `haunch.ts`, `finJoint.ts` | knee |
 | חיבורים: בסיס, ראש עמוד, רכס, ברגים (`makeBolt`) | `connections.ts`, `eavePlate.ts` | connections |
-| פרטים מותאמים ("מתכון" ops), פרטים מוכנים (`detailPresets`, `presetFits`) | `detail.ts`, `core/expr.ts`, `model/connRegistry.ts` (רישום סוגי פרט) | connections |
+| פרטים מותאמים ("מתכון" ops), פרטים מוכנים (`detailPresets`, `presetFits`); מתכון v2: `params` + ערכי מופע `detailParams` (`paramOverrides`, `shownParams`, `detailParamValues`; פקודות `setDetailParam` / `resetDetailParams` / `setDetailTemplateVar`) | `detail.ts`, `core/expr.ts`, `model/connRegistry.ts` (רישום סוגי פרט, `customParamDefs`) | connections (`tests/detailparams.test.ts`) |
 | ספריית מחברים: 7 מחברים מוכנים, ייבוא/ייצוא | `data/connLibrary.json`, `detailLibrary.ts`, `ui/DetailLibrary.tsx` (`lib-*`) | connections (e2e v167) |
 | סככת L וכיסאות `C.WS` | `wing.ts` | wing |
 | דילול עמודים / קורה נושאת | `transfer.ts` | transfer |
@@ -53,6 +53,7 @@
 | אשף משפחות (purlins, ties, ridge, clad, tb, wing, truss, frame, roofx) | `FamilyStudio.tsx` (`FAMILIES`) | ux158 FW-* |
 | אשף אלכסונים / קירות / אלמנט בודד | `KneeStudio.tsx`, `WallsStudio.tsx`, `ElementStudio.tsx` | ux156, ux158 EL-01 |
 | בלוק מחבר אחד | `wizard/ConnectorBlock.tsx` (`cb-*`), `ConnTypePicker.tsx`, `DetailPicker.tsx` | ux158 CB-01 |
+| טופס פרמטרים דינמי לפרט מהספרייה (מתכון v2) | `wizard/DetailParams.tsx` (`dpf-*`), שדות `wiz-cf-*` ב-`ConnWizard.tsx`, כרטיס "פרמטרים באשף" ב-`DetailStudio.tsx` (`ParamsCard`) | detail-params |
 | מידות נעולות | `wizard/LockedDims.tsx` | — |
 | כרטיס אלמנט (מחולק לחלקי אשף) | `PropertiesPanel.tsx` (**830 שורות**, `CardPartCtx`, `PSEC_PART`) | scope, ux |
 | חתך מסגרת עם מידות | `FrameSection.tsx` (`fs-*`), `SectionEditor.tsx` (**679**, `TemplateBar`, `SecHeightsCtx`), `TriDims.tsx` | ux158 FS-02 |

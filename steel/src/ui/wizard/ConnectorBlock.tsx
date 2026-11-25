@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { store, useStore } from '../../store';
 import { EndTypePicker } from '../ConnTypePicker';
+import { DetailParamsForm } from './DetailParams';
 
 /**
  * 1.63: מקום אחד לבחירת חיבור בכל אשף (במקום פרט + כרטיסי קצה + "סוג חיבור בכל קצה" + כפתורים נפרדים):
@@ -47,7 +48,7 @@ export function ConnectorBlock({ tabs, value, onPick, built, site, onStudio, wiz
           {wizardConnId && <button className="wz-link cb-more" onClick={() => store.set({ connWizard: wizardConnId })} data-testid="ks-wizard">עוד סוגי פרט לחיבור הזה — אשף המחברים ←</button>}
         </div>}
         {src === 'lib' && !single && <div className="cb-body">
-          {site ? <><div className="ks-note">פרט מהספרייה של הפרויקט או פרט מוכן — לקצה הזה (אפשר להחיל גם על כל הקצוות הדומים).</div><EndTypePicker memberId={site.memberId} end={site.end} /></>
+          {site ? <><div className="ks-note">פרט מהספרייה של הפרויקט או פרט מוכן — לקצה הזה (אפשר להחיל גם על כל הקצוות הדומים).</div><EndTypePicker memberId={site.memberId} end={site.end} /><DetailParamsForm siteKey={`${site.memberId}|${site.end}`} /></>
             : <div className="ks-note" data-testid="cb-lib-nosel">בחרו במודל אלמנט של הרכיב — הפרט מהספרייה משויך לקצה שלו (ואפשר להחיל על כל הקצוות הדומים).</div>}
         </div>}
       </div>

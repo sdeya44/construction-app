@@ -27,6 +27,50 @@
     "note": "מרחק שפה"
    }
   ],
+  "params": [
+   {
+    "name": "d",
+    "label": "קוטר בורג",
+    "kind": "select",
+    "group": "ברגים",
+    "options": [
+     {
+      "value": 12,
+      "label": "M12"
+     },
+     {
+      "value": 16,
+      "label": "M16"
+     },
+     {
+      "value": 20,
+      "label": "M20"
+     },
+     {
+      "value": 24,
+      "label": "M24"
+     }
+    ]
+   },
+   {
+    "name": "t",
+    "label": "עובי פלטה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 6,
+    "max": 40,
+    "group": "פלטות"
+   },
+   {
+    "name": "e",
+    "label": "מרחק שפה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 20,
+    "max": 100,
+    "group": "ברגים"
+   }
+  ],
   "ops": [
    {
     "k": "cut",
@@ -142,6 +186,50 @@
     "name": "e",
     "expr": "35",
     "note": "מרחק שפה"
+   }
+  ],
+  "params": [
+   {
+    "name": "d",
+    "label": "קוטר בורג",
+    "kind": "select",
+    "group": "ברגים",
+    "options": [
+     {
+      "value": 12,
+      "label": "M12"
+     },
+     {
+      "value": 16,
+      "label": "M16"
+     },
+     {
+      "value": 20,
+      "label": "M20"
+     },
+     {
+      "value": 24,
+      "label": "M24"
+     }
+    ]
+   },
+   {
+    "name": "t",
+    "label": "עובי פלטה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 6,
+    "max": 40,
+    "group": "פלטות"
+   },
+   {
+    "name": "e",
+    "label": "מרחק שפה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 20,
+    "max": 100,
+    "group": "ברגים"
    }
   ],
   "ops": [
@@ -293,6 +381,50 @@
     "note": "מרחק שפה"
    }
   ],
+  "params": [
+   {
+    "name": "d",
+    "label": "קוטר בורג",
+    "kind": "select",
+    "group": "ברגים",
+    "options": [
+     {
+      "value": 12,
+      "label": "M12"
+     },
+     {
+      "value": 16,
+      "label": "M16"
+     },
+     {
+      "value": 20,
+      "label": "M20"
+     },
+     {
+      "value": 24,
+      "label": "M24"
+     }
+    ]
+   },
+   {
+    "name": "t",
+    "label": "עובי פלטה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 6,
+    "max": 40,
+    "group": "פלטות"
+   },
+   {
+    "name": "e",
+    "label": "מרחק שפה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 20,
+    "max": 100,
+    "group": "ברגים"
+   }
+  ],
   "ops": [
    {
     "k": "plate",
@@ -409,6 +541,50 @@
     "name": "e",
     "expr": "35",
     "note": "מרחק שפה"
+   }
+  ],
+  "params": [
+   {
+    "name": "d",
+    "label": "קוטר בורג",
+    "kind": "select",
+    "group": "ברגים",
+    "options": [
+     {
+      "value": 12,
+      "label": "M12"
+     },
+     {
+      "value": 16,
+      "label": "M16"
+     },
+     {
+      "value": 20,
+      "label": "M20"
+     },
+     {
+      "value": 24,
+      "label": "M24"
+     }
+    ]
+   },
+   {
+    "name": "t",
+    "label": "עובי פלטה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 6,
+    "max": 40,
+    "group": "פלטות"
+   },
+   {
+    "name": "e",
+    "label": "מרחק שפה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 20,
+    "max": 100,
+    "group": "ברגים"
    }
   ],
   "ops": [
@@ -532,6 +708,59 @@
     "name": "g",
     "expr": "if(mh < 130, 56, min(80, r5(mh - 50)))",
     "note": "מרחק בין הברגים לרוחב האגף — בין הווב למשולשי התמיכה"
+   }
+  ],
+  "params": [
+   {
+    "name": "d",
+    "label": "קוטר בורג",
+    "kind": "select",
+    "group": "ברגים",
+    "options": [
+     {
+      "value": 12,
+      "label": "M12"
+     },
+     {
+      "value": 16,
+      "label": "M16"
+     },
+     {
+      "value": 20,
+      "label": "M20"
+     },
+     {
+      "value": 24,
+      "label": "M24"
+     }
+    ]
+   },
+   {
+    "name": "t",
+    "label": "עובי פלטה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 6,
+    "max": 40,
+    "group": "פלטות"
+   },
+   {
+    "name": "e",
+    "label": "מרחק שפה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 20,
+    "max": 100,
+    "group": "ברגים"
+   },
+   {
+    "name": "g",
+    "label": "מרחק בין ברגים",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 40,
+    "max": 200,
+    "group": "ברגים"
    }
   ],
   "ops": [
@@ -750,6 +979,46 @@
     "note": "מרחק שפה"
    }
   ],
+  "params": [
+   {
+    "name": "d",
+    "label": "קוטר בורג",
+    "kind": "select",
+    "group": "ברגים",
+    "options": [
+     {
+      "value": 10,
+      "label": "M10"
+     },
+     {
+      "value": 12,
+      "label": "M12"
+     },
+     {
+      "value": 16,
+      "label": "M16"
+     }
+    ]
+   },
+   {
+    "name": "t",
+    "label": "עובי פלטה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 6,
+    "max": 40,
+    "group": "פלטות"
+   },
+   {
+    "name": "e",
+    "label": "מרחק שפה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 20,
+    "max": 100,
+    "group": "ברגים"
+   }
+  ],
   "ops": [
    {
     "k": "plate",
@@ -881,6 +1150,46 @@
     "name": "e",
     "expr": "35",
     "note": "מרחק שפה"
+   }
+  ],
+  "params": [
+   {
+    "name": "d",
+    "label": "קוטר בורג",
+    "kind": "select",
+    "group": "ברגים",
+    "options": [
+     {
+      "value": 10,
+      "label": "M10"
+     },
+     {
+      "value": 12,
+      "label": "M12"
+     },
+     {
+      "value": 16,
+      "label": "M16"
+     }
+    ]
+   },
+   {
+    "name": "t",
+    "label": "עובי פלטה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 6,
+    "max": 40,
+    "group": "פלטות"
+   },
+   {
+    "name": "e",
+    "label": "מרחק שפה",
+    "kind": "number",
+    "unit": "מ\"מ",
+    "min": 20,
+    "max": 100,
+    "group": "ברגים"
    }
   ],
   "ops": [

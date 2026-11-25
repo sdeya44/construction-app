@@ -1,6 +1,6 @@
 import type { Connection, CustomDetail, DerivedModel, Member, Project } from './types';
-import { findSite, similarSites } from '../geometry/detail';
-import { assignDetail } from '../commands/commands';
+import { findSite, shownParams, similarSites } from '../geometry/detail';
+import { assignDetail, resetDetailParams, setDetailParam } from '../commands/commands';
 import { tryProfile } from '../profiles/library';
 import { defaultKneeBraces, kneeDetail } from '../geometry/knee';
 import { defaultRafterStruts } from '../geometry/rafterStruts';
@@ -108,6 +108,15 @@ export const DETAIL_TYPES: DetailType[] = [
 ];
 export const detailById = (id: string) => DETAIL_TYPES.find((t) => t.id === id);
 
+/** פרמטרים של פרט מותאם (מתכון v2) בצורת שדות האשף הקיימת: מספר ⇒ min; בחירה ⇒ options; מתג ⇒ לא/כן */
+export function customParamDefs(det: CustomDetail): (ParamDef & { group?: string; hint?: string; max?: number; toggle?: boolean })[] {
+  return shownParams(det).map((q) => ({
+    key: q.name, label: q.label, unit: q.unit, min: q.min, max: q.max, group: q.group, hint: q.hint,
+    ...(q.kind === 'select' ? { options: (q.options ?? []).map((o) => ({ v: o.value, t: o.label })) } : {}),
+    ...(q.kind === 'toggle' ? { options: [{ v: 0, t: 'לא' }, { v: 1, t: 'כן' }], toggle: true } : {}),
+  }));
+}
+
 /** משפחת חיבור לפי מזהה וסוג */
 export function familyOf(c: Pick<Connection, 'id' | 'type'>): ConnFamily | null {
   if (c.id.startsWith('C.KB.')) return 'knee';
@@ -194,7 +203,7 @@ function situationBase(p: Project, d: DerivedModel, connId: string): Situation |
 export function readCurrent(p: Project, s: Situation): { detail: string; params: Params; local: boolean } {
   const b = p.building;
   const asg = s.site ? p.detailAssign?.[s.site.key] : undefined;
-  if (asg && (p.customDetails ?? []).some((x) => x.id === asg)) return { detail: `custom:${asg}`, local: true, params: {} };
+  if (asg && (p.customDetails ?? []).some((x) => x.id === asg)) return { detail: `custom:${asg}`, local: true, params: { ...(p.detailParams?.[s.site!.key] ?? {}) } };
   if (s.family === 'knee') {
     const kb = b.kneeBraces ?? defaultKneeBraces();
     const ov = kb.sides?.[s.local];
@@ -246,7 +255,16 @@ export function applyDetail(p: Project, s: Situation, detail: string, params: Pa
   const keys = s.site ? (scope === 'one' ? [s.site.key] : s.site.similar) : [];
   if (detail.startsWith('custom:')) {
     const det = (p.customDetails ?? []).find((x) => x.id === detail.slice(7));
-    return det && keys.length ? assignDetail(keys, det).run(p) : p;
+    if (!det || !keys.length) return p;
+    // ערכי מופע (מתכון v2): רק פרמטרים שהפרט מגדיר; מה שלא נשלח חוזר לברירת המחדל של הפרט
+    let n = assignDetail(keys, det).run(p);
+    n = resetDetailParams(keys).run(n);
+    for (const q of det.params ?? []) {
+      const v = params[q.name];
+      if (v === undefined || v === '') continue;
+      n = setDetailParam(keys, q.name, Number(v)).run(n);
+    }
+    return n;
   }
   if (keys.some((k) => p.detailAssign?.[k])) p = assignDetail(keys.filter((k) => p.detailAssign?.[k]), null).run(p);
   const n: Project = structuredClone(p);

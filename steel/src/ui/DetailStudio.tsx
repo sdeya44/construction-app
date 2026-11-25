@@ -7,7 +7,7 @@ import { generate } from '../geometry/generate';
 import { memberSolid } from '../geometry/solid';
 import { blankDetail, buildDetail, detailPresets, findSite, presetFits, parseSiteKey, partsToReplace, similarSites, siteKey, VAR_HELP, type DetailResult, type Site } from '../geometry/detail';
 import { assignDetail, saveDetail } from '../commands/commands';
-import type { CustomDetail, DetailOp, DetailRef, Member } from '../model/types';
+import type { CustomDetail, DetailOp, DetailParam, DetailRef, Member } from '../model/types';
 import { store, useStore } from '../store';
 import { tryProfile } from '../profiles/library';
 import { Icon } from './icons';
@@ -299,6 +299,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
           </section>
           {sel && det.ops.find((o) => o.id === sel) && <OpProps op={det.ops.find((o) => o.id === sel)!} det={det} res={res} patch={(p) => patchOp(sel, p)} />}
           <VarsCard det={det} res={res} setDet={setDet} />
+          <ParamsCard det={det} res={res} setDet={setDet} />
           <section className="ss-card"><h4>בדיקות</h4>
             <ul className="ss-checks" data-testid="ds-checks">
               {res.issues.filter((i) => i.severity !== 'info').map((i, k) => <li key={k} className={i.severity}>{i.message.replace(/^פרט [^:]*: /, '')}</li>)}
@@ -471,6 +472,48 @@ function OpProps({ op, det, res, patch }: { op: DetailOp; det: CustomDetail; res
 
 function FxBtn({ title, value, apply }: FxTarget) { const fx = useContext(FxCtx); return <button className="fx-btn" title="בונה נוסחה בלחצנים" onClick={() => fx.open({ title, value, apply })}>ƒ</button>; }
 
+/** פרמטרים שמוצגים באשף (מתכון v2): בוחרים אילו משתנים הופכים לשדה, ומגדירים תווית, סוג פקד, יחידה וטווח */
+function ParamsCard({ det, res, setDet }: { det: CustomDetail; res: DetailResult; setDet: (fn: (d: CustomDetail) => CustomDetail) => void }) {
+  const get = (name: string) => det.params?.find((q) => q.name === name);
+  const edit = (name: string, fn: (q: DetailParam) => void) => setDet((d) => { const q = d.params?.find((y) => y.name === name); if (q) fn(q); return d; });
+  const toggle = (name: string, on: boolean) => setDet((d) => {
+    const list = d.params ?? [];
+    if (!on) d.params = list.filter((q) => q.name !== name);
+    else if (!list.some((q) => q.name === name)) d.params = [...list, { name, label: d.vars.find((v) => v.name === name)?.note || name, kind: 'number', unit: 'מ"מ' }];
+    return d;
+  });
+  const vars = det.vars.filter((v) => v.name);
+  return (
+    <section className="ss-card" data-testid="ds-params"><h4>פרמטרים באשף</h4>
+      <div className="hint">משתנה שמסומן כאן יופיע כשדה באשף החיבורים; ערך שמשנים באשף נשמר לקצה הזה בלבד (או לתבנית), והנוסחה כאן נשארת ברירת המחדל.</div>
+      <div className="ss-vars">
+        {vars.map((v) => {
+          const q = get(v.name);
+          return (
+            <div key={v.name} className="ss-var" data-testid={`dsp-${v.name}`} style={{ flexWrap: 'wrap' }}>
+              <label className="ss-radio"><input type="checkbox" checked={!!q} data-testid={`dsp-on-${v.name}`} onChange={(e) => toggle(v.name, e.target.checked)} /><span className="mono">{v.name}</span></label>
+              {q && <>
+                <input className="inp" value={q.label} aria-label="תווית" onChange={(e) => { const x = e.target.value; edit(v.name, (y) => { y.label = x; }); }} />
+                <select className="inp" value={q.kind} aria-label="סוג פקד" onChange={(e) => { const k = e.target.value as DetailParam['kind']; edit(v.name, (y) => { y.kind = k; if (k === 'toggle') { y.options = undefined; y.unit = undefined; } if (k === 'select' && !y.options?.length) y.options = [{ value: res.values[v.name] ?? 0, label: String(res.values[v.name] ?? 0) }]; }); }}>
+                  <option value="number">מספר</option><option value="select">בחירה</option><option value="toggle">מתג (כן/לא)</option>
+                </select>
+                {q.kind === 'number' && <>
+                  <input className="inp num" style={{ width: 64 }} value={q.unit ?? ''} placeholder="יחידה" aria-label="יחידה" onChange={(e) => { const x = e.target.value; edit(v.name, (y) => { y.unit = x || undefined; }); }} />
+                  <input className="inp num" style={{ width: 70 }} type="number" value={q.min ?? ''} placeholder="מינ׳" aria-label="מינימום" onChange={(e) => { const x = e.target.value; edit(v.name, (y) => { y.min = x === '' ? undefined : Number(x); }); }} />
+                  <input className="inp num" style={{ width: 70 }} type="number" value={q.max ?? ''} placeholder="מקס׳" aria-label="מקסימום" onChange={(e) => { const x = e.target.value; edit(v.name, (y) => { y.max = x === '' ? undefined : Number(x); }); }} />
+                </>}
+                {q.kind === 'select' && <input className="inp mono" style={{ minWidth: 160 }} value={(q.options ?? []).map((o) => `${o.value}=${o.label}`).join(', ')} placeholder="ערך=תווית, ערך=תווית" aria-label="אפשרויות"
+                  onChange={(e) => { const x = e.target.value; edit(v.name, (y) => { y.options = x.split(',').map((t) => t.trim()).filter(Boolean).map((t) => { const [a, ...b] = t.split('='); const n = Number(a); return { value: Number.isFinite(n) ? n : 0, label: (b.join('=') || a).trim() }; }); }); }} />}
+                <input className="inp" style={{ width: 90 }} value={q.group ?? ''} placeholder="קבוצה" aria-label="קבוצה" onChange={(e) => { const x = e.target.value; edit(v.name, (y) => { y.group = x || undefined; }); }} />
+              </>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function VarsCard({ det, res, setDet }: { det: CustomDetail; res: DetailResult; setDet: (fn: (d: CustomDetail) => CustomDetail) => void }) {
   const [open, setOpen] = useState(false);
   return (
@@ -478,12 +521,12 @@ function VarsCard({ det, res, setDet }: { det: CustomDetail; res: DetailResult; 
       <div className="ss-vars">
         {det.vars.map((v, i) => (
           <div className={`ss-var${res.errors[`var.${v.name}`] ? ' bad' : ''}`} key={i}>
-            <input className="inp mono" value={v.name} aria-label="שם משתנה" onChange={(e) => { const x = e.target.value.replace(/[^A-Za-z0-9_]/g, ''); setDet((d) => { d.vars[i].name = x; return d; }); }} />
+            <input className="inp mono" value={v.name} aria-label="שם משתנה" onChange={(e) => { const x = e.target.value.replace(/[^A-Za-z0-9_]/g, ''); setDet((d) => { const was = d.vars[i].name; d.vars[i].name = x; const q = d.params?.find((y) => y.name === was); if (q) q.name = x; return d; }); }} />
             <span>=</span>
             <span className="ef-in"><input className="inp mono" value={v.expr} aria-label="נוסחה" title={v.note} onChange={(e) => { const x = e.target.value; setDet((d) => { d.vars[i].expr = x; return d; }); }} />
               <FxBtn title={v.note || v.name} value={v.expr} apply={(x) => setDet((d) => { d.vars[i].expr = x; return d; })} /></span>
             <span className="ef-v">{res.errors[`var.${v.name}`] ?? fmt(res.values[v.name])}</span>
-            <button className="icon-btn" onClick={() => setDet((d) => { d.vars.splice(i, 1); return d; })} aria-label="מחיקת משתנה">✕</button>
+            <button className="icon-btn" onClick={() => setDet((d) => { const [gone] = d.vars.splice(i, 1); if (d.params) d.params = d.params.filter((y) => y.name !== gone.name); return d; })} aria-label="מחיקת משתנה">✕</button>
           </div>
         ))}
       </div>

@@ -1,6 +1,7 @@
 import { safeFileName } from '../persist/files';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { deleteMembers, restoreDeleted, setBuilding, setPurlinSide, setSection } from '../commands/commands';
+import { assignDetail, deleteMembers, restoreDeleted, setBuilding, setPurlinSide, setSection } from '../commands/commands';
+import { detailPresets } from '../geometry/detail';
 import { fromMm } from '../core/units';
 import { store, useStore, type ViewName } from '../store';
 import { VIEW_LABEL, Viewport, largeModel } from '../view/viewport';
@@ -143,7 +144,7 @@ export function App() {
     setVpObj(viewport);
     viewport.onContext = (x, y) => setMenu({ x, y });
     viewport.onDimEdit = (key, value, x, y) => setDimEdit({ key, value, x, y });
-    window.__ksp = { store, viewport };
+    window.__ksp = { store, viewport, assignDetail, detailPresets };
     const onNav = (e: Event) => { setMode('model'); setNav((e as CustomEvent).detail as NavKey); };
     const onMode = (e: Event) => setMode((e as CustomEvent).detail as typeof mode);
     window.addEventListener('ksp-mode', onMode);
@@ -339,7 +340,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.70.1</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.71.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}

@@ -2,7 +2,7 @@ import { add, cross, dot, len, norm, rotateAxis, scale, sub, v3, type Plane, typ
 import CONN_LIBRARY from './data/connLibrary.json';
 import { tryExpr, type Vars } from '../core/expr';
 import { getProfile, tryProfile } from '../profiles/library';
-import type { BoltInfo, Connection, CustomDetail, DetailOp, DetailRef, Member, Project, ValidationIssue, WeldInfo } from '../model/types';
+import type { BoltInfo, Connection, CustomDetail, DetailOp, DetailParam, DetailRef, Member, Project, ValidationIssue, WeldInfo } from '../model/types';
 import { localFrame } from './frame';
 import { memberSolid } from './solid';
 import { axialExtent } from './parts';
@@ -210,8 +210,39 @@ export interface DetailResult {
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
 
+/**
+ * ערכי מופע תקפים לפרט: רק למשתנים שקיימים בפרט, רק מספרים סופיים, ובמגבלות הטווח של הפרמטר (אם הוגדר).
+ * קובץ מיובא או פרט שהשתנה בספרייה לא יפיל את המודל — ערך לא תקף פשוט מתעלמים ממנו.
+ */
+export function paramOverrides(det: CustomDetail, raw?: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!raw) return out;
+  for (const v of det.vars) {
+    const x = raw[v.name];
+    if (typeof x !== 'number' || !Number.isFinite(x)) continue;
+    const def = det.params?.find((q) => q.name === v.name);
+    out[v.name] = def ? Math.min(def.max ?? Infinity, Math.max(def.min ?? -Infinity, x)) : x;
+  }
+  return out;
+}
+
+/** הפרמטרים שהאשף מציג לפרט, בסדר ההגדרה (רק אלה שמסומנים להצגה ושקיים להם משתנה) */
+export function shownParams(det: CustomDetail): NonNullable<CustomDetail['params']> {
+  return (det.params ?? []).filter((q) => q.show !== false && det.vars.some((v) => v.name === q.name));
+}
+
+/** ערכי הפרמטרים בפועל באתר (ברירת מחדל מהנוסחה, או ערך המופע) — לתצוגת האשף. null = האתר לא נמצא */
+export function detailParamValues(members: Member[], key: string, det: CustomDetail, overrides?: Record<string, number>): { values: Record<string, number>; defaults: Record<string, number> } | null {
+  const { id, end } = parseSiteKey(key);
+  const m = members.find((x) => x.id === id);
+  const site = m ? findSite(members, m, end) : null;
+  if (!site) return null;
+  const pick = (v: Vars) => Object.fromEntries((det.params ?? []).map((q) => [q.name, v[q.name] ?? 0]));
+  return { values: pick(buildDetail(site, det, { overrides }).values), defaults: pick(buildDetail(site, det).values) };
+}
+
 /** בניית פרט על אתר. טהור — אינו משנה את האלמנט המקורי. */
-export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: string; material?: string; others?: Member[] } = {}): DetailResult {
+export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: string; material?: string; others?: Member[]; /** ערכי מופע (מתכון v2): שם משתנה ⇒ ערך, דורסים את נוסחת המשתנה */ overrides?: Record<string, number> } = {}): DetailResult {
   const s = site, cid = opts.connId ?? `C.CD.${s.key.replace('|', '.').replace(':', '.')}`, mat = opts.material ?? s.main.material;
   const vals: Vars = siteVars(s), errors: Record<string, string> = {}, issues: ValidationIssue[] = [];
   const ev = (src: string | number | undefined, key: string, dflt = 0) => {
@@ -220,7 +251,8 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
     if (!key.startsWith('_') && !(key in vals)) vals[key] = r.v;
     return r.v;
   };
-  for (const v of det.vars) { const x = ev(v.expr, `var.${v.name}`); vals[v.name] = x; }
+  const ovr = paramOverrides(det, opts.overrides);
+  for (const v of det.vars) { const x = v.name in ovr ? ovr[v.name] : ev(v.expr, `var.${v.name}`); vals[v.name] = x; }
   // מעבר מקדים: מידות הפלטות זמינות לנוסחאות של כל הפעולות (גם לחיתוך שלפניהן)
   for (let pass = 0; pass < 2; pass++) for (const op of det.ops) if (op.k === 'plate' || op.k === 'endplate') {
     for (const k of ['w', 'h', 't'] as const) { const r = tryExpr((op as Record<string, unknown>)[k] as string, vals, NaN); if (!r.err) vals[`${op.id}.${k}`] = r.v; }
@@ -486,7 +518,7 @@ export function applyCustomDetails(project: Project, members: Member[], connecti
     const box = { c: site2.P, r: 900 };
     const others = members.filter((x) => x.id !== m.id && x.id !== site2.host?.id && x.kind !== 'bolt' && ['column', 'rafter', 'purlin', 'cleat', 'plate', 'brace', 'beam', 'girt'].includes(x.kind)
       && !x.connId?.startsWith('C.CD.') && Math.min(len(sub(x.start, box.c)), len(sub(x.end, box.c)), len(sub(scale(add(x.start, x.end), 0.5), box.c))) < box.r);
-    const r = buildDetail(site2, det, { material: project.building.material, others });
+    const r = buildDetail(site2, det, { material: project.building.material, others, overrides: project.detailParams?.[key] });
     const k = members.findIndex((x) => x.id === m.id);
     if (k >= 0) members[k] = r.main;
     members.push(...r.members);
@@ -557,6 +589,8 @@ export function presetFits(det: CustomDetail, site: Site | null): boolean {
   return !((mt.angMin !== undefined && a < mt.angMin) || (mt.angMax !== undefined && a > mt.angMax));
 }
 const R = (on: string, face: string, along = '0', across = '0'): DetailRef => ({ on, face, along, across });
+const pBolt = (opts: number[]): DetailParam => ({ name: 'd', label: 'קוטר בורג', kind: 'select', group: 'ברגים', options: opts.map((v) => ({ value: v, label: `M${v}` })) });
+const pNum = (name: string, label: string, min: number, max: number, group: string, hint?: string): DetailParam => ({ name, label, kind: 'number', unit: 'מ"מ', min, max, group, ...(hint ? { hint } : {}) });
 export function detailPresets(): CustomDetail[] {
   return [...basePresets(), ...(structuredClone(CONN_LIBRARY) as CustomDetail[])];
 }
@@ -571,6 +605,7 @@ function basePresets(): CustomDetail[] {
         { name: 'g', expr: 'if(c2, r5(mb + 2*d0 + 20), r5(htw + 2*d + 40))', note: 'מרחק בין עמודות ברגים' },
         { name: 'p', expr: 'r5(mh/sin(ang) + if(c2, 2*d0 + 20, 4*d/tan(ang) + 2*d + 20))', note: 'מרחק בין שורות ברגים' },
       ],
+      params: [pBolt([12, 16, 20, 24]), pNum('e', 'מרחק שפה', 25, 100, 'ברגים'), pNum('p', 'מרחק בין שורות ברגים', 40, 300, 'ברגים', 'ברירת המחדל מחושבת מגובה האלמנט והזווית')],
       ops: [
         { k: 'plate', id: 'P1', name: 'פלטת חיבור', ref: R('host', 'hit'), mode: 'flat', spin: '0', off: '0', shape: 'rect', w: 'max(g+2*e, mb+20)', h: 'p+2*e', t: '12', ch: '0', corners: [false, false, false, false] },
         { k: 'cut', id: 'C1', kind: 'host', at: 'P1.t' },
@@ -592,6 +627,7 @@ function basePresets(): CustomDetail[] {
         { name: 'gh', expr: 'r5((sb2-sb1)*cos(ang) + 2*e + 40)', note: 'גובה הסנפיר' },
         { name: 'cutAt', expr: 'r5(max(sb2 + e + 20, (gw + 10 + mh/2*cos(ang))/sin(ang)))', note: 'קצה האלמנט מהמפגש' },
       ],
+      params: [pBolt([12, 16, 20]), pNum('p', 'מרווח בין ברגים', 40, 150, 'ברגים'), pNum('tk', 'עובי לשונית', 6, 25, 'פלטות'), pNum('tg', 'עובי סנפיר', 6, 25, 'פלטות'), pNum('kh', 'גובה לשונית', 60, 400, 'פלטות')],
       ops: [
         { k: 'cut', id: 'C1', kind: 'perp', at: 'cutAt' },
         { k: 'slot', id: 'S1', L: 'ins+10', w: 'tk+2', dir: 'a' },
@@ -610,6 +646,7 @@ function basePresets(): CustomDetail[] {
         { name: 'd', expr: '12', note: 'קוטר בורג' }, { name: 'd0', expr: 'd+2', note: 'קוטר חור' }, { name: 'e', expr: 'max(25, r5(1.5*d0))', note: 'מרחק שפה' },
         { name: 'g', expr: '60', note: 'מרחק בין הברגים (לאורך הפטה)' }, { name: 'H', expr: 'mh - 20', note: 'גובה הפלטה' }, { name: 'B', expr: '60', note: 'בסיס משולש התמיכה' },
       ],
+      params: [pBolt([10, 12, 16]), pNum('g', 'מרחק בין הברגים (לאורך הפטה)', 40, 150, 'ברגים'), pNum('H', 'גובה הפלטה', 40, 300, 'פלטות'), pNum('B', 'בסיס משולש התמיכה', 30, 150, 'פלטות')],
       ops: [
         { k: 'plate', id: 'P1', name: 'פלטת תושבת', ref: R('host', 'hit', '0', 'cs*(wo + P1.t/2)'), mode: 'stand', spin: '0', off: '0', shape: 'rect', w: 'H', h: 'g + 2*e', t: '8', ch: '0', corners: [false, false, false, false] },
         { k: 'plate', id: 'G1', name: 'משולש תמיכה', ref: R('host', 'hit', '0', 'cs*(wo + P1.t + B/2)'), mode: 'stand', spin: 'sr', off: '0', shape: 'tri', w: 'H - 15', h: 'B', t: '8', ch: '0', corners: [false, false, false, false] },

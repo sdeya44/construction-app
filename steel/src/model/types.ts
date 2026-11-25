@@ -644,6 +644,8 @@ export interface Project {
   connDefaults?: Partial<Record<import('./connRegistry').ConnFamily, string>>;
   /** שיוך פרט מותאם לקצה אלמנט: "מזהה אלמנט|start" או "|end" ⇒ מזהה פרט */
   detailAssign?: Record<string, string>;
+  /** ערכי פרמטרים למופע (מתכון v2): "מזהה אלמנט|start/end" ⇒ { שם משתנה ⇒ ערך }. דורסים את ברירות המחדל של הפרט */
+  detailParams?: Record<string, Record<string, number>>;
   /** הודעות שהוסתרו: "קוד|*" לסוג שלם, או מפתח הודעה (issueKey) */
   dismissedIssues?: string[];
   nextFrameNo: number;
@@ -844,9 +846,26 @@ export type DetailOp =
   | { k: 'rod'; id: string; ref: DetailRef; d: Expr; L: Expr }
   | { k: 'weld'; id: string; part: string; a: Expr; site: boolean; /** למה לרתך: main / host / מזהה פלטה. ברירת מחדל — הרכיב שהפלטה יושבת עליו */ to?: string };
 export interface DetailVar { name: string; expr: Expr; note?: string }
+/**
+ * פרמטר שמוצג באשף (מתכון v2). קשור למשתנה בשם `name`: ערך למופע דורס את נוסחת המשתנה, ובלי ערך — הנוסחה (ברירת המחדל).
+ * סוגי פקד: number (מספר, יחידה וטווח), select (בחירה מרשימה), toggle (מתג 0/1).
+ */
+export interface DetailParam {
+  name: string; label: string;
+  kind: 'number' | 'select' | 'toggle';
+  unit?: string; min?: number; max?: number;
+  options?: { value: number; label: string }[];
+  /** קבוצה באשף (כותרת משנה) */
+  group?: string;
+  /** מוצג באשף (ברירת מחדל: כן) */
+  show?: boolean;
+  hint?: string;
+}
 export interface CustomDetail {
   id: string; name: string; note?: string;
   vars: DetailVar[];
+  /** מתכון v2: הפרמטרים שהאשף מציג (בלי — הפרט נראה באשף בלי שדות; תואם לאחור) */
+  params?: DetailParam[];
   ops: DetailOp[];
   /** סוג האתר שעליו נבנה (לסינון ולהצעה): "brace>column" וכד' */
   family?: string;
