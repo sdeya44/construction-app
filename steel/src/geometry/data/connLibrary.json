@@ -1,0 +1,976 @@
+[
+ {
+  "id": "lib-fin-web",
+  "name": "סנפיר לווב קורה",
+  "family": "any",
+  "category": "beam",
+  "note": "I/H מול אגף עמוד, מפגש ניצב. סנפיר מרותך לעמוד ושלושה ברגים לווב הקורה.",
+  "vars": [
+   {
+    "name": "d",
+    "expr": "16",
+    "note": "קוטר בורג — מ״מ"
+   },
+   {
+    "name": "d0",
+    "expr": "d+2",
+    "note": "קוטר קדח"
+   },
+   {
+    "name": "t",
+    "expr": "10",
+    "note": "עובי פלטות"
+   },
+   {
+    "name": "e",
+    "expr": "35",
+    "note": "מרחק שפה"
+   }
+  ],
+  "ops": [
+   {
+    "k": "cut",
+    "id": "C1",
+    "kind": "host",
+    "at": "10"
+   },
+   {
+    "k": "plate",
+    "id": "F1",
+    "name": "סנפיר",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "0",
+     "across": "-(mt+t)/2"
+    },
+    "mode": "stand",
+    "spin": "0",
+    "off": "0",
+    "shape": "rect",
+    "w": "150",
+    "h": "max(140, mb-2*mtf-40)",
+    "t": "t",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "holes",
+    "id": "H1",
+    "ref": {
+     "on": "F1",
+     "face": "z+",
+     "along": "0",
+     "across": "0"
+    },
+    "rows": "3",
+    "cols": "1",
+    "px": "60",
+    "py": "50",
+    "d0": "d0"
+   },
+   {
+    "k": "bolts",
+    "id": "B1",
+    "holes": "H1",
+    "d": "d",
+    "grade": "8.8",
+    "site": true
+   },
+   {
+    "k": "weld",
+    "id": "W1",
+    "part": "F1",
+    "a": "5",
+    "site": false
+   }
+  ],
+  "provenance": {
+   "url": "https://github.com/osdag-admin/osdag-core",
+   "path": "src/osdag_core/design_type/connection/fin_plate_connection.py",
+   "basis": "Connection family reference; independently authored native geometry. No upstream design code imported.",
+   "commit": "9e9de582b6578da770812a5b7a9408d15bd47466"
+  },
+  "version": 1,
+  "match": {
+   "member": [
+    "IPE",
+    "HEA",
+    "HEB",
+    "HEM",
+    "INP"
+   ],
+   "host": [
+    "IPE",
+    "HEA",
+    "HEB",
+    "HEM",
+    "INP"
+   ],
+   "angMin": 75,
+   "angMax": 90
+  }
+ },
+ {
+  "id": "lib-double-fin",
+  "name": "שני סנפירים לצדי הווב",
+  "family": "any",
+  "category": "beam",
+  "note": "זוג פלטות משני צדי ווב קורה עם קבוצת ברגים משותפת. מפגש ניצב.",
+  "vars": [
+   {
+    "name": "d",
+    "expr": "16",
+    "note": "קוטר בורג — מ״מ"
+   },
+   {
+    "name": "d0",
+    "expr": "d+2",
+    "note": "קוטר קדח"
+   },
+   {
+    "name": "t",
+    "expr": "10",
+    "note": "עובי פלטות"
+   },
+   {
+    "name": "e",
+    "expr": "35",
+    "note": "מרחק שפה"
+   }
+  ],
+  "ops": [
+   {
+    "k": "cut",
+    "id": "C1",
+    "kind": "host",
+    "at": "10"
+   },
+   {
+    "k": "plate",
+    "id": "F1",
+    "name": "סנפיר",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "0",
+     "across": "-(mt+t)/2"
+    },
+    "mode": "stand",
+    "spin": "0",
+    "off": "0",
+    "shape": "rect",
+    "w": "150",
+    "h": "max(140, mb-2*mtf-40)",
+    "t": "t",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "plate",
+    "id": "F2",
+    "name": "סנפיר נגדי",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "0",
+     "across": "(mt+t)/2"
+    },
+    "mode": "stand",
+    "spin": "0",
+    "off": "0",
+    "shape": "rect",
+    "w": "150",
+    "h": "max(140, mb-2*mtf-40)",
+    "t": "t",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "holes",
+    "id": "H1",
+    "ref": {
+     "on": "F1",
+     "face": "z+",
+     "along": "0",
+     "across": "0"
+    },
+    "rows": "3",
+    "cols": "1",
+    "px": "60",
+    "py": "50",
+    "d0": "d0"
+   },
+   {
+    "k": "bolts",
+    "id": "B1",
+    "holes": "H1",
+    "d": "d",
+    "grade": "8.8",
+    "site": true
+   },
+   {
+    "k": "weld",
+    "id": "W1",
+    "part": "F1",
+    "a": "5",
+    "site": false
+   },
+   {
+    "k": "weld",
+    "id": "W2",
+    "part": "F2",
+    "a": "5",
+    "site": false
+   }
+  ],
+  "provenance": {
+   "url": "https://github.com/osdag-admin/osdag-core",
+   "path": "src/osdag_core/design_type/connection/cleat_angle_connection.py",
+   "basis": "Connection family reference; independently authored native geometry. No upstream design code imported.",
+   "commit": "9e9de582b6578da770812a5b7a9408d15bd47466"
+  },
+  "version": 1,
+  "match": {
+   "member": [
+    "IPE",
+    "HEA",
+    "HEB",
+    "HEM",
+    "INP"
+   ],
+   "host": [
+    "IPE",
+    "HEA",
+    "HEB",
+    "HEM",
+    "INP"
+   ],
+   "angMin": 75,
+   "angMax": 90
+  }
+ },
+ {
+  "id": "lib-flush-end",
+  "name": "פלטת קצה קומפקטית",
+  "family": "any",
+  "category": "beam",
+  "note": "קורה לעמוד: פלטת קצה מרותכת וארבעה ברגים למארח. נדרש רוחב אגף מארח מתאים.",
+  "vars": [
+   {
+    "name": "d",
+    "expr": "16",
+    "note": "קוטר בורג — מ״מ"
+   },
+   {
+    "name": "d0",
+    "expr": "d+2",
+    "note": "קוטר קדח"
+   },
+   {
+    "name": "t",
+    "expr": "10",
+    "note": "עובי פלטות"
+   },
+   {
+    "name": "e",
+    "expr": "35",
+    "note": "מרחק שפה"
+   }
+  ],
+  "ops": [
+   {
+    "k": "plate",
+    "id": "P1",
+    "name": "פלטת קצה",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "0",
+     "across": "0"
+    },
+    "mode": "flat",
+    "spin": "0",
+    "off": "0",
+    "shape": "rect",
+    "w": "max(mh+40, 160)",
+    "h": "mb+20",
+    "t": "t",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "cut",
+    "id": "C1",
+    "kind": "host",
+    "at": "t"
+   },
+   {
+    "k": "holes",
+    "id": "H1",
+    "ref": {
+     "on": "P1",
+     "face": "z-",
+     "along": "0",
+     "across": "0"
+    },
+    "rows": "2",
+    "cols": "2",
+    "px": "max(70, mh-60)",
+    "py": "max(80, mb-100)",
+    "d0": "d0"
+   },
+   {
+    "k": "bolts",
+    "id": "B1",
+    "holes": "H1",
+    "d": "d",
+    "grade": "8.8",
+    "site": true
+   },
+   {
+    "k": "weld",
+    "id": "W1",
+    "part": "P1",
+    "a": "5",
+    "site": false,
+    "to": "main"
+   }
+  ],
+  "provenance": {
+   "url": "https://github.com/osdag-admin/osdag-core",
+   "path": "src/osdag_core/design_type/connection/end_plate_connection.py",
+   "basis": "Connection family reference; independently authored native geometry. No upstream design code imported.",
+   "commit": "9e9de582b6578da770812a5b7a9408d15bd47466"
+  },
+  "version": 1,
+  "match": {
+   "member": [
+    "IPE",
+    "HEA",
+    "HEB",
+    "HEM",
+    "INP"
+   ],
+   "host": [
+    "IPE",
+    "HEA",
+    "HEB",
+    "HEM",
+    "INP"
+   ],
+   "angMin": 75,
+   "angMax": 90
+  }
+ },
+ {
+  "id": "lib-extended-end",
+  "name": "פלטת קצה מורחבת",
+  "family": "any",
+  "category": "beam",
+  "note": "פלטת קצה עם ברגים מחוץ לגובה הקורה. אין סיווג קשיחות או בדיקת מומנט.",
+  "vars": [
+   {
+    "name": "d",
+    "expr": "16",
+    "note": "קוטר בורג — מ״מ"
+   },
+   {
+    "name": "d0",
+    "expr": "d+2",
+    "note": "קוטר קדח"
+   },
+   {
+    "name": "t",
+    "expr": "10",
+    "note": "עובי פלטות"
+   },
+   {
+    "name": "e",
+    "expr": "35",
+    "note": "מרחק שפה"
+   }
+  ],
+  "ops": [
+   {
+    "k": "plate",
+    "id": "P1",
+    "name": "פלטת קצה",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "0",
+     "across": "0"
+    },
+    "mode": "flat",
+    "spin": "0",
+    "off": "0",
+    "shape": "rect",
+    "w": "max(mh+40, 160)",
+    "h": "mb+160",
+    "t": "t",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "cut",
+    "id": "C1",
+    "kind": "host",
+    "at": "t"
+   },
+   {
+    "k": "holes",
+    "id": "H1",
+    "ref": {
+     "on": "P1",
+     "face": "z-",
+     "along": "0",
+     "across": "0"
+    },
+    "rows": "2",
+    "cols": "2",
+    "px": "max(70, mh-60)",
+    "py": "mb+80",
+    "d0": "d0"
+   },
+   {
+    "k": "bolts",
+    "id": "B1",
+    "holes": "H1",
+    "d": "d",
+    "grade": "8.8",
+    "site": true
+   },
+   {
+    "k": "weld",
+    "id": "W1",
+    "part": "P1",
+    "a": "5",
+    "site": false,
+    "to": "main"
+   }
+  ],
+  "provenance": {
+   "url": "https://github.com/osdag-admin/osdag-core",
+   "path": "src/osdag_core/design_type/connection/beam_column_end_plate.py",
+   "basis": "Connection family reference; independently authored native geometry. No upstream design code imported.",
+   "commit": "9e9de582b6578da770812a5b7a9408d15bd47466"
+  },
+  "version": 1,
+  "match": {
+   "member": [
+    "IPE",
+    "HEA",
+    "HEB",
+    "HEM",
+    "INP"
+   ],
+   "host": [
+    "IPE",
+    "HEA",
+    "HEB",
+    "HEM",
+    "INP"
+   ],
+   "angMin": 75,
+   "angMax": 90
+  }
+ },
+ {
+  "id": "lib-seat",
+  "name": "תושבת מושב מרותכת",
+  "family": "any",
+  "category": "beam",
+  "note": "מושב תחתון, גב אנכי ושני משולשי תמיכה; קורה מוברגת למושב. מפגש ניצב. (1.67: קוטר ומרווח הברגים לפי רוחב האגף — בלי התנגשות במשולשי התמיכה בקורה צרה; פלטת המושב מרותכת לפלטת הגב — לא לעמוד)",
+  "vars": [
+   {
+    "name": "d",
+    "expr": "if(mh < 130, 12, 16)",
+    "note": "קוטר בורג — M12 לאגף צר (עד 130), אחרת M16"
+   },
+   {
+    "name": "d0",
+    "expr": "d+2",
+    "note": "קוטר קדח"
+   },
+   {
+    "name": "t",
+    "expr": "10",
+    "note": "עובי פלטות"
+   },
+   {
+    "name": "e",
+    "expr": "35",
+    "note": "מרחק שפה"
+   },
+   {
+    "name": "g",
+    "expr": "if(mh < 130, 56, min(80, r5(mh - 50)))",
+    "note": "מרחק בין הברגים לרוחב האגף — בין הווב למשולשי התמיכה"
+   }
+  ],
+  "ops": [
+   {
+    "k": "cut",
+    "id": "C1",
+    "kind": "host",
+    "at": "12"
+   },
+   {
+    "k": "plate",
+    "id": "BACK",
+    "name": "גב תושבת",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "-(mb/2+80)",
+     "across": "0"
+    },
+    "mode": "flat",
+    "spin": "0",
+    "off": "0",
+    "shape": "rect",
+    "w": "max(mh+40,180)",
+    "h": "160",
+    "t": "t",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "plate",
+    "id": "SEAT",
+    "name": "פלטת מושב",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "-(mb/2+t/2)",
+     "across": "0"
+    },
+    "mode": "stand",
+    "spin": "90",
+    "off": "t",
+    "shape": "rect",
+    "w": "160",
+    "h": "max(mh+40,180)",
+    "t": "t",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "plate",
+    "id": "G1",
+    "name": "משולש תמיכה",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "-(mb/2+t+70)",
+     "across": "-(mh/2-5)"
+    },
+    "mode": "stand",
+    "spin": "180",
+    "off": "t",
+    "shape": "tri",
+    "w": "140",
+    "h": "140",
+    "t": "8",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "plate",
+    "id": "G2",
+    "name": "משולש תמיכה",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "-(mb/2+t+70)",
+     "across": "mh/2-5"
+    },
+    "mode": "stand",
+    "spin": "180",
+    "off": "t",
+    "shape": "tri",
+    "w": "140",
+    "h": "140",
+    "t": "8",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "holes",
+    "id": "H1",
+    "ref": {
+     "on": "SEAT",
+     "face": "z+",
+     "along": "0",
+     "across": "0"
+    },
+    "rows": "2",
+    "cols": "1",
+    "px": "60",
+    "py": "g",
+    "d0": "d0"
+   },
+   {
+    "k": "bolts",
+    "id": "B1",
+    "holes": "H1",
+    "d": "d",
+    "grade": "8.8",
+    "site": true
+   },
+   {
+    "k": "weld",
+    "id": "W1",
+    "part": "BACK",
+    "a": "5",
+    "site": false
+   },
+   {
+    "k": "weld",
+    "id": "W2",
+    "part": "SEAT",
+    "a": "5",
+    "site": false,
+    "to": "BACK"
+   },
+   {
+    "k": "weld",
+    "id": "W3",
+    "part": "G1",
+    "a": "5",
+    "site": false,
+    "to": "SEAT"
+   },
+   {
+    "k": "weld",
+    "id": "W4",
+    "part": "G2",
+    "a": "5",
+    "site": false,
+    "to": "SEAT"
+   }
+  ],
+  "provenance": {
+   "url": "https://github.com/osdag-admin/osdag-core",
+   "path": "src/osdag_core/cad/ShearConnections/SeatedAngle/CAD_col_flange_beam_web_connectivity.py",
+   "basis": "Connection family reference; independently authored native geometry. No upstream design code imported.",
+   "commit": "9e9de582b6578da770812a5b7a9408d15bd47466"
+  },
+  "version": 2,
+  "match": {
+   "member": [
+    "IPE",
+    "HEA",
+    "HEB",
+    "HEM",
+    "INP"
+   ],
+   "host": [
+    "IPE",
+    "HEA",
+    "HEB",
+    "HEM",
+    "INP"
+   ],
+   "angMin": 75,
+   "angMax": 90
+  }
+ },
+ {
+  "id": "lib-purlin-single",
+  "name": "תושבת פטה מפלטה — 3 ברגים",
+  "family": "cleat",
+  "category": "cleat",
+  "note": "פלטה צמודה לווב פטה רציפה ומשולש תמיכה; שלושה ברגים לאורך הפטה.",
+  "vars": [
+   {
+    "name": "d",
+    "expr": "12",
+    "note": "קוטר בורג — מ״מ"
+   },
+   {
+    "name": "d0",
+    "expr": "d+2",
+    "note": "קוטר קדח"
+   },
+   {
+    "name": "t",
+    "expr": "10",
+    "note": "עובי פלטות"
+   },
+   {
+    "name": "e",
+    "expr": "35",
+    "note": "מרחק שפה"
+   }
+  ],
+  "ops": [
+   {
+    "k": "plate",
+    "id": "P1",
+    "name": "תושבת פטה",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "0",
+     "across": "cs*(wo+t/2)"
+    },
+    "mode": "stand",
+    "spin": "0",
+    "off": "0",
+    "shape": "rect",
+    "w": "mh-20",
+    "h": "180",
+    "t": "t",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "plate",
+    "id": "G1",
+    "name": "משולש תמיכה",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "25",
+     "across": "cs*(wo+t+30)"
+    },
+    "mode": "stand",
+    "spin": "sr",
+    "off": "0",
+    "shape": "tri",
+    "w": "mh-35",
+    "h": "60",
+    "t": "8",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "holes",
+    "id": "H1",
+    "ref": {
+     "on": "P1",
+     "face": "z+",
+     "along": "0",
+     "across": "0"
+    },
+    "rows": "3",
+    "cols": "1",
+    "px": "40",
+    "py": "50",
+    "d0": "d0"
+   },
+   {
+    "k": "bolts",
+    "id": "B1",
+    "holes": "H1",
+    "d": "d",
+    "grade": "8.8",
+    "site": true
+   },
+   {
+    "k": "weld",
+    "id": "W1",
+    "part": "P1",
+    "a": "5",
+    "site": false
+   },
+   {
+    "k": "weld",
+    "id": "W2",
+    "part": "G1",
+    "a": "5",
+    "site": false
+   },
+   {
+    "k": "weld",
+    "id": "W3",
+    "part": "G1",
+    "a": "5",
+    "site": false,
+    "to": "P1"
+   }
+  ],
+  "provenance": {
+   "url": "https://github.com/ahmedalisteel-star/bimsteelauto",
+   "path": "bimsteelauto_connections/secondary.py",
+   "basis": "Connection family reference; independently authored native geometry. No upstream design code imported.",
+   "commit": "358c2fb36800c15f2021c78c30d245e1a688f1e3"
+  },
+  "version": 1
+ },
+ {
+  "id": "lib-purlin-double",
+  "name": "תושבת פטה כפולה",
+  "family": "cleat",
+  "category": "cleat",
+  "note": "שתי פלטות משני צדי ווב הפטה עם שני ברגים משותפים. מיועדת לפטות C/Z. (1.67: הפלטה הנגדית יושבת מעל האגף התחתון של הפטה — רופפת ומוברגת, לא מרותכת לקורה)",
+  "vars": [
+   {
+    "name": "d",
+    "expr": "16",
+    "note": "קוטר בורג — מ״מ"
+   },
+   {
+    "name": "d0",
+    "expr": "d+2",
+    "note": "קוטר קדח"
+   },
+   {
+    "name": "t",
+    "expr": "10",
+    "note": "עובי פלטות"
+   },
+   {
+    "name": "e",
+    "expr": "35",
+    "note": "מרחק שפה"
+   }
+  ],
+  "ops": [
+   {
+    "k": "plate",
+    "id": "P1",
+    "name": "תושבת פטה",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "0",
+     "across": "cs*(wo+t/2)"
+    },
+    "mode": "stand",
+    "spin": "0",
+    "off": "0",
+    "shape": "rect",
+    "w": "mh-20",
+    "h": "140",
+    "t": "t",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "plate",
+    "id": "P2",
+    "name": "פלטה נגדית (רופפת, מעל האגף התחתון)",
+    "ref": {
+     "on": "host",
+     "face": "hit",
+     "along": "0",
+     "across": "cs*(wo-mt-t/2)"
+    },
+    "mode": "stand",
+    "spin": "0",
+    "off": "mtf+1",
+    "shape": "rect",
+    "w": "mh-21-mtf",
+    "h": "140",
+    "t": "t",
+    "ch": "0",
+    "corners": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "k": "holes",
+    "id": "H1",
+    "ref": {
+     "on": "P1",
+     "face": "z+",
+     "along": "0",
+     "across": "0"
+    },
+    "rows": "2",
+    "cols": "1",
+    "px": "40",
+    "py": "60",
+    "d0": "d0"
+   },
+   {
+    "k": "bolts",
+    "id": "B1",
+    "holes": "H1",
+    "d": "d",
+    "grade": "8.8",
+    "site": true
+   },
+   {
+    "k": "weld",
+    "id": "W1",
+    "part": "P1",
+    "a": "5",
+    "site": false
+   }
+  ],
+  "provenance": {
+   "url": "https://github.com/ahmedalisteel-star/bimsteelauto",
+   "path": "bimsteelauto_connections/secondary.py",
+   "basis": "Connection family reference; independently authored native geometry. No upstream design code imported.",
+   "commit": "358c2fb36800c15f2021c78c30d245e1a688f1e3"
+  },
+  "version": 2
+ }
+]

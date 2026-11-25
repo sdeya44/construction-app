@@ -3,7 +3,7 @@ import { evalExpr, tryExpr } from '../src/core/expr';
 import { defaultBuilding, newProject } from '../src/model/defaults';
 import { generate } from '../src/geometry/generate';
 import { defaultKneeBraces } from '../src/geometry/knee';
-import { blankDetail, buildDetail, detailPresets, findSite, similarSites } from '../src/geometry/detail';
+import { blankDetail, buildDetail, detailPresets, findSite, presetFits, similarSites } from '../src/geometry/detail';
 import { computeFabrication } from '../src/fab/marks';
 import { computeBom } from '../src/fab/bom';
 import { buildSheet, drawingCatalog } from '../src/drawing/views';
@@ -31,7 +31,8 @@ describe('פרטי חיבור מותאמים', () => {
     for (const m of kb.slice(0, 4)) for (const end of ['start', 'end'] as const) {
       const s = findSite(d.members, m, end)!;
       expect(s.host).toBeTruthy();
-      for (const det of detailPresets().filter((x) => x.family !== 'cleat')) {
+      // רק פרטים שמתאימים לאתר (1.67: פרטי קורת I מהספרייה לא מוצעים לאלכסון RHS — LIB-02b)
+      for (const det of detailPresets().filter((x) => x.family !== 'cleat' && presetFits(x, s))) {
         const r = buildDetail(s, det);
         expect(bad(r.issues), `${m.id} ${end} ${det.id}`).toEqual([]);
         expect(r.conn.bolts.length).toBeGreaterThan(0);

@@ -1,4 +1,5 @@
 import { add, cross, dot, len, norm, rotateAxis, scale, sub, v3, type Plane, type Vec3 } from '../core/vec';
+import CONN_LIBRARY from './data/connLibrary.json';
 import { tryExpr, type Vars } from '../core/expr';
 import { getProfile, tryProfile } from '../profiles/library';
 import type { BoltInfo, Connection, CustomDetail, DetailOp, DetailRef, Member, Project, ValidationIssue, WeldInfo } from '../model/types';
@@ -543,8 +544,23 @@ export function similarSites(members: Member[], key: string, withProfile = true,
 }
 
 // ---------- פרטים מוכנים לספרייה ----------
+/** האם פרט מוכן מתאים לאתר (לפי תנאי ההתאמה שלו); פרט בלי תנאים — מתאים לכל אתר שאינו תושבת */
+export function presetFits(det: CustomDetail, site: Site | null): boolean {
+  if (!site) return false;
+  if ((det.family === 'cleat') !== !!site.cross) return false;
+  const mt = det.match;
+  if (!mt) return true;
+  const fam = (id?: string) => (id ? tryProfile(id)?.family ?? '' : '');
+  if (mt.member?.length && !mt.member.includes(fam(site.main.profile))) return false;
+  if (mt.host?.length && !mt.host.includes(fam(site.host?.profile))) return false;
+  const a = Math.round(site.ang);
+  return !((mt.angMin !== undefined && a < mt.angMin) || (mt.angMax !== undefined && a > mt.angMax));
+}
 const R = (on: string, face: string, along = '0', across = '0'): DetailRef => ({ on, face, along, across });
 export function detailPresets(): CustomDetail[] {
+  return [...basePresets(), ...(structuredClone(CONN_LIBRARY) as CustomDetail[])];
+}
+function basePresets(): CustomDetail[] {
   return [
     {
       id: 'preset-flange', name: 'פלטה מוברגת לפני המארח', family: 'any',

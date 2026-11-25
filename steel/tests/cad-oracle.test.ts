@@ -98,3 +98,23 @@ describe('CAD-02 תיקוני גיאומטריה שנמצאו בביקורת', (
     expect(cadFindings(cadAudit(K, d, cs))).toEqual([]);
   }, 300000);
 });
+
+describe('CAD-03 ספריית מחברים (1.67)', () => {
+  it('כל פרט מהספרייה על אתר מתאים: גופים, חורים, ריתוכים במגע, בלי חדירות', async () => {
+    const { buildDetail, detailPresets, presetFits } = await import('../src/geometry/detail');
+    const { libSites } = await import('./libSites');
+    const out: string[] = [];
+    for (const [label, make] of libSites) {
+      const { sites, d } = make();
+      for (const det of detailPresets().filter((x) => x.id.startsWith('lib-'))) {
+        const s = sites.find((x) => presetFits(det, x))!;
+        const r = buildDetail(s, det);
+        const members = [...d.members.filter((m) => m.id !== r.main.id), r.main, ...r.members];
+        const dd = { ...d, members, byId: new Map(members.map((m) => [m.id, m])), connections: [...d.connections, r.conn] };
+        out.push(...cadFindings(cadAudit(K, dd, [r.conn])).map((f) => `${label} ${det.id}: ${f}`));
+      }
+    }
+    expect(out).toEqual([]);
+  }, 300000);
+});
+

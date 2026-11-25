@@ -733,6 +733,20 @@ export function saveDetail(det: CustomDetail): Command {
     },
   };
 }
+/** הוספת כמה פרטים לספרייה בפעולה אחת (ייבוא קובץ ספרייה) */
+export function addDetails(list: CustomDetail[]): Command {
+  return {
+    label: `ייבוא ${list.length} פרטים לספרייה`,
+    run: (p) => {
+      if (!list.length) throw new CommandError('אין פרטים בקובץ');
+      const n = clone(p);
+      const have = new Set((n.customDetails ?? []).map((x) => x.id));
+      if (list.some((x) => have.has(x.id))) throw new CommandError('מזהה פרט כפול');
+      n.customDetails = [...(n.customDetails ?? []), ...clone(list)];
+      return n;
+    },
+  };
+}
 /** מחיקת פרט מהספרייה — ושחרור כל הקצוות שהשתמשו בו (חזרה לפרט הרגיל) */
 export function deleteDetail(id: string): Command {
   return {

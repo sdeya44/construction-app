@@ -852,6 +852,12 @@ export interface CustomDetail {
   family?: string;
   /** תנאי התאמה לאשף החיבורים (1.47): משפחות חתך של האלמנט ושל המארח, טווח זווית (מעלות) */
   match?: { member?: string[]; host?: string[]; angMin?: number; angMax?: number };
+  /** קטגוריה בספרייה (beam / cleat / …) */
+  category?: string;
+  /** מקור הפרט (ספרייה מיובאת): קישור, נתיב ונימוק — מידע בלבד */
+  provenance?: { url?: string; path?: string; basis?: string; commit?: string };
+  /** גרסת הגיאומטריה של הפרט (שינוי = פרט אחר) */
+  version?: number;
 }
 
 export interface SpliceInfo {

@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { add, dot, len, scale, sub, type Vec3 } from '../core/vec';
 import { generate } from '../geometry/generate';
 import { memberSolid } from '../geometry/solid';
-import { blankDetail, buildDetail, detailPresets, findSite, parseSiteKey, partsToReplace, similarSites, siteKey, VAR_HELP, type DetailResult, type Site } from '../geometry/detail';
+import { blankDetail, buildDetail, detailPresets, findSite, presetFits, parseSiteKey, partsToReplace, similarSites, siteKey, VAR_HELP, type DetailResult, type Site } from '../geometry/detail';
 import { assignDetail, saveDetail } from '../commands/commands';
 import type { CustomDetail, DetailOp, DetailRef, Member } from '../model/types';
 import { store, useStore } from '../store';
@@ -267,7 +267,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
             </div>
           ))}
           <div className="sl-grp"><h4>פרטים מוכנים</h4>
-            {detailPresets().filter((p) => (p.family === 'cleat') === !!site.cross).map((p) => <button key={p.id} className="sl-tool" title={p.note} data-testid={`ds-preset-${p.id}`} onClick={() => loadPreset(p, true)}><span>{p.name}</span></button>)}
+            {detailPresets().filter((p) => presetFits(p, site)).map((p) => <button key={p.id} className="sl-tool" title={p.note} data-testid={`ds-preset-${p.id}`} onClick={() => loadPreset(p, true)}><span>{p.name}</span></button>)}
           </div>
           {!!project.customDetails?.length && <div className="sl-grp"><h4>הספרייה שלי</h4>
             {project.customDetails.map((p) => <button key={p.id} className={`sl-tool${p.id === det.id ? ' on' : ''}`} onClick={() => loadPreset(p, false)}><span>{p.name}</span></button>)}

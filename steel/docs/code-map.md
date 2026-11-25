@@ -18,7 +18,8 @@
 | קושרות, סבכה, אגד B | `bracing.ts`, `hbrace.ts`, `portal.ts` | bracing |
 | אלכסוני עמוד-קורה, מכפל, פרט פח+לשונית | `knee.ts`, `kneeSolve.ts`, `haunch.ts`, `finJoint.ts` | knee |
 | חיבורים: בסיס, ראש עמוד, רכס, ברגים (`makeBolt`) | `connections.ts`, `eavePlate.ts` | connections |
-| פרטים מותאמים ("מתכון" ops) | `detail.ts`, `core/expr.ts`, `model/connRegistry.ts` (רישום סוגי פרט) | connections |
+| פרטים מותאמים ("מתכון" ops), פרטים מוכנים (`detailPresets`, `presetFits`) | `detail.ts`, `core/expr.ts`, `model/connRegistry.ts` (רישום סוגי פרט) | connections |
+| ספריית מחברים: 7 מחברים מוכנים, ייבוא/ייצוא | `data/connLibrary.json`, `detailLibrary.ts`, `ui/DetailLibrary.tsx` (`lib-*`) | connections (e2e v167) |
 | סככת L וכיסאות `C.WS` | `wing.ts` | wing |
 | דילול עמודים / קורה נושאת | `transfer.ts` | transfer |
 | מסבכים, נעילה | `truss.ts`, `lockTruss.ts` | truss |

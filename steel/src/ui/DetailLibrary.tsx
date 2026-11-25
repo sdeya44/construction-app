@@ -1,17 +1,45 @@
 import { useState } from 'react';
-import { deleteDetail, saveDetail } from '../commands/commands';
+import { addDetails, deleteDetail, saveDetail } from '../commands/commands';
+import { detailPresets } from '../geometry/detail';
+import { exportLibrary, importLibrary } from '../geometry/detailLibrary';
+import { downloadText, pickFile, safeFileName } from '../persist/files';
 import { store, useStore } from '../store';
 
 /** ספריית פרטי החיבור של הפרויקט: שם, שימוש, שכפול, מחיקה ופתיחה בסטודיו */
 export function DetailLibrary() {
   const p = useStore((s) => s.project);
   const [confirm, setConfirm] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const doImport = async () => {
+    const f = await pickFile('.json,application/json');
+    if (!f) return;
+    try {
+      const { added } = importLibrary(await f.text(), p.customDetails ?? []);
+      store.exec(addDetails(added));
+      setMsg({ ok: true, text: `יובאו ${added.length} פרטים: ${added.map((x) => x.name).join(', ')}` });
+    } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
+  };
+  const builtin = detailPresets().filter((x) => x.id.startsWith('lib-'));
+  const addBuiltin = () => {
+    const names = new Set((p.customDetails ?? []).map((x) => x.name));
+    const add = builtin.filter((x) => !names.has(x.name)).map((x, i) => ({ ...structuredClone(x), id: `cd-${Date.now().toString(36)}-${i}` }));
+    if (!add.length) { setMsg({ ok: true, text: 'כל פרטי הספרייה המובנית כבר בפרויקט' }); return; }
+    store.exec(addDetails(add));
+    setMsg({ ok: true, text: `נוספו ${add.length} פרטים מהספרייה המובנית` });
+  };
   const lib = p.customDetails ?? [];
   const uses = (id: string) => Object.entries(p.detailAssign ?? {}).filter(([, v]) => v === id).map(([k]) => k);
   return (
     <div className="panel-body" data-testid="detail-library">
       <button className="btn" style={{ width: '100%', marginBottom: 8 }} data-testid="open-conn-library" onClick={() => store.set({ connLibraryOpen: true })}>ספריית חיבורים — הגדרות שמורות לפרויקט ←</button>
       <div className="panel-title">ספריית פרטים ({lib.length})</div>
+      <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+        <button className="btn small" data-testid="lib-export" disabled={!lib.length} title="שמירת פרטי הספרייה לקובץ — להעברה לפרויקט אחר או למחשב אחר"
+          onClick={() => downloadText(`${safeFileName(p.meta.name)}-מחברים.json`, exportLibrary(lib))}>ייצוא ספרייה</button>
+        <button className="btn small" data-testid="lib-import" title="טעינת פרטים מקובץ ספרייה (פרטים קיימים לא נדרסים)" onClick={doImport}>ייבוא ספרייה</button>
+        <button className="btn small" data-testid="lib-add-builtin" title={builtin.map((x) => x.name).join(' · ')} onClick={addBuiltin}>＋ {builtin.length} מחברים מוכנים</button>
+      </div>
+      {msg && <div className={msg.ok ? 'hint' : 'hint warn'} data-testid="lib-msg">{msg.text}</div>}
       {!lib.length && <div className="hint">אין עדיין פרטים בספרייה. בוחרים אלמנט ← "סוג חיבור בכל קצה" ← "פרט חדש בסטודיו", או תושבת ← "סוג התושבת".</div>}
       {lib.length > 0 && (
         <table className="tbl" data-testid="lib-table">

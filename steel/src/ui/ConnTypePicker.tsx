@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { assignDetail, setCleat, setCleatEverywhere, withDetailCleared } from '../commands/commands';
 import { effCleat } from '../geometry/connections';
-import { detailPresets, similarSites } from '../geometry/detail';
+import { detailPresets, findSite, presetFits, similarSites } from '../geometry/detail';
 import type { CleatParams, CustomDetail } from '../model/types';
 import { store, useStore } from '../store';
 
@@ -53,7 +53,9 @@ export function CleatTypePicker({ connId: connId0, side: side0 }: { connId?: str
   const style: Style = cl.style ?? 'run';
   const assigned = siteKeyCur ? p.detailAssign?.[siteKeyCur] : undefined;
   const lib = (p.customDetails ?? []).filter((x) => x.family === 'cleat' || Object.entries(p.detailAssign ?? {}).some(([k, v]) => v === x.id && k.includes('|x:')));
-  const presets = detailPresets().filter((x) => x.family === 'cleat');
+  const curPur = pur ?? (siteKeyCur ? d.byId.get(siteKeyCur.split('|')[0]!) : undefined);
+  const siteC = curPur && siteKeyCur ? findSite(d.members, curPur, siteKeyCur.split('|')[1] as `x:${string}`) : null;
+  const presets = detailPresets().filter((x) => x.family === 'cleat' && (!siteC || presetFits(x, siteC)));
   const allCleatKeys = () => similarSites(d.members, siteKeyCur ?? anyKey(), false, d.connections);
   const anyKey = () => { const cc = d.connections.find((x) => x.type === 'purlin-cleat'); return cc ? `${cc.members[0]}|x:${cc.id.split('.').pop()}` : ''; };
   const keysFor = (): string[] => {
@@ -103,7 +105,10 @@ export function EndTypePicker({ memberId, end }: { memberId: string; end: 'start
   const key = `${memberId}|${end}`;
   const assigned = p.detailAssign?.[key];
   const lib = (p.customDetails ?? []).filter((x) => x.family !== 'cleat' && !Object.entries(p.detailAssign ?? {}).some(([k, v]) => v === x.id && k.includes('|x:')));
-  const presets = detailPresets().filter((x) => x.family !== 'cleat');
+  // פרט מוכן מוצע רק כשתנאי ההתאמה שלו מתקיימים בקצה הזה (למשל פרטי קורת I — רק קורת I מול עמוד I/H)
+  const m0 = d.byId.get(memberId);
+  const site0 = m0 ? findSite(d.members, m0, end) : null;
+  const presets = detailPresets().filter((x) => x.family !== 'cleat' && presetFits(x, site0));
   const [all, setAll] = useState(false);
   const sim = all ? similarSites(d.members, key, true, d.connections) : [key];
   const regular = d.connections.find((c) => c.type !== 'custom' && (c.members.includes(memberId) || c.parts.includes(memberId)));
