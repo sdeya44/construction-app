@@ -36,7 +36,7 @@
 | קטלוג גיליונות ובניית גיליון | `drawing/views.ts` (**1241 שורות**) | drawing |
 | שרטוט חלק (כולל חריצים ל-RHS), תא פלטה והפניית חורים (`holeCallouts`), מכלול | `drawing/part.ts`, `drawing/assembly.ts` | drawing |
 | מודל גיליון ופלט | `drawing/sheet.ts`, `svg.ts`, `pdf.ts`, `dxf.ts`, `solidCache.ts` | drawing |
-| מכלול אגד B / אלכסוני Y (מבט, פרטים מוגדלים, ריתוכים, פרטי פלטות) | `drawing/unit.ts` (`braceUnits`, `braceUnitSheet`) | drawing (`tests/unit.test.ts`) |
+| מכלול אגד B / אלכסוני Y (מבט, פרטים מוגדלים, ריתוכים, פרטי פלטות, תלת־ממד) | `drawing/unit.ts` (`braceUnits`, `braceUnitSheet`) | drawing (`tests/unit.test.ts`) |
 | ביקורת קריאות, הצבת תוויות בלי חפיפה, הסרת כפילויות | `drawing/layoutAudit.ts` (`auditSheet`, `boxIsFree`), `drawing/labels.ts` (`placeLabels`, `dedupeTexts`) | drawing (`tests/layout.test.ts`) |
 | ביקורת CAD (OpenCascade, בבדיקות בלבד) | `cad/occAudit.ts` | cad |
 

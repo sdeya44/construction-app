@@ -10,6 +10,7 @@ import { cachedSolidPure, silhouetteEdges } from './solidCache';
 import { plateFaceInBox } from './part';
 import { approxMeasure, boxIsFree, type Box } from './layoutAudit';
 import { placeLabels } from './labels';
+import { renderIso } from './assembly';
 
 type V3 = { x: number; y: number; z: number };
 export interface BraceUnit { id: string; title: string; core: string[]; conns: Connection[]; hosts: string[]; refs: string[] }
@@ -202,6 +203,13 @@ export function braceUnitSheet(sh: Sheet, def: { ref?: string }, d: DerivedModel
     for (const wd of words) { if (approxMeasure(`${cur} ${wd}`, 2.3) > tblW - 4) { T(cur.trim(), x1, 2.3); y -= 3.8; cur = wd; } else cur += ` ${wd}`; }
     if (cur.trim()) { T(cur.trim(), x1, 2.3); y -= 3.8; }
     y -= 1.2;
+  }
+  // ---- 1.69.1: תלת־ממד מוצלל של היחידה (בלי העמודים והקורה הנושאת הארוכים), עם סימוני החלקים
+  {
+    const isoIds = [...partIds.filter((id) => !id.startsWith('TB.')), ...u.conns.flatMap((c) => c.bolts.flatMap((b) => ['.H', '.S', '.N'].map((sf) => `${b.id}${sf}`)))].filter((id) => d.byId.has(id));
+    const ms = [...new Set(isoIds)].map((id) => d.byId.get(id)!);
+    const top = Math.min(y - 4, area.y0 + 150);
+    if (top - area.y0 > 50 && ms.length) renderIso(sh, ms, ms.map((m) => fab.parts.find((x) => x.memberId === m.id)?.mark ?? ''), { x0: area.x0 + 2, x1: area.x0 + tblW, y0: area.y0 + 4, y1: top }, null, () => ({ t: 0, u: 0, v: 0 }), 'תלת־ממד (ללא קנ"מ)', [], 0, true);
   }
   return `1:${scO}`;
 }
