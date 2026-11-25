@@ -162,13 +162,13 @@ export function siteVars(s: Site): Vars {
   return {
     mh: s.mh, mb: s.mb, mt: mp.dims.t ?? mp.dims.tw ?? 5, mtf: mp.dims.tf ?? mp.dims.t ?? 5,
     hh: hp?.props.h ?? 0, hb: hp?.props.b ?? 0, htf: hp?.dims.tf ?? hp?.dims.t ?? 0, htw: hp?.dims.tw ?? hp?.dims.t ?? 0,
-    hd: s.hd, ang: Math.max(1, s.ang), wo: s.cross?.wo ?? 0, cs: s.cross?.cs ?? 1, sr: s.cross?.sr ?? 90,
+    hd: s.hd, ang: Math.max(1, s.ang), hs: s.hand, wo: s.cross?.wo ?? 0, cs: s.cross?.cs ?? 1, sr: s.cross?.sr ?? 90,
   };
 }
 export const VAR_HELP: [string, string][] = [
   ['mh', 'גובה חתך האלמנט (במישור)'], ['mb', 'רוחב חתך האלמנט (ניצב למישור)'], ['mt', 'עובי דופן/ווב האלמנט'], ['mtf', 'עובי אגף האלמנט'],
   ['hh', 'גובה חתך המארח'], ['hb', 'רוחב חתך המארח'], ['htf', 'עובי אגף המארח'], ['htw', 'עובי ווב המארח'], ['hd', 'עומק המארח בכיוון הפגיעה'],
-  ['ang', 'זווית בין ציר האלמנט לפני המארח (90 = ניצב)'], ['wo', 'תושבת פטה: מרחק פני הווב מציר הפטה'],
+  ['ang', 'זווית בין ציר האלמנט לפני המארח (90 = ניצב)'], ['hs', 'כיוון קנוני ±1 של w: הסטה/היסט ב-hs·x הולכים לאותו צד מוחלט בשני קצוות האלמנט'], ['wo', 'תושבת פטה: מרחק פני הווב מציר הפטה'],
 ];
 
 export interface Frame { base: Vec3; n: Vec3; e1: Vec3; e2: Vec3; hand: 1 | -1 }
@@ -277,7 +277,14 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
       const tt = dot(sub(Q, s.P), N) / (dot(s.u, N) || 1); sEnd = tt;
     }
   }
-  const endPt = add(s.P, scale(s.u, sEnd));
+  // הסטת הקצה (shift): ניצב למישור, לאורך w — הציר והחיתוך זזים; הפלטות על "axis" נשארות על הציר המקורי
+  const shiftOp = det.ops.find((o) => o.k === 'shift') as Extract<DetailOp, { k: 'shift' }> | undefined;
+  let sh = v3(0, 0, 0);
+  if (shiftOp) {
+    if (s.cross) errors[shiftOp.id] = 'בתושבת פטה הפטה רציפה — אין הסטה';
+    else { const by = ev(shiftOp.by, shiftOp.id); vals[`${shiftOp.id}.by`] = by; sh = scale(s.w, by); cutPlane = { point: add(cutPlane.point, sh), normal: cutPlane.normal }; }
+  }
+  const endPt = add(add(s.P, scale(s.u, sEnd)), sh);
   const main: Member = s.cross ? s.main : { ...s.main, ...(s.end === 'start' ? { start: endPt, startCut: cutPlane } : { end: endPt, endCut: cutPlane }), connId: s.main.connId };
   if (s.cross && cutOp) errors[cutOp.id] = 'בתושבת פטה הפטה רציפה — אין חיתוך';
   vals.send = sEnd;
@@ -286,7 +293,8 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
   const frame = (ref: Pick<DetailRef, 'on' | 'face'>): Frame | null => {
     let base: Vec3, n: Vec3, e1: Vec3;
     if (ref.on === 'main') {
-      if (ref.face === 'end') { if (s.cross) return null; base = add(s.P, scale(s.u, sEnd - endT)); n = scale(s.u, -1); e1 = s.a; }
+      if (ref.face === 'axis' || ref.face === 'axis-') { if (s.cross) return null; base = s.P; n = scale(s.w, s.hand * (ref.face === 'axis-' ? -1 : 1)); e1 = s.u; }
+      else if (ref.face === 'end') { if (s.cross) return null; base = add(add(s.P, scale(s.u, sEnd - endT)), sh); n = scale(s.u, -1); e1 = s.a; }
       else if (s.cross) {
         // פטה: פני הווב (a+ בצד התושבת), e1 כלפי מעלה
         if (!ref.face.startsWith('a')) return null;
@@ -294,7 +302,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         n = scale(s.a, sg); base = add(s.P, scale(n, s.cross.wo)); e1 = s.u;
       } else {
         const sg = ref.face.endsWith('-') ? -1 : 1, isA = ref.face.startsWith('a');
-        n = scale(isA ? s.a : s.w, sg); base = add(s.P, scale(n, (isA ? s.mh : s.mb) / 2)); e1 = s.u;
+        n = scale(isA ? s.a : s.w, sg); base = add(add(s.P, sh), scale(n, (isA ? s.mh : s.mb) / 2)); e1 = s.u;
       }
     } else if (ref.on === 'host') {
       n = s.n;
@@ -348,9 +356,16 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         let X: Vec3, Y: Vec3, Z: Vec3, center: Vec3;
         if (op.mode === 'flat') { Z = fr.n; Y = rotateAxis(fr.e1, Z, spin); X = scale(cross(Z, Y), fr.hand); center = add(o, scale(Z, t / 2 + off)); }
         else { X = fr.n; Y = rotateAxis(fr.e1, X, spin); Z = scale(cross(X, Y), fr.hand); center = add(o, scale(X, w / 2 + off)); }
-        const g: PlateGeom = { id: op.id, center, X, Y, Z, t, w, h, poly: platePoly(op.shape, w, h, ch, op.corners), hand: fr.hand, memberId: `${cid}.${op.id}`, target: targetOf(op.ref.on) };
+        const poly = platePoly(op.shape, w, h, ch, op.corners);
+        const g: PlateGeom = { id: op.id, center, X, Y, Z, t, w, h, poly, hand: fr.hand, memberId: `${cid}.${op.id}`, target: targetOf(op.ref.on) };
         plates.set(op.id, g);
-        members.push(plateMember(g, op.name || 'פלטה', op.shape !== 'rect' && !(op.shape === 'cham' && (ch <= 0 || !op.corners.some(Boolean)))));
+        const pm = plateMember(g, op.name || 'פלטה', op.shape !== 'rect' && !(op.shape === 'cham' && (ch <= 0 || !op.corners.some(Boolean))));
+        // clipHost: קצה הפלטה שליד המארח נחתך במישור פני המארח (זווית חיתוך בחלק — כמו בקוד הישן, ו-NC1 מקבל את זווית החיתוך)
+        if (op.clipHost && s.host && !s.cross) {
+          const cut = { point: s.P, normal: scale(s.n, -1) };
+          if (dot(sub(pm.start, s.P), s.n) <= dot(sub(pm.end, s.P), s.n)) pm.startCut = cut; else pm.endCut = cut;
+        }
+        members.push(pm);
       } else if (op.k === 'endplate') {
         const t = ev(op.t, `${op.id}.t`, 15), w = ev(op.w, `${op.id}.w`, s.mh + 40), h = ev(op.h, `${op.id}.h`, s.mb + 40);
         const dx = ev(op.dx, `${op.id}.dx`), dy = ev(op.dy, `${op.id}.dy`);
@@ -420,6 +435,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
           if (pOp.ref.on === 'main' && pOp.ref.face === 'end' && off < 0) length = 4 * -off;
           else for (let i = 0; i < g.poly.length; i++) { const p = g.poly[i], q = g.poly[(i + 1) % g.poly.length]; if (Math.abs(p[0] - x0) < 0.5 && Math.abs(q[0] - x0) < 0.5) { length += 2 * Math.abs(q[1] - p[1]); from = add(add(g.center, scale(g.X, x0)), scale(g.Y, p[1])); toP = add(add(g.center, scale(g.X, x0)), scale(g.Y, q[1])); } }
         }
+        if (op.len !== undefined && op.len !== '') length = ev(op.len, `${op.id}.len`);
         welds.push({ id: `${cid}.${op.id}`, connId: cid, type: 'fillet', a, length: Math.round(length), location: op.site ? 'site' : 'shop', between: [g.memberId, to], from, to: toP });
         if (op.site) issues.push({ code: 'CD_SITE_WELD', severity: 'warning', elementId: cid, message: `פרט ${det.name}: ריתוך בשטח — סותר את עיקרון הגלוון (ריתוך במסגריה, ברגים בשטח)` });
       } else if (op.k === 'vent') {

@@ -118,3 +118,21 @@ describe('CAD-03 ספריית מחברים (1.67)', () => {
   }, 300000);
 });
 
+
+describe('CAD-04 הסבה (שלב C): אלכסון עמוד-קורה פח+לשונית כמתכון', () => {
+  it('כל קצוות האלכסונים: גופים תקינים, חורים חותכים, ריתוכים במגע, בלי חדירות — ובדיוק כמו הפרט הישן', async () => {
+    const { kneeFinRecipe } = await import('../src/geometry/convRecipes');
+    const { assignDetail } = await import('../src/commands/commands');
+    const b = defaultBuilding();
+    b.kneeBraces = { ...defaultKneeBraces(), enabled: true, profile: 'RHS60x60x4', detail: 'fin' } as never;
+    const p0 = newProject('conv', b), d0 = generate(p0);
+    const keys = d0.members.filter((m) => m.id.startsWith('KB.F1.')).flatMap((m) => [`${m.id}|start`, `${m.id}|end`]);
+    const d1 = generate(assignDetail(keys, kneeFinRecipe()).run(p0));
+    const old = d0.connections.filter((c) => c.id.startsWith('C.KB.F1.'));
+    const neu = d1.connections.filter((c) => c.custom?.site.startsWith('KB.F1.'));
+    expect(neu.length).toBe(old.length * 2);
+    const fo = cadFindings(cadAudit(K, d0, old)), fn = cadFindings(cadAudit(K, d1, neu));
+    expect(fo).toEqual([]);
+    expect(fn).toEqual([]);
+  }, 300000);
+});

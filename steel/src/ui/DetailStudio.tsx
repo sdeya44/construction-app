@@ -43,8 +43,8 @@ const HINT: Record<string, string> = {
   plate: 'על כל פנים: האלמנט, המארח או פלטה', endplate: 'על האלמנט — נצמדת לקצה', cut: 'על האלמנט — במקום החיתוך', slot: 'על האלמנט', vent: 'על האלמנט',
   holes: 'על פלטה', bolts: 'על פלטה (חורים נוספים אוטומטית)', rod: 'על כל פנים', weld: 'על פלטה — מרותכת למה שהיא יושבת עליו',
 };
-const OPNAME: Record<DetailOp['k'], string> = { plate: 'פלטה', endplate: 'פלטת קצה', cut: 'חיתוך', slot: 'חריץ', vent: 'אוורור', holes: 'חורים', bolts: 'ברגים', rod: 'מוט הברגה', weld: 'ריתוך' };
-const PREFIX: Record<DetailOp['k'], string> = { plate: 'P', endplate: 'E', cut: 'C', slot: 'S', vent: 'V', holes: 'H', bolts: 'B', rod: 'R', weld: 'W' };
+const OPNAME: Record<DetailOp['k'], string> = { plate: 'פלטה', endplate: 'פלטת קצה', cut: 'חיתוך', shift: 'הסטת קצה', slot: 'חריץ', vent: 'אוורור', holes: 'חורים', bolts: 'ברגים', rod: 'מוט הברגה', weld: 'ריתוך' };
+const PREFIX: Record<DetailOp['k'], string> = { plate: 'P', endplate: 'E', cut: 'C', shift: 'M', slot: 'S', vent: 'V', holes: 'H', bolts: 'B', rod: 'R', weld: 'W' };
 const FACE_NAME: Record<string, string> = { end: 'קצה', 'a+': 'דופן במישור +', 'a-': 'דופן במישור −', 'w+': 'דופן צד +', 'w-': 'דופן צד −', hit: 'פני המגע', opp: 'פנים נגדיות', web: 'ווב', 'z+': 'פנים +', 'z-': 'פנים −' };
 const r5 = (x: number) => Math.round(x / 5) * 5;
 /** פתיחת בונה הנוסחאות משדה כלשהו */
@@ -444,6 +444,7 @@ function OpProps({ op, det, res, patch }: { op: DetailOp; det: CustomDetail; res
         <div className="ss-row">{([['perp', 'ניצב לציר'], ['host', 'מקביל למארח'], ['vert', 'אנכי'], ['horiz', 'אופקי']] as const).map(([kk, l]) => <button key={kk} className={`btn small${op.kind === kk ? ' on' : ''}`} onClick={() => patch({ kind: kk })}>{l}</button>)}</div>
         <EF label={op.kind === 'host' ? 'מרחק מפני המארח' : 'מרחק לאורך הציר'} value={op.at} onChange={(v) => patch({ at: v })} vkey={k('at')} res={res} testId={`ds-${op.id}-at`} />
       </>}
+      {op.k === 'shift' && <EF label="הסטה ניצבת למישור (לאורך w)" value={op.by} onChange={(v) => patch({ by: v })} vkey={k('by')} res={res} hint="למשל חצי עובי הפח+הלשונית — הציר זז, פלטות על 'axis' נשארות" />}
       {op.k === 'slot' && <><EF label="אורך" value={op.L} onChange={(v) => patch({ L: v })} vkey={k('L')} res={res} /><EF label="רוחב" value={op.w} onChange={(v) => patch({ w: v })} vkey={k('w')} res={res} hint="עובי הלשונית + 2" /></>}
       {op.k === 'vent' && <><EF label="קוטר" value={op.d} onChange={(v) => patch({ d: v })} vkey={k('d')} res={res} /><EF label="מרחק מהקצה" value={op.at} onChange={(v) => patch({ at: v })} vkey={k('at')} res={res} /></>}
       {op.k === 'holes' && <>

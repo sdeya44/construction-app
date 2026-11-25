@@ -6,7 +6,7 @@
 import type { CustomDetail } from '../model/types';
 
 export const LIB_FORMAT = 'kayan-connection-library';
-const OPS = new Set(['cut', 'plate', 'endplate', 'holes', 'bolts', 'slot', 'vent', 'rod', 'weld']);
+const OPS = new Set(['cut', 'shift', 'plate', 'endplate', 'holes', 'bolts', 'slot', 'vent', 'rod', 'weld']);
 
 export function exportLibrary(details: CustomDetail[]): string {
   return JSON.stringify({ format: LIB_FORMAT, version: 1, exportedAt: new Date().toISOString(), details }, null, 1);

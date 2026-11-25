@@ -38,8 +38,8 @@ export const MODULES = {
   },
   knee: {
     title: 'אלכסוני עמוד-קורה ומכפלים',
-    src: ['src/geometry/knee.ts', 'src/geometry/kneeSolve.ts', 'src/geometry/haunch.ts', 'src/geometry/finJoint.ts'],
-    tests: ['tests/kneegrid.test.ts', 'tests/kneesolve.test.ts', { file: 'tests/newshapes.test.ts', t: 'מכפל' }, cad('· knee')],
+    src: ['src/geometry/knee.ts', 'src/geometry/kneeSolve.ts', 'src/geometry/haunch.ts', 'src/geometry/finJoint.ts', 'src/geometry/convRecipes.ts'],
+    tests: ['tests/kneegrid.test.ts', 'tests/kneesolve.test.ts', 'tests/kneefin-compare.test.ts', { file: 'tests/cad-oracle.test.ts', t: 'CAD-04' }, { file: 'tests/newshapes.test.ts', t: 'מכפל' }, cad('· knee')],
     e2e: ['e2e/knee-sides.spec.ts', 'e2e/ux156.spec.ts'],
   },
   connections: {

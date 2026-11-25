@@ -830,21 +830,24 @@ export interface Connection {
 export type Expr = string;
 /**
  * פנים שעליהן יושב רכיב:
- *   main — האלמנט שהקצה שלו מפורט: end (קצה לאחר חיתוך), a+/a- (דפנות במישור), w+/w- (דפנות ניצבות למישור);
+ *   main — האלמנט שהקצה שלו מפורט: end (קצה לאחר חיתוך), a+/a- (דפנות במישור), w+/w- (דפנות ניצבות למישור), axis / axis- (מישור הציר המקורי, לפני shift: נורמל w קנוני — הצד החיובי זהה בשני קצוות האלמנט — לאורך הציר);
  *   host — המארח: hit (הפנים שהציר פוגע בהן), opp (הפנים הנגדיות), web (הווב, בצד האלמנט);
  *   מזהה פעולת פלטה — z+ / z- (שני פני הפלטה).
  */
 export interface DetailRef { on: 'main' | 'host' | string; face: string; along: Expr; across: Expr }
 export type DetailOp =
   | { k: 'cut'; id: string; kind: 'perp' | 'host' | 'vert' | 'horiz'; at: Expr }
-  | { k: 'plate'; id: string; name?: string; ref: DetailRef; mode: 'flat' | 'stand'; spin: Expr; off: Expr; shape: 'rect' | 'cham' | 'tri' | 'round'; w: Expr; h: Expr; t: Expr; ch: Expr; corners: [boolean, boolean, boolean, boolean] }
+  /** הסטת קצה האלמנט הראשי (ציר + חיתוך) ניצב למישור (לאורך w) — למשל בעובי הפח, כשהלשונית מחליפה את מקומו. לא חל על תושבת פטה */
+  | { k: 'shift'; id: string; by: Expr }
+  | { k: 'plate'; id: string; name?: string; ref: DetailRef; mode: 'flat' | 'stand'; spin: Expr; off: Expr; shape: 'rect' | 'cham' | 'tri' | 'round'; w: Expr; h: Expr; t: Expr; ch: Expr; corners: [boolean, boolean, boolean, boolean];
+      /** קצה הפלטה שליד המארח נחתך בזווית במישור פני המארח (חיתוך קצה בחלק — מופיע בגיליון ובזווית ה-NC1) */ clipHost?: boolean }
   | { k: 'endplate'; id: string; t: Expr; w: Expr; h: Expr; dx: Expr; dy: Expr }
   | { k: 'holes'; id: string; ref: DetailRef; rows: Expr; cols: Expr; px: Expr; py: Expr; d0: Expr }
   | { k: 'bolts'; id: string; holes: string; d: Expr; grade: string; site: boolean }
   | { k: 'slot'; id: string; L: Expr; w: Expr; dir: 'a' | 'w' }
   | { k: 'vent'; id: string; d: Expr; at: Expr }
   | { k: 'rod'; id: string; ref: DetailRef; d: Expr; L: Expr }
-  | { k: 'weld'; id: string; part: string; a: Expr; site: boolean; /** למה לרתך: main / host / מזהה פלטה. ברירת מחדל — הרכיב שהפלטה יושבת עליו */ to?: string };
+  | { k: 'weld'; id: string; part: string; a: Expr; site: boolean; /** אורך ריתוך מפורש (מ"מ); בלי — לפי היקף/צלע הפלטה */ len?: Expr; /** למה לרתך: main / host / מזהה פלטה. ברירת מחדל — הרכיב שהפלטה יושבת עליו */ to?: string };
 export interface DetailVar { name: string; expr: Expr; note?: string }
 /**
  * פרמטר שמוצג באשף (מתכון v2). קשור למשתנה בשם `name`: ערך למופע דורס את נוסחת המשתנה, ובלי ערך — הנוסחה (ברירת המחדל).
