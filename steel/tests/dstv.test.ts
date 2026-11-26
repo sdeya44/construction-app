@@ -40,12 +40,16 @@ describe('DSTV (NC1)', () => {
     expect(pl.holes.every((h) => h.d === 20)).toBe(true); // M18 + 2
     expect(Number(L[19])).toBeCloseTo(0, 1); // קצה המרזב: חיתוך 90° לציר (החלטת משתמש)
   });
-  it('ZIP: קובץ לכל סימון (ללא מוטות עיגון), נפתח ומכיל ST/EN', () => {
+  it('ZIP: קובץ לכל סימון פלטה בלבד (ללא פרופילים וללא מוטות עיגון), נפתח ומכיל ST/EN', () => {
     const { zip, count } = dstvZip(p, d, fab);
     const files = unzipSync(zip);
     const names = Object.keys(files);
     expect(names.length).toBe(count);
-    expect(names.length).toBe(new Set(fab.parts.filter((x) => x.kind !== 'anchor').map((x) => x.mark)).size);
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.length).toBe(new Set(fab.parts.filter((x) => x.kind === 'plate').map((x) => x.mark)).size);
+    const profMarks = new Set(fab.parts.filter((x) => x.kind !== 'plate' && x.kind !== 'anchor').map((x) => x.mark));
+    expect(profMarks.size).toBeGreaterThan(0);
+    expect(names.some((n) => profMarks.has(n.replace(/\.nc1$/, '')))).toBe(false);
     for (const n of names) { const t = strFromU8(files[n]); expect(t.startsWith('ST')).toBe(true); expect(t.trim().endsWith('EN')).toBe(true); }
   });
 });

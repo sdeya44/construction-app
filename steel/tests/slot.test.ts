@@ -154,3 +154,19 @@ describe('SLOT-05 תמוכה בין קורות (dir=w): הקוד הישן מול
     expect(checked).toBeGreaterThan(4);
   });
 });
+
+describe('SLOT-06 חלק עם חריץ מקבל סימון שונה', () => {
+  it('אותו אלכסון בלי החריצים (אותו פרופיל, אורך, חיתוך וחורים) — חתימה וסימון שונים', () => {
+    const p = mk('RHS60x60x4', 10), d = generate(p);
+    const d0: DerivedModel = { ...d, connections: d.connections.map((c) => ({ ...c, slots: undefined })) };
+    const withS = computeFabrication(p, d), without = computeFabrication(p, d0);
+    const id = d.members.find((m) => m.id.startsWith('KB.'))!.id;
+    const a = withS.parts.find((x) => x.memberId === id)!, b = without.parts.find((x) => x.memberId === id)!;
+    expect(a.slots.length).toBe(2);
+    expect(b.slots.length).toBe(0);
+    expect(a.signature).not.toBe(b.signature);
+    // אחרי מספור: שני החלקים (עם/בלי חריץ) לא חולקים סימון
+    const reg = { ...p, marks: { ...p.marks, parts: { [b.signature]: 'BR9' } } } as Project;
+    expect(computeFabrication(reg, d).parts.find((x) => x.memberId === id)!.mark).not.toBe('BR9');
+  });
+});

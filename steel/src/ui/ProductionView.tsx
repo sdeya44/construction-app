@@ -111,11 +111,11 @@ export function ProductionView() {
           <div className="tabs" style={{ border: 0 }}>{tables.map((x, i) => <button key={x.name} className={`tab${i === tab ? ' on' : ''}`} onClick={() => setTab(i)} data-testid={`prod-tab-${i}`}>{x.name}</button>)}</div>
           <span style={{ flex: 1 }} />
           <span className="badge blue" data-testid="total-weight">משקל כולל {Math.round(bom.totalWeight).toLocaleString('en-US')} ק"ג</span>
-          <button className="btn small" data-testid="export-dstv" title="קבצי NC1 למכונות CNC — גרסת בטא, לאמת מול המכונה" onClick={() => {
+          <button className="btn small" data-testid="export-dstv" title="קבצי NC1 ללייזר — פלטות בלבד (פרופילים נחתכים במסגריה). גרסת בטא, לאמת מול המכונה" onClick={() => {
             const { zip, count } = dstvZip(p, store.state.derived, fab);
             const blob = new Blob([zip as BlobPart], { type: 'application/zip' });
             const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${safeFileName(p.meta.name)}_DSTV.zip`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-            store.toast('ok', `הופקו ${count} קבצי NC1 (בטא — לאמת מול המכונה)`);
+            store.toast('ok', `הופקו ${count} קבצי NC1 לפלטות (בטא — לאמת מול המכונה)`);
           }}><Icon name="download" />DSTV</button>
           <button className="btn small" data-testid="export-ifc" title="מודל BIM ‏IFC4 — לפתיחה ב-Tekla / Revit / צופי IFC" onClick={() => {
             const txt = projectToIfc(p, store.state.derived, fab);

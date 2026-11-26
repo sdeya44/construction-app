@@ -54,13 +54,13 @@ export function partToNc1(p: MarkedPart, project: Project, d: DerivedModel, qty:
   return lines.join('\r\n') + '\r\n';
 }
 
-/** קובץ ZIP עם NC1 לכל סימון חלק (חלקים ליניאריים ופלטות; ללא מוטות עיגון). */
+/** קובץ ZIP עם NC1 לכל סימון פלטה — **פלטות בלבד** (הלייזר חותך פלטות; פרופילים נחתכים במסגריה לפי שרטוט החלק, ולכן אינם בייצוא; ללא מוטות עיגון). `partToNc1` עצמו עדיין יודע פרופילים (בדיקות). */
 export function dstvZip(project: Project, d: DerivedModel, fab: Fabrication): { zip: Uint8Array; count: number } {
   const byMark = new Map<string, MarkedPart[]>();
   for (const p of fab.parts) byMark.set(p.mark, [...(byMark.get(p.mark) ?? []), p]);
   const files: Record<string, Uint8Array> = {};
   for (const [mark, ps] of byMark) {
-    if (ps[0].kind === 'anchor') continue;
+    if (ps[0].kind !== 'plate') continue;
     files[`${mark}.nc1`] = strToU8(partToNc1(ps[0], project, d, ps.length));
   }
   return { zip: zipSync(files, { level: 6 }), count: Object.keys(files).length };
