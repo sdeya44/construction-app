@@ -8,9 +8,11 @@ const R = (on: string, face: string, along = '0', across = '0'): DetailRef => ({
 
 export const KNEE_FIN_RECIPE_ID = 'conv-knee-fin';
 export const STRUT_FIN_RECIPE_ID = 'conv-strut-fin';
+export const STRUT_END_RECIPE_ID = 'conv-strut-end';
+export const STRUT_WELD_RECIPE_ID = 'conv-strut-weld';
 
 /** מתכונים מובנים לפי מזהה (מחוץ ל-`project.customDetails`): מחולים אוטומטית לפי `Connection.recipe` */
-export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe() };
+export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe() };
 
 /**
  * אלכסון עמוד-קורה, פח + לשונית בחריץ — שקול ל-`finJoint` ב-`geometry/finJoint.ts` (פרט הלקוח 15.11.2026).
@@ -82,6 +84,63 @@ export function strutFinRecipe(): CustomDetail {
       { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true },
       { k: 'weld', id: 'W1', part: 'F1', a: '5', site: false, to: 'host', len: '2*round(wt/max(sn, 0.25))' },
       { k: 'weld', id: 'W2', part: 'T1', a: '5', site: false, to: 'main', len: '4*ins' },
+    ],
+  };
+}
+
+/**
+ * תמוכה בין קורות, פלטת קצה מוברגת לווב — שקול ל-`endplate` ב-`rafterStruts.ts`. אתר זוגי (G8): כשיש תמוכה משני צדי הווב, אותם ברגים עוברים דרך שתי הפלטות והווב.
+ * כל קצה בונה את הפלטה והריתוך שלו; הברגים נבנים באתר אחד בלבד (`bld`) — זה שבצד הנמוך של Y — והפלטה של האתר שכנגד משתתפת בסריקת הברגים
+ * (`Connection.recipe.pairs`), כך שהאורך (grip) והחורים בשתי הפלטות נגזרים מהחומר שנמצא בפועל. `bld`/`prt` מגיעים לכל אתר מהחיבור (`recipe.siteParams`).
+ */
+export function strutEndRecipe(): CustomDetail {
+  return {
+    id: STRUT_END_RECIPE_ID, name: 'תמוכה בין קורות: פלטת קצה (הסבה)', family: 'any', category: 'brace',
+    note: 'שקול ל-endplate בתמוכות בין קורות: פלטת קצה מרותכת לתמוכה (מסגריה), מוברגת לווב הקורה; משני צדי הווב — אותם ברגים.',
+    match: { member: ['RHS', 'SHS'], host: ['IPE', 'HEA', 'HEB', 'HEM', 'INP'] },
+    vars: [
+      { name: 'd', expr: '16', note: 'קוטר בורג' }, { name: 'd0', expr: 'd+2', note: 'קוטר חור' }, { name: 'nb', expr: '2', note: 'ברגים (2/4)' },
+      { name: 'ft', expr: '10', note: 'עובי פלטת הקצה' },
+      { name: 'e', expr: 'max(30, ceil(1.5*d0))', note: 'מרחק שפה' },
+      { name: 'W', expr: 'ceil((pb + 4*e)/5)*5', note: 'רוחב הפלטה לאורך השיפוע' },
+      { name: 'clear', expr: 'hh - 2*htf - 2*hr', note: 'גובה הווב הפנוי בקורה' },
+      { name: 'Hp', expr: 'max(60, min(ph, floor(clear/5)*5))', note: 'גובה הפלטה' },
+      { name: 'four', expr: 'if(nb > 3, if(Hp - 2*e >= 2.4*d0 - 0.01, 1, 0), 0)', note: '4 ברגים (אם הגובה מאפשר)' },
+      { name: 'wd', expr: '(hb - htw)/2', note: 'עומק פני הווב מקצה האגפים (המארח נפגע מהצד)' },
+      { name: 'bld', expr: '1', note: 'האתר הזה בונה את הברגים (אתר זוגי: רק אחד)' }, { name: 'prt', expr: '0', note: 'יש תמוכה גם בצד השני של הווב' },
+    ],
+    params: [
+      { name: 'd', label: 'קוטר בורג', kind: 'select', group: 'ברגים', options: [12, 16, 20].map((v) => ({ value: v, label: `M${v}` })) },
+      { name: 'nb', label: 'ברגים בקצה', kind: 'select', group: 'ברגים', options: [2, 4].map((v) => ({ value: v, label: String(v) })) },
+      { name: 'ft', label: 'עובי פלטת קצה', kind: 'number', unit: 'מ"מ', min: 6, max: 25, group: 'פלטות' },
+    ],
+    ops: [
+      { k: 'cut', id: 'C1', kind: 'perp', at: 'ft - wd' },
+      { k: 'plate', id: 'F1', name: 'פלטת קצה תמוכה', ref: R('host', 'hit'), mode: 'flat', spin: '-90', off: '-wd', shape: 'rect', w: 'W', h: 'Hp', t: 'ft', ch: '0', corners: [false, false, false, false] },
+      { k: 'holes', id: 'H1', ref: R('F1', 'z-'), rows: 'if(four, 2, 1)', cols: '2', px: 'pb + 2*e', py: 'Hp - 2*e', d0: 'd0' },
+      { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true, grip: 'htw + ft*(1 + prt)', when: 'bld' },
+      { k: 'weld', id: 'W1', part: 'F1', a: '4', site: false, to: 'main', len: '2*(pb + ph)' },
+    ],
+  };
+}
+
+/**
+ * תמוכה בין קורות, ריתוך ישיר לווב (שטח) — שקול ל-`weld` ב-`rafterStruts.ts`: אין פלטות ואין ברגים; התמוכה נעצרת במרווח 1 מ"מ מפני הווב,
+ * וריתוך היקפי (a לפי עובי דופן ה-RHS, 4–6) לווב. הריתוך בשטח — בכוונה, כמו בקוד הישן (אזהרת "ריתוך בשטח" לא נוספת במתכון מובנה).
+ */
+export function strutWeldRecipe(): CustomDetail {
+  return {
+    id: STRUT_WELD_RECIPE_ID, name: 'תמוכה בין קורות: ריתוך ישיר לווב (הסבה)', family: 'any', category: 'brace',
+    note: 'שקול ל-weld בתמוכות בין קורות: ה-RHS מרותך ישירות לווב הקורה בשטח (ריתוך היקפי), ללא פחים.',
+    match: { member: ['RHS', 'SHS'], host: ['IPE', 'HEA', 'HEB', 'HEM', 'INP'] },
+    vars: [
+      { name: 'wd', expr: '(hb - htw)/2', note: 'עומק פני הווב מקצה האגפים (המארח נפגע מהצד)' },
+      { name: 'gap', expr: '1', note: 'מרווח בין קצה התמוכה לפני הווב' },
+      { name: 'wa', expr: 'max(4, min(6, round(mt)))', note: 'גודל ריתוך a (לפי עובי דופן ה-RHS)' },
+    ],
+    ops: [
+      { k: 'cut', id: 'C1', kind: 'perp', at: 'gap - wd' },
+      { k: 'weld', id: 'W1', part: 'main', a: 'wa', site: true, len: '2*(pb + ph)' },
     ],
   };
 }

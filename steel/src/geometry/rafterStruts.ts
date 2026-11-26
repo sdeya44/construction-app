@@ -4,7 +4,7 @@ import type { BoltInfo, BuildingParams, Connection, Member, RafterStrutDetail, R
 import { finJoint } from './finJoint';
 import { zAt, type SectionTopology } from '../model/section';
 import { makeBolt } from './connections';
-import { STRUT_FIN_RECIPE_ID } from './convRecipes';
+import { STRUT_END_RECIPE_ID, STRUT_FIN_RECIPE_ID, STRUT_WELD_RECIPE_ID } from './convRecipes';
 
 export function defaultRafterStruts(): RafterStrutParams {
   return { rows: [], profile: 'RHS100x100x5', plateT: 10, bolt: { d: 16, grade: '8.8', standard: 'ISO 4017', clearance: 2 } };
@@ -40,6 +40,20 @@ export function strutLines(b: BuildingParams, topo: SectionTopology, issues?: Va
     out.push({ idx, id: r.id, x, plane: pl.id, bays, profile: r.profile && tryProfile(r.profile) ? r.profile : rs.profile, detail: r.detail ?? rs.detail ?? 'endplate', label });
   });
   return out;
+}
+
+/** תיוג חיבור למתכון מובנה (שלב D): לפי הדגל בפרמטרים, פרט השורה, ומשפחות התמוכה והקורה. אתר זוגי (פלטת קצה): הברגים נבנים בצד הנמוך של Y */
+function strutRecipe(rs: RafterStrutParams, detail: RafterStrutDetail, strutFam: string, hostFam: string, nBolts: number, tp: number, sites: { key: string; s: number }[]): Pick<Connection, 'recipe'> {
+  if (!['RHS', 'SHS'].includes(strutFam) || !['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(hostFam)) return {};
+  const keys = sites.map((q) => q.key);
+  if (detail === 'fin' && rs.finEngine === 'recipe') return { recipe: { id: STRUT_FIN_RECIPE_ID, params: { d: rs.bolt.d, nb: nBolts, ft: tp, tt: tp }, sites: keys } };
+  if (detail === 'endplate' && rs.endEngine === 'recipe') {
+    const lo = sites.reduce((a, q) => (q.s < a.s ? q : a), sites[0]!), hi = sites.find((q) => q !== lo);
+    const siteParams = Object.fromEntries(sites.map((q) => [q.key, { bld: q === lo ? 1 : 0, prt: sites.length > 1 ? 1 : 0 }]));
+    return { recipe: { id: STRUT_END_RECIPE_ID, params: { d: rs.bolt.d, nb: nBolts, ft: tp }, sites: keys, siteParams, ...(hi ? { pairs: { [lo.key]: hi.key } } : {}) } };
+  }
+  if (detail === 'weld' && rs.weldEngine === 'recipe') return { recipe: { id: STRUT_WELD_RECIPE_ID, params: {}, sites: keys } };
+  return {};
 }
 
 /**
@@ -127,8 +141,7 @@ export function buildRafterStruts(b: BuildingParams, topo: SectionTopology, prof
         });
       }
       out.connections.push({ id: cid, type: 'brace', label: `תמוכה בין קורות ${sl.label} — ${STRUT_DETAIL_HE[sl.detail]} (מסגרת ${fi + 1})`, members: [r.id, ...sides.map((q) => sid(q.bay))], parts: [...parts, ...bolts.map((x) => x.id)], bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: false,
-        ...(rs.finEngine === 'recipe' && sl.detail === 'fin' && ['RHS', 'SHS'].includes(sp.family) && ['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(tryProfile(profOf?.(r.id) ?? '')?.family ?? '')
-          ? { recipe: { id: STRUT_FIN_RECIPE_ID, params: { d: rs.bolt.d, nb: nBolts, ft: tp, tt: tp }, sites: sides.map((sd) => `${sid(sd.bay)}|${sd.k === 1 ? 'end' : 'start'}`) } } : {}) });
+        ...strutRecipe(rs, sl.detail, sp.family, tryProfile(profOf?.(r.id) ?? '')?.family ?? '', nBolts, tp, sides.map((sd) => ({ key: `${sid(sd.bay)}|${sd.k === 1 ? 'end' : 'start'}`, s: sd.s }))) });
     }
     for (const bay of has) {
       const [A, B] = ends.get(bay) ?? [];

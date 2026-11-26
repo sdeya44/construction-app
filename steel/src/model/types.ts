@@ -163,6 +163,10 @@ export interface RafterStrutParams {
   bolts?: number;
   /** מנוע פרט ה-fin (שלב D): 'recipe' = המתכון `strutFinRecipe` מחליף את הקוד הישן (`finJoint`); חסר/'legacy' = הקוד הישן. אין חשיפה בממשק עד אישור המשתמש */
   finEngine?: 'legacy' | 'recipe';
+  /** כמו `finEngine`, לפרט פלטת הקצה (`endplate`, אתר זוגי) */
+  endEngine?: 'legacy' | 'recipe';
+  /** כמו `finEngine`, לפרט הריתוך הישיר (`weld`) */
+  weldEngine?: 'legacy' | 'recipe';
 }
 
 /**
@@ -830,7 +834,9 @@ export interface Connection {
   /** פרט מותאם: מזהה הפרט ומפתח האתר */
   custom?: { detailId: string; site: string };
   /** חיבור מובנה שמוחלף אוטומטית במתכון מובנה (ראו `KneeBraceParams.finEngine`): מזהה המתכון וערכי הפרמטרים לשני הקצוות */
-  recipe?: { id: string; params: Record<string, number>; /** קצוות האתר (מפתחות `אלמנט|start/end`); חסר = שני קצוות האלמנט הראשון ברשימת החלקים */ sites?: string[] };
+  recipe?: { id: string; params: Record<string, number>; /** קצוות האתר (מפתחות `אלמנט|start/end`); חסר = שני קצוות האלמנט הראשון ברשימת החלקים */ sites?: string[];
+    /** ערכים נוספים לכל אתר (מעל `params`) — למשל מי בונה את הברגים המשותפים */ siteParams?: Record<string, Record<string, number>>;
+    /** אתר זוגי: אתר שבונה ברגים משותפים ← האתר שכנגד (הפלטה שלו משתתפת בסריקת הברגים) */ pairs?: Record<string, string> };
 }
 
 // ---------- פרטי חיבור מותאמים ----------
@@ -853,11 +859,11 @@ export type DetailOp =
       /** עם clipHost: עומק מישור החיתוך לתוך המארח מפני הפגיעה (למשל פני הווב מאחורי קצה האגפים בחתך I שנפגע מהצד) */ clipOff?: Expr }
   | { k: 'endplate'; id: string; t: Expr; w: Expr; h: Expr; dx: Expr; dy: Expr }
   | { k: 'holes'; id: string; ref: DetailRef; rows: Expr; cols: Expr; px: Expr; py: Expr; d0: Expr }
-  | { k: 'bolts'; id: string; holes: string; d: Expr; grade: string; site: boolean }
+  | { k: 'bolts'; id: string; holes: string; d: Expr; grade: string; site: boolean; /** אורך אחיזה (grip) מפורש במקום המדוד בסריקה (המדידה מעוגלת למ"מ ומשתמשת בעובי הווב של הגוף) — כמו החישוב האנליטי בקוד הישן; גבול אורך תקני רגיש ל-0.1 מ"מ */ grip?: Expr; /** התנאי: הפעולה מתבצעת רק כשהביטוי ≠ 0 (אתר זוגי: הברגים נבנים באתר אחד בלבד) */ when?: Expr }
   | { k: 'slot'; id: string; L: Expr; w: Expr; dir: 'a' | 'w' }
   | { k: 'vent'; id: string; d: Expr; at: Expr }
   | { k: 'rod'; id: string; ref: DetailRef; d: Expr; L: Expr }
-  | { k: 'weld'; id: string; part: string; a: Expr; site: boolean; /** אורך ריתוך מפורש (מ"מ); בלי — לפי היקף/צלע הפלטה */ len?: Expr; /** למה לרתך: main / host / מזהה פלטה. ברירת מחדל — הרכיב שהפלטה יושבת עליו */ to?: string };
+  | { k: 'weld'; id: string; /** מזהה פלטה, או 'main' = ריתוך ישיר של האלמנט הראשי למארח (דורש `len`) */ part: string; a: Expr; site: boolean; /** אורך ריתוך מפורש (מ"מ); בלי — לפי היקף/צלע הפלטה */ len?: Expr; /** למה לרתך: main / host / מזהה פלטה. ברירת מחדל — הרכיב שהפלטה יושבת עליו */ to?: string };
 export interface DetailVar { name: string; expr: Expr; note?: string }
 /**
  * פרמטר שמוצג באשף (מתכון v2). קשור למשתנה בשם `name`: ערך למופע דורס את נוסחת המשתנה, ובלי ערך — הנוסחה (ברירת המחדל).

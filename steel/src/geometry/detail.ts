@@ -181,12 +181,12 @@ export function siteVars(s: Site): Vars {
   const mp = getProfile(s.main.profile), hp = s.host ? getProfile(s.host.profile) : null;
   return {
     mh: s.mh, mb: s.mb, pb: mp.props.b ?? mp.props.h, mt: mp.dims.t ?? mp.dims.tw ?? 5, mtf: mp.dims.tf ?? mp.dims.t ?? 5,
-    hh: hp?.props.h ?? 0, hb: hp?.props.b ?? 0, htf: hp?.dims.tf ?? hp?.dims.t ?? 0, htw: hp?.dims.tw ?? hp?.dims.t ?? 0,
+    hh: hp?.props.h ?? 0, hr: hp?.dims.r ?? 0, ph: mp.props.h, hb: hp?.props.b ?? 0, htf: hp?.dims.tf ?? hp?.dims.t ?? 0, htw: hp?.dims.tw ?? hp?.dims.t ?? 0,
     hd: s.hd, ang: Math.max(1, s.ang), hs: s.hand, ha: s.handA, wo: s.cross?.wo ?? 0, cs: s.cross?.cs ?? 1, sr: s.cross?.sr ?? 90,
   };
 }
 export const VAR_HELP: [string, string][] = [
-  ['mh', 'גובה חתך האלמנט (במישור)'], ['mb', 'רוחב חתך האלמנט (ניצב למישור)'], ['pb', 'רוחב החתך b לפי הפרופיל (בלי קשר לכיוון ההנחה)'], ['mt', 'עובי דופן/ווב האלמנט'], ['mtf', 'עובי אגף האלמנט'],
+  ['mh', 'גובה חתך האלמנט (במישור)'], ['mb', 'רוחב חתך האלמנט (ניצב למישור)'], ['pb', 'רוחב החתך b לפי הפרופיל (בלי קשר לכיוון ההנחה)'], ['ph', 'גובה החתך h לפי הפרופיל'], ['hr', 'רדיוס שורש (r) של חתך המארח'], ['mt', 'עובי דופן/ווב האלמנט'], ['mtf', 'עובי אגף האלמנט'],
   ['hh', 'גובה חתך המארח'], ['hb', 'רוחב חתך המארח'], ['htf', 'עובי אגף המארח'], ['htw', 'עובי ווב המארח'], ['hd', 'עומק המארח בכיוון הפגיעה'],
   ['ang', 'זווית בין ציר האלמנט לפני המארח (90 = ניצב)'], ['hs', 'כיוון קנוני ±1 של w: הסטה/היסט ב-hs·x הולכים לאותו צד מוחלט בשני קצוות האלמנט'], ['ha', 'כיוון קנוני ±1 של a (כמו hs, לציר a): היסט ב-ha·x באותו צד מוחלט בשני הקצוות'], ['wo', 'תושבת פטה: מרחק פני הווב מציר הפטה'],
 ];
@@ -262,7 +262,7 @@ export function detailParamValues(members: Member[], key: string, det: CustomDet
 }
 
 /** בניית פרט על אתר. טהור — אינו משנה את האלמנט המקורי. */
-export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: string; material?: string; others?: Member[]; /** ערכי מופע (מתכון v2): שם משתנה ⇒ ערך, דורסים את נוסחת המשתנה */ overrides?: Record<string, number> } = {}): DetailResult {
+export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: string; material?: string; others?: Member[]; /** ערכי מופע (מתכון v2): שם משתנה ⇒ ערך, דורסים את נוסחת המשתנה */ overrides?: Record<string, number>; /** חלקים נוספים (פלטות של האתר שכנגד באתר זוגי) שהברגים נסרקים דרכם */ extra?: Member[] } = {}): DetailResult {
   const s = site, cid = opts.connId ?? `C.CD.${s.key.replace('|', '.').replace(':', '.')}`, mat = opts.material ?? s.main.material;
   const vals: Vars = siteVars(s), errors: Record<string, string> = {}, issues: ValidationIssue[] = [];
   const ev = (src: string | number | undefined, key: string, dflt = 0) => {
@@ -415,11 +415,12 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) cs.push(at(fr, along + (i - (rows - 1) / 2) * py, across + (j - (cols - 1) / 2) * px));
         holeSets.set(op.id, { cs, axis: fr.n, d0, plate: op.ref.on });
       } else if (op.k === 'bolts') {
+        if (op.when !== undefined && op.when !== '' && !ev(op.when, `${op.id}.when`, 1)) continue;
         const hs = holeSets.get(op.holes);
         if (!hs) { errors[op.id] = 'אין קבוצת חורים — הוסיפו קודם חורים'; continue; }
         const d = Math.round(ev(op.d, `${op.id}.d`, 16));
         vals[`${op.id}.d`] = d;
-        const cand: Member[] = [...members.filter((m) => m.kind === 'plate'), main, ...(s.host ? [s.host] : [])];
+        const cand: Member[] = [...members.filter((m) => m.kind === 'plate'), ...(opts.extra ?? []), main, ...(s.host ? [s.host] : [])];
         const testers = cand.map((m) => ({ m, t: new PrismTester(m) }));
         const own = plates.get(hs.plate)?.memberId;
         hs.cs.forEach((c, i) => {
@@ -443,11 +444,18 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
           for (let ch = true; ch;) { ch = false; for (const g of segs) if (!used.has(g.m) && g.lo <= hi + 2 && g.hi >= lo - 2) { lo = Math.min(lo, g.lo); hi = Math.max(hi, g.hi); used.add(g.m); ch = true; } }
           if (used.size < 2) issues.push({ code: 'CD_BOLT', severity: 'warning', elementId: cid, message: `פרט ${det.name}: בורג ${op.id}-${i + 1} עובר בחלק אחד בלבד — חסרה פלטה נגדית?` });
           const head = add(c, scale(hs.axis, lo));
-          bolts.push(makeBolt(`${cid}.${op.id}.${i + 1}`, cid, head, hs.axis, { d, grade: op.grade, standard: 'ISO 4017', clearance: Math.max(1, hs.d0 - d) }, Math.round(hi - lo), op.site ? 'site' : 'shop', [...used], frame({ on: hs.plate, face: 'z+' })?.e1 ?? s.a, members));
+          bolts.push(makeBolt(`${cid}.${op.id}.${i + 1}`, cid, head, hs.axis, { d, grade: op.grade, standard: 'ISO 4017', clearance: Math.max(1, hs.d0 - d) }, op.grip !== undefined && op.grip !== '' ? ev(op.grip, `${op.id}.grip`) : Math.round(hi - lo), op.site ? 'site' : 'shop', [...used], frame({ on: hs.plate, face: 'z+' })?.e1 ?? s.a, members));
         });
       } else if (op.k === 'weld') {
-        const g = plates.get(op.part);
         const a = ev(op.a, `${op.id}.a`, 5);
+        // ריתוך ישיר של האלמנט הראשי למארח (בלי פלטה): part = 'main', האורך מפורש
+        if (op.part === 'main') {
+          if (!s.host || op.len === undefined || op.len === '') { errors[op.id] = 'ריתוך ישיר דורש מארח ואורך מפורש'; continue; }
+          welds.push({ id: `${cid}.${op.id}`, connId: cid, type: 'fillet', a, length: Math.round(ev(op.len, `${op.id}.len`)), location: op.site ? 'site' : 'shop', between: [s.host.id, s.main.id], from: s.P, to: s.P });
+          if (op.site && !BUILTIN_RECIPES[det.id]) issues.push({ code: 'CD_SITE_WELD', severity: 'warning', elementId: cid, message: `פרט ${det.name}: ריתוך בשטח — סותר את עיקרון הגלוון (ריתוך במסגריה, ברגים בשטח)` });
+          continue;
+        }
+        const g = plates.get(op.part);
         if (!g) { errors[op.id] = 'בחרו פלטה לריתוך'; continue; }
         const to = op.to ? targetOf(op.to) : g.target;
         if (!to) { errors[op.id] = 'אין למה לרתך'; continue; }
@@ -462,7 +470,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         }
         if (op.len !== undefined && op.len !== '') length = ev(op.len, `${op.id}.len`);
         welds.push({ id: `${cid}.${op.id}`, connId: cid, type: 'fillet', a, length: Math.round(length), location: op.site ? 'site' : 'shop', between: [g.memberId, to], from, to: toP });
-        if (op.site) issues.push({ code: 'CD_SITE_WELD', severity: 'warning', elementId: cid, message: `פרט ${det.name}: ריתוך בשטח — סותר את עיקרון הגלוון (ריתוך במסגריה, ברגים בשטח)` });
+        if (op.site && !BUILTIN_RECIPES[det.id]) issues.push({ code: 'CD_SITE_WELD', severity: 'warning', elementId: cid, message: `פרט ${det.name}: ריתוך בשטח — סותר את עיקרון הגלוון (ריתוך במסגריה, ברגים בשטח)` });
       } else if (op.k === 'vent') {
         const d = ev(op.d, `${op.id}.d`, 12), atS = ev(op.at, `${op.id}.at`, 30);
         for (const sg of [1, -1]) vents.push({ memberId: s.main.id, p: add(add(s.P, scale(s.u, sEnd + atS)), scale(s.a, (sg * s.mh) / 2)), axis: scale(s.a, -sg), d });
@@ -530,7 +538,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
 export function applyCustomDetails(project: Project, members: Member[], connections: Connection[]): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   // שיוך מפורש (פרויקט) קודם; שיוך משתמע ממתכון מובנה (`Connection.recipe`) — רק לקצוות שאין להם שיוך מפורש
-  const { assign: implicit, params: implicitParams } = recipeSites(project, connections);
+  const { assign: implicit, params: implicitParams, pairs } = recipeSites(project, connections);
   const assign: Record<string, string> = { ...implicit, ...(project.detailAssign ?? {}) };
   const lib = new Map((project.customDetails ?? []).map((d) => [d.id, d]));
   // אינדקס מזהים אחד לכל הריצה (ולא בנייה מחדש בכל אתר) — מתעדכן עם כל הוספה/הסרה/החלפה של אלמנט
@@ -563,7 +571,15 @@ export function applyCustomDetails(project: Project, members: Member[], connecti
     const box = { c: site2.P, r: 900 };
     const others = members.filter((x) => x.id !== m.id && x.id !== site2.host?.id && x.kind !== 'bolt' && ['column', 'rafter', 'purlin', 'cleat', 'plate', 'brace', 'beam', 'girt'].includes(x.kind)
       && !x.connId?.startsWith('C.CD.') && Math.min(len(sub(x.start, box.c)), len(sub(x.end, box.c)), len(sub(scale(add(x.start, x.end), 0.5), box.c))) < box.r);
-    const r = buildDetail(site2, det, { material: project.building.material, others, overrides: implicitParams[key] || project.detailParams?.[key] ? { ...implicitParams[key], ...project.detailParams?.[key] } : undefined });
+    const ovr = (k: string) => (implicitParams[k] || project.detailParams?.[k] ? { ...implicitParams[k], ...project.detailParams?.[k] } : undefined);
+    // אתר זוגי: הפלטה של האתר שכנגד נבנית מראש (טהור) כדי שהברגים המשותפים יעברו גם דרכה
+    let extra: Member[] | undefined;
+    const pk = pairs[key];
+    if (pk) {
+      const pp = parseSiteKey(pk), pm = members.find((x) => x.id === pp.id), ps = pm ? findSite(members, pm, pp.end) : null;
+      if (ps) extra = buildDetail(ps, det, { material: project.building.material, others, overrides: ovr(pk) }).members.filter((x) => x.kind === 'plate');
+    }
+    const r = buildDetail(site2, det, { material: project.building.material, others, overrides: ovr(key), extra });
     const k = members.findIndex((x) => x.id === m.id);
     if (k >= 0) { members[k] = r.main; index.set(r.main.id, r.main); }
     members.push(...r.members);
@@ -585,13 +601,20 @@ export function builtinRecipe(id: string): CustomDetail | undefined {
 export function findDetail(project: Project, id: string): CustomDetail | undefined { return (project.customDetails ?? []).find((x) => x.id === id) ?? builtinRecipe(id); }
 
 /** קצוות שמתכון מובנה מוחל עליהם אוטומטית (חיבור עם `recipe`): שיוך וערכי פרמטרים לשני קצוות האלמנט הראשי של החיבור */
-function recipeSites(project: Project, connections: Connection[]): { assign: Record<string, string>; params: Record<string, Record<string, number>> } {
-  const assign: Record<string, string> = {}, params: Record<string, Record<string, number>> = {};
+function recipeSites(project: Project, connections: Connection[]): { assign: Record<string, string>; params: Record<string, Record<string, number>>; pairs: Record<string, string> } {
+  const assign: Record<string, string> = {}, params: Record<string, Record<string, number>> = {}, pairs: Record<string, string> = {};
   for (const c of connections) {
     if (!c.recipe) continue;
-    for (const k of c.recipe.sites ?? ['start', 'end'].map((end) => `${c.parts[0]}|${end}`)) { if (project.detailAssign?.[k]) continue; assign[k] = c.recipe.id; params[k] = c.recipe.params; }
+    for (const k of c.recipe.sites ?? ['start', 'end'].map((end) => `${c.parts[0]}|${end}`)) { if (project.detailAssign?.[k]) continue; assign[k] = c.recipe.id; params[k] = { ...c.recipe.params, ...c.recipe.siteParams?.[k] }; }
+    // אתר זוגי: אם לאחד מהצדדים הוקצה במפורש פרט אחר — הצד הנותר בונה את הברגים לבדו (ללא שותף)
+    for (const [b, q] of Object.entries(c.recipe.pairs ?? {})) {
+      const ab = assign[b] === c.recipe.id, aq = assign[q] === c.recipe.id;
+      if (ab && aq) pairs[b] = q;
+      else if (ab) params[b] = { ...params[b], prt: 0 };
+      else if (aq) params[q] = { ...params[q], bld: 1, prt: 0 };
+    }
   }
-  return { assign, params };
+  return { assign, params, pairs };
 }
 
 /** חלקי החיבורים הקיימים בקצה האלמנט (פלטות, זוויתנים, ברגים, עיגונים) — מוחלפים בפרט המותאם */

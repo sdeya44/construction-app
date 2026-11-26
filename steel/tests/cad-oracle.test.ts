@@ -154,3 +154,19 @@ describe('CAD-05 הסבה (שלב D): תמוכה בין קורות פח+לשונ
     expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
   }, 300000);
 });
+
+describe('CAD-06 הסבה (שלב D): תמוכה בין קורות — פלטת קצה (אתר זוגי) וריתוך ישיר', () => {
+  for (const [detail, flag] of [['endplate', 'endEngine'], ['weld', 'weldEngine']] as const) it(detail, async () => {
+    const { defaultRafterStruts } = await import('../src/geometry/rafterStruts');
+    const b = defaultBuilding();
+    b.bracing.rafterStruts = { ...defaultRafterStruts(), detail, profile: 'RHS80x80x4', bolts: 4, rows: [{ id: 'r1', from: 'L', toward: 'R', dist: 4000, bays: [0, 1, 2] }] };
+    const p0 = newProject('conv', b), d0 = generate(p0);
+    const p1 = structuredClone(p0); p1.building.bracing.rafterStruts![flag] = 'recipe';
+    const d1 = generate(p1);
+    const old = d0.connections.filter((c) => /^C\.RS1\./.test(c.id));
+    const neu = d1.connections.filter((c) => c.custom && /^RS1\./.test(c.custom.site));
+    expect(neu.length).toBeGreaterThan(4);
+    expect(cadFindings(cadAudit(K, d0, old))).toEqual([]);
+    expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
+  }, 300000);
+});

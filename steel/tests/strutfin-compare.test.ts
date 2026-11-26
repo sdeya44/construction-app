@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultBuilding, newProject } from '../src/model/defaults';
 import { generate } from '../src/geometry/generate';
 import { defaultRafterStruts } from '../src/geometry/rafterStruts';
-import { strutFinRecipe } from '../src/geometry/convRecipes';
+import { strutEndRecipe, strutFinRecipe, strutWeldRecipe } from '../src/geometry/convRecipes';
 import { assignDetail, setDetailParam } from '../src/commands/commands';
 import { applyDetail, candidates, familyOf, readCurrent, situationOf } from '../src/model/connRegistry';
 import { computeFabrication } from '../src/fab/marks';
@@ -22,20 +22,34 @@ const mid = (m: Member) => ({ x: (m.start.x + m.end.x) / 2, y: (m.start.y + m.en
 const L = (m: Member) => dist(m.start, m.end);
 const dot = (a: V, b: V) => a.x * b.x + a.y * b.y + a.z * b.z;
 
-interface Cfg { name: string; profile: string; d: number; bolts: number; plateT: number; rows: { id: string; from: string; toward: string; dist: number; bays?: number[]; profile?: string }[] }
+interface Cfg { detail?: 'fin' | 'endplate' | 'weld'; name: string; profile: string; d: number; bolts: number; plateT: number; rows: { id: string; from: string; toward: string; dist: number; bays?: number[]; profile?: string }[] }
 const CFGS: Cfg[] = [
   { name: 'RHS80 · M16 · 2 ברגים · פח 10', profile: 'RHS80x80x4', d: 16, bolts: 2, plateT: 10, rows: [{ id: 'r1', from: 'L', toward: 'R', dist: 4000 }] },
   { name: 'RHS100 · M20 · 4 ברגים · פח 12 · שתי שורות', profile: 'RHS100x100x5', d: 20, bolts: 4, plateT: 12, rows: [{ id: 'r1', from: 'L', toward: 'R', dist: 3000 }, { id: 'r2', from: 'R', toward: 'L', dist: 5000, bays: [1, 2] }] },
   { name: 'RHS100x50 · M12 · 2 ברגים · פח 8', profile: 'RHS100x50x4', d: 12, bolts: 2, plateT: 8, rows: [{ id: 'r1', from: 'L', toward: 'R', dist: 6000, bays: [0, 1, 2, 3] }] },
 ];
 
+/** פלטת קצה (אתר זוגי): הקצוות נבנים דרך הדגל (שיוך משתמע עם מי-בונה-ברגים וזוגות), לא בהחלה מפורשת */
+const END_CFGS: Cfg[] = [
+  { detail: 'endplate', name: 'פלטת קצה · RHS80 · M16 · 2 ברגים · פח 10', profile: 'RHS80x80x4', d: 16, bolts: 2, plateT: 10, rows: [{ id: 'r1', from: 'L', toward: 'R', dist: 4000 }] },
+  { detail: 'endplate', name: 'פלטת קצה · RHS80 · M16 · 4 ברגים · פח 10 (פלטה נמוכה — 2 ברגים בלבד)', profile: 'RHS80x80x4', d: 16, bolts: 4, plateT: 10, rows: [{ id: 'r1', from: 'L', toward: 'R', dist: 4000, bays: [0, 1] }] },
+  { detail: 'endplate', name: 'פלטת קצה · RHS100 · M20 · 4 ברגים · פח 12 · שתי שורות', profile: 'RHS100x100x5', d: 20, bolts: 4, plateT: 12, rows: [{ id: 'r1', from: 'L', toward: 'R', dist: 3000 }, { id: 'r2', from: 'R', toward: 'L', dist: 5000, bays: [1, 2] }] },
+  { detail: 'endplate', name: 'פלטת קצה · RHS100x50 · M12 · 2 ברגים · פח 8 · מפתחות בודדים', profile: 'RHS100x50x4', d: 12, bolts: 2, plateT: 8, rows: [{ id: 'r1', from: 'L', toward: 'R', dist: 6000, bays: [0, 2, 3] }] },
+];
+
+const WELD_CFGS: Cfg[] = [
+  { detail: 'weld', name: 'ריתוך ישיר · RHS80', profile: 'RHS80x80x4', d: 16, bolts: 2, plateT: 10, rows: [{ id: 'r1', from: 'L', toward: 'R', dist: 4000 }] },
+  { detail: 'weld', name: 'ריתוך ישיר · RHS100x50 · שתי שורות', profile: 'RHS100x50x5', d: 16, bolts: 2, plateT: 10, rows: [{ id: 'r1', from: 'L', toward: 'R', dist: 3000, bays: [0, 1] }, { id: 'r2', from: 'R', toward: 'L', dist: 5000, bays: [1, 2, 3] }] },
+];
+
 function oldProject(c: Cfg): Project {
   const b = defaultBuilding();
-  b.bracing.rafterStruts = { ...defaultRafterStruts(), detail: 'fin', profile: c.profile, plateT: c.plateT, bolts: c.bolts, bolt: { d: c.d, grade: '8.8', standard: 'ISO 4017', clearance: 2 }, rows: c.rows };
+  b.bracing.rafterStruts = { ...defaultRafterStruts(), detail: c.detail ?? 'fin', profile: c.profile, plateT: c.plateT, bolts: c.bolts, bolt: { d: c.d, grade: '8.8', standard: 'ISO 4017', clearance: 2 }, rows: c.rows };
   return newProject('s', b);
 }
 const strutIds = (d: DerivedModel) => d.members.filter((m) => /^RS\d+\.\d+$/.test(m.id)).map((m) => m.id);
 function assigned(p: Project, d: DerivedModel, c: Cfg): Project {
+  if (c.detail === 'endplate' || c.detail === 'weld') { const n = structuredClone(p); n.building.bracing.rafterStruts![c.detail === 'weld' ? 'weldEngine' : 'endEngine'] = 'recipe'; return n; }
   const det = strutFinRecipe();
   const keys = strutIds(d).flatMap((id) => [`${id}|start`, `${id}|end`]);
   let n = assignDetail(keys, det).run(p);
@@ -46,10 +60,10 @@ const isOldC = (id?: string) => /^C\.RS\d+\./.test(id ?? '');
 const oldConns = (d: DerivedModel) => d.connections.filter((c) => isOldC(c.id));
 const newConns = (d: DerivedModel) => d.connections.filter((c) => c.custom && /^RS\d+\.\d+\|/.test(c.custom.site));
 
-describe('STRUT-01 תמוכה בין קורות פח+לשונית: הקוד הישן מול המתכון', () => {
-  for (const cfg of CFGS) it(cfg.name, () => {
+describe('STRUT-01 תמוכה בין קורות: הקוד הישן מול המתכון (fin + endplate)', () => {
+  for (const cfg of [...CFGS, ...END_CFGS, ...WELD_CFGS]) it(cfg.name, () => {
     const p0 = oldProject(cfg), d0 = generate(p0);
-    expect(strutIds(d0).length).toBeGreaterThan(2);
+    expect(strutIds(d0).length).toBeGreaterThan(1);
     const p1 = assigned(p0, d0, cfg), d1 = generate(p1);
     const bad: string[] = [];
     // התמוכות עצמן
@@ -101,14 +115,14 @@ describe('STRUT-01 תמוכה בין קורות פח+לשונית: הקוד הי
 
 /** STRUT-02: גיליונות השרטוט — אותם כללים כמו CONV-02 (אותן ישויות וטקסטים עד רעש עיגול; גיליון הפרט המותאם הוא חריג מאושר) */
 describe('STRUT-02 תמוכות: גיליונות השרטוט', () => {
-  for (const cfg of [CFGS[0]!, CFGS[1]!]) it(cfg.name, () => {
+  for (const cfg of [CFGS[0]!, CFGS[1]!, END_CFGS[0]!, END_CFGS[2]!, WELD_CFGS[0]!]) it(cfg.name, () => {
     const p0 = oldProject(cfg), d0 = generate(p0), p1 = assigned(p0, d0, cfg), d1 = generate(p1);
     const run = (p: Project, d: DerivedModel) => { const f = computeFabrication(p, d), bom = computeBom(d, f); return new Map(drawingCatalog(p, d, f).map((df) => [df.id, buildSheet(df, p, d, f, bom)])); };
     const a = run(p0, d0), b = run(p1, d1);
     const gone = [...a.keys()].filter((k) => !b.has(k)), added = [...b.keys()].filter((k) => !a.has(k));
     // חריג מאושר (כמו (ב) באלכסון): נוסף גיליון פרט מותאם אחד; מספור העמודים (n/N) זז בהתאם
     expect(gone).toEqual([]);
-    expect(added).toEqual([`D-CONN-cd-${strutFinRecipe().id}`]);
+    expect(added).toEqual([`D-CONN-cd-${cfg.detail === 'endplate' ? strutEndRecipe().id : cfg.detail === 'weld' ? strutWeldRecipe().id : strutFinRecipe().id}`]);
     const bad: string[] = [];
     // (א)+(ד) מורחב לגיליונות מכלול: סטיית מיקום ≤ 0.1 מ"מ בראשי ברגים משנה אילו קצוות משושה נראים (OUTLINE/THIN), ובחירת החלק שמקבל בועה
     // בחפיפה (לשונית בתוך ה-RHS) תלויה בסדר — לכן MARK/OUTLINE/THIN בטולרנס; כל השאר (חתכים, צירים, מידות, טקסטים) — מדויק.
@@ -174,5 +188,41 @@ describe('STRUT-03 דגל finEngine ואשף', () => {
     expect(candidates(p0, sit).some((x) => x.detail === 'strut.endplate')).toBe(true);
     const p1 = applyDetail(p0, sit, 'strut.endplate', {}, 'all');
     expect(newConns(generate(p1)).length).toBe(0);
+  });
+});
+
+/** STRUT-04: פלטת קצה (אתר זוגי) וריתוך ישיר — דגלים, אשף, ושיוך מפורש לצד אחד בלבד */
+describe('STRUT-04 endplate / weld: דגלים, אשף ואתר זוגי', () => {
+  const flag = (c: Cfg, k: 'endEngine' | 'weldEngine') => { const p = oldProject(c); p.building.bracing.rafterStruts![k] = 'recipe'; return p; };
+  it('ללא דגל = קוד ישן; דגל של פרט אחר לא משפיע', () => {
+    const e = oldProject(END_CFGS[0]!); e.building.bracing.rafterStruts!.finEngine = 'recipe'; e.building.bracing.rafterStruts!.weldEngine = 'recipe';
+    expect(generate(e).connections.some((c) => c.custom)).toBe(false);
+    const w = oldProject(WELD_CFGS[0]!); w.building.bracing.rafterStruts!.finEngine = 'recipe'; w.building.bracing.rafterStruts!.endEngine = 'recipe';
+    expect(generate(w).connections.some((c) => c.custom)).toBe(false);
+  });
+  it('אשף מחיבור custom (פלטת קצה / ריתוך) וחזרה לפרט הרגיל', () => {
+    for (const [cfg, k] of [[END_CFGS[0]!, 'endEngine'], [WELD_CFGS[0]!, 'weldEngine']] as const) {
+      const p0 = flag(cfg, k), d0 = generate(p0), cs = newConns(d0);
+      expect(cs.length).toBe(strutIds(d0).length * 2);
+      const sit = situationOf(p0, d0, cs[0]!.id)!;
+      expect(sit.family).toBe('strut');
+      expect(readCurrent(p0, sit).detail).toBe(`strut.${cfg.detail}`);
+      const p1 = applyDetail(p0, sit, 'strut.fin', {}, 'all');
+      expect(newConns(generate(p1)).length).toBe(0);
+    }
+  });
+  it('שיוך מפורש של פרט אחר לצד אחד של הווב: הצד השני בונה לבדו את הברגים (דרך הפלטה והווב בלבד)', () => {
+    const cfg = END_CFGS[0]!, p0 = flag(cfg, 'endEngine'), d0 = generate(p0);
+    const frame2 = newConns(d0).filter((c) => c.custom!.site === 'RS1.1|end' || c.custom!.site === 'RS1.2|start');
+    expect(frame2.length).toBe(2);
+    expect(frame2.flatMap((c) => c.bolts).length).toBe(2); // 2 ברגים משותפים — בונה אחד
+    const other = { ...strutEndRecipe(), id: 'other-y', name: 'אחר' };
+    for (const site of ['RS1.1|end', 'RS1.2|start']) {
+      const d = generate(assignDetail([site], other).run(p0));
+      const mine = d.connections.filter((c) => c.custom && c.custom.detailId === 'conv-strut-end' && ['RS1.1|end', 'RS1.2|start'].includes(c.custom.site));
+      expect(mine.length).toBe(1);
+      expect(mine[0]!.bolts.length).toBeGreaterThanOrEqual(2);
+      expect(mine[0]!.bolts.every((b) => b.grip < 25)).toBe(true); // רק פלטה אחת + ווב (לא שתי פלטות)
+    }
   });
 });
