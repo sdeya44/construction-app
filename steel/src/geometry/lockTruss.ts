@@ -1,4 +1,5 @@
 import { add, norm, scale, sub, v3, type Vec3 } from '../core/vec';
+import { KNEE_FIN_LTCHORD_RECIPE_ID, KNEE_FIN_LTTRUSS_RECIPE_ID } from './convRecipes';
 import type { BoltInfo, Connection, LockTrussParams, Member, ValidationIssue, WeldInfo } from '../model/types';
 import { getProfile, tryProfile, type Profile } from '../profiles/library';
 import { makeBolt } from './connections';
@@ -44,6 +45,10 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
   const nb = L.frames.length - 1;
   const locked = new Set(L.portalBays);
   if (Math.min(zCont, zSec) - ch / 2 < L.zBase + 800) { out.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `נעילה אופקית ציר ${L.label}: גובה לא מספיק למסבך בגובה ${H}` }); return; }
+  // מתכון מובנה (שלב D): לשונית שוכבת בשני הצדדים, עמוד/סיב RHS/SHS, בורג 8.8 ISO 4017 עם חור d+2. הציר נשמר ללא ההסטה — המתכון מחיל אותה (כמו קורת אגד)
+  const bothTongue = (lt.connA ?? lt.conn) === 'tongue' && (lt.connB ?? lt.conn) === 'tongue';
+  const recipeOn = lt.engine === 'recipe' && bothTongue && (lt.finOrient ?? 'horizontal') === 'horizontal' && ['RHS', 'SHS'].includes(col.family) && ['RHS', 'SHS'].includes(cpf.family)
+    && lt.bolt.grade === '8.8' && lt.bolt.standard === 'ISO 4017' && lt.bolt.clearance === 2;
   const bays = lt.continuous ? Array.from({ length: nb }, (_, i) => i) : [...locked];
   const joints = new Map<string, { colId: string; z: number; yC: number; ends: { chordId: string; plateId: string; sg: number; yF: number; lab: string }[] }>();
   for (const bay of bays) {
@@ -82,8 +87,9 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
           const Pj = horiz ? v3(P.x, P.y, P.z - lt.plateT) : P;
           const j = finJoint({ cid, desc: c.id.endsWith('C') ? 'סיב נעילה' : 'חגורת מסבך', hostId: colId, memberId: c.id, P: Pj, n, d: n, pn: horiz ? Z : X, side: 1, prof: cpf, profile: lt.chord, finT: lt.plateT, tongueT: lt.plateT, bolt: lt.bolt, bolts: 2, weldSize: lt.weldSize, mat: L.mat });
           out.members.push(...j.members); out.issues.push(...j.issues);
-          out.connections.push({ id: cid, type: 'knee', label: `${lab} — ${c.id.endsWith('C') ? 'סיב' : 'חגורה'} לעמוד (לשונית)`, members: [colId, c.id], parts: j.parts, bolts: j.bolts, welds: j.welds, status: 'not-verified', fixity: 'pinned', overridden: false });
-          pts.push(j.start);
+          out.connections.push({ id: cid, type: 'knee', label: `${lab} — ${c.id.endsWith('C') ? 'סיב' : 'חגורה'} לעמוד (לשונית)`, members: [colId, c.id], parts: j.parts, bolts: j.bolts, welds: j.welds, status: 'not-verified', fixity: 'pinned', overridden: false,
+            ...(recipeOn ? { recipe: { id: c.id.endsWith('C') ? KNEE_FIN_LTCHORD_RECIPE_ID : KNEE_FIN_LTTRUSS_RECIPE_ID, params: { d: lt.bolt.d, nb: 2, ft: lt.plateT, tt: lt.plateT, sd: 1, bs: 1, wa: lt.weldSize }, sites: [`${c.id}|${k === 'A' ? 'start' : 'end'}`] } } : {}) });
+          pts.push(recipeOn ? sub(j.start, scale(Z, lt.plateT)) : j.start); // מתכון: ציר ללא ההסטה (פח + לשונית)/2 = T
           endReach = Math.max(endReach, j.tongueL + 25);
         }
       }

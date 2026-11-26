@@ -251,3 +251,20 @@ describe('CAD-10 הסבה (שלב D): אגד B (קורה + אלכסונים; פ�
     expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
   }, 300000);
 });
+
+describe('CAD-11 הסבה (שלב D): מסבך נעילה (סגנון לשונית) כמתכון', () => {
+  it('גופים תקינים, חורים חותכים, ריתוכים במגע, בלי חדירות — ובדיוק כמו הפרט הישן', async () => {
+    const { defaultLockTruss } = await import('../src/geometry/lockTruss');
+    const b = defaultBuilding(); b.columnProfile = 'RHS200x200x8';
+    b.bracing.walls = { ...b.bracing.walls, enabled: true, type: 'truss', truss: { ...defaultLockTruss(), conn: 'tongue' } };
+    const p0 = newProject('conv', b), d0 = generate(p0);
+    const p1 = structuredClone(p0); p1.building.bracing.walls.truss = { ...defaultLockTruss(), conn: 'tongue', engine: 'recipe' };
+    const d1 = generate(p1);
+    const neu = d1.connections.filter((c) => c.custom && /^LT\.[12]\.L\b/.test(c.custom.site));
+    const old = d0.connections.filter((c) => /^C\.LT\.[12]\.L\.[CS][AB]$/.test(c.id));
+    expect(neu.length).toBeGreaterThan(3);
+    expect(old.length).toBe(neu.length);
+    expect(cadFindings(cadAudit(K, d0, old))).toEqual([]);
+    expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
+  }, 300000);
+});

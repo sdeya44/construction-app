@@ -16,16 +16,18 @@ export const CLEAT_SEAM_RECIPE_ID = 'conv-cleat-seam';
 export const CLEAT_STAND_RECIPE_ID = 'conv-cleat-stand';
 export const KNEE_FIN_BEAM_RECIPE_ID = 'conv-knee-fin-bb-beam';
 export const KNEE_FIN_BBDIAG_RECIPE_ID = 'conv-knee-fin-bb-diag';
+export const KNEE_FIN_LTCHORD_RECIPE_ID = 'conv-knee-fin-lt-chord';
+export const KNEE_FIN_LTTRUSS_RECIPE_ID = 'conv-knee-fin-lt-truss';
 export const SIDE_RECIPE_ID = 'conv-side';
 export const BASE_EMBEDDED_RECIPE_ID = 'conv-base-embedded';
 export const BASE_BOLTED_RECIPE_ID = 'conv-base-bolted';
 export const BASE_BOLTED_B500_RECIPE_ID = 'conv-base-bolted-b500';
 
 /** סוג החיבור המובנה שהמתכון מחליף — לחתימות שמבוססות על סוגי חיבורים (קיבוץ מסגרות זהות בשרטוטים) */
-export const RECIPE_CONN_TYPE: Record<string, 'knee' | 'brace' | 'purlin-cleat' | 'base' | 'rafter-side'> = { [KNEE_FIN_RECIPE_ID]: 'knee', [STRUT_FIN_RECIPE_ID]: 'brace', [STRUT_END_RECIPE_ID]: 'brace', [STRUT_WELD_RECIPE_ID]: 'brace', [CLEAT_RUN_RECIPE_ID]: 'purlin-cleat', [CLEAT_PLATE_RECIPE_ID]: 'purlin-cleat', [CLEAT_SEAM_RECIPE_ID]: 'purlin-cleat', [CLEAT_STAND_RECIPE_ID]: 'purlin-cleat', [KNEE_FIN_BEAM_RECIPE_ID]: 'knee', [KNEE_FIN_BBDIAG_RECIPE_ID]: 'knee', [SIDE_RECIPE_ID]: 'rafter-side', [BASE_EMBEDDED_RECIPE_ID]: 'base', [BASE_BOLTED_RECIPE_ID]: 'base', [BASE_BOLTED_B500_RECIPE_ID]: 'base' };
+export const RECIPE_CONN_TYPE: Record<string, 'knee' | 'brace' | 'purlin-cleat' | 'base' | 'rafter-side'> = { [KNEE_FIN_RECIPE_ID]: 'knee', [STRUT_FIN_RECIPE_ID]: 'brace', [STRUT_END_RECIPE_ID]: 'brace', [STRUT_WELD_RECIPE_ID]: 'brace', [CLEAT_RUN_RECIPE_ID]: 'purlin-cleat', [CLEAT_PLATE_RECIPE_ID]: 'purlin-cleat', [CLEAT_SEAM_RECIPE_ID]: 'purlin-cleat', [CLEAT_STAND_RECIPE_ID]: 'purlin-cleat', [KNEE_FIN_BEAM_RECIPE_ID]: 'knee', [KNEE_FIN_BBDIAG_RECIPE_ID]: 'knee', [KNEE_FIN_LTCHORD_RECIPE_ID]: 'knee', [KNEE_FIN_LTTRUSS_RECIPE_ID]: 'knee', [SIDE_RECIPE_ID]: 'rafter-side', [BASE_EMBEDDED_RECIPE_ID]: 'base', [BASE_BOLTED_RECIPE_ID]: 'base', [BASE_BOLTED_B500_RECIPE_ID]: 'base' };
 
 /** מתכונים מובנים לפי מזהה (מחוץ ל-`project.customDetails`): מחולים אוטומטית לפי `Connection.recipe` */
-export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe(), [CLEAT_RUN_RECIPE_ID]: () => cleatRunRecipe(), [CLEAT_PLATE_RECIPE_ID]: () => cleatPlateRecipe(), [CLEAT_SEAM_RECIPE_ID]: () => cleatSeamRecipe(), [CLEAT_STAND_RECIPE_ID]: () => cleatStandRecipe(), [KNEE_FIN_BEAM_RECIPE_ID]: () => kneeFinRecipe('קורת אגד', KNEE_FIN_BEAM_RECIPE_ID), [KNEE_FIN_BBDIAG_RECIPE_ID]: () => kneeFinRecipe('אלכסון אגד', KNEE_FIN_BBDIAG_RECIPE_ID), [SIDE_RECIPE_ID]: () => sideRecipe(), [BASE_EMBEDDED_RECIPE_ID]: () => baseEmbeddedRecipe(), [BASE_BOLTED_RECIPE_ID]: () => baseBoltedRecipe('8.8', 'ISO 4017'), [BASE_BOLTED_B500_RECIPE_ID]: () => baseBoltedRecipe('B500', 'מוט מצולע') };
+export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe(), [CLEAT_RUN_RECIPE_ID]: () => cleatRunRecipe(), [CLEAT_PLATE_RECIPE_ID]: () => cleatPlateRecipe(), [CLEAT_SEAM_RECIPE_ID]: () => cleatSeamRecipe(), [CLEAT_STAND_RECIPE_ID]: () => cleatStandRecipe(), [KNEE_FIN_BEAM_RECIPE_ID]: () => kneeFinRecipe('קורת אגד', KNEE_FIN_BEAM_RECIPE_ID), [KNEE_FIN_BBDIAG_RECIPE_ID]: () => kneeFinRecipe('אלכסון אגד', KNEE_FIN_BBDIAG_RECIPE_ID), [KNEE_FIN_LTCHORD_RECIPE_ID]: () => kneeFinRecipe('סיב נעילה', KNEE_FIN_LTCHORD_RECIPE_ID), [KNEE_FIN_LTTRUSS_RECIPE_ID]: () => kneeFinRecipe('חגורת מסבך', KNEE_FIN_LTTRUSS_RECIPE_ID), [SIDE_RECIPE_ID]: () => sideRecipe(), [BASE_EMBEDDED_RECIPE_ID]: () => baseEmbeddedRecipe(), [BASE_BOLTED_RECIPE_ID]: () => baseBoltedRecipe('8.8', 'ISO 4017'), [BASE_BOLTED_B500_RECIPE_ID]: () => baseBoltedRecipe('B500', 'מוט מצולע') };
 
 /**
  * אלכסון עמוד-קורה, פח + לשונית בחריץ — שקול ל-`finJoint` ב-`geometry/finJoint.ts` (פרט הלקוח 15.11.2026).

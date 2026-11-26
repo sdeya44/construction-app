@@ -114,6 +114,7 @@ export function findSite(members: Member[], m: Member, end: End): Site | null {
   let best: { m: Member; t: number; n: Vec3; depth: number; webOff: number | null } | null = null;
   for (const x of members) {
     if (x === m || !STRUCT.has(x.kind) || !tryProfile(x.profile)) continue;
+    if (m.id.startsWith('LT.') && x.id.startsWith('LT.')) continue; // מסבך נעילה: אלכסוני/חגורת אותו מסבך אינם מארח לקצה החגורה (תיבת החתך המסובבת של האלכסון תופסת את ציר החגורה)
     const h = rayHit(o, dOut, x);
     if (!h || h.t < 0 || h.t > Math.min(250, L / 2) + 600) continue;
     if (!best || h.t < best.t) best = { m: x, ...h };
@@ -616,15 +617,18 @@ export function applyCustomDetails(project: Project, members: Member[], connecti
     const ownConn = site.cross?.conn ?? own[key];
     const kill = partsToReplace(members, connections, m, site.E, site.O, ownConn, index);
     if (ownConn) { const i = connections.findIndex((c) => c.id === ownConn); if (i >= 0) connections.splice(i, 1); }
+    const touched = new Set<Connection>();
     for (const c of connections) {
       if (!c.parts.some((p) => kill.has(p)) && !c.bolts.some((b) => kill.has(b.id))) continue;
+      touched.add(c);
       c.parts = c.parts.filter((p) => !kill.has(p));
       c.bolts = c.bolts.filter((b) => !kill.has(b.id));
       c.welds = c.welds.filter((w) => !w.between.some((x) => kill.has(x)));
     }
     for (let i = connections.length - 1; i >= 0; i--) {
       const c = connections[i];
-      if (c.type !== 'custom' && !c.bolts.length && !c.parts.some((p) => members.some((x) => x.id === p && REMOVABLE.has(x.kind) && !kill.has(p)))) connections.splice(i, 1);
+      // רק חיבורים שאיבדו חלקים עכשיו (חיבור ריתוכי כמו מסבך הנעילה, שחלקיו אלכסונים, לא נמחק רק כי אין בו פלטות)
+      if (touched.has(c) && c.type !== 'custom' && !c.bolts.length && !c.parts.some((p) => members.some((x) => x.id === p && REMOVABLE.has(x.kind) && !kill.has(p)))) connections.splice(i, 1);
     }
     for (let i = members.length - 1; i >= 0; i--) if (kill.has(members[i].id)) { index.delete(members[i].id); members.splice(i, 1); }
     const site2 = findSite(sees(), m, end) ?? site;

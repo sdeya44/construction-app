@@ -280,10 +280,12 @@ export function LockTrussFields({ lineId }: { lineId?: string } = {}) {
       <select className="inp" data-testid={`lt-conn-${k}`} value={(k === 'A' ? p.connA : p.connB) ?? p.conn} onChange={(e) => set({ [k === 'A' ? 'connA' : 'connB']: e.target.value as 'plate' | 'tongue' })}>
         <option value="plate">פלטת קצה + ברגים דרך העמוד</option><option value="tongue">פח + לשונית</option>
       </select></div>)}
-    {[p.conn, p.connA, p.connB].includes('tongue') && <div className="field"><label>כיוון הפח והלשונית</label>
+    {[p.conn, p.connA, p.connB].includes('tongue') && <><label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} title="חיבור הלשונית של הסיב/החגורה לעמוד נבנה ממתכון במקום מהקוד הישן — עמוד וסיב RHS/SHS, לשונית שוכבת בשני הצדדים, בורג 8.8 ISO 4017 בלבד (סגנון פלטה — תמיד הקוד הישן). השוואה אוטומטית מול הקוד הישן ירוקה; כבוי = הקוד הישן (ברירת מחדל, גיבוי).">
+      <input type="checkbox" data-testid="lt-recipe" checked={p.engine === 'recipe'} onChange={(e) => set({ engine: e.target.checked ? 'recipe' : 'legacy' })} />
+      <span>בנה ממתכון (מנוע חדש) — כבוי: הקוד הישן</span></label><div className="field"><label>כיוון הפח והלשונית</label>
       <select className="inp" data-testid="lt-orient" value={p.finOrient ?? 'horizontal'} onChange={(e) => set({ finOrient: e.target.value as 'horizontal' | 'vertical' })}>
         <option value="horizontal">שוכבים (חריץ אופקי בסיב)</option><option value="vertical">במישור המסבך</option>
-      </select></div>}
+      </select></div></>}
     <div className="field"><label>עובי פלטות</label><NumField value={p.plateT} suffix='מ"מ' onCommit={(v) => set({ plateT: v })} /></div>
     <div className="field"><label>קוטר בורג</label><BoltSelect d={p.bolt.d} onChange={(d) => set({ bolt: { ...p.bolt, d } })} /></div>
   </>;

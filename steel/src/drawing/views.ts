@@ -463,7 +463,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       const fi = b.frames.indexOf(f) + 1;
       const pr: Proj = (q) => ({ x: q.x, y: q.z });
       // חלקי מתכון מובנה (הסבה) שאין במזהה שלהם מסגרת (תמוכות בין קורות) שייכים למסגרת של המארח — כמו החלקים של הקוד הישן
-      const recipeFrame = new Map(d.connections.filter((c) => c.custom && BUILTIN_RECIPES[c.custom.detailId] && !c.custom.site.startsWith('BB.')) /* אגד B: חלק מציר הקיר, לא ממסגרת (כמו הקוד הישן) */.map((c) => [c.id, d.byId.get(c.members[0] ?? '')?.frameId]));
+      const recipeFrame = new Map(d.connections.filter((c) => c.custom && BUILTIN_RECIPES[c.custom.detailId] && !c.custom.site.startsWith('BB.') && !c.custom.site.startsWith('LT.')) /* אגד B: חלק מציר הקיר, לא ממסגרת (כמו הקוד הישן) */.map((c) => [c.id, d.byId.get(c.members[0] ?? '')?.frameId]));
       const cleatRecipe = new Set(d.connections.filter((c) => c.custom && RECIPE_CONN_TYPE[c.custom.detailId] === 'purlin-cleat').map((c) => c.id)); // כמו C.PC.* בקוד הישן — לא בגיליון המסגרת
       const own = d.members.filter((m) => !(m.connId && cleatRecipe.has(m.connId)) && (m.frameId === f.id || (m.connId && (m.connId.split('.').includes(f.id) || recipeFrame.get(m.connId) === f.id) && m.kind !== 'cleat' && !m.connId.startsWith('C.PC'))));
       const bx = boxOf(solidPts(own.filter((m) => m.kind !== 'anchor'), pr));

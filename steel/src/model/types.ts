@@ -229,6 +229,8 @@ export interface LockTrussParams {
   diags: number;
   /** סיב בשאר המפתחים */
   continuous: boolean;
+  /** מנוע חיבורי הלשונית (שלב D): 'recipe' = `kneeFinRecipe` מחליף את `finJoint` (עמוד RHS/SHS, סיב/חגורה RHS/SHS, לשונית שוכבת בשני הצדדים, בורג 8.8 ISO 4017); חסר/'legacy' = הקוד הישן. סגנון `plate` — תמיד הקוד הישן */
+  engine?: 'legacy' | 'recipe';
   /** סוג חיבור בכל צד (עמוד בתחילת המפתח / בסופו); חסר = conn */
   connA?: 'plate' | 'tongue';
   connB?: 'plate' | 'tongue';
