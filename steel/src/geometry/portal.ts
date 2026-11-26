@@ -62,7 +62,7 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
   // מתכון מובנה (שלב D): חתכי RHS/SHS, בורג 8.8 ISO 4017 עם חור d+2; קורת האגד — רק בפח ולשונית שוכבים
   const HOLLOW = ['RHS', 'SHS'];
   // עמוד I: `th` — הפרט נבנה על פני הווב האמיתיים (פגיעה במתאר החתך) ולא על תיבת החתך (קצה האגף)
-  const colI = ['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(cp.family);
+  const colI = ['IPE', 'HEA', 'HEB', 'HEM', 'INP', 'UPN', 'UPE'].includes(cp.family);
   const colOk = ['RHS', 'SHS'].includes(cp.family) || colI;
   const specOk = pp.engine === 'recipe' && colOk && pp.bolt.grade === '8.8' && pp.bolt.standard === 'ISO 4017' && pp.bolt.clearance === 2;
   // קורת האגד (פח ולשונית שוכבים): במצב מתכון הציר נשמר ללא ההסטה (על קו הפח) והמתכון מחיל אותה — אחרת היא מוחלת פעמיים.

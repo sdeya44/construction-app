@@ -47,7 +47,7 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
   if (Math.min(zCont, zSec) - ch / 2 < L.zBase + 800) { out.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `נעילה אופקית ציר ${L.label}: גובה לא מספיק למסבך בגובה ${H}` }); return; }
   // מתכון מובנה (שלב D): לשונית שוכבת בשני הצדדים, עמוד/סיב RHS/SHS, בורג 8.8 ISO 4017 עם חור d+2. הציר נשמר ללא ההסטה — המתכון מחיל אותה (כמו קורת אגד)
   const bothTongue = (lt.connA ?? lt.conn) === 'tongue' && (lt.connB ?? lt.conn) === 'tongue';
-  const colI = ['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(col.family); // `th`: הפרט על פני הווב האמיתיים
+  const colI = ['IPE', 'HEA', 'HEB', 'HEM', 'INP', 'UPN', 'UPE'].includes(col.family); // `th`: הפרט על פני הווב האמיתיים
   const recipeOn = lt.engine === 'recipe' && bothTongue && (lt.finOrient ?? 'horizontal') === 'horizontal' && (['RHS', 'SHS'].includes(col.family) || colI) && ['RHS', 'SHS'].includes(cpf.family)
     && lt.bolt.grade === '8.8' && lt.bolt.standard === 'ISO 4017' && lt.bolt.clearance === 2;
   // מתכון פלטת קצה (אתר של 3 אלמנטים: עמוד + סיב משני צדיו — אתר זוגי): עמוד RHS/SHS, בורג 8.8 ISO 4017 עם חור d+2
