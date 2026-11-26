@@ -164,7 +164,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
     if (tool.startsWith('plate:')) {
       const shape = tool.split(':')[1] as 'rect' | 'tri' | 'cham' | 'round';
       const onEnd = ref.on === 'main' && ref.face === 'end';
-      addOp({ k: 'plate', id: nextId('plate'), ref, mode: onEnd || shape === 'tri' || shape === 'cham' ? 'stand' : 'flat', spin: '0', off: '0', shape, w: shape === 'tri' ? '150' : '150', h: shape === 'tri' ? '150' : '200', t: '10', ch: shape === 'cham' ? '50' : '0', corners: [shape === 'cham', false, false, false] });
+      addOp({ k: 'plate', id: nextId('plate'), ref, mode: onEnd || shape === 'tri' || shape === 'cham' ? 'stand' : 'flat', spin: '0', off: '0', shape, w: shape === 'tri' ? '150' : 'max(mb, hb) + 20', h: shape === 'tri' ? '150' : 'r5(mh/sin(ang))', t: '10', ch: shape === 'cham' ? '50' : '0', corners: [shape === 'cham', false, false, false] });
     } else if (site.cross && ['endplate', 'cut', 'slot', 'vent'].includes(tool)) {
       return err('בתושבת פטה הפטה רציפה — אין חיתוך, חריץ או פלטת קצה. בונים את התושבת מפחים על פני הקורה ופני הווב');
     } else if (tool === 'endplate') {
@@ -435,8 +435,8 @@ function OpProps({ op, det, res, patch }: { op: DetailOp; det: CustomDetail; res
       </>}
       {op.k === 'endplate' && <>
         <EF label="עובי t" value={op.t} onChange={(v) => patch({ t: v })} vkey={k('t')} res={res} />
-        <EF label="רוחב (במישור)" value={op.w} onChange={(v) => patch({ w: v })} vkey={k('w')} res={res} />
-        <EF label="גובה (ניצב)" value={op.h} onChange={(v) => patch({ h: v })} vkey={k('h')} res={res} />
+        <EF label="רוחב (במישור)" hint="לאורך מישור האלמנט (ברירת מחדל: גובה החתך + 40)" value={op.w} onChange={(v) => patch({ w: v })} vkey={k('w')} res={res} />
+        <EF label="גובה (ניצב)" hint="ניצב למישור האלמנט (ברירת מחדל: רוחב החתך + 40)" value={op.h} onChange={(v) => patch({ h: v })} vkey={k('h')} res={res} />
         <EF label="היסט במישור" value={op.dx} onChange={(v) => patch({ dx: v })} vkey={k('dx')} res={res} />
         <EF label="היסט ניצב" value={op.dy} onChange={(v) => patch({ dy: v })} vkey={k('dy')} res={res} />
       </>}

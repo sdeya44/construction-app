@@ -478,7 +478,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         if (!hs) { errors[op.id] = 'אין קבוצת חורים — הוסיפו קודם חורים'; continue; }
         const d = Math.round(ev(op.d, `${op.id}.d`, 16));
         vals[`${op.id}.d`] = d;
-        const cand: Member[] = [...members.filter((m) => m.kind === 'plate' || m.kind === 'cleat'), ...(opts.extra ?? []), ...(op.noMain || s.mid?.through ? [] : [main]), ...(s.host ? [s.host] : [])];
+        const cand: Member[] = [...members.filter((m) => m.kind === 'plate' || m.kind === 'cleat'), ...(opts.extra ?? []), ...(op.noMain || s.mid?.through ? [] : [main]), ...(s.host && !op.noHost ? [s.host] : [])];
         const testers = cand.map((m) => ({ m, t: new PrismTester(m) }));
         const own = plates.get(hs.plate)?.memberId;
         const scanR = op.reach !== undefined ? Math.ceil(ev(op.reach, `${op.id}.reach`)) + 60 : 200; // חלון הסריקה לאורך הבורג
@@ -874,6 +874,27 @@ function basePresets(): CustomDetail[] {
         { k: 'weld', id: 'W1', part: 'P1', a: '4', site: false },
         { k: 'weld', id: 'W2', part: 'G1', a: '4', site: false },
         { k: 'weld', id: 'W3', part: 'G1', a: '4', site: false, to: 'P1' },
+      ],
+    },
+    {
+      id: 'preset-plate-plate', name: 'פלטה אל פלטה (4 ברגים)', family: 'any',
+      note: 'פלטה מרותכת למארח ופלטה שנייה מרותכת לקצה האלמנט, שתיהן מוברגות זו לזו. רוחב הפלטות = הגדול מבין רוחב האלמנט ורוחב המארח + תוספת; הגובה = היטל האלמנט על המארח + תוספת. הברגים מהדקים את הפלטות בלבד.',
+      vars: [
+        { name: 'd', expr: '16', note: 'קוטר בורג' }, { name: 'd0', expr: 'd+2', note: 'קוטר חור' }, { name: 'e', expr: 'max(30, r5(1.5*d0))', note: 'מרחק שפה' },
+        { name: 'ex', expr: '20', note: 'תוספת לרוחב הפלטות מעל הגדול מבין רוחב האלמנט והמארח' }, { name: 'eh', expr: '0', note: 'תוספת לגובה הפלטות מעל היטל האלמנט' },
+        { name: 't', expr: '12', note: 'עובי כל פלטה' },
+        { name: 'W', expr: 'max(max(mb, hb) + ex, hb + 2*e + 40)', note: 'רוחב הפלטות: הגדול מבין רוחב האלמנט והמארח + תוספת, ולפחות רוחב שמוציא את הברגים (עם דיסקית ואום) מחוץ לאגף המארח' }, { name: 'H', expr: 'mh/sin(ang) + eh', note: 'גובה הפלטות' },
+        { name: 'g', expr: 'W - 2*e', note: 'מרחק בין עמודות ברגים' }, { name: 'p', expr: 'H - 2*e', note: 'מרחק בין שורות ברגים' },
+      ],
+      params: [pBolt([12, 16, 20, 24]), pNum('t', 'עובי פלטה', 6, 30, 'פלטות'), pNum('ex', 'תוספת לרוחב', 0, 100, 'פלטות', 'מעל הגדול מבין רוחב האלמנט לרוחב המארח'), pNum('eh', 'תוספת לגובה', 0, 100, 'פלטות', 'מעל גובה האלמנט (היטל על המארח)'), pNum('e', 'מרחק שפה', 25, 100, 'ברגים')],
+      ops: [
+        { k: 'plate', id: 'P1', name: 'פלטה על המארח', ref: R('host', 'hit'), mode: 'flat', spin: '0', off: '0', shape: 'rect', w: 'W', h: 'H', t: 't', ch: '0', corners: [false, false, false, false] },
+        { k: 'plate', id: 'P2', name: 'פלטה על האלמנט', ref: R('P1', 'z+'), mode: 'flat', spin: '0', off: '0', shape: 'rect', w: 'W', h: 'H', t: 't', ch: '0', corners: [false, false, false, false] },
+        { k: 'cut', id: 'C1', kind: 'host', at: 'P1.t + P2.t' },
+        { k: 'holes', id: 'H1', ref: R('P2', 'z+'), rows: '2', cols: '2', px: 'g', py: 'p', d0: 'd0' },
+        { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true, noMain: true, noHost: true },
+        { k: 'weld', id: 'W1', part: 'P1', a: 'max(4, ceil(mt))', site: false, to: 'host' },
+        { k: 'weld', id: 'W2', part: 'P2', a: 'max(4, ceil(mt))', site: false, to: 'main' },
       ],
     },
   ];
