@@ -69,7 +69,7 @@ export const MODULES = {
   struts: {
     title: 'תמוכות בין הקורות',
     src: ['src/geometry/rafterStruts.ts'],
-    tests: ['tests/rafterstruts.test.ts'],
+    tests: ['tests/rafterstruts.test.ts', 'tests/strutfin-compare.test.ts', { file: 'tests/cad-oracle.test.ts', t: 'CAD-05' }],
     e2e: ['e2e/rafter-struts.spec.ts'],
   },
   cladding: {

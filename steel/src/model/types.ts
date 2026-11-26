@@ -161,6 +161,8 @@ export interface RafterStrutParams {
   detail?: RafterStrutDetail;
   /** ברגים בכל קצה (2 / 4) */
   bolts?: number;
+  /** מנוע פרט ה-fin (שלב D): 'recipe' = המתכון `strutFinRecipe` מחליף את הקוד הישן (`finJoint`); חסר/'legacy' = הקוד הישן. אין חשיפה בממשק עד אישור המשתמש */
+  finEngine?: 'legacy' | 'recipe';
 }
 
 /**
@@ -828,7 +830,7 @@ export interface Connection {
   /** פרט מותאם: מזהה הפרט ומפתח האתר */
   custom?: { detailId: string; site: string };
   /** חיבור מובנה שמוחלף אוטומטית במתכון מובנה (ראו `KneeBraceParams.finEngine`): מזהה המתכון וערכי הפרמטרים לשני הקצוות */
-  recipe?: { id: string; params: Record<string, number> };
+  recipe?: { id: string; params: Record<string, number>; /** קצוות האתר (מפתחות `אלמנט|start/end`); חסר = שני קצוות האלמנט הראשון ברשימת החלקים */ sites?: string[] };
 }
 
 // ---------- פרטי חיבור מותאמים ----------
@@ -837,7 +839,7 @@ export interface Connection {
 export type Expr = string;
 /**
  * פנים שעליהן יושב רכיב:
- *   main — האלמנט שהקצה שלו מפורט: end (קצה לאחר חיתוך), a+/a- (דפנות במישור), w+/w- (דפנות ניצבות למישור), axis / axis- (מישור הציר המקורי, לפני shift: נורמל w קנוני — הצד החיובי זהה בשני קצוות האלמנט — לאורך הציר);
+ *   main — האלמנט שהקצה שלו מפורט: end (קצה לאחר חיתוך), a+/a- (דפנות במישור), w+/w- (דפנות ניצבות למישור), axis / axis- (מישור הציר המקורי, לפני shift: נורמל w קנוני — הצד החיובי זהה בשני קצוות האלמנט — לאורך הציר); axisA / axisA- (כמו axis, אבל נורמל a קנוני — לפלטה שמישורה מקביל ל-w, כמו בתמוכה בין קורות);
  *   host — המארח: hit (הפנים שהציר פוגע בהן), opp (הפנים הנגדיות), web (הווב, בצד האלמנט);
  *   מזהה פעולת פלטה — z+ / z- (שני פני הפלטה).
  */
@@ -847,7 +849,8 @@ export type DetailOp =
   /** הסטת קצה האלמנט הראשי (ציר + חיתוך) ניצב למישור (לאורך w) — למשל בעובי הפח, כשהלשונית מחליפה את מקומו. לא חל על תושבת פטה */
   | { k: 'shift'; id: string; by: Expr }
   | { k: 'plate'; id: string; name?: string; ref: DetailRef; mode: 'flat' | 'stand'; spin: Expr; off: Expr; shape: 'rect' | 'cham' | 'tri' | 'round'; w: Expr; h: Expr; t: Expr; ch: Expr; corners: [boolean, boolean, boolean, boolean];
-      /** קצה הפלטה שליד המארח נחתך בזווית במישור פני המארח (חיתוך קצה בחלק — מופיע בגיליון ובזווית ה-NC1) */ clipHost?: boolean }
+      /** קצה הפלטה שליד המארח נחתך בזווית במישור פני המארח (חיתוך קצה בחלק — מופיע בגיליון ובזווית ה-NC1) */ clipHost?: boolean;
+      /** עם clipHost: עומק מישור החיתוך לתוך המארח מפני הפגיעה (למשל פני הווב מאחורי קצה האגפים בחתך I שנפגע מהצד) */ clipOff?: Expr }
   | { k: 'endplate'; id: string; t: Expr; w: Expr; h: Expr; dx: Expr; dy: Expr }
   | { k: 'holes'; id: string; ref: DetailRef; rows: Expr; cols: Expr; px: Expr; py: Expr; d0: Expr }
   | { k: 'bolts'; id: string; holes: string; d: Expr; grade: string; site: boolean }

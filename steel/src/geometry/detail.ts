@@ -35,6 +35,8 @@ export interface Site {
   /** a — ניצב לציר במישור (n,u); w — ניצב למישור */
   a: Vec3; w: Vec3;
   hand: 1 | -1;
+  /** כיוון קנוני ±1 של a (סימן רכיב x, ואם אפסי — הרכיב הדומיננטי): אותו צד מוחלט בשני קצוות האלמנט */
+  handA: 1 | -1;
   /** מידות החתך הראשי לאורך a ו-w */
   mh: number; mb: number;
   /** עומק המארח לאורך n (לפנים הנגדיות), ומרחק פני המארח לווב */
@@ -124,6 +126,8 @@ export function findSite(members: Member[], m: Member, end: End): Site | null {
   const w = norm(w0), a = norm(cross(w, u));
   const ax = Math.abs(w.x) >= Math.abs(w.y) && Math.abs(w.x) >= Math.abs(w.z) ? w.x : Math.abs(w.y) >= Math.abs(w.z) ? w.y : w.z;
   const hand: 1 | -1 = ax >= 0 ? 1 : -1;
+  const axA = Math.abs(a.x) > 1e-3 ? a.x : Math.abs(a.y) >= Math.abs(a.z) ? a.y : a.z;
+  const handA: 1 | -1 = axA >= 0 ? 1 : -1;
   const f = localFrame(m), prof = getProfile(m.profile);
   const bU = prof.props.b ?? prof.props.h, hV = prof.props.h;
   const uAlongA = Math.abs(dot(f.u, a)) >= Math.abs(dot(f.v, a));
@@ -138,7 +142,7 @@ export function findSite(members: Member[], m: Member, end: End): Site | null {
     if (len(qv) > 0.5 && Math.abs(dot(w, hf.ex)) < 0.2) { const q = norm(qv), off = dot(sub(P, C), q); if (Math.abs(off) > 0.01 && Math.abs(off) < 25) Pc = sub(P, scale(q, off)); }
   }
   return {
-    key: siteKey(m.id, end), main: m, end, host: best?.m ?? null, P: Pc, u, n, a, w, hand, mh, mb,
+    key: siteKey(m.id, end), main: m, end, host: best?.m ?? null, P: Pc, u, n, a, w, hand, handA, mh, mb,
     hd: best?.depth ?? 0, webOff: best?.webOff ?? null, hostAxis: best ? localFrame(best.m).ex : null, ang, E, O,
   };
 }
@@ -162,7 +166,7 @@ function crossSite(members: Member[], pur: Member, frameId: string): Site | null
   const ax = Math.abs(w.x) >= Math.abs(w.y) && Math.abs(w.x) >= Math.abs(w.z) ? w.x : Math.abs(w.y) >= Math.abs(w.z) ? w.y : w.z;
   const rp = getProfile(raf.profile);
   return {
-    key: siteKey(pur.id, `x:${frameId}`), main: pur, end: `x:${frameId}`, host: raf, P, u: n, n, a, w, hand: ax >= 0 ? 1 : -1,
+    key: siteKey(pur.id, `x:${frameId}`), main: pur, end: `x:${frameId}`, host: raf, P, u: n, n, a, w, hand: ax >= 0 ? 1 : -1, handA: (Math.abs(a.x) > 1e-3 ? a.x : Math.abs(a.y) >= Math.abs(a.z) ? a.y : a.z) >= 0 ? 1 : -1,
     mh: pp.props.h, mb: pp.props.b ?? pp.props.h, hd: rp.props.h, webOff: null, hostAxis: localFrame(raf).ex, ang: 90, E: P, O: add(P, scale(w, 1000)),
     cross: (() => {
       const hand = ax >= 0 ? 1 : -1, e2 = scale(cross(n, w), hand);
@@ -176,15 +180,15 @@ function crossSite(members: Member[], pur: Member, frameId: string): Site | null
 export function siteVars(s: Site): Vars {
   const mp = getProfile(s.main.profile), hp = s.host ? getProfile(s.host.profile) : null;
   return {
-    mh: s.mh, mb: s.mb, mt: mp.dims.t ?? mp.dims.tw ?? 5, mtf: mp.dims.tf ?? mp.dims.t ?? 5,
+    mh: s.mh, mb: s.mb, pb: mp.props.b ?? mp.props.h, mt: mp.dims.t ?? mp.dims.tw ?? 5, mtf: mp.dims.tf ?? mp.dims.t ?? 5,
     hh: hp?.props.h ?? 0, hb: hp?.props.b ?? 0, htf: hp?.dims.tf ?? hp?.dims.t ?? 0, htw: hp?.dims.tw ?? hp?.dims.t ?? 0,
-    hd: s.hd, ang: Math.max(1, s.ang), hs: s.hand, wo: s.cross?.wo ?? 0, cs: s.cross?.cs ?? 1, sr: s.cross?.sr ?? 90,
+    hd: s.hd, ang: Math.max(1, s.ang), hs: s.hand, ha: s.handA, wo: s.cross?.wo ?? 0, cs: s.cross?.cs ?? 1, sr: s.cross?.sr ?? 90,
   };
 }
 export const VAR_HELP: [string, string][] = [
-  ['mh', 'גובה חתך האלמנט (במישור)'], ['mb', 'רוחב חתך האלמנט (ניצב למישור)'], ['mt', 'עובי דופן/ווב האלמנט'], ['mtf', 'עובי אגף האלמנט'],
+  ['mh', 'גובה חתך האלמנט (במישור)'], ['mb', 'רוחב חתך האלמנט (ניצב למישור)'], ['pb', 'רוחב החתך b לפי הפרופיל (בלי קשר לכיוון ההנחה)'], ['mt', 'עובי דופן/ווב האלמנט'], ['mtf', 'עובי אגף האלמנט'],
   ['hh', 'גובה חתך המארח'], ['hb', 'רוחב חתך המארח'], ['htf', 'עובי אגף המארח'], ['htw', 'עובי ווב המארח'], ['hd', 'עומק המארח בכיוון הפגיעה'],
-  ['ang', 'זווית בין ציר האלמנט לפני המארח (90 = ניצב)'], ['hs', 'כיוון קנוני ±1 של w: הסטה/היסט ב-hs·x הולכים לאותו צד מוחלט בשני קצוות האלמנט'], ['wo', 'תושבת פטה: מרחק פני הווב מציר הפטה'],
+  ['ang', 'זווית בין ציר האלמנט לפני המארח (90 = ניצב)'], ['hs', 'כיוון קנוני ±1 של w: הסטה/היסט ב-hs·x הולכים לאותו צד מוחלט בשני קצוות האלמנט'], ['ha', 'כיוון קנוני ±1 של a (כמו hs, לציר a): היסט ב-ha·x באותו צד מוחלט בשני הקצוות'], ['wo', 'תושבת פטה: מרחק פני הווב מציר הפטה'],
 ];
 
 export interface Frame { base: Vec3; n: Vec3; e1: Vec3; e2: Vec3; hand: 1 | -1 }
@@ -313,6 +317,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
     let base: Vec3, n: Vec3, e1: Vec3;
     if (ref.on === 'main') {
       if (ref.face === 'axis' || ref.face === 'axis-') { if (s.cross) return null; base = s.P; n = scale(s.w, s.hand * (ref.face === 'axis-' ? -1 : 1)); e1 = s.u; }
+      else if (ref.face === 'axisA' || ref.face === 'axisA-') { if (s.cross) return null; base = s.P; n = scale(s.a, s.handA * (ref.face === 'axisA-' ? -1 : 1)); e1 = s.u; }
       else if (ref.face === 'end') { if (s.cross) return null; base = add(add(s.P, scale(s.u, sEnd - endT)), sh); n = scale(s.u, -1); e1 = s.a; }
       else if (s.cross) {
         // פטה: פני הווב (a+ בצד התושבת), e1 כלפי מעלה
@@ -381,7 +386,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         const pm = plateMember(g, op.name || 'פלטה', op.shape !== 'rect' && !(op.shape === 'cham' && (ch <= 0 || !op.corners.some(Boolean))));
         // clipHost: קצה הפלטה שליד המארח נחתך במישור פני המארח (זווית חיתוך בחלק — כמו בקוד הישן, ו-NC1 מקבל את זווית החיתוך)
         if (op.clipHost && s.host && !s.cross) {
-          const cut = { point: s.P, normal: scale(s.n, -1) };
+          const cut = { point: sub(s.P, scale(s.n, op.clipOff ? ev(op.clipOff, `${op.id}.clipOff`) : 0)), normal: scale(s.n, -1) };
           if (dot(sub(pm.start, s.P), s.n) <= dot(sub(pm.end, s.P), s.n)) pm.startCut = cut; else pm.endCut = cut;
         }
         if (op.clipHost && s.host && !s.cross) pm.partDesc = `${pm.partDesc ?? pm.label} (קצה חתוך בזווית)`;
@@ -584,7 +589,7 @@ function recipeSites(project: Project, connections: Connection[]): { assign: Rec
   const assign: Record<string, string> = {}, params: Record<string, Record<string, number>> = {};
   for (const c of connections) {
     if (!c.recipe) continue;
-    for (const end of ['start', 'end']) { const k = `${c.parts[0]}|${end}`; if (project.detailAssign?.[k]) continue; assign[k] = c.recipe.id; params[k] = c.recipe.params; }
+    for (const k of c.recipe.sites ?? ['start', 'end'].map((end) => `${c.parts[0]}|${end}`)) { if (project.detailAssign?.[k]) continue; assign[k] = c.recipe.id; params[k] = c.recipe.params; }
   }
   return { assign, params };
 }

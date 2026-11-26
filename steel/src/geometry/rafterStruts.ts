@@ -4,6 +4,7 @@ import type { BoltInfo, BuildingParams, Connection, Member, RafterStrutDetail, R
 import { finJoint } from './finJoint';
 import { zAt, type SectionTopology } from '../model/section';
 import { makeBolt } from './connections';
+import { STRUT_FIN_RECIPE_ID } from './convRecipes';
 
 export function defaultRafterStruts(): RafterStrutParams {
   return { rows: [], profile: 'RHS100x100x5', plateT: 10, bolt: { d: 16, grade: '8.8', standard: 'ISO 4017', clearance: 2 } };
@@ -125,7 +126,9 @@ export function buildRafterStruts(b: BuildingParams, topo: SectionTopology, prof
           bolts.push(makeBolt(`${cid}.B${i + 1}`, cid, at, scale(Y, sMax > sMin ? sMax : -sMin), rs.bolt, grip, 'site', [...parts, r.id], n, out.members));
         });
       }
-      out.connections.push({ id: cid, type: 'brace', label: `תמוכה בין קורות ${sl.label} — ${STRUT_DETAIL_HE[sl.detail]} (מסגרת ${fi + 1})`, members: [r.id, ...sides.map((q) => sid(q.bay))], parts: [...parts, ...bolts.map((x) => x.id)], bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: false });
+      out.connections.push({ id: cid, type: 'brace', label: `תמוכה בין קורות ${sl.label} — ${STRUT_DETAIL_HE[sl.detail]} (מסגרת ${fi + 1})`, members: [r.id, ...sides.map((q) => sid(q.bay))], parts: [...parts, ...bolts.map((x) => x.id)], bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: false,
+        ...(rs.finEngine === 'recipe' && sl.detail === 'fin' && ['RHS', 'SHS'].includes(sp.family) && ['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(tryProfile(profOf?.(r.id) ?? '')?.family ?? '')
+          ? { recipe: { id: STRUT_FIN_RECIPE_ID, params: { d: rs.bolt.d, nb: nBolts, ft: tp, tt: tp }, sites: sides.map((sd) => `${sid(sd.bay)}|${sd.k === 1 ? 'end' : 'start'}`) } } : {}) });
     }
     for (const bay of has) {
       const [A, B] = ends.get(bay) ?? [];

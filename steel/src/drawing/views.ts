@@ -15,6 +15,7 @@ import { assemblyLocations } from '../fab/location';
 import type { Bom } from '../fab/bom';
 import type { Fabrication, MarkedPart } from '../fab/marks';
 import { findDetail } from '../geometry/detail';
+import { BUILTIN_RECIPES } from '../geometry/convRecipes';
 import type { Connection, DerivedModel, DrawingRecord, DrawingType, Member, Project } from '../model/types';
 import { declutterDims, drawArea, fitScale, frameAndTitle, newSheet, today, View, type P, type Sheet, type SheetSize, type TitleInfo } from './sheet';
 
@@ -459,7 +460,9 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       const f = b.frames.find((x) => x.id === def.ref)!;
       const fi = b.frames.indexOf(f) + 1;
       const pr: Proj = (q) => ({ x: q.x, y: q.z });
-      const own = d.members.filter((m) => m.frameId === f.id || (m.connId && m.connId.split('.').includes(f.id) && m.kind !== 'cleat' && !m.connId.startsWith('C.PC')));
+      // חלקי מתכון מובנה (הסבה) שאין במזהה שלהם מסגרת (תמוכות בין קורות) שייכים למסגרת של המארח — כמו החלקים של הקוד הישן
+      const recipeFrame = new Map(d.connections.filter((c) => c.custom && BUILTIN_RECIPES[c.custom.detailId]).map((c) => [c.id, d.byId.get(c.members[0] ?? '')?.frameId]));
+      const own = d.members.filter((m) => m.frameId === f.id || (m.connId && (m.connId.split('.').includes(f.id) || recipeFrame.get(m.connId) === f.id) && m.kind !== 'cleat' && !m.connId.startsWith('C.PC')));
       const bx = boxOf(solidPts(own.filter((m) => m.kind !== 'anchor'), pr));
       bx.x0 -= 1800; bx.x1 += 1800; bx.y0 -= 1500; bx.y1 += 1200;
       const v = placeView(sh, bx, area); setScale(v);
