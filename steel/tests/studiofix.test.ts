@@ -92,3 +92,15 @@ describe('PARAM הפוך לפרמטר', () => {
     expect(r.values['P2.w']).toBe(300);
   });
 });
+
+describe('ANGLE זוויתן בסטודיו', () => {
+  it('ANGLE-01: פעולת זוויתן (כלי חדש) נבנית: פרופיל L, ללא שגיאות נוסחה', () => {
+    const s = site();
+    const det: CustomDetail = { ...blankDetail('x'), ops: [{ k: 'angle', id: 'L1', name: 'זוויתן', ref: { on: 'host', face: 'hit', along: '0', across: '0' }, H: '60', B: '60', t: '6', w: '100' }] };
+    const r = buildDetail(s, det);
+    expect(r.errors).toEqual({});
+    const a = r.members.find((m) => m.id.endsWith('.L1'));
+    expect(a).toBeTruthy();
+    expect(a!.profile).toMatch(/^L60x60x6/);
+  });
+});

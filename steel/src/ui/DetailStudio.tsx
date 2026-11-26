@@ -25,12 +25,12 @@ export function DetailStudio() {
   return <Studio key={key} siteKey={key} />;
 }
 
-type ToolId = 'plate:rect' | 'plate:tri' | 'plate:cham' | 'plate:round' | 'endplate' | 'cut' | 'slot' | 'vent' | 'holes' | 'bolts' | 'rod' | 'weld';
+type ToolId = 'plate:rect' | 'plate:tri' | 'plate:cham' | 'plate:round' | 'endplate' | 'cut' | 'slot' | 'vent' | 'holes' | 'bolts' | 'rod' | 'weld' | 'angle';
 const TOOLS: [string, [ToolId, string, string][]][] = [
   ['פחים', [['plate:rect', 'פלטה מלבנית', 'rect'], ['plate:tri', 'גוסט משולש', 'tri'], ['plate:cham', 'פלטה עם קיטום', 'cham'], ['plate:round', 'פלטה עגולה', 'round']]],
   ['פלטות חכמות', [['endplate', 'פלטת קצה (ניצבת לאלמנט)', 'endplate']]],
   ['חיתוכים', [['cut', 'חיתוך במישור', 'cut'], ['slot', 'חריץ בפרופיל', 'slot'], ['vent', 'חורי אוורור', 'vent']]],
-  ['מחברים', [['holes', 'חורים לברגים', 'holes'], ['bolts', 'ברגים', 'bolts'], ['rod', 'מוט הברגה', 'rod']]],
+  ['מחברים', [['holes', 'חורים לברגים', 'holes'], ['bolts', 'ברגים', 'bolts'], ['rod', 'מוט הברגה', 'rod'], ['angle', 'זוויתן L', 'angle']]],
   ['ריתוך', [['weld', 'ריתוך (מסגריה)', 'weld']]],
 ];
 const TOOL_ICON: Record<string, ReactNode> = {
@@ -38,11 +38,11 @@ const TOOL_ICON: Record<string, ReactNode> = {
   endplate: <><rect x="4" y="4" width="5" height="18" /><path d="M9 9h13M9 17h13" /></>, cut: <><path d="M4 22L22 4" strokeDasharray="3 2" /><path d="M8 18l10-10" /></>,
   slot: <><rect x="4" y="8" width="18" height="10" /><path d="M4 13h9" strokeWidth="3" /></>, vent: <><rect x="4" y="7" width="18" height="12" /><circle cx="10" cy="13" r="2" /><circle cx="16" cy="13" r="2" /></>,
   holes: <><rect x="4" y="5" width="18" height="16" /><circle cx="9" cy="13" r="2.4" /><circle cx="17" cy="13" r="2.4" /></>, bolts: <><path d="M13 3v20" /><path d="M9 3h8v4H9zM9 17h8v3H9z" /></>,
-  rod: <path d="M13 2v22M10 6l6 2M10 10l6 2M10 14l6 2M10 18l6 2" />, weld: <><path d="M4 20h18M4 20V6" /><path d="M4 20l6-6v6z" fill="currentColor" /></>,
+  rod: <path d="M13 2v22M10 6l6 2M10 10l6 2M10 14l6 2M10 18l6 2" />, angle: <path d="M7 4v18h16v-5H12V4z" />, weld: <><path d="M4 20h18M4 20V6" /><path d="M4 20l6-6v6z" fill="currentColor" /></>,
 };
 const HINT: Record<string, string> = {
   plate: 'על כל פנים: האלמנט, המארח או פלטה', endplate: 'על האלמנט — נצמדת לקצה', cut: 'על האלמנט — במקום החיתוך', slot: 'על האלמנט', vent: 'על האלמנט',
-  holes: 'על פלטה', bolts: 'על פלטה (חורים נוספים אוטומטית)', rod: 'על כל פנים', weld: 'על פלטה — מרותכת למה שהיא יושבת עליו',
+  holes: 'על פלטה', bolts: 'על פלטה (חורים נוספים אוטומטית)', rod: 'על כל פנים', angle: 'על כל פנים: האלמנט, המארח או פלטה', weld: 'על פלטה — מרותכת למה שהיא יושבת עליו',
 };
 const OPNAME: Record<DetailOp['k'], string> = { plate: 'פלטה', endplate: 'פלטת קצה', cut: 'חיתוך', shift: 'הסטת קצה', slot: 'חריץ', vent: 'אוורור', holes: 'חורים', bolts: 'ברגים', rod: 'מוט הברגה', weld: 'ריתוך', angle: 'זוויתן' };
 const PREFIX: Record<DetailOp['k'], string> = { plate: 'P', endplate: 'E', cut: 'C', shift: 'M', slot: 'S', vent: 'V', holes: 'H', bolts: 'B', rod: 'R', weld: 'W', angle: 'L' };
@@ -200,6 +200,8 @@ function Studio({ siteKey: key }: { siteKey: string }) {
       const bid = nextId('bolts');
       ops.push({ k: 'bolts', id: bid, holes: h.id, d: 'd', grade: '8.8', site: true });
       setDet((d) => ({ ...d, ops: [...d.ops, ...ops] })); setSel(bid);
+    } else if (tool === 'angle') {
+      addOp({ k: 'angle', id: nextId('angle'), name: 'זוויתן', ref, H: '60', B: '60', t: '6', w: '100' });
     } else if (tool === 'rod') {
       addOp({ k: 'rod', id: nextId('rod'), ref, d: '20', L: '200' });
     } else if (tool === 'weld') {
@@ -303,7 +305,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
           <ParamsCard det={det} res={res} setDet={setDet} />
           <section className="ss-card"><h4>בדיקות</h4>
             <ul className="ss-checks" data-testid="ds-checks">
-              {res.issues.filter((i) => i.severity !== 'info').map((i, k) => <li key={k} className={i.severity}>{i.message.replace(/^פרט [^:]*: /, '')}{i.studioFix && <> <button className="btn small" data-testid="ds-fix" onClick={() => { const f = i.studioFix!; const r = growPlate(det, f.op, f.field, f.add); if ('error' in r) setMsg(r.error); else { setDet(() => r.det); setSel(r.sel); setMsg(''); } }}>תקן: {i.studioFix.label}</button></>}</li>)}
+              {res.issues.filter((i) => i.severity !== 'info').map((i, k) => <li key={k} className={i.severity}>{i.message.replace(/^פרט [^:]*: /, '')}{i.code === 'CD_BOLT' && <span className="hint" data-testid="ds-hint-bolt"> ← הפלטות כנראה לא נפגשות: "פלטה זהה מעליה" או "הצמד את קצה האלמנט אליה" בפלטה שנבחרה.</span>}{i.studioFix && <> <button className="btn small" data-testid="ds-fix" onClick={() => { const f = i.studioFix!; const r = growPlate(det, f.op, f.field, f.add); if ('error' in r) setMsg(r.error); else { setDet(() => r.det); setSel(r.sel); setMsg(''); } }}>תקן: {i.studioFix.label}</button></>}</li>)}
               {!res.issues.some((i) => i.severity !== 'info') && <li className="ok">אין התנגשויות ואין שגיאות. {res.conn.bolts.length ? `${res.conn.bolts.length} ברגים · ` : ''}{res.conn.welds.filter((w) => w.location === 'shop').length} ריתוכי מסגריה</li>}
             </ul>
           </section>
@@ -403,7 +405,7 @@ function EF({ label, value, onChange, vkey, res, hint, testId, onParam }: { labe
 
 function OpProps({ op, det, res, patch, mate }: { op: DetailOp; det: CustomDetail; res: DetailResult; patch: (p: Record<string, unknown>) => void; mate: (fn: (d: CustomDetail) => MateResult) => void }) {
   const k = (f: string) => `${op.id}.${f}`;
-  const plates = det.ops.filter((o) => o.k === 'plate' || o.k === 'endplate').map((o) => o.id);
+  const plates = det.ops.filter((o) => o.k === 'plate' || o.k === 'endplate' || o.k === 'angle').map((o) => o.id);
   const refEditor = (ref: DetailRef) => (
     <>
       <label className="ef"><span className="ef-l">יושב על</span>
@@ -466,6 +468,13 @@ function OpProps({ op, det, res, patch, mate }: { op: DetailOp; det: CustomDetai
         <label className="ef"><span className="ef-l">דרגה</span><select className="inp" value={op.grade} onChange={(e) => patch({ grade: e.target.value })}><option>8.8</option><option>10.9</option><option>5.6</option></select></label>
         <div className="ss-row"><button className={`btn small${op.site ? ' on' : ''}`} onClick={() => patch({ site: true })}>הרכבה בשטח</button><button className={`btn small${!op.site ? ' on' : ''}`} onClick={() => patch({ site: false })}>מסגריה</button></div>
         <Help>אורך הבורג והחורים בכל החלקים שהוא עובר בהם — אוטומטי. {res.conn.bolts.filter((b) => b.id.includes(`.${op.id}.`)).slice(0, 1).map((b) => `M${b.d}×${b.length}, אחיזה ${b.grip}`).join('')}</Help>
+      </>}
+      {op.k === 'angle' && <>
+        <EF label="רגל מוברגת H" value={op.H} onChange={(v) => patch({ H: v })} vkey={k('H')} res={res} testId={`ds-${op.id}-H`} hint="הרגל הצמודה לפנים — לאורך e1 של הפנים" />
+        <EF label="רגל בסיס B" value={op.B} onChange={(v) => patch({ B: v })} vkey={k('B')} res={res} testId={`ds-${op.id}-B`} />
+        <EF label="עובי t" value={op.t} onChange={(v) => patch({ t: v })} vkey={k('t')} res={res} testId={`ds-${op.id}-t`} />
+        <EF label="אורך w" value={op.w} onChange={(v) => patch({ w: v })} vkey={k('w')} res={res} testId={`ds-${op.id}-w`} />
+        {refEditor(op.ref)}
       </>}
       {op.k === 'rod' && <><EF label="קוטר" value={op.d} onChange={(v) => patch({ d: v })} vkey={k('d')} res={res} /><EF label="אורך" value={op.L} onChange={(v) => patch({ L: v })} vkey={k('L')} res={res} />{refEditor(op.ref)}</>}
       {op.k === 'weld' && <>

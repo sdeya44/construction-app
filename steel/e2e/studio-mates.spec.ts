@@ -50,3 +50,17 @@ test('FIX-E1: סטודיו — אזהרת מרחק שפה עם כפתור "תק�
   await shot(page, 'FIX_E1');
   expect(errors).toEqual([]);
 });
+
+test('ANGLE-E1: סטודיו — כלי זוויתן: נוסף בלחיצה על המארח ונערך', async ({ page }) => {
+  const errors = await boot(page);
+  await openNav(page, 'b:knee'); await page.getByTestId('kb-on').check();
+  await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
+  await page.getByTestId('ks-sec-conn').click(); await page.getByTestId('ks-sec-conn').click(); await page.getByTestId('cb-lib').click(); await page.getByTestId('studio-start').click();
+  const site = await page.evaluate(() => { const S = (window as any).__kspStudio; return S.screenOf(S.site()); });
+  await page.getByTestId('ds-tool-angle').click(); await page.mouse.click(site.x - 25, site.y + 40);
+  await expect(page.getByTestId('ds-op-L1')).toBeVisible();
+  await page.getByTestId('ds-L1-H').fill('80'); await page.getByTestId('ds-L1-H').press('Enter');
+  await expect(page.getByTestId('ds-L1-H')).toHaveValue('80');
+  await shot(page, 'ANGLE_E1');
+  expect(errors).toEqual([]);
+});
