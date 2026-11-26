@@ -1493,3 +1493,19 @@ span.step-done-b { color: #1f7a45; font-size: 12px; font-weight: 600; }
 .dim-svg .sd-stk circle { fill: #b58f00; stroke: #fff; stroke-width: 1; }
 .dim-svg .sd-stk line { stroke: #b58f00; stroke-width: 1; stroke-dasharray: 2 2; }
 .dim-svg .sd-stk.hot circle { fill: #e8761c; }
+
+/* כרטיסי חתך בסטודיו: שרטוט חתך האלמנט והמארח עם שם המשתנה והערך על כל מידה — תמיד נראה, בלי תלות במצלמה */
+.ssc-cards { position: absolute; inset-block-end: 44px; inset-inline-start: 10px; z-index: 3; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; max-width: calc(100% - 20px); }
+.ssc-row { display: flex; gap: 8px; }
+.ssc-card { background: rgba(255,255,255,.95); border: 1px solid var(--line, #cfd6dd); border-radius: 10px; padding: 6px 8px 8px; width: 190px; box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+.ssc-card h5 { margin: 0 0 2px; font-size: 12px; display: flex; justify-content: space-between; gap: 6px; }
+.ssc-card svg { width: 100%; height: auto; display: block; }
+.ssc-lab line { stroke: #b58f00; stroke-width: 1; stroke-dasharray: 2 2; }
+.ssc-lab circle { fill: #b58f00; }
+.ssc-lab rect { fill: #fff3b0; stroke: #d9b800; stroke-width: .8; }
+.ssc-lab text { font-size: 9px; font-weight: 700; fill: #4a3b00; font-family: inherit; }
+.ssc-lab:hover rect { fill: #ffd24a; }
+.ssc-legend { list-style: none; margin: 4px 0 0; padding: 0; font-size: 11px; color: var(--muted, #566674); display: grid; gap: 1px; }
+.ssc-legend code { background: #fff3b0; color: #4a3b00; border-radius: 3px; padding: 0 3px; font-weight: 700; }
+.ssc-legend b { color: #14202b; }
+@media (max-width: 900px) { .ssc-row { flex-direction: column; } }

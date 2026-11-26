@@ -11,6 +11,7 @@ import { assignDetail, saveDetail } from '../commands/commands';
 import type { CustomDetail, DetailOp, DetailParam, DetailRef, Member } from '../model/types';
 import { store, useStore } from '../store';
 import { tryProfile } from '../profiles/library';
+import { SectionCards } from './SectionCards';
 import { Icon } from './icons';
 import { PlateWizard } from './PlateWizard';
 
@@ -312,6 +313,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
           <Viewer res={res} site={site} others={others} sel={sel} armed={armed} onSelect={setSel} onPlace={(h) => { if (armed && place(armed, h)) setArmed(null); }} onMove={moveSel}
             tags={showDims || fx ? (() => { const base = dimMode === 'stick' && stickTags.length ? stickTags : tags; return sel && !fx ? base.filter((t) => t.grp === sel || t.grp === 'site') : base; })() : []} tagLabel={(k) => `${varLabel(k, det)} = ${fmt(res.values[k])}`} onTag={onTag} pickMode={!!fx} />
           <button className={`btn small studio-dims${showDims ? ' on' : ''}`} onClick={() => setShowDims(!showDims)} data-testid="ds-dims">שמות מידות</button>
+          {!site.cross && <SectionCards mainProfile={main.profile} hostProfile={site.host?.profile} values={res.values} det={det} onTag={onTag} />}
           <button className={`btn small studio-dims2${dimMode === 'stick' ? ' on' : ''}`} onClick={() => setDimMode(dimMode === 'stick' ? 'lines' : 'stick')} data-testid="ds-dimmode" title="פתקיות על הדפנות / קווי מידה">{dimMode === 'stick' ? 'פתקיות על דפנות' : 'קווי מידה'}</button>
           <div className="studio-status" data-testid="ds-status">{msg || (fx ? 'בונה נוסחה: לחצו על תגית מידה בשרטוט כדי להוסיף אותה לנוסחה' : armed ? `כלי: ${TOOLS.flatMap((x) => x[1]).find((t) => t[0] === armed)?.[1]} — ${HINT[armed.split(':')[0]]} · לחיצה = הנחה, גרירה = סיבוב · Esc לביטול` : 'גררו כלי מהמחסן אל המודל, או לחצו על כלי ואז על המודל. גרירה על הרקע = סיבוב, גלגלת = זום')}</div>
           {preview !== key && <div className="studio-preview">תצוגה על קצה אחר: {base.byId.get(pKey.id)?.label} <button className="btn small" onClick={() => setPreview(key)}>חזרה</button></div>}

@@ -93,3 +93,26 @@ test('STK-E1: סטודיו — פתקיות מידה על דפנות (ברירת
   expect(await page.locator('button.dim-tag.sticker:visible').count()).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test('SEC-E1: סטודיו — כרטיסי חתך עם שם המשתנה והערך על כל מידה (תמיד נראים), לחיצה על תגית, וקיפול', async ({ page }) => {
+  const errors = await boot(page);
+  await openNav(page, 'b:knee'); await page.getByTestId('kb-on').check();
+  await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
+  await page.getByTestId('ks-sec-conn').click(); await page.getByTestId('ks-sec-conn').click(); await page.getByTestId('cb-lib').click(); await page.getByTestId('studio-start').click();
+  await expect(page.getByTestId('sec-cards')).toBeVisible();
+  const main = page.getByTestId('sec-card-main'), host = page.getByTestId('sec-card-host');
+  await expect(main).toContainText('RHS80x80x4');
+  for (const k of ['mb', 'mh', 'mt']) await expect(main).toContainText(k);
+  await expect(main).toContainText('80'); await expect(main).toContainText('4');
+  for (const k of ['hb', 'hh', 'htf', 'htw']) await expect(host).toContainText(k);
+  await expect(host).toContainText('200'); // HEA200: רוחב 200
+  // מקרא בעברית לכל משתנה
+  await expect(main).toContainText('רוחב חתך האלמנט');
+  await expect(host).toContainText('עובי אגף המארח');
+  await page.getByTestId('sec-tag-m-mb').click();
+  await expect(page.getByTestId('ds-status')).toContainText('mb');
+  await shot(page, 'SEC_E1');
+  await page.getByTestId('sec-toggle').click();
+  await expect(page.getByTestId('sec-card-main')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
