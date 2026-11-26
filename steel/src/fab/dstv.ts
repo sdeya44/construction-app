@@ -38,6 +38,8 @@ export function partToNc1(p: MarkedPart, project: Project, d: DerivedModel, qty:
     `  ${f2(p.length)}`, `  ${f2(p.length)}`, `  ${f2(isPlate ? b : h)}`, `  ${f2(isPlate ? h : b)}`, `  ${f2(tf)}`, `  ${f2(tw)}`, `  ${f2(r)}`,
     `  ${f2(kgm)}`, `  ${f2(per)}`, `  ${f2(p.cutStart)}`, `  ${f2(p.cutEnd)}`, `  ${f2(0)}`, `  ${f2(0)}`,
     `  ${p.desc.replace(/[^\x20-\x7E]/g, '').trim() || '-'}`, '  -', '  -', '  -'];
+  // חריצי קצה ב-RHS (G12): נעשים ידנית, לא בלייזר — לכן שורות הערה בלבד (`**` — המכונה מתעלמת), ללא קונטור AK. v/h = פאה שהרוחב נמדד עליה
+  for (const sl of p.slots) lines.push(`** SLOT ${sl.view === 'u' ? 'width-u' : 'width-v'} w=${sl.w.toFixed(1)} depth=${Math.abs(sl.t1 - sl.t0).toFixed(1)} mouth-x=${sl.t0.toFixed(1)} to-x=${sl.t1.toFixed(1)} c=${sl.c.toFixed(1)}`);
   if (p.holes.length) {
     lines.push('BO');
     const mid = (vmin + vmax) / 2;

@@ -71,7 +71,7 @@ export function kneeFinRecipe(desc = 'אלכסון', id = KNEE_FIN_RECIPE_ID): C
     ops: [
       { k: 'shift', id: 'M1', by: 'by' },
       { k: 'cut', id: 'C1', kind: 'perp', at: 'sEnd' },
-      { k: 'slot', id: 'S1', L: 'ins + 10', w: 'tt + 2', dir: 'a' },
+      { k: 'slot', id: 'S1', L: 'sTip + tongueL - sEnd + 2', w: 'tt + 1', dir: 'a' },
       { k: 'plate', id: 'F1', name: `פח חיבור ${desc}`, ref: R('main', 'axis', 's0 + finL/2'), mode: 'flat', spin: '-90', off: '-sd*ft/2', shape: 'rect', w: 'finL', h: 'wt', t: 'ft', ch: '0', corners: [false, false, false, false], clipHost: true },
       { k: 'plate', id: 'T1', name: `לשונית ${desc}`, ref: R('main', 'axis', 'sTip + tongueL/2'), mode: 'flat', spin: '-90', off: 'sd*ft/2', shape: 'rect', w: 'tongueL', h: 'wt', t: 'tt', ch: '0', corners: [false, false, false, false] },
       { k: 'holes', id: 'H1', ref: R('main', 'axis-', 'sTip + edge + (rows-1)*pitch/2'), rows: 'rows', cols: 'across', px: 'hs*gauge', py: 'pitch', d0: 'd0', rev: '(1 - sd)/2' },
@@ -97,7 +97,7 @@ export function strutFinRecipe(): CustomDetail {
     match: { member: ['RHS', 'SHS'], host: ['IPE', 'HEA', 'HEB', 'HEM', 'INP'] },
     ops: [
       { k: 'cut', id: 'C1', kind: 'perp', at: 'sEnd - wd' },
-      { k: 'slot', id: 'S1', L: 'ins + 10', w: 'tt + 2', dir: 'w' },
+      { k: 'slot', id: 'S1', L: 'sTip + tongueL - sEnd + 2', w: 'tt + 1', dir: 'w' },
       { k: 'plate', id: 'F1', name: 'פח חיבור תמוכה בין קורות', ref: R('main', 'axisA', 's0 + finL/2 - wd'), mode: 'flat', spin: '-90', off: '-(ft+tt)/2 - ft/2', shape: 'rect', w: 'finL', h: 'wt', t: 'ft', ch: '0', corners: [false, false, false, false], clipHost: true, clipOff: 'wd' },
       { k: 'plate', id: 'T1', name: 'לשונית תמוכה בין קורות', ref: R('main', 'axisA', 'sTip + tongueL/2 - wd'), mode: 'flat', spin: '-90', off: '-tt/2', shape: 'rect', w: 'tongueL', h: 'wt', t: 'tt', ch: '0', corners: [false, false, false, false] },
       { k: 'holes', id: 'H1', ref: R('main', 'axisA-', 'sTip + edge + (rows-1)*pitch/2 - wd'), rows: 'rows', cols: 'across', px: 'gauge', py: 'pitch', d0: 'd0' },

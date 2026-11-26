@@ -323,7 +323,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
     for (const k of ['w', 'h', 't'] as const) { const r = tryExpr((op as Record<string, unknown>)[k] as string, vals, NaN); if (!r.err) vals[`${op.id}.${k}`] = r.v; }
     if (op.k === 'plate' && op.shape === 'round') vals[`${op.id}.h`] = vals[`${op.id}.w`];
   }
-  const members: Member[] = [], bolts: BoltInfo[] = [], welds: WeldInfo[] = [], vents: NonNullable<Connection['vents']> = [];
+  const members: Member[] = [], bolts: BoltInfo[] = [], welds: WeldInfo[] = [], vents: NonNullable<Connection['vents']> = [], slotCuts: NonNullable<Connection['slots']> = [];
   let connHoles: Connection['holes'];
   const plates = new Map<string, PlateGeom>();
   // חיתוך: ברירת מחדל — מקביל לפני המארח, בפנים
@@ -594,6 +594,8 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         if (tgt) welds.push({ id: `${id}.W`, connId: cid, type: 'fillet', a: 4, length: Math.round(Math.PI * d), location: 'shop', between: [id, tgt], from: o, to: o });
       } else if (op.k === 'slot') {
         vals[`${op.id}.L`] = ev(op.L, `${op.id}.L`, 100); vals[`${op.id}.w`] = ev(op.w, `${op.id}.w`, 12);
+        // G12: החריץ נרשם כנתון ייצור על האלמנט (פתח בקצה החתוך, עומק פנימה לאורך הציר). `dir` = כיוון מישור הלשונית, ולכן הרוחב ניצב לו: dir 'a' ⇒ רוחב לאורך w, dir 'w' ⇒ לאורך a; באתר רציף אין קצה
+        if (!planar) slotCuts.push({ memberId: s.main.id, p: endPt, axis: s.u, nrm: op.dir === 'w' ? s.a : s.w, L: vals[`${op.id}.L`], w: vals[`${op.id}.w`] });
       }
     } catch (e) { errors[op.id] = (e as Error).message; }
   }
@@ -639,7 +641,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
   const conn: Connection = {
     id: cid, type: 'custom', label: `${det.name} — ${s.main.label} (${s.mid ? `חיבור המשך ${(s.mid.t / 1000).toFixed(3)} מ'` : s.cross ? `תושבת ${s.host?.label ?? ''}` : s.end === 'start' ? 'התחלה' : 'סוף'})`,
     members: [...(s.host ? [s.host.id] : []), s.main.id, ...(s.mid?.partner ? [s.mid.partner] : [])], parts: [...members.filter((m) => !(m.kind === 'bolt')).map((m) => m.id), ...bolts.map((b) => b.id)],
-    bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: true, vents: vents.length ? vents : undefined, ...(connHoles ? { holes: connHoles } : {}), custom: { detailId: det.id, site: s.key },
+    bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: true, vents: vents.length ? vents : undefined, ...(slotCuts.length ? { slots: slotCuts } : {}), ...(connHoles ? { holes: connHoles } : {}), custom: { detailId: det.id, site: s.key },
   };
   return { site: s, main, members, conn, issues, values: vals, errors, plates, frame, sEnd };
 }

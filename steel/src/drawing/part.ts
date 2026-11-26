@@ -102,29 +102,12 @@ export function partSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: st
     const edgeT = (ring: { t: number; v: number }[], vv: number) => { const pts = ring.filter((q) => Math.abs(q.v - vv) < 0.5); return pts.length ? pts.reduce((a2, q) => a2 + q.t, 0) / pts.length : null; };
     const sTop = edgeT(ring0, vmax) ?? 0, sBot = edgeT(ring0, vmin) ?? 0, eTop = edgeT(ring1, vmax) ?? L, eBot = edgeT(ring1, vmin) ?? L;
     const sloped = Math.abs(sTop - sBot) > 0.5 || Math.abs(eTop - eBot) > 0.5;
-    // חריצים לפח/לשונית שנכנסים לתוך הפרופיל (אלכסון RHS עם פח בחריץ): רוחב = עובי הפח + 1, עומק = אורך הכניסה + 2
-    type Slot = { view: 'u' | 'v'; t0: number; t1: number; w0: number; w1: number; thk: number; ins: number };
-    const slots: Slot[] = [];
-    {
-      const fam = getProfile(m.profile).family;
-      const conns = m.kind === 'brace' && ['RHS', 'SHS', 'CHS'].includes(fam) ? d.connections.filter((c) => c.parts.includes(m.id) || c.members.includes(m.id)) : [];
-      const pids = new Set(conns.flatMap((c) => c.parts));
-      for (const pm of d.members.filter((x) => x.kind === 'plate' && pids.has(x.id))) {
-        const q = [...cachedSolidPure(pm).startRing, ...cachedSolidPure(pm).endRing].map(loc);
-        const t0 = Math.max(0, Math.min(...q.map((x) => x.t))), t1 = Math.min(L, Math.max(...q.map((x) => x.t)));
-        if (t1 - t0 < 5) continue;
-        const u0 = Math.min(...q.map((x) => x.u)), u1 = Math.max(...q.map((x) => x.u)), v0 = Math.min(...q.map((x) => x.v)), v1 = Math.max(...q.map((x) => x.v));
-        const eu = u1 - u0, ev = v1 - v0;
-        // הפח חוצה את הפרופיל לרוחב (דרך שני הדפנות) — אחרת זה לא חריץ
-        const touchesEnd = t0 < 1 || t1 > L - 1;
-        if (!touchesEnd) continue;
-        if (ev >= hv - 1 && eu < hu / 2 && u0 > umin + 1 && u1 < umax - 1) slots.push({ view: 'u', t0, t1, w0: u0, w1: u1, thk: eu, ins: t1 - t0 });
-        else if (eu >= hu - 1 && ev < hv / 2 && v0 > vmin + 1 && v1 < vmax - 1) slots.push({ view: 'v', t0, t1, w0: v0, w1: v1, thk: ev, ins: t1 - t0 });
-      }
-    }
+    // חריצים לפח/לשונית בקצה הפרופיל החלול: מנתוני המודל (`Connection.slots` ⇒ `part.slots`), לא מהיוריסטיקה על פלטות
+    type Slot = { view: 'u' | 'v'; mouth: number; tIn: number; wc: number; w: number };
+    const slots: Slot[] = part.slots.map((x) => ({ view: x.view, mouth: Math.max(0, Math.min(L, x.t0)), tIn: Math.max(0, Math.min(L, x.t1)), wc: x.c, w: x.w }));
     const sY = (w: number) => fitScale(1, w, 1e9, Math.min(70, avH));
     let sc = sY(hv + hu);
-    const pois = [0, L, ...part.holes.map((h) => h.t), ...slots.flatMap((x) => [x.t0, x.t1]), sTop, sBot, eTop, eBot].filter((t) => t >= -1 && t <= L + 1);
+    const pois = [0, L, ...part.holes.map((h) => h.t), ...slots.flatMap((x) => [x.mouth, x.tIn]), sTop, sBot, eTop, eBot].filter((t) => t >= -1 && t <= L + 1);
     const GAP = 10;
     const zonesFor = (scl: number): [number, number][] => {
       const e = Math.max(60, 14 * scl, 1.1 * Math.max(hu, hv));
@@ -199,10 +182,9 @@ export function partSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: st
       if (h.face === 'web') holeCircle(PF(h.t, h.c), h.d, sc, h.slot);
       if (h.face === 'flange') holeCircle(PT(h.t, h.c), h.d, sc, h.slot);
     }
-    // חריצים: מלבן ברוחב עובי+1 ובעומק הכניסה+2, עם מידות ותווית
+    // חריצים: מלבן ברוחב ובעומק מהמודל, עם מידות ותווית
     for (const sl of slots) {
-      const w = sl.thk + 1, wc = (sl.w0 + sl.w1) / 2, atStart = sl.t0 < 1;
-      const tIn = atStart ? Math.min(L, sl.t1 + 2) : Math.max(0, sl.t0 - 2), tOut = atStart ? 0 : L;
+      const w = sl.w, wc = sl.wc, tOut = sl.mouth, tIn = sl.tIn, atStart = tIn > tOut;
       const P = (t: number, ww: number) => (sl.view === 'u' ? PT(t, ww) : PF(t, ww));
       const pts = [P(tOut, wc - w / 2), P(tIn, wc - w / 2), P(tIn, wc + w / 2), P(tOut, wc + w / 2)];
       E.push({ k: 'poly', pts, closed: false, layer: 'OUTLINE' });
@@ -210,9 +192,9 @@ export function partSheet(sh: Sheet, fab: Fabrication, d: DerivedModel, mark: st
       dimH(Math.min(P(tOut, 0).x, P(tIn, 0).x), Math.max(P(tOut, 0).x, P(tIn, 0).x), yd, String(Math.round(Math.abs(tIn - tOut))));
       const lp = P((tOut + tIn) / 2, wc);
       line(lp, { x: lp.x + (atStart ? 6 : -6), y: yd + 6 }, 'DIM');
-      text({ x: lp.x + (atStart ? 6.5 : -6.5), y: yd + 6.4 }, `חריץ ${Math.round(w * 10) / 10}×${Math.round(Math.abs(tIn - tOut))} (פח ${Math.round(sl.thk)}+1)`, 2.2, atStart ? 'left' : 'right', 'DIM');
+      text({ x: lp.x + (atStart ? 6.5 : -6.5), y: yd + 6.4 }, `חריץ ${Math.round(w * 10) / 10}×${Math.round(Math.abs(tIn - tOut))}`, 2.2, atStart ? 'left' : 'right', 'DIM');
     }
-    if (slots.length) rows.push(`חריצים: ${[...new Set(slots.map((x) => `${Math.round((x.thk + 1) * 10) / 10}×${Math.round(x.ins + 2)}`))].join(', ')} מ"מ (רוחב × עומק) — ${slots.length} יח'`);
+    if (slots.length) rows.push(`חריצים: ${[...new Set(slots.map((x) => `${Math.round(x.w * 10) / 10}×${Math.round(Math.abs(x.tIn - x.mouth))}`))].join(', ')} מ"מ (רוחב × עומק) — ${slots.length} יח'`);
     // קצה בשיפוע: אורך בשני הצדדים, בציר, והיסט החיתוך + זווית בכל קצה
     if (sloped) {
       dimH(PF(Math.max(0, sTop), 0).x, PF(Math.min(L, eTop), 0).x, PF(0, vmax).y + 7, `${Math.round(Math.min(L, eTop) - Math.max(0, sTop))} (צד עליון)`);

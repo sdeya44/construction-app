@@ -3,7 +3,7 @@ import type { BoltInfo, Connection, KneeBraceParams, Member, Project, Validation
 import { zAt, type SectionTopology } from '../model/section';
 import { getProfile, tryProfile } from '../profiles/library';
 import { hw, makeBolt } from './connections';
-import { angleFin, finJoint } from './finJoint';
+import { angleFin, finJoint, slotsOf } from './finJoint';
 import { trussFrames } from './truss';
 import { KNEE_FIN_RECIPE_ID } from './convRecipes';
 
@@ -136,7 +136,7 @@ export function buildKneeBraces(project: Project, topo: SectionTopology, byId: M
             rollDeg: 0, mirror: false, anchor: 'center', refUp: Y, source: 'generated', manualPlacement: false, connId: id, partDesc: `אלכסון ${kq.profile}`,
           }, ...jc.members, ...jr.members);
           out.issues.push(...jc.issues, ...jr.issues);
-          out.connections.push({ id, type: 'knee', label: `אלכסון עמוד-קורה ציר ${jn.line.label} (${s < 0 ? 'שמאל' : 'ימין'}) מסגרת ${fi}`, members: [col.id, raf.id], parts: [bid, ...jc.parts, ...jr.parts], bolts: [...jc.bolts, ...jr.bolts], welds: [...jc.welds, ...jr.welds], status: 'not-verified', fixity: 'pinned', overridden: false,
+          out.connections.push({ id, type: 'knee', label: `אלכסון עמוד-קורה ציר ${jn.line.label} (${s < 0 ? 'שמאל' : 'ימין'}) מסגרת ${fi}`, members: [col.id, raf.id], parts: [bid, ...jc.parts, ...jr.parts], bolts: [...jc.bolts, ...jr.bolts], welds: [...jc.welds, ...jr.welds], ...slotsOf(jc, jr), status: 'not-verified', fixity: 'pinned', overridden: false,
             ...(kb.finEngine === 'recipe' && HOLLOW_FAM.includes(profK.family) ? { recipe: { id: KNEE_FIN_RECIPE_ID, params: { d: kq.bolt.d, nb: kq.boltsPerEnd ?? 2, ft: kq.plateT, tt: kq.plateT } } } : {}) });
           continue;
         }

@@ -9,6 +9,9 @@ import type { DerivedModel, FabPart, Member, MemberKind, Project } from '../mode
 /** חור בחלק: מיקום לאורך החלק (מתחילת החלק), קואורדינטה רוחבית על הפאה, קוטר, והפאה (ווב/אגף). */
 export interface Hole { t: number; c: number; c2?: number; d: number; face: 'web' | 'flange' | 'section'; boltId: string; /** חור אובלי: אורך כולל לאורך ציר החלק */ slot?: number }
 
+/** חריץ בקצה חלק פרופיל חלול (G12), בקואורדינטות החלק: פתח ב-t0, תחתית ב-t1, מרכז הרוחב c על ציר `view` ('u'/'v'), רוחב w. נתון ייצור — לא קונטור ב-NC1. */
+export interface PartSlot { view: 'u' | 'v'; t0: number; t1: number; c: number; w: number }
+
 export interface MarkedPart extends FabPart {
   mark: string;
   provisional: boolean;
@@ -16,6 +19,7 @@ export interface MarkedPart extends FabPart {
   desc: string;
   weight: number;   // ק"ג
   holes: Hole[];
+  slots: PartSlot[];
   /** זוויות חיתוך קצה (מעלות מהניצב) */
   cutStart: number;
   cutEnd: number;
@@ -122,6 +126,21 @@ export function ventHoles(m: Member, d: DerivedModel): VentHole[] {
   return out;
 }
 
+/** חריצי קצה באלמנט (`Connection.slots`), בקואורדינטות האלמנט (t מתחילת האלמנט). */
+export function memberSlots(m: Member, d: DerivedModel): PartSlot[] {
+  const f = localFrame(m);
+  const out: PartSlot[] = [];
+  for (const c of d.connections) for (const sl of c.slots ?? []) {
+    if (sl.memberId !== m.id) continue;
+    const r = sub(sl.p, m.start), dt = dot(sl.axis, f.ex);
+    if (Math.abs(dt) < 0.9) continue; // החריץ אינו לאורך הציר
+    const view: 'u' | 'v' = Math.abs(dot(sl.nrm, f.u)) >= Math.abs(dot(sl.nrm, f.v)) ? 'u' : 'v';
+    const t0 = dot(r, f.ex);
+    out.push({ view, t0, t1: t0 + Math.sign(dt) * sl.L, c: view === 'u' ? dot(r, f.u) : dot(r, f.v), w: sl.w });
+  }
+  return out.sort((a, b) => a.t0 - b.t0 || a.c - b.c);
+}
+
 /** חורים באלמנט מכל הברגים שעוברים בו. */
 export function memberHoles(m: Member, d: DerivedModel): Hole[] {
   const out: Hole[] = [];
@@ -159,22 +178,25 @@ export function computeFabrication(project: Project, d: DerivedModel): Fabricati
     const pr = getProfile(p.profile);
     const first = p.index === 1, last = p.t1 >= axialExtent(m).tMax - 0.01;
     const holes = memberHoles(m, d).filter((h) => h.t >= p.t0 - 0.01 && h.t <= p.t1 + 0.01).map((h) => ({ ...h, t: h.t - p.t0 }));
+    const slots = memberSlots(m, d).filter((x) => x.t0 >= p.t0 - 0.5 && x.t0 <= p.t1 + 0.5).map((x) => ({ ...x, t0: x.t0 - p.t0, t1: x.t1 - p.t0 }));
     const cutStart = first ? cutAngle(m, 'start') : 0, cutEnd = last ? cutAngle(m, 'end') : 0;
     // חתימה: חורים באגף/ווב — מיקום לאורך ורוחב בלבד (c2 = צד ראש הבורג, לא משנה ייצור); חלק הפוך קצה-לקצה זהה
     const hs = (rev: boolean) => holes.map((h) => h.face === 'section' ? `${h.face}${r1(h.t)}/${r1(h.c)}/${r1(h.c2 ?? 0)}/${h.d}` : `${h.face}${r1(rev ? p.length - h.t : h.t)}/${r1(h.c)}/${h.d}${h.slot ? `x${h.slot}` : ''}`).sort().join(';');
+    // חריצים: נכנסים לחתימה רק כשיש (חלקים בלי חריץ — חתימה ללא שינוי); חלק הפוך קצה-לקצה זהה
+    const ss = (rev: boolean) => slots.map((x) => `${x.view}${r1(rev ? p.length - x.t0 : x.t0)}>${r1(rev ? p.length - x.t1 : x.t1)}/${r1(x.c)}/${r1(x.w)}`).sort().join(';');
     const cont = m.contour ? `C${m.contour.map((q) => `${r1(q.s)},${r1(q.u)}`).join(';')}` : '';
-    const fwd = [m.kind, p.profile, p.material, r1(p.length), cutStart, cutEnd, hs(false), cont].join('|');
-    const rev = holes.some((h) => h.face === 'section') || cont ? fwd : [m.kind, p.profile, p.material, r1(p.length), cutEnd, cutStart, hs(true), cont].join('|');
+    const fwd = [m.kind, p.profile, p.material, r1(p.length), cutStart, cutEnd, hs(false), cont, ...(slots.length ? [`S${ss(false)}`] : [])].join('|');
+    const rev = holes.some((h) => h.face === 'section') || cont ? fwd : [m.kind, p.profile, p.material, r1(p.length), cutEnd, cutStart, hs(true), cont, ...(slots.length ? [`S${ss(true)}`] : [])].join('|');
     const sig = rev < fwd ? rev : fwd;
     // לסבולת מספור: צורה ללא אורך ומיקומי חורים לאורך, ומיקומי החורים בכיוון הקנוני
     const isRev = sig !== fwd;
     const hShape = holes.map((h) => `${h.face}/${r1(h.c)}/${h.d}${h.slot ? `x${h.slot}` : ''}${h.face === 'section' ? `/${r1(h.t)}` : ''}`);
     const tCanon = holes.filter((h) => h.face !== 'section').map((h) => (isRev ? p.length - h.t : h.t)).sort((a, b) => a - b);
-    shapes.set(p.id, { key: [m.kind, p.profile, p.material, isRev ? cutEnd : cutStart, isRev ? cutStart : cutEnd, [...hShape].sort().join(';'), cont].join('|'), length: p.length, ts: tCanon });
+    shapes.set(p.id, { key: [m.kind, p.profile, p.material, isRev ? cutEnd : cutStart, isRev ? cutStart : cutEnd, [...hShape].sort().join(';'), cont, ...(slots.length ? [`S${ss(isRev)}`] : [])].join('|'), length: p.length, ts: tCanon });
     parts.push({
       ...p, mark: '', provisional: false, kind: m.kind, desc: plateDesc(m, m.partDesc ?? `${m.profile}`),
       weight: m.contour ? (contourArea(m.contour) * pr.dims.t * getMaterial(p.material).density) / 1e9 : (massPerMeter(pr, getMaterial(p.material).density) * p.length) / 1000,
-      holes, cutStart, cutEnd, assembly: '', signature: sig,
+      holes, slots, cutStart, cutEnd, assembly: '', signature: sig,
     });
   }
   // סבולת מספור (settings.markTol): חלקים באותה צורה שאורכם ומיקומי חוריהם שונים עד הסבולת — חתימה אחת
@@ -201,7 +223,7 @@ export function computeFabrication(project: Project, d: DerivedModel): Fabricati
           if (Math.abs(Q.length - R.length) > tol || Q.ts.length !== R.ts.length || Q.ts.some((t, i) => Math.abs(t - R.ts[i]) > tol)) continue;
           done.add(sg2);
           // מיוצר כמו הנציג: אורך, חורים, חיתוכים ומשקל זהים בכל הפלטים (שרטוט, כתב כמויות, DSTV, חיתוך)
-          for (const y of ys) { y.signature = sg; y.length = xs[0].length; y.holes = xs[0].holes; y.cutStart = xs[0].cutStart; y.cutEnd = xs[0].cutEnd; y.weight = xs[0].weight; }
+          for (const y of ys) { y.signature = sg; y.length = xs[0].length; y.holes = xs[0].holes; y.slots = xs[0].slots; y.cutStart = xs[0].cutStart; y.cutEnd = xs[0].cutEnd; y.weight = xs[0].weight; }
           merged.push(Math.round(Q.length));
         }
         if (merged.length) unified.push({ signature: sg, length: Math.round(R.length), from: merged, profile: xs[0].profile });

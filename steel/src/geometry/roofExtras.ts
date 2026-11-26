@@ -3,7 +3,7 @@ import { getProfile, tryProfile } from '../profiles/library';
 import type { BoltInfo, BuildingParams, Connection, Member, ValidationIssue, WeldInfo } from '../model/types';
 import { zAt, type SectionTopology } from '../model/section';
 import { makeBolt } from './connections';
-import { finJoint } from './finJoint';
+import { finJoint, slotsOf } from './finJoint';
 import { localFrame } from './frame';
 import { aabb, aabbOverlap, clash } from './clash';
 import { bolt } from '../model/defaults';
@@ -171,7 +171,7 @@ export function buildLineTies(b: BuildingParams, topo: SectionTopology, profOf?:
       out.members.push({ id: bid, kind: 'beam', label: `סיב רציף ציר ${l.label} מפתח ${bay + 1}`, start: ends[0].j.start, end: ends[1].j.start, profile: lt.profile, material: b.material, rollDeg: 0, mirror: false, anchor: 'center', refUp: v3(0, 0, 1), source: 'generated', manualPlacement: false, partDesc: `סיב רציף ${lt.profile}` });
       for (const e of ends) {
         out.members.push(...e.j.members); out.issues.push(...e.j.issues);
-        out.connections.push({ id: e.cid, type: 'knee', label: `סיב רציף ציר ${l.label} מפתח ${bay + 1} — לעמוד`, members: [e.col, bid], parts: e.j.parts, bolts: e.j.bolts, welds: e.j.welds, status: 'not-verified', fixity: 'pinned', overridden: false });
+        out.connections.push({ id: e.cid, type: 'knee', label: `סיב רציף ציר ${l.label} מפתח ${bay + 1} — לעמוד`, members: [e.col, bid], parts: e.j.parts, bolts: e.j.bolts, welds: e.j.welds, ...slotsOf(e.j), status: 'not-verified', fixity: 'pinned', overridden: false });
       }
     }
   }

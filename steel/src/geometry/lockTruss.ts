@@ -3,7 +3,7 @@ import { KNEE_FIN_LTCHORD_RECIPE_ID, KNEE_FIN_LTTRUSS_RECIPE_ID, LOCK_PLATE_RECI
 import type { BoltInfo, Connection, LockTrussParams, Member, ValidationIssue, WeldInfo } from '../model/types';
 import { getProfile, tryProfile, type Profile } from '../profiles/library';
 import { makeBolt } from './connections';
-import { finJoint } from './finJoint';
+import { finJoint, slotsOf } from './finJoint';
 import type { PortalLine } from './portal';
 
 /** ברירת מחדל לפי תוכנית 130: סיב וחגורה RHS80/80/4, אלכסונים RHS80/80/4, גובה 1000, פלטות 10 (130×250), 4×M16 */
@@ -91,7 +91,7 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
           const Pj = horiz ? v3(P.x, P.y, P.z - lt.plateT) : P;
           const j = finJoint({ cid, desc: c.id.endsWith('C') ? 'סיב נעילה' : 'חגורת מסבך', hostId: colId, memberId: c.id, P: Pj, n, d: n, pn: horiz ? Z : X, side: 1, prof: cpf, profile: lt.chord, finT: lt.plateT, tongueT: lt.plateT, bolt: lt.bolt, bolts: 2, weldSize: lt.weldSize, mat: L.mat });
           out.members.push(...j.members); out.issues.push(...j.issues);
-          out.connections.push({ id: cid, type: 'knee', label: `${lab} — ${c.id.endsWith('C') ? 'סיב' : 'חגורה'} לעמוד (לשונית)`, members: [colId, c.id], parts: j.parts, bolts: j.bolts, welds: j.welds, status: 'not-verified', fixity: 'pinned', overridden: false,
+          out.connections.push({ id: cid, type: 'knee', label: `${lab} — ${c.id.endsWith('C') ? 'סיב' : 'חגורה'} לעמוד (לשונית)`, members: [colId, c.id], parts: j.parts, bolts: j.bolts, welds: j.welds, ...slotsOf(j), status: 'not-verified', fixity: 'pinned', overridden: false,
             ...(recipeOn ? { recipe: { id: c.id.endsWith('C') ? KNEE_FIN_LTCHORD_RECIPE_ID : KNEE_FIN_LTTRUSS_RECIPE_ID, params: { d: lt.bolt.d, nb: 2, ft: lt.plateT, tt: lt.plateT, sd: 1, bs: 1, wa: lt.weldSize, ...(colI ? { th: 1 } : {}) }, sites: [`${c.id}|${k === 'A' ? 'start' : 'end'}`] } } : {}) });
           pts.push(recipeOn ? sub(j.start, scale(Z, lt.plateT)) : j.start); // מתכון: ציר ללא ההסטה (פח + לשונית)/2 = T
           endReach = Math.max(endReach, j.tongueL + 25);

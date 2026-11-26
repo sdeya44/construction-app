@@ -7,11 +7,11 @@
  */
 import { add, norm, scale, sub, v3, type Plane, type Vec3 } from '../core/vec';
 import { getProfile, tryProfile } from '../profiles/library';
-import type { BoltInfo, BuildingParams, Connection, FrameDef, Member, Project, TransferDef, ValidationIssue, WeldInfo } from '../model/types';
+import type { BoltInfo, BuildingParams, Connection, FrameDef, Member, Project, SlotCut, TransferDef, ValidationIssue, WeldInfo } from '../model/types';
 import type { NLine, NSection } from '../model/section';
 import { buildTrussPlane, trussNodes } from './truss';
 import { makeBolt } from './connections';
-import { angleFin, finJoint } from './finJoint';
+import { angleFin, finJoint, slotsOf } from './finJoint';
 import { localFrame } from './frame';
 
 const Z = v3(0, 0, 1), X = v3(1, 0, 0), Y = v3(0, 1, 0);
@@ -219,7 +219,7 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
           : finJoint({ ...base, tag: 'R', hostId: tbId, P: R0, n: v3(0, 0, -1), d: scale(dir, -1), side: 1, profile: kn.profile, tongueT: 10, bolts: 2 });
         res.members.push({ id: bid, kind: 'brace', label: `אלכסון קורה נושאת ציר ${line.label}`, start: jc.start, end: jr.start, profile: kn.profile, material: mat, rollDeg: 0, mirror: false, anchor: L ? 'corner' : 'center', refUp: X, source: 'generated', manualPlacement: false, connId: cid, partDesc: `אלכסון ${kn.profile}` }, ...jc.members, ...jr.members);
         res.issues.push(...jc.issues, ...jr.issues);
-        res.connections.push({ id: cid, type: 'knee', label: `אלכסון קורה נושאת ציר ${line.label} — ${L ? 'זוויתן מוברג לפח' : 'פח + לשונית'}`, members: [col.id, tbId], parts: [bid, ...jc.parts, ...jr.parts], bolts: [...jc.bolts, ...jr.bolts], welds: [...jc.welds, ...jr.welds], status: 'not-verified', fixity: 'pinned', overridden: false });
+        res.connections.push({ id: cid, type: 'knee', label: `אלכסון קורה נושאת ציר ${line.label} — ${L ? 'זוויתן מוברג לפח' : 'פח + לשונית'}`, members: [col.id, tbId], parts: [bid, ...jc.parts, ...jr.parts], bolts: [...jc.bolts, ...jr.bolts], welds: [...jc.welds, ...jr.welds], ...slotsOf(jc, jr), status: 'not-verified', fixity: 'pinned', overridden: false });
       }
     }
     // ---------- מסבך נושא: חגורה תחתונה, אנכיים ואלכסונים (מרותכים), חיבורי המשך באמצע שדות
@@ -267,7 +267,7 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
       if (!c) continue;
       const fy = frames.find((f) => f.id === fid)!.y;
       const id = `C.TBS.${def.id}.${fid}`;
-      const parts: string[] = []; const bolts: BoltInfo[] = []; const welds: WeldInfo[] = [];
+      const parts: string[] = []; const bolts: BoltInfo[] = []; const welds: WeldInfo[] = []; const slotCuts: SlotCut[] = [];
       // תמיכה: קורה — ה-TB עצמה; מסבך — החגורה התחתונה יושבת על פלטת הראש
       const sP = tr ? pB! : tbp, sId = tr ? bcId : tbId;
       const sh = sP.props.h, sbw = sP.props.b, stw = sP.dims.tw ?? 8, stf = sP.dims.tf ?? 12;
@@ -311,7 +311,7 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
         for (const key of ['T', 'B']) {
           const j = finJ.get(`${fid}|${key}`)!;
           res.members.push(...j.members); res.issues.push(...j.issues);
-          parts.push(...j.members.map((m) => m.id)); bolts.push(...j.bolts); welds.push(...j.welds);
+          parts.push(...j.members.map((m) => m.id)); bolts.push(...j.bolts); welds.push(...j.welds); slotCuts.push(...j.slots);
         }
       } else if (def.support === 'A2' || def.support === 'A4' || def.support === 'A5') {
         // רוחב הפלטה: עומק העמוד, ולפחות רוחב אגף ה-TB + שפה (הברגים ב-±(tb/2 − 30)) — TB רחב מהעמוד
@@ -375,7 +375,7 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
         let k = 0;
         for (const dx of [-(tb / 2 - 30), tb / 2 - 30]) bolts.push(makeBolt(`${id}.B${++k}`, id, v3(x + dx, yA + sgn * 100, zB - 20), Z, BOLT, 20 + tf, 'site', [sp.id, tbId], X, res.members));
       }
-      res.connections.push({ id, type: 'tb-support', label: `קורה נושאת ↔ עמוד ${c.label.replace(/ \(.*\)$/, '')} — ${SUPPORT_HE[def.support]}`, members: [tbId, c.id], parts: [...parts, ...bolts.map((q) => q.id)], bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: false });
+      res.connections.push({ id, type: 'tb-support', label: `קורה נושאת ↔ עמוד ${c.label.replace(/ \(.*\)$/, '')} — ${SUPPORT_HE[def.support]}`, members: [tbId, c.id], parts: [...parts, ...bolts.map((q) => q.id)], bolts, welds, ...(slotCuts.length ? { slots: slotCuts } : {}), status: 'not-verified', fixity: 'pinned', overridden: false });
     }
 
     // ---------- קורות הגג על ה-TB

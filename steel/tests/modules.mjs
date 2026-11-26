@@ -39,7 +39,7 @@ export const MODULES = {
   knee: {
     title: 'אלכסוני עמוד-קורה ומכפלים',
     src: ['src/geometry/knee.ts', 'src/geometry/kneeSolve.ts', 'src/geometry/haunch.ts', 'src/geometry/finJoint.ts', 'src/geometry/convRecipes.ts'],
-    tests: ['tests/kneegrid.test.ts', 'tests/kneesolve.test.ts', 'tests/kneefin-compare.test.ts', { file: 'tests/cad-oracle.test.ts', t: 'CAD-04' }, { file: 'tests/newshapes.test.ts', t: 'מכפל' }, cad('· knee')],
+    tests: ['tests/kneegrid.test.ts', 'tests/kneesolve.test.ts', 'tests/kneefin-compare.test.ts', 'tests/slot.test.ts', { file: 'tests/cad-oracle.test.ts', t: 'CAD-04' }, { file: 'tests/newshapes.test.ts', t: 'מכפל' }, cad('· knee')],
     e2e: ['e2e/knee-sides.spec.ts', 'e2e/ux156.spec.ts'],
   },
   connections: {
@@ -69,7 +69,7 @@ export const MODULES = {
   struts: {
     title: 'תמוכות בין הקורות',
     src: ['src/geometry/rafterStruts.ts'],
-    tests: ['tests/rafterstruts.test.ts', 'tests/strutfin-compare.test.ts', { file: 'tests/cad-oracle.test.ts', t: 'CAD-05' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-06' }],
+    tests: ['tests/rafterstruts.test.ts', 'tests/strutfin-compare.test.ts', 'tests/slot.test.ts', { file: 'tests/cad-oracle.test.ts', t: 'CAD-05' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-06' }],
     e2e: ['e2e/rafter-struts.spec.ts'],
   },
   cladding: {

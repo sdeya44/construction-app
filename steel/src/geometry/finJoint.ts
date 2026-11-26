@@ -1,5 +1,5 @@
 import { add, cross, dot, norm, scale, sub, type Vec3 } from '../core/vec';
-import type { BoltInfo, BoltSpec, Member, ValidationIssue, WeldInfo } from '../model/types';
+import type { BoltInfo, BoltSpec, Member, SlotCut, ValidationIssue, WeldInfo } from '../model/types';
 import type { Profile } from '../profiles/library';
 import { makeBolt } from './connections';
 
@@ -41,7 +41,12 @@ export interface FinJointOut {
   start: Vec3;
   members: Member[]; bolts: BoltInfo[]; welds: WeldInfo[]; parts: string[]; issues: ValidationIssue[];
   finW: number; finL: number; tongueL: number;
+  /** חריץ הלשונית ב-RHS: רוחב עובי הלשונית + 1, עומק חפיפת הלשונית ב-RHS + 2 (כמו שהופיע בשרטוט החלק מאז 1.2x) */
+  slots: SlotCut[];
 }
+
+/** פריסה לאובייקט חיבור: `...slotsOf(j1, j2)` — מוסיף `slots` רק אם יש. */
+export const slotsOf = (...js: object[]): { slots?: SlotCut[] } => { const s = js.flatMap((x) => (x as { slots?: SlotCut[] }).slots ?? []); return s.length ? { slots: s } : {}; };
 
 export function finJoint(j: FinJointIn): FinJointOut {
   const members: Member[] = [], welds: WeldInfo[] = [], issues: ValidationIssue[] = [];
@@ -105,7 +110,8 @@ export function finJoint(j: FinJointIn): FinJointOut {
     { id: `${base}.W1`, connId: j.cid, type: 'fillet', a: j.weldSize, length: 2 * weldL, location: 'shop', between: [j.hostId, fin], from: add(j.P, scale(hdir, -weldL / 2)), to: add(j.P, scale(hdir, weldL / 2)) },
     { id: `${base}.W2`, connId: j.cid, type: 'fillet', a: j.weldSize, length: 4 * insert, location: 'shop', between: [j.memberId, tg], from: add(ax(sEnd), off), to: add(ax(sEnd + insert), off) },
   );
-  return { start: add(ax(sEnd), off), members, bolts, welds, parts: [fin, tg, ...bolts.map((b) => b.id)], issues, finW, finL, tongueL };
+  const slots: SlotCut[] = !['RHS', 'SHS', 'CHS'].includes(j.prof.family) ? [] : [{ memberId: j.memberId, p: add(ax(sEnd), off), axis: d, nrm: pn, L: tongueL + sTip - sEnd + 2, w: j.tongueT + 1 }];
+  return { start: add(ax(sEnd), off), members, bolts, welds, parts: [fin, tg, ...bolts.map((b) => b.id)], issues, finW, finL, tongueL, slots };
 }
 
 /**

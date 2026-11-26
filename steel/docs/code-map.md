@@ -16,7 +16,7 @@
 | מוצק אלמנט (רשת), חלקי ייצור, התנגשויות, ביקורת אורכים | `solid.ts`, `parts.ts`, `clash.ts`, `audit.ts`, `lengthWhy.ts` | frame |
 | פטות ותושבות, חיבורי המשך | `purlins.ts`, `autoSplice.ts` (גם `C.RS` המשך קורה) | purlins |
 | קושרות, סבכה, אגד B | `bracing.ts`, `hbrace.ts`, `portal.ts` | bracing |
-| אלכסוני עמוד-קורה, מכפל, פרט פח+לשונית | `knee.ts`, `kneeSolve.ts`, `haunch.ts`, `finJoint.ts` | knee |
+| אלכסוני עמוד-קורה, מכפל, פרט פח+לשונית (חריץ RHS: `finJoint` ⇒ `Connection.slots` דרך `slotsOf`; מתכון: פעולת `slot` ב-`detail.ts`; ייצור: `fab/marks.ts:memberSlots`; `tests/slot.test.ts` SLOT-01..05) | `knee.ts`, `kneeSolve.ts`, `haunch.ts`, `finJoint.ts` | knee |
 | חיבורים: בסיס, ראש עמוד, רכס, ברגים (`makeBolt`) | `connections.ts`, `eavePlate.ts` | connections |
 | פרטים מותאמים ("מתכון" ops), פרטים מוכנים (`detailPresets`, `presetFits`); מתכון v2: `params` + ערכי מופע `detailParams` (`paramOverrides`, `shownParams`, `detailParamValues`; פקודות `setDetailParam` / `resetDetailParams` / `setDetailTemplateVar`) | `detail.ts`, `core/expr.ts`, `model/connRegistry.ts` (רישום סוגי פרט, `customParamDefs`) | connections (`tests/detailparams.test.ts`) |
 | אתרי אמצע/עוגן (G9, שלב D): `midSite.ts` (`midSite` — `פריט\|s:k`, `anchorSite` — `פריט\|p:שם`), `Site.mid`, `SiteCtx` (`findSite(.., ctx)`), פנים `u±`/`a±`/`w±`, `weld.ax`, `Connection.recipe.anchors`; מתכונים: `spliceRecipes.ts` (`purlinSpliceRecipe` — דגל `purlins.splice.engine`; `beamSplice{Bolted,Flange,WeldedI,WeldedBox}Recipe` — דגל `settings.spliceEngine`, פרמטרים מ-`autoSplice.ts`), `crossRecipes.ts` (`braceCrossGusset/RodRecipe` — `bracing.conn.engine` / `roof.rod.engine`, עוגן מ-`bracing.ts:crossRecipe`) | `geometry/midSite.ts`, `geometry/detail.ts`, `geometry/spliceRecipes.ts`, `geometry/crossRecipes.ts`, `geometry/autoSplice.ts` | purlins (`tests/splice-compare.test.ts` SPLICE-01/02, `tests/beamsplice-compare.test.ts` BSPLICE-01/02), bracing (`tests/cross-compare.test.ts` CROSS-01/02), CAD-14 |
@@ -33,10 +33,10 @@
 |---|---|---|
 | מספור, חורים בחלק, מכלולים | `fab/marks.ts` | fab |
 | כתב כמויות, ייצוא, הזמנה, האחדה | `fab/bom.ts`, `fab/export.ts`, `fab/unify.ts` | fab |
-| DSTV/NC1, IFC | `fab/dstv.ts`, `fab/ifc.ts` | fab |
+| DSTV/NC1 (חריץ RHS כשורות `** SLOT`, ללא AK), IFC | `fab/dstv.ts`, `fab/ifc.ts` | fab |
 | הרכבה, מיקום, הצעת מחיר, גדלים | `fab/sequence.ts`, `fab/location.ts`, `fab/quote.ts`, `fab/clientQuote.ts`, `model/sizing.ts` | fab |
 | קטלוג גיליונות ובניית גיליון (החלק המייצג של סימון: `representativePart`) | `drawing/views.ts` (**~1260 שורות**) | drawing |
-| שרטוט חלק (כולל חריצים ל-RHS), תא פלטה והפניית חורים (`holeCallouts`), מכלול | `drawing/part.ts`, `drawing/assembly.ts` | drawing |
+| שרטוט חלק (כולל חריצים ל-RHS — מ-`part.slots` של המודל), תא פלטה והפניית חורים (`holeCallouts`), מכלול | `drawing/part.ts`, `drawing/assembly.ts` | drawing |
 | מודל גיליון ופלט | `drawing/sheet.ts`, `svg.ts`, `pdf.ts`, `dxf.ts`, `solidCache.ts` | drawing |
 | מכלול אגד B / אלכסוני Y (מבט, פרטים מוגדלים, ריתוכים, פרטי פלטות, תלת־ממד) | `drawing/unit.ts` (`braceUnits`, `braceUnitSheet`) | drawing (`tests/unit.test.ts`) |
 | ביקורת קריאות, הצבת תוויות בלי חפיפה, הסרת כפילויות | `drawing/layoutAudit.ts` (`auditSheet`, `boxIsFree`), `drawing/labels.ts` (`placeLabels`, `dedupeTexts`) | drawing (`tests/layout.test.ts`) |

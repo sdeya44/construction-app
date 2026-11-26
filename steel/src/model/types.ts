@@ -827,6 +827,9 @@ export interface WeldInfo {
   to: Vec3;
 }
 
+/** חריץ בקצה אלמנט: פתח על הציר `p`, עומק `L` לתוך האלמנט בכיוון `axis`, רוחב `w` בכיוון `nrm` (ניצב ל-axis), חוצה את שני הדפנות. */
+export interface SlotCut { memberId: string; p: Vec3; axis: Vec3; nrm: Vec3; L: Mm; w: Mm }
+
 export interface Connection {
   id: string;
   type: ConnType;
@@ -843,6 +846,8 @@ export interface Connection {
   overridden: boolean;
   /** חורי אוורור נוספים שהוגדרו בפרט מותאם */
   vents?: { memberId: string; p: Vec3; axis: Vec3; d: Mm }[];
+  /** חריצי פח/לשונית בקצה פרופיל חלול (G12): נתון ייצור על האלמנט — לא חיתוך במוצק, לא נפלט כקונטור ל-NC1 (חריץ ידני, לא בלייזר) */
+  slots?: SlotCut[];
   /** חורים ללא בורג (מוט עיגון עובר בפלטה ומרותך מעליה וכד') */
   holes?: { id: string; memberId: string; p: Vec3; axis: Vec3; d: Mm; slot?: Mm }[];
   /** פרט מותאם: מזהה הפרט ומפתח האתר */

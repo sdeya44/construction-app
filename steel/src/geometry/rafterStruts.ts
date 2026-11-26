@@ -1,6 +1,6 @@
 import { add, norm, scale, v3, type Vec3 } from '../core/vec';
 import { getProfile, tryProfile } from '../profiles/library';
-import type { BoltInfo, BuildingParams, Connection, Member, RafterStrutDetail, RafterStrutParams, ValidationIssue, WeldInfo } from '../model/types';
+import type { BoltInfo, BuildingParams, Connection, Member, RafterStrutDetail, RafterStrutParams, SlotCut, ValidationIssue, WeldInfo } from '../model/types';
 import { finJoint } from './finJoint';
 import { zAt, type SectionTopology } from '../model/section';
 import { makeBolt } from './connections';
@@ -101,7 +101,7 @@ export function buildRafterStruts(b: BuildingParams, topo: SectionTopology, prof
       const sides: { bay: number; s: number; k: 0 | 1 }[] = [];
       if (left) sides.push({ bay: fi - 1, s: -sgnF, k: 1 });
       if (right) sides.push({ bay: fi, s: sgnF, k: 0 });
-      const parts: string[] = [], welds: WeldInfo[] = [], bolts: BoltInfo[] = [];
+      const parts: string[] = [], welds: WeldInfo[] = [], bolts: BoltInfo[] = [], slotCuts: SlotCut[] = [];
       const face = (s: number) => v3(C.x, f.y + s * tw / 2, C.z);
       if (sl.detail === 'weld') {
         for (const sd of sides) {
@@ -111,7 +111,7 @@ export function buildRafterStruts(b: BuildingParams, topo: SectionTopology, prof
       } else if (sl.detail === 'fin') {
         for (const sd of sides) {
           const j = finJoint({ cid, tag: sd.s > 0 ? 'A' : 'B', desc: 'תמוכה בין קורות', hostId: r.id, memberId: sid(sd.bay), P: face(sd.s), n: scale(Y, sd.s), d: scale(Y, sd.s), pn: dir, side: 1, prof: sp, profile: sl.profile, finT: tp, tongueT: tp, bolt: rs.bolt, bolts: nBolts, weldSize: 5, mat });
-          out.members.push(...j.members); bolts.push(...j.bolts); welds.push(...j.welds); parts.push(...j.parts.filter((x) => !j.bolts.some((bo) => bo.id === x)));
+          out.members.push(...j.members); slotCuts.push(...j.slots); bolts.push(...j.bolts); welds.push(...j.welds); parts.push(...j.parts.filter((x) => !j.bolts.some((bo) => bo.id === x)));
           for (const q of j.issues) if (!out.issues.some((i) => i.code === q.code && i.elementId === tag)) out.issues.push({ ...q, elementId: tag });
           setEnd(sd.bay, sd.k, j.start);
           if (j.finW > clear - 4 && !out.issues.some((i) => i.code === 'RS_FIN_H' && i.elementId === tag)) out.issues.push({ code: 'RS_FIN_H', severity: 'warning', elementId: tag, message: `תמוכה בין קורות ${sl.label}: רוחב הפח (${j.finW}) גדול מגובה הווב הפנוי (${Math.round(clear)}) — לבחור RHS נמוך יותר או פלטת קצה` });
@@ -140,7 +140,7 @@ export function buildRafterStruts(b: BuildingParams, topo: SectionTopology, prof
           bolts.push(makeBolt(`${cid}.B${i + 1}`, cid, at, scale(Y, sMax > sMin ? sMax : -sMin), rs.bolt, grip, 'site', [...parts, r.id], n, out.members));
         });
       }
-      out.connections.push({ id: cid, type: 'brace', label: `תמוכה בין קורות ${sl.label} — ${STRUT_DETAIL_HE[sl.detail]} (מסגרת ${fi + 1})`, members: [r.id, ...sides.map((q) => sid(q.bay))], parts: [...parts, ...bolts.map((x) => x.id)], bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: false,
+      out.connections.push({ id: cid, type: 'brace', label: `תמוכה בין קורות ${sl.label} — ${STRUT_DETAIL_HE[sl.detail]} (מסגרת ${fi + 1})`, members: [r.id, ...sides.map((q) => sid(q.bay))], parts: [...parts, ...bolts.map((x) => x.id)], bolts, welds, ...(slotCuts.length ? { slots: slotCuts } : {}), status: 'not-verified', fixity: 'pinned', overridden: false,
         ...strutRecipe(rs, sl.detail, sp.family, tryProfile(profOf?.(r.id) ?? '')?.family ?? '', nBolts, tp, sides.map((sd) => ({ key: `${sid(sd.bay)}|${sd.k === 1 ? 'end' : 'start'}`, s: sd.s }))) });
     }
     for (const bay of has) {
