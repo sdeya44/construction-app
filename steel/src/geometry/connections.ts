@@ -14,14 +14,15 @@ import { CLEAT_PLATE_RECIPE_ID, CLEAT_RUN_RECIPE_ID, CLEAT_SEAM_RECIPE_ID, CLEAT
 import { purlinParams } from './purlins';
 
 /** מידות בורג/אום/דיסקית לפי ISO 4017/4032/7089 (מידע גיאומטרי בלבד — לא מאומת). */
-const HW: Record<number, { s: number; k: number; m: number; w: number; P: number }> = {
-  10: { s: 16, k: 6.4, m: 8.4, w: 2, P: 1.5 },
-  12: { s: 18, k: 7.5, m: 10.8, w: 2.5, P: 1.75 },
-  16: { s: 24, k: 10, m: 14.8, w: 3, P: 2 },
-  20: { s: 30, k: 12.5, m: 18, w: 3, P: 2.5 },
-  24: { s: 36, k: 15, m: 21.5, w: 4, P: 3 },
+const HW: Record<number, { s: number; k: number; m: number; w: number; P: number; D: number }> = {
+  10: { s: 16, k: 6.4, m: 8.4, w: 2, P: 1.5, D: 20 },
+  12: { s: 18, k: 7.5, m: 10.8, w: 2.5, P: 1.75, D: 24 },
+  16: { s: 24, k: 10, m: 14.8, w: 3, P: 2, D: 30 },
+  20: { s: 30, k: 12.5, m: 18, w: 3, P: 2.5, D: 37 },
+  24: { s: 36, k: 15, m: 21.5, w: 4, P: 3, D: 44 },
 };
-export const hw = (d: number) => HW[d] ?? { s: 1.5 * d, k: 0.62 * d, m: 0.85 * d, w: 0.2 * d, P: 0.15 * d };
+/** D = קוטר חיצוני של הדיסקית (ISO 7089) */
+export const hw = (d: number) => HW[d] ?? { s: 1.5 * d, k: 0.62 * d, m: 0.85 * d, w: 0.2 * d, P: 0.15 * d, D: 1.85 * d };
 const STD_LEN = [16, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 180, 200];
 
 /** אורך בורג: אחיזה + 2 דיסקיות + אום + בליטה של 2 פסיעות, מעוגל לאורך תקני. */
@@ -68,6 +69,10 @@ export function makeBolt(id: string, connId: string, head: Vec3, axis: Vec3, spe
   const desc = anchorLen ? `בורג עיגון M${spec.d}×${length}` : `בורג M${spec.d}×${length} ${spec.grade}`;
   if (!anchorLen) members.push(mk(`${id}.H`, `HX${h.s}`, sub(head, scale(axis, h.k)), head, desc));
   members.push(mk(`${id}.S`, `RD${spec.d}`, head, add(head, scale(axis, length)), desc));
+  // דיסקית (טבעת) מתחת לאום: צמודה לפני החלק האחרון, והאום צמוד אליה — בלי חדירה ובלי רווח
+  const wAt = add(head, scale(axis, grip));
+  const wt = Math.round(((h.D - (spec.d + 1)) / 2) * 100) / 100;
+  members.push(mk(`${id}.W`, `CHS${h.D}x${wt}`, wAt, add(wAt, scale(axis, h.w)), `דיסקית M${spec.d}`));
   const nutAt = add(head, scale(axis, grip + h.w));
   members.push(mk(`${id}.N`, `HX${h.s}`, nutAt, add(nutAt, scale(axis, h.m)), desc));
   return { id, connId, p: head, axis, d: spec.d, hole: spec.d + spec.clearance, grade: spec.grade, standard: spec.standard, grip, length, location, holesIn };
@@ -727,7 +732,7 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
       const pur = byId.get(pid);
       if (pur?.purlin && pur.purlin.index === 1 && pur.purlin.side !== 'M' && cl) ridgeGroup.push(cl);
       // ראשי ברגים ואומים מול הקורה
-      for (const bo of c.bolts) { test(byId.get(`${bo.id}.H`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(pid), ' (אום מול חתך הפטה)'); }
+      for (const bo of c.bolts) { test(byId.get(`${bo.id}.H`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(rid)); test(byId.get(`${bo.id}.N`), byId.get(pid), ' (אום מול חתך הפטה)'); test(byId.get(`${bo.id}.W`), byId.get(rid)); test(byId.get(`${bo.id}.W`), byId.get(pid), ' (דיסקית מול חתך הפטה)'); }
     } else if (c.type === 'beam-splice') {
       // פלטות ההמשך יושבות בתפר של האלמנט (שאינו מפוצל במודל) — נבדקות מול שאר האלמנטים בלבד
       spliceChecks.push(c);

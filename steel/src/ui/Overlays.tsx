@@ -78,7 +78,7 @@ export function ContextBar({ vp, onMore }: { vp: Viewport | null; onMore: (x: nu
         const asm = pt && fab.assemblies.find((a) => a.id === pt.assembly);
         if (!asm) return;
         const ids = new Set(asm.parts.map((pid) => fab.byPart.get(pid)?.memberId).filter((x): x is string => !!x));
-        for (const c of st.derived.connections) for (const b of c.bolts) if (b.holesIn.some((h) => ids.has(h))) for (const sfx of ['', '.H', '.S', '.N']) ids.add(`${b.id}${sfx}`);
+        for (const c of st.derived.connections) for (const b of c.bolts) if (b.holesIn.some((h) => ids.has(h))) for (const sfx of ['', '.H', '.S', '.N', '.W']) ids.add(`${b.id}${sfx}`);
         store.set({ isolated: [...ids], selection: [single.id] });
         store.toast('info', `מכלול ${asm.mark}: ${asm.parts.length} חלקים`);
       }}>בודד מכלול</button>}

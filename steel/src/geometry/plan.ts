@@ -103,7 +103,7 @@ export function applyPlan(project: Project, local: DerivedModel, map: PlanMap): 
   const partConn = new Map<string, string>();
   for (const c of local.connections) {
     for (const id of c.parts) partConn.set(id, c.id);
-    for (const b of c.bolts) for (const s of ['H', 'S', 'N']) partConn.set(`${b.id}.${s}`, c.id);
+    for (const b of c.bolts) for (const s of ['H', 'S', 'N', 'W']) partConn.set(`${b.id}.${s}`, c.id);
   }
   for (const m of local.members) if (m.connId && !partConn.has(m.id)) partConn.set(m.id, m.connId);
   for (const c of local.connections) {

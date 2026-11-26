@@ -1074,7 +1074,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
     }
     case 'connection': {
       const c = d.connById.get(def.ref!)!;
-      const ids = [...c.members, ...c.parts.flatMap((x) => [x, `${x}.H`, `${x}.S`, `${x}.N`])];
+      const ids = [...c.members, ...c.parts.flatMap((x) => [x, `${x}.H`, `${x}.S`, `${x}.N`, `${x}.W`])];
       const ms = ids.map((x) => d.byId.get(x)).filter((m): m is Member => !!m);
       // חלק ראשון במרכז הפרט (בהצטלבות עם בורג בלבד — שוק הבורג)
       const first = c.parts.flatMap((x) => [x, `${x}.S`]).map((x) => d.byId.get(x)).find((m): m is Member => !!m) ?? d.byId.get(c.members[0])!;

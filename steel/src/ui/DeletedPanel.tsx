@@ -17,8 +17,8 @@ export function DeletedPanel({ onClose }: { onClose: () => void }) {
     const del = new Set(deleted);
     const owner = (id: string) => deleted.find((o) => o !== id && (id.startsWith(`${o}.`) || id.startsWith(`C.${o}.`)));
     return deleted
-      .filter((id) => !/\.(H|S|N)$/.test(id) || !del.has(id.replace(/\.(H|S|N)$/, '')) )
-      .filter((id) => !owner(id) && !/\.B\d+\.(H|S|N)$/.test(id))
+      .filter((id) => !/\.(H|S|N|W)$/.test(id) || !del.has(id.replace(/\.(H|S|N|W)$/, '')) )
+      .filter((id) => !owner(id) && !/\.B\d+\.(H|S|N|W)$/.test(id))
       .map((id) => {
         const m = full?.byId.get(id);
         const sub = deleted.filter((x) => x !== id && (x.startsWith(`${id}.`) || x.startsWith(`C.${id}.`))).length;

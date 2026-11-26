@@ -174,7 +174,7 @@ export function connParts(d: DerivedModel, ids: string[]): Member[] {
   const S = new Set(ids), out: Member[] = [], seen = new Set<string>();
   for (const c of d.connections) {
     if (!c.members.some((x) => S.has(x))) continue;
-    for (const pid of [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`])]) {
+    for (const pid of [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`, `${b.id}.W`])]) {
       const m = d.byId.get(pid); if (m && !seen.has(pid)) { seen.add(pid); out.push(m); }
     }
   }
@@ -331,7 +331,7 @@ export function endCloseup(d: DerivedModel, memberId: string, which: 'low' | 'hi
   const near = (q: Vec3, rr: number) => Math.abs(q.x - P.x) < rr && Math.abs(q.y - P.y) < rr && Math.abs(q.z - P.z) < rr;
   // האלמנט יכול להיות "חלק" של החיבור (אלכסון) או "מחובר" בו (קורה/עמוד)
   const cs = d.connections.filter((x) => x.members.includes(memberId) || x.parts.includes(memberId));
-  const all = cs.flatMap((c) => [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`])]).filter((x) => x !== memberId).map((x) => d.byId.get(x)).filter((x): x is Member => !!x);
+  const all = cs.flatMap((c) => [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`, `${b.id}.W`])]).filter((x) => x !== memberId).map((x) => d.byId.get(x)).filter((x): x is Member => !!x);
   const parts = all.filter((x) => near(mid(x), r));
   const c = cs.find((x) => x.parts.some((pp) => parts.some((q) => q.id === pp)));
   const own = cropTo(m, (q) => near(q, r * 1.4));

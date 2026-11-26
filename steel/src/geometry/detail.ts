@@ -557,7 +557,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
   const hard = [main, ...(s.host ? [s.host] : [])];
   // ברגי עוגן עוברים בפלטה (ובחתך העמוד) מעצם הגדרתם — לא נבדקים (כמו בקוד הישן)
   const anchorPre = det.ops.filter((o) => o.k === 'bolts' && o.anchor).map((o) => `${cid}.${o.id}.`);
-  const bh = members.filter((m) => m.kind === 'bolt' && /\.(H|N)$/.test(m.id) && !anchorPre.some((x) => m.id.startsWith(x)));
+  const bh = members.filter((m) => m.kind === 'bolt' && /\.(H|N|W)$/.test(m.id) && !anchorPre.some((x) => m.id.startsWith(x)));
   const tests: [Member, Member][] = [];
   for (const p of parts) {
     for (const h of hard) {
@@ -676,7 +676,7 @@ function recipeSites(project: Project, connections: Connection[]): { assign: Rec
 export function partsToReplace(members: Member[], connections: Connection[], m: Member, E: Vec3, O: Vec3, crossConn?: string, index?: Map<string, Member>): Set<string> {
   if (crossConn) {
     const c = connections.find((x) => x.id === crossConn), kill = new Set<string>();
-    if (c) { for (const p of c.parts) kill.add(p); for (const b of c.bolts) { kill.add(b.id); for (const k of ['H', 'S', 'N']) kill.add(`${b.id}.${k}`); } }
+    if (c) { for (const p of c.parts) kill.add(p); for (const b of c.bolts) { kill.add(b.id); for (const k of ['H', 'S', 'N', 'W']) kill.add(`${b.id}.${k}`); } }
     return kill;
   }
   const near = (p: Vec3) => len(sub(p, E)) < len(sub(p, O)) && len(sub(p, E)) < 800;
@@ -688,7 +688,7 @@ export function partsToReplace(members: Member[], connections: Connection[], m: 
       const pm = byId.get(pid);
       if (pm && REMOVABLE.has(pm.kind) && near(scale(add(pm.start, pm.end), 0.5))) kill.add(pid);
     }
-    for (const b of c.bolts) if (near(b.p)) { kill.add(b.id); for (const k of ['H', 'S', 'N']) kill.add(`${b.id}.${k}`); }
+    for (const b of c.bolts) if (near(b.p)) { kill.add(b.id); for (const k of ['H', 'S', 'N', 'W']) kill.add(`${b.id}.${k}`); }
   }
   return kill;
 }

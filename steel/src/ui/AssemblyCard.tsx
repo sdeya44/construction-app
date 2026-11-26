@@ -24,7 +24,7 @@ export const FAM_NAME: Record<AsmFamily, string> = { lock: 'מסבך נעילה'
 export function assemblyOf(m: Member, d: DerivedModel): Asm | null {
   const id = m.id, cid = m.connId ?? '';
   const lineLabel = (lid: string) => d.section?.lines.find((l) => l.id === lid)?.label ?? lid;
-  const connParts = (pred: (cId: string) => boolean) => d.connections.filter((c) => pred(c.id)).flatMap((c) => [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`])]);
+  const connParts = (pred: (cId: string) => boolean) => d.connections.filter((c) => pred(c.id)).flatMap((c) => [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`, `${b.id}.W`])]);
   const withConnMembers = (ids: string[]) => d.members.filter((x) => x.connId && ids.includes(x.connId)).map((x) => x.id);
   // נעילה אופקית
   let mm = /^(?:C\.)?LT\.(\d+)\.([^.]+)\./.exec(id) ?? /^C\.LT\.(\d+)\.([^.]+)\./.exec(cid);
@@ -34,7 +34,7 @@ export function assemblyOf(m: Member, d: DerivedModel): Asm | null {
     const chords = d.members.filter((x) => x.id.startsWith(pre)).map((x) => x.id);
     const joints = d.connections.filter((c) => c.id.startsWith(`C.LT.${bay}.${line}.`) || (c.id.startsWith('C.LT.') && c.members.some((x) => chords.includes(x))));
     const cols = [...new Set(joints.flatMap((c) => c.members.filter((x) => x.includes('.COL.'))))];
-    const ids = [...chords, ...cols, ...joints.flatMap((c) => [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`])]), ...withConnMembers(joints.map((c) => c.id))];
+    const ids = [...chords, ...cols, ...joints.flatMap((c) => [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`, `${b.id}.W`])]), ...withConnMembers(joints.map((c) => c.id))];
     return { family: 'lock', title: `${FAM_NAME.lock} — ציר ${lineLabel(line!)} מפתח ${bay}`, ids: [...new Set(ids)], lineId: line, bay: Number(bay) - 1, view: 'yz' };
   }
   mm = /^(?:C\.)?BB\.(\d+)\.([^.]+)/.exec(id) ?? /^C\.BB\.(\d+)\.([^.]+)/.exec(cid);
@@ -64,7 +64,7 @@ export function assemblyOf(m: Member, d: DerivedModel): Asm | null {
   const famByConn = (prefix: string, fam: AsmFamily): Asm | null => {
     const c = cid.startsWith(prefix) ? d.connById.get(cid) : d.connections.find((x) => x.id.startsWith(prefix) && (x.parts.includes(id) || (x.members.includes(id) && d.byId.get(id)?.kind === 'brace')));
     if (!c) return null;
-    return { family: fam, title: `${FAM_NAME[fam]} — ${c.label}`, ids: [...new Set([...c.members, ...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`]), ...withConnMembers([c.id])])], view: 'xz' };
+    return { family: fam, title: `${FAM_NAME[fam]} — ${c.label}`, ids: [...new Set([...c.members, ...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`, `${b.id}.W`]), ...withConnMembers([c.id])])], view: 'xz' };
   };
   const k = famByConn('C.KB.', 'knee') ?? famByConn('C.GB.', 'gutter') ?? famByConn('C.HN.', 'haunch');
   if (k) return k;

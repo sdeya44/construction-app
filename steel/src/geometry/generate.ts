@@ -319,7 +319,7 @@ export function generateBase(project: Project): DerivedModel {
         const dropConn = connections.filter((c) => c.members.some((mid) => tr.drop.has(mid)) || ((c.type === 'eave' || c.type === 'rafter-side') && c.members.some((mid) => tr.shortCols.has(mid))));
         const dc = new Set(dropConn.map((c) => c.id));
         const keepIss = issues.filter((i) => !(i.elementId && dc.has(i.elementId))); issues.length = 0; issues.push(...keepIss);
-        const dropIds = new Set([...tr.drop, ...dropConn.flatMap((c) => c.parts.flatMap((pid) => [pid, `${pid}.H`, `${pid}.S`, `${pid}.N`]))]);
+        const dropIds = new Set([...tr.drop, ...dropConn.flatMap((c) => c.parts.flatMap((pid) => [pid, `${pid}.H`, `${pid}.S`, `${pid}.N`, `${pid}.W`]))]);
         const keep = out.filter((m) => !dropIds.has(m.id)); out.length = 0; out.push(...keep);
         connections = connections.filter((c) => !dropConn.includes(c));
         if (tr.drop.size) issues.push({ code: 'TB_DROP', severity: 'info', message: `דילול עמודים: הוסרו ${tr.drop.size} אלמנטים (אלכסונים/קושרות) שנשענו על עמודים שבוטלו או קוצרו` });
@@ -336,7 +336,7 @@ export function generateBase(project: Project): DerivedModel {
       const orphan = connections.filter((c) => { const o = own(c); return o.some((id) => hid.has(id)) && (c.type === 'brace-cross' || o.filter((id) => !hid.has(id) && live.has(id)).every(isMain)); });
       if (orphan.length) {
         const oc = new Set(orphan);
-        const dropIds = new Set(orphan.flatMap((c) => c.parts.flatMap((pid) => [pid, `${pid}.H`, `${pid}.S`, `${pid}.N`])));
+        const dropIds = new Set(orphan.flatMap((c) => c.parts.flatMap((pid) => [pid, `${pid}.H`, `${pid}.S`, `${pid}.N`, `${pid}.W`])));
         const keep = out.filter((m) => !dropIds.has(m.id)); out.length = 0; out.push(...keep);
         connections = connections.filter((c) => !oc.has(c));
         const ids = new Set(orphan.map((c) => c.id));

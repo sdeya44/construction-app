@@ -461,7 +461,7 @@ export class Viewport {
     if (largeModel(s.derived) && s.selection.length && s.selection.length < 200) {
       const ids = new Set(s.selection);
       const extra: string[] = [];
-      for (const c of s.derived.connections) if (c.parts.some((x) => ids.has(x)) || c.members.some((x) => ids.has(x))) for (const b of c.bolts) extra.push(`${b.id}.H`, `${b.id}.S`, `${b.id}.N`);
+      for (const c of s.derived.connections) if (c.parts.some((x) => ids.has(x)) || c.members.some((x) => ids.has(x))) for (const b of c.bolts) extra.push(`${b.id}.H`, `${b.id}.S`, `${b.id}.N`, `${b.id}.W`);
       s = { ...s, selection: [...s.selection, ...extra.filter((x) => s.derived.byId.has(x))] };
     }
     for (const c of [...this.selGroup.children]) { this.selGroup.remove(c); (c as THREE.Mesh).geometry.dispose(); }

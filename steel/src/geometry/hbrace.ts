@@ -91,7 +91,7 @@ export function rhsTruss(ctx: Ctx, rp: RhsTrussParams, key: string, label: strin
     res.members.push({ id: gid, kind: 'plate', label: `פח צומת סבכה PL${tg}×${W}×${Lg}`, start: add(c, scale(wDir, -Lg / 2)), end: add(c, scale(wDir, Lg / 2)), profile: `PL${W}x${tg}`, material: mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: n, source: 'generated', manualPlacement: false, connId: cid, partDesc: `פח צומת סבכה PL${tg}×${W}×${Lg}` });
     for (const bo of nd.bolts) {
       bo.connId = cid; bo.holesIn = [bo.holesIn[0], gid];
-      for (const suf of ['.H', '.S', '.N']) { const m = res.members.find((x) => x.id === bo.id + suf); if (m) m.connId = cid; }
+      for (const suf of ['.H', '.S', '.N', '.W']) { const m = res.members.find((x) => x.id === bo.id + suf); if (m) m.connId = cid; }
     }
     for (const m of res.members) if (nd.members.includes(m.id) && m.kind === 'plate') m.connId = cid;
     const welds: WeldInfo[] = [

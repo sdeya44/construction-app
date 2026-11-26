@@ -455,7 +455,7 @@ function HubSettings({ m }: { m: Member }) {
   const d = useStore((s) => s.derived);
   // פלטה / תומך / בורג / מוט עיגון: אשף הפלטה של החיבור שלהם
   if (m.kind === 'plate' || m.kind === 'cleat' || m.kind === 'bolt' || m.kind === 'anchor') {
-    const base = m.id.replace(/\.(H|S|N)$/, '');
+    const base = m.id.replace(/\.(H|S|N|W)$/, '');
     const c = (m.connId && d.connById.get(m.connId)) || d.connections.find((x) => x.parts.includes(m.id) || x.parts.includes(base));
     if (c && m.kind !== 'cleat') return <StudioPlateButton c={c} />;
     // תומך שאינו תושבת פטה (תומך מזחלה וכו') — רק הסטודיו; הגדרות השיפוע אינן שלו
@@ -621,7 +621,7 @@ export interface ScopeOpt { key: PropScope; label: string; ids: string[]; show: 
 /** אפשרויות ההיקף לאלמנט: מזהי האלמנטים שהשינוי חל עליהם (ids) ומה מוצג בתלת-ממד (show) */
 export function scopeOptions(m: Member, d: DerivedModel): ScopeOpt[] {
   const parts = (ids: string[]) => d.connections.filter((c) => c.members.some((x) => ids.includes(x)) || c.parts.some((x) => ids.includes(x)))
-    .flatMap((c) => [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`])]);
+    .flatMap((c) => [...c.parts, ...c.bolts.flatMap((b) => [`${b.id}.H`, `${b.id}.S`, `${b.id}.N`, `${b.id}.W`])]);
   const asm = assemblyOf(m, d);
   // אלמנט שהוא חלק ממכלול קשיחות (אגד B / נעילה / X בקיר / קושרות גג) — עובדים רק על מכלולים (1.48)
   const bf = asm ? BRACE_ASM[asm.family] : undefined;

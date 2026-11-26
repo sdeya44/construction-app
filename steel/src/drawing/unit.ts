@@ -87,7 +87,7 @@ export function braceUnitSheet(sh: Sheet, def: { ref?: string }, d: DerivedModel
     };
     for (const id of hostIds) draw(d.byId.get(id)!, 'THIN');
     for (const id of partIds) { const m = d.byId.get(id)!; draw(m, m.kind === 'bolt' ? 'THIN' : 'OUTLINE'); }
-    for (const c of u.conns) for (const b of c.bolts) for (const suf of ['.H', '.S', '.N']) { const m = d.byId.get(`${b.id}${suf}`); if (m) draw(m, 'THIN'); }
+    for (const c of u.conns) for (const b of c.bolts) for (const suf of ['.H', '.S', '.N', '.W']) { const m = d.byId.get(`${b.id}${suf}`); if (m) draw(m, 'THIN'); }
     E.push({ k: 'text', p: { x: va.x1, y: va.y1 }, s: `${title}  1:${sc}`, h: 2.8, align: 'right', layer: 'TEXT', bold: true });
     const inside = (q: P) => q.x >= va.x0 && q.x <= va.x1 && q.y >= va.y0 && q.y <= va.y1 - 4;
     if (opt.dims) {
@@ -206,7 +206,7 @@ export function braceUnitSheet(sh: Sheet, def: { ref?: string }, d: DerivedModel
   }
   // ---- 1.69.1: תלת־ממד מוצלל של היחידה (בלי העמודים והקורה הנושאת הארוכים), עם סימוני החלקים
   {
-    const isoIds = [...partIds.filter((id) => !id.startsWith('TB.')), ...u.conns.flatMap((c) => c.bolts.flatMap((b) => ['.H', '.S', '.N'].map((sf) => `${b.id}${sf}`)))].filter((id) => d.byId.has(id));
+    const isoIds = [...partIds.filter((id) => !id.startsWith('TB.')), ...u.conns.flatMap((c) => c.bolts.flatMap((b) => ['.H', '.S', '.N', '.W'].map((sf) => `${b.id}${sf}`)))].filter((id) => d.byId.has(id));
     const ms = [...new Set(isoIds)].map((id) => d.byId.get(id)!);
     const top = Math.min(y - 4, area.y0 + 150);
     if (top - area.y0 > 50 && ms.length) renderIso(sh, ms, ms.map((m) => fab.parts.find((x) => x.memberId === m.id)?.mark ?? ''), { x0: area.x0 + 2, x1: area.x0 + tblW, y0: area.y0 + 4, y1: top }, null, () => ({ t: 0, u: 0, v: 0 }), 'תלת־ממד (ללא קנ"מ)', [], 0, true);

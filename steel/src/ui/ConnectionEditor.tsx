@@ -83,7 +83,7 @@ export function ConnectionEditor() {
       <details className="psec" open><summary data-testid="conn-prev-sum">פרט טיפוסי</summary><div className="psec-b"><ConnPreview connId={c.id} /></div></details>
       <div className="row" style={{ margin: '6px 0' }}>
         <button className="btn small" data-testid="conn-show3d" onClick={() => {
-          store.set({ isolated: [...c.members, ...c.parts.flatMap((x) => [x, `${x}.H`, `${x}.S`, `${x}.N`])], selection: [c.parts[0]] });
+          store.set({ isolated: [...c.members, ...c.parts.flatMap((x) => [x, `${x}.H`, `${x}.S`, `${x}.N`, `${x}.W`])], selection: [c.parts[0]] });
           // תומך פטה: מבט מצד הזוויתן ומעט מלמעלה, כך שהפטה אינה מסתירה אותו
           const dir = viewDirFor(c);
           setTimeout(() => (dir ? window.__ksp?.viewport?.fitSelectionFrom(dir) : window.__ksp?.viewport?.fitSelection()), 30);
@@ -301,7 +301,7 @@ function clip(x0: number, y0: number, x1: number, y1: number, R: number): [numbe
  */
 export function SectionSvg({ c }: { c: Connection }) {
   const d = useStore((s) => s.derived);
-  const ids = [...c.members, ...c.parts.flatMap((x) => [x, `${x}.H`, `${x}.S`, `${x}.N`])];
+  const ids = [...c.members, ...c.parts.flatMap((x) => [x, `${x}.H`, `${x}.S`, `${x}.N`, `${x}.W`])];
   const parts = ids.map((x) => d.byId.get(x)).filter((m): m is NonNullable<typeof m> => !!m);
   const pm = d.byId.get(c.parts[0]);
   if (!pm) return null;
