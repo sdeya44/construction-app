@@ -62,9 +62,11 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
   // מתכון מובנה (שלב D): חתכי RHS/SHS, בורג 8.8 ISO 4017 עם חור d+2; קורת האגד — רק בפח ולשונית שוכבים
   const HOLLOW = ['RHS', 'SHS'];
   // עמוד I: `th` — הפרט נבנה על פני הווב האמיתיים (פגיעה במתאר החתך) ולא על תיבת החתך (קצה האגף)
-  const colI = ['IPE', 'HEA', 'HEB', 'HEM', 'INP', 'UPN', 'UPE'].includes(cp.family);
+  const colI = ['IPE', 'HEA', 'HEB', 'HEM', 'INP', 'UPN', 'UPE', 'C'].includes(cp.family);
   const colOk = ['RHS', 'SHS'].includes(cp.family) || colI;
   const specOk = pp.engine === 'recipe' && colOk && pp.bolt.grade === '8.8' && pp.bolt.standard === 'ISO 4017' && pp.bolt.clearance === 2;
+  // הקוד הישן ממקם את קצה האלמנט לפי ציר העמוד ± tw/2 — נכון ל-I בלבד; בעמוד U/C הווב בקצה החתך (התנגשות עם האגף)
+  if (!specOk && ['UPN', 'UPE', 'C'].includes(cp.family)) out.issues.push({ code: 'COL_U_LEGACY', severity: 'warning', message: `אגד B ציר ${L.label}: עמוד ${L.colProfile} (U/C) בקוד הישן — הקצה ממוקם לפי ציר העמוד ויתנגש באגף. הפעל "בנה ממתכון" (בורג 8.8 ISO 4017, פער 2)` });
   // קורת האגד (פח ולשונית שוכבים): במצב מתכון הציר נשמר ללא ההסטה (על קו הפח) והמתכון מחיל אותה — אחרת היא מוחלת פעמיים.
   // אלכסונים: הציר כבר על מישור הלשונית וממורכז על המארח (`findSite` ממרכז היסט < 25 מ"מ) — `bs: 0`, הפח מוזז מהציר ב-T
   const unshift = (start: Vec3, pnV: Vec3, dV: Vec3, sd: 1 | -1) => { const dn = norm(dV); return sub(start, scale(norm(sub(pnV, scale(dn, dot(pnV, dn)))), sd * T)); };

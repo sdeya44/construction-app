@@ -76,7 +76,7 @@ const maxDiff = (a: Record<string, number>, b: Record<string, number>) => {
 };
 
 describe('UHOST-01 עמוד U: פני חומר אמיתיים (th) — מתכון מול עמוד I', () => {
-  for (const mode of MODES) for (const col of ['UPN200', 'UPE200']) it(`${mode.name} · ${col}`, () => {
+  for (const mode of MODES) for (const col of ['UPN200', 'UPE200', 'C200x70x20x2.5']) it(`${mode.name} · ${col}`, () => {
     const dU = build(col, mode.mk, true), dI = build('HEA200', mode.mk, true);
     expect(mode.recipeConns(dU)).toBeGreaterThan(10);                       // השער פתוח: חיבורי מתכון נוצרו
     expect(mode.recipeConns(dU)).toBe(mode.recipeConns(dI));
@@ -101,5 +101,9 @@ describe('UHOST-02 בקרת הבדיקה: הקוד הישן על U חייב לה
     expect(maxDiff(gOld, gI)).toBeGreaterThan(20);
     // ובנוסף: הקוד הישן על U מתנגש עם אגף העמוד
     expect(build('UPN200', mode.mk, false).issues.filter((i) => i.code === 'CLASH').length).toBeGreaterThan(0);
+    // והמערכת מזהירה על כך (COL_U_LEGACY); במתכון אין אזהרה
+    expect(build('UPN200', mode.mk, false).issues.some((i) => i.code === 'COL_U_LEGACY')).toBe(true);
+    expect(build('UPN200', mode.mk, true).issues.some((i) => i.code === 'COL_U_LEGACY')).toBe(false);
+    expect(build('HEA200', mode.mk, false).issues.some((i) => i.code === 'COL_U_LEGACY')).toBe(false);
   });
 });

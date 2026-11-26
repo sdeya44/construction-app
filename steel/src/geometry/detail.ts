@@ -75,13 +75,13 @@ function secBox(m: Member) {
  * `findSite` רץ לכל אתר מול כל האלמנטים במודל — בלי זה העלות ריבועית במספר האתרים (מדידה: 160 אתרים ≈ 4 שניות מתוך 6).
  * המפתח הוא אובייקט האלמנט; אלמנט שהוחלף באובייקט חדש (ע"י פרט) מחושב מחדש.
  */
-interface RayGeom { f: ReturnType<typeof localFrame>; bx: ReturnType<typeof secBox>; tMin: number; tMax: number; isI: boolean; tw: number }
+interface RayGeom { f: ReturnType<typeof localFrame>; bx: ReturnType<typeof secBox>; tMin: number; tMax: number; isI: boolean; /** חתך שבו פני התיבה אינם פני החומר (I/U וגם C/Z קר-מרותך) — `trueHit`; נפרד מ-`isI` כדי לא לשנות `webOff`/`tw` */ trueFace: boolean; tw: number }
 const rayGeomCache = new WeakMap<Member, RayGeom>();
 function rayGeom(m: Member): RayGeom {
   let g = rayGeomCache.get(m);
   if (!g) {
     const prof = getProfile(m.profile), { tMin, tMax } = axialExtent(m);
-    g = { f: localFrame(m), bx: secBox(m), tMin, tMax, isI: ['IPE', 'HEA', 'HEB', 'HEM', 'INP', 'UPN', 'UPE'].includes(prof.family), tw: prof.dims.tw ?? 8 };
+    g = { f: localFrame(m), bx: secBox(m), tMin, tMax, isI: ['IPE', 'HEA', 'HEB', 'HEM', 'INP', 'UPN', 'UPE'].includes(prof.family), trueFace: ['IPE', 'HEA', 'HEB', 'HEM', 'INP', 'UPN', 'UPE', 'C', 'Z'].includes(prof.family), tw: prof.dims.tw ?? 8 };
     rayGeomCache.set(m, g);
   }
   return g;
@@ -159,7 +159,7 @@ export function findSite(members: Member[], m: Member, end: End, ctx?: SiteCtx):
   }
   const u = scale(dOut, -1);
   const P = best ? add(o, scale(dOut, best.t)) : E;
-  const th = best && rayGeom(best.m).isI ? trueHit(o, dOut, best.m, best.t) : null;
+  const th = best && rayGeom(best.m).trueFace ? trueHit(o, dOut, best.m, best.t) : null;
   const Pt0 = th && th.t - best!.t > 0.5 ? add(o, scale(dOut, th.t)) : undefined;
   const n = best ? best.n : u;
   let w0 = cross(n, u);
