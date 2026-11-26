@@ -122,6 +122,7 @@ function customFamily(c: Pick<Connection, 'custom'>): ConnFamily | null {
   const mid = c.custom?.site.split('|')[0] ?? '';
   if (mid.startsWith('KB.')) return 'knee';
   if (/^RS\d+\.\d+$/.test(mid)) return 'strut';
+  if (/\|x:/.test(c.custom?.site ?? '')) return 'cleat';
   return null;
 }
 
@@ -142,6 +143,11 @@ export function familyOf(c: Pick<Connection, 'id' | 'type'> & Partial<Pick<Conne
 function underlyingConn(d: DerivedModel, c: Connection, f: ConnFamily): Connection {
   const mid = c.custom!.site.split('|')[0];
   const host = c.members.find((x) => x !== mid);
+  if (f === 'cleat') {
+    // אתר חציה `פטה|x:מסגרת`: החיבור המובנה הוא C.PC.פטה.מסגרת, חלק התושבת CL.פטה.מסגרת
+    const frame = c.custom!.site.split('|x:')[1] ?? '';
+    return { ...c, id: `C.PC.${mid}.${frame}`, type: 'purlin-cleat', members: [mid, host ?? ''], parts: [`CL.${mid}.${frame}`] };
+  }
   if (f === 'knee') {
     const [fr, ...rest] = mid.slice(3).split('.'), [line, plane] = rest;
     const col = d.byId.get(`${fr}.COL.${line}`) ? `${fr}.COL.${line}` : host ?? '';

@@ -198,6 +198,7 @@ export function platePoly(shape: string, w: number, h: number, ch: number, co: b
   const W = w / 2, H = h / 2;
   if (shape === 'round') return Array.from({ length: 32 }, (_, i) => [W * Math.cos((i / 32) * Math.PI * 2), W * Math.sin((i / 32) * Math.PI * 2)]);
   if (shape === 'tri') return [[-W, -H], [W, -H], [-W, H]];
+  if (shape === 'rtri') return [[-W, -H], [-W, H], [W, -H]];
   const C: [number, number][] = [[W, H], [-W, H], [-W, -H], [W, -H]], ord = [3, 0, 1, 2], out: [number, number][] = [];
   const cc = shape === 'cham' ? Math.max(0, Math.min(ch, Math.min(w, h) - 2)) : 0;
   ord.forEach((k, i) => {
@@ -347,16 +348,16 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
   const at = (fr: Frame, along: number, across: number) => add(add(fr.base, scale(fr.e1, along)), scale(fr.e2, across));
   const targetOf = (on: string) => on === 'main' ? s.main.id : on === 'host' ? (s.host?.id ?? '') : (plates.get(on)?.memberId ?? '');
 
-  const plateMember = (g: PlateGeom, name: string, contour: boolean): Member => {
+  const plateMember = (g: PlateGeom, name: string, contour: boolean, rt = false): Member => {
     const xs = g.poly.map((p) => p[0]), ys = g.poly.map((p) => p[1]);
-    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), yc = (y0 + y1) / 2;
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), yc = rt ? g.poly[0][1] : (y0 + y1) / 2;
     const W = (x: number, y: number) => add(add(g.center, scale(g.X, x)), scale(g.Y, y));
     const start = W(x0, yc), end = W(x1, yc);
     const b = Math.round(y1 - y0), t = Math.round(g.t);
     const desc = `${name} PL${t}×${b}×${Math.round(x1 - x0)}`;
     const m: Member = {
       id: g.memberId, kind: 'plate', label: desc, start, end, profile: `PL${b}x${t}`, material: mat, rollDeg: 0, mirror: false,
-      anchor: 'center', refUp: g.Z, source: 'generated', manualPlacement: false, connId: cid, partDesc: contour ? `${desc} (צורה)` : desc,
+      anchor: 'center', refUp: rt && g.Z.y < 0 ? scale(g.Z, -1) : g.Z, source: 'generated', manualPlacement: false, connId: cid, partDesc: contour && !rt ? `${desc} (צורה)` : desc,
     };
     if (contour) {
       const f = localFrame(m);
@@ -383,7 +384,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         const poly = platePoly(op.shape, w, h, ch, op.corners);
         const g: PlateGeom = { id: op.id, center, X, Y, Z, t, w, h, poly, hand: fr.hand, memberId: `${cid}.${op.id}`, target: targetOf(op.ref.on) };
         plates.set(op.id, g);
-        const pm = plateMember(g, op.name || 'פלטה', op.shape !== 'rect' && !(op.shape === 'cham' && (ch <= 0 || !op.corners.some(Boolean))));
+        const pm = plateMember(g, op.name || 'פלטה', op.shape !== 'rect' && !(op.shape === 'cham' && (ch <= 0 || !op.corners.some(Boolean))), op.shape === 'rtri');
         // clipHost: קצה הפלטה שליד המארח נחתך במישור פני המארח (זווית חיתוך בחלק — כמו בקוד הישן, ו-NC1 מקבל את זווית החיתוך)
         if (op.clipHost && s.host && !s.cross) {
           const cut = { point: sub(s.P, scale(s.n, op.clipOff ? ev(op.clipOff, `${op.id}.clipOff`) : 0)), normal: scale(s.n, -1) };

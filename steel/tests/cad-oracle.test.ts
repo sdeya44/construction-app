@@ -171,9 +171,10 @@ describe('CAD-06 הסבה (שלב D): תמוכה בין קורות — פלטת 
   }, 300000);
 });
 
-describe('CAD-07 הסבה (שלב D): תושבת פטה (זוויתן) כמתכון', () => {
-  it('גופים תקינים, חורים חותכים, ריתוכים במגע, בלי חדירות — ובדיוק כמו הפרט הישן', async () => {
+describe('CAD-07 הסבה (שלב D): תושבת פטה (זוויתן / פלטה + משולש) כמתכון', () => {
+  for (const style of ['run', 'plate'] as const) it(`${style}: גופים תקינים, חורים חותכים, ריתוכים במגע, בלי חדירות — ובדיוק כמו הפרט הישן`, async () => {
     const b = defaultBuilding();
+    for (const k of ['left', 'right'] as const) b.purlins[k] = { ...b.purlins[k], cleat: { ...b.purlins[k].cleat, style } };
     const p0 = newProject('conv', b), d0 = generate(p0);
     const p1 = structuredClone(p0); p1.building.purlins.engine = 'recipe';
     const d1 = generate(p1);

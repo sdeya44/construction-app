@@ -852,7 +852,7 @@ export type DetailOp =
   | { k: 'cut'; id: string; kind: 'perp' | 'host' | 'vert' | 'horiz'; at: Expr }
   /** הסטת קצה האלמנט הראשי (ציר + חיתוך) ניצב למישור (לאורך w) — למשל בעובי הפח, כשהלשונית מחליפה את מקומו. לא חל על תושבת פטה */
   | { k: 'shift'; id: string; by: Expr }
-  | { k: 'plate'; id: string; name?: string; ref: DetailRef; mode: 'flat' | 'stand'; spin: Expr; off: Expr; shape: 'rect' | 'cham' | 'tri' | 'round'; w: Expr; h: Expr; t: Expr; ch: Expr; corners: [boolean, boolean, boolean, boolean];
+  | { k: 'plate'; id: string; name?: string; ref: DetailRef; mode: 'flat' | 'stand'; spin: Expr; off: Expr; shape: 'rect' | 'cham' | 'tri' | 'rtri' | 'round'; /* rtri: משולש ישר-זווית — ציר החלק לאורך הניצב הראשון (פינת הזווית הישרה), סדר קודקודים: פינה, לאורך הרוחב, לאורך הציר, וכיוון v של החלק (refUp) כלפי +Y העולמי — כמו משולש התמיכה בקוד הישן */ w: Expr; h: Expr; t: Expr; ch: Expr; corners: [boolean, boolean, boolean, boolean];
       /** קצה הפלטה שליד המארח נחתך בזווית במישור פני המארח (חיתוך קצה בחלק — מופיע בגיליון ובזווית ה-NC1) */ clipHost?: boolean;
       /** עם clipHost: עומק מישור החיתוך לתוך המארח מפני הפגיעה (למשל פני הווב מאחורי קצה האגפים בחתך I שנפגע מהצד) */ clipOff?: Expr }
   | { k: 'endplate'; id: string; t: Expr; w: Expr; h: Expr; dx: Expr; dy: Expr }

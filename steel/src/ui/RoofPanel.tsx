@@ -87,7 +87,7 @@ export function SideEditor({ side, title, items, freeStart, part }: { side: stri
         </div>
         {prm.cleat.enabled && <>
           <CleatTypePicker side={side} />
-          <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} title="תושבות זוויתן רגילות (בפטות C/Z, בלי תפר מעל התומך) נבנות ממתכון במקום מהקוד הישן. השוואה אוטומטית מול הקוד הישן ירוקה; כבוי = הקוד הישן (ברירת מחדל, גיבוי). חל על כל התושבות במבנה.">
+          <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} title="תושבות זוויתן ותושבות פלטה + משולש (בפטות C/Z, בלי תפר מעל התומך) נבנות ממתכון במקום מהקוד הישן. השוואה אוטומטית מול הקוד הישן ירוקה; כבוי = הקוד הישן (ברירת מחדל, גיבוי). חל על כל התושבות במבנה.">
             <input type="checkbox" data-testid="cleat-recipe" checked={p.building.purlins.engine === 'recipe'} onChange={(e) => store.exec(setPurlinSystem({ engine: e.target.checked ? 'recipe' : 'legacy' }))} />
             <span>בנה ממתכון (מנוע חדש) — כבוי: הקוד הישן</span></label>
           {(prm.cleat.style ?? 'run') === 'run' && <CleatSchematic side={side} />}

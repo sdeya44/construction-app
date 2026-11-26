@@ -10,7 +10,7 @@ import { checkEavePlate } from './eavePlate';
 import { zAt, type SectionTopology } from '../model/section';
 import { defaultSideConn } from '../model/defaults';
 import { buildKneeBraces } from './knee';
-import { CLEAT_RUN_RECIPE_ID } from './convRecipes';
+import { CLEAT_PLATE_RECIPE_ID, CLEAT_RUN_RECIPE_ID } from './convRecipes';
 import { purlinParams } from './purlins';
 
 /** מידות בורג/אום/דיסקית לפי ISO 4017/4032/7089 (מידע גיאומטרי בלבד — לא מאומת). */
@@ -528,6 +528,7 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
     const weldsX: WeldInfo[] = [];
     const extraParts: string[] = [];
     let hh0: number, top: number;
+    let plateRcp: Record<string, number> | undefined; // פרמטרים למתכון `plate` (רק בלי תפר)
     if (style === 'run') {
       const prof = `L${H}x${prm.base}x${prm.thickness}`;
       const uC = cross(n, Y);
@@ -586,6 +587,7 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
         bolts.push(makeBolt(`${id}.B${r + 1}${ci + 1}`, id, head, backD, prm.bolt, T + tw, 'site', [cid, pur.id], n, res.members));
       });
       top = hh0 + (rows - 1) * rp;
+      if (jointT === undefined) plateRcp = { H, T, nc: cols.length, cp: Math.max(prm.pitch, 60), rows, rp, hh0, e, Bs: Math.max(40, prm.base), Hs: Math.max(40, H - 15), d: prm.bolt.d, cl: prm.bolt.clearance, a: prm.weldSize, gt: T + tw };
       // משולש תמיכה: במישור (n, d), במרכז הפלטה, מאחורי הפלטה
       const sid = `${cid}.ST`, Bs = Math.max(40, prm.base), Hs = Math.max(40, H - 15);
       const S0 = add(add(Q, scale(d, T)), scale(Y, yc));
@@ -638,7 +640,9 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
     res.connections.push({ id, type: 'purlin-cleat', label: `פטה-קורה ${sp.purlinId} / ${sp.frameId}`, members: [pur.id, raf.id], parts: [cid, ...extraParts, ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: 'pinned', overridden: !!project.cleatOverrides[cid],
       // מתכון מובנה (שלב D): רק תושבת זוויתן רגילה בפטת C/Z, בלי פלטת המשך שעוברת בה בורג
       ...(project.building.purlins.engine === 'recipe' && style === 'run' && (pp.family === 'C' || pp.family === 'Z') && ((prm.perRow - 1) / 2) * prm.pitch + d0 / 2 < prm.width / 2 && top + d0 / 2 < H && hh0 - d0 / 2 > 0 && bolts.every((b2) => b2.holesIn.length === 2 && b2.p.y - d0 / 2 >= yMin + 1.2 * d0 - 0.01 && b2.p.y + d0 / 2 <= yMax - 1.2 * d0 + 0.01)
-        ? { recipe: { id: CLEAT_RUN_RECIPE_ID, params: { H, B: prm.base, t: prm.thickness, W: prm.width, rows: prm.rows, perRow: prm.perRow, pitch: prm.pitch, rowPitch: prm.rowPitch, hh0, d: prm.bolt.d, cl: prm.bolt.clearance, a: prm.weldSize, gt: prm.thickness + tw }, sites: [`${pur.id}|x:${sp.frameId}`] } } : {}) });
+        ? { recipe: { id: CLEAT_RUN_RECIPE_ID, params: { H, B: prm.base, t: prm.thickness, W: prm.width, rows: prm.rows, perRow: prm.perRow, pitch: prm.pitch, rowPitch: prm.rowPitch, hh0, d: prm.bolt.d, cl: prm.bolt.clearance, a: prm.weldSize, gt: prm.thickness + tw }, sites: [`${pur.id}|x:${sp.frameId}`] } } : {}),
+      ...(project.building.purlins.engine === 'recipe' && style === 'plate' && plateRcp && (pp.family === 'C' || pp.family === 'Z') && bolts.every((b2) => b2.holesIn.length === 2 && b2.p.y - d0 / 2 >= yMin + 1.2 * d0 - 0.01 && b2.p.y + d0 / 2 <= yMax - 1.2 * d0 + 0.01) && hh0 - d0 / 2 > 0 && top + d0 / 2 < H
+        ? { recipe: { id: CLEAT_PLATE_RECIPE_ID, params: plateRcp, sites: [`${pur.id}|x:${sp.frameId}`] } } : {}) });
   }
 
   // כלל ייצור: ריתוך רק במסגריה

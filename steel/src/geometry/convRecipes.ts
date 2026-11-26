@@ -11,12 +11,13 @@ export const STRUT_FIN_RECIPE_ID = 'conv-strut-fin';
 export const STRUT_END_RECIPE_ID = 'conv-strut-end';
 export const STRUT_WELD_RECIPE_ID = 'conv-strut-weld';
 export const CLEAT_RUN_RECIPE_ID = 'conv-cleat-run';
+export const CLEAT_PLATE_RECIPE_ID = 'conv-cleat-plate';
 
 /** סוג החיבור המובנה שהמתכון מחליף — לחתימות שמבוססות על סוגי חיבורים (קיבוץ מסגרות זהות בשרטוטים) */
-export const RECIPE_CONN_TYPE: Record<string, 'knee' | 'brace' | 'purlin-cleat'> = { [KNEE_FIN_RECIPE_ID]: 'knee', [STRUT_FIN_RECIPE_ID]: 'brace', [STRUT_END_RECIPE_ID]: 'brace', [STRUT_WELD_RECIPE_ID]: 'brace', [CLEAT_RUN_RECIPE_ID]: 'purlin-cleat' };
+export const RECIPE_CONN_TYPE: Record<string, 'knee' | 'brace' | 'purlin-cleat'> = { [KNEE_FIN_RECIPE_ID]: 'knee', [STRUT_FIN_RECIPE_ID]: 'brace', [STRUT_END_RECIPE_ID]: 'brace', [STRUT_WELD_RECIPE_ID]: 'brace', [CLEAT_RUN_RECIPE_ID]: 'purlin-cleat', [CLEAT_PLATE_RECIPE_ID]: 'purlin-cleat' };
 
 /** מתכונים מובנים לפי מזהה (מחוץ ל-`project.customDetails`): מחולים אוטומטית לפי `Connection.recipe` */
-export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe(), [CLEAT_RUN_RECIPE_ID]: () => cleatRunRecipe() };
+export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe(), [CLEAT_RUN_RECIPE_ID]: () => cleatRunRecipe(), [CLEAT_PLATE_RECIPE_ID]: () => cleatPlateRecipe() };
 
 /**
  * אלכסון עמוד-קורה, פח + לשונית בחריץ — שקול ל-`finJoint` ב-`geometry/finJoint.ts` (פרט הלקוח 15.11.2026).
@@ -169,6 +170,34 @@ export function cleatRunRecipe(): CustomDetail {
       { k: 'holes', id: 'H1', ref: R('A1', 'z-', 'hh0 + (rows - 1)*rowPitch/2 - H/2', '0'), rows: 'rows', cols: 'perRow', px: 'pitch', py: 'rowPitch', d0: 'd + cl' },
       { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true, grip: 'gt' },
       { k: 'weld', id: 'W1', part: 'A1', a: 'a', site: false, to: 'host', len: 'W + 2*B' },
+    ],
+  };
+}
+
+/**
+ * תושבת פטה — פלטה אנכית צמודה לווב + משולש תמיכה מאחוריה (סגנון `plate`, בלי תפר פטה מעל התומך) — שקול ל-`connections.ts`.
+ * הפרמטרים מהחיבור: H, T (עובי), nc (עמודות חורים לאורך הפטה), cp (מרווח), rows/rp (שורות ומרווח, כבר מוגבלים לגובה), hh0, e, Bs/Hs (משולש), d/cl, a, gt.
+ */
+export function cleatPlateRecipe(): CustomDetail {
+  return {
+    id: CLEAT_PLATE_RECIPE_ID, name: 'תושבת פטה: פלטה + משולש (הסבה)', family: 'cleat', category: 'support',
+    note: 'שקול לתושבת פלטה + משולש תמיכה: פלטה אנכית צמודה לווב הפטה, משולש מאחוריה; מרותך לקורה, מוברג לפטה.',
+    vars: [
+      { name: 'H', expr: 'mh', note: 'גובה הפלטה' }, { name: 'T', expr: '8', note: 'עובי' }, { name: 'nc', expr: '2', note: 'עמודות חורים' }, { name: 'cp', expr: '60', note: 'מרווח בין עמודות' },
+      { name: 'rows', expr: '1', note: 'שורות חורים' }, { name: 'rp', expr: '0', note: 'מרווח בין שורות' }, { name: 'hh0', expr: '(H - (rows - 1)*rp)/2', note: 'גובה השורה התחתונה' },
+      { name: 'e', expr: 'max(30, ceil(1.5*(d + cl)/5)*5)', note: 'מרחק שפה' }, { name: 'Bs', expr: '60', note: 'בסיס המשולש' }, { name: 'Hs', expr: 'max(40, H - 15)', note: 'גובה המשולש' },
+      { name: 'W', expr: 'ceil(((nc - 1)*cp + 2*e)/5)*5', note: 'רוחב הפלטה לאורך הפטה' },
+      { name: 'd', expr: '12', note: 'קוטר בורג' }, { name: 'cl', expr: '2', note: 'מרווח חור' }, { name: 'a', expr: '5', note: 'גודל ריתוך' }, { name: 'gt', expr: 'T + mt', note: 'אורך אחיזה' },
+    ],
+    ops: [
+      { k: 'plate', id: 'P1', name: 'פלטת תושבת', ref: R('host', 'hit', '0', 'cs*(wo + T/2)'), mode: 'stand', spin: '0', off: '0', shape: 'rect', w: 'H', h: 'W', t: 'T', ch: '0', corners: [false, false, false, false] },
+      { k: 'plate', id: 'G1', name: 'משולש תמיכה', ref: R('host', 'hit', '0', 'cs*(wo + T + Bs/2)'), mode: 'stand', spin: 'sr', off: '0', shape: 'rtri', w: 'Hs', h: 'Bs', t: 'T', ch: '0', corners: [false, false, false, false] },
+      // חורים על פני הפטה (פנים a-: נורמל קנוני לכיוון הווב, בשני צדי הגג), לא על הפלטה — כיוון הנורמל של פלטת stand תלוי בצד
+      { k: 'holes', id: 'H1', ref: R('main', 'a-', 'hh0 + (rows - 1)*rp/2', '0'), rows: 'rows', cols: 'nc', px: 'cp', py: 'rp', d0: 'd + cl' },
+      { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true, grip: 'gt' },
+      { k: 'weld', id: 'W1', part: 'P1', a: 'a', site: false, to: 'host', len: '2*W' },
+      { k: 'weld', id: 'W2', part: 'G1', a: 'min(a, 5)', site: false, to: 'P1', len: '2*(Bs + Hs)' },
+      { k: 'weld', id: 'W3', part: 'G1', a: 'min(a, 5)', site: false, to: 'host', len: '2*Bs' },
     ],
   };
 }
