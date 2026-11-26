@@ -344,7 +344,7 @@ export function generateBase(project: Project): DerivedModel {
       }
     }
     // פרטי חיבור מותאמים מהספרייה: מחליפים את החיבור שנבנה בקצה האלמנט
-    if ((project.detailAssign && Object.keys(project.detailAssign).length) || connections.some((c) => c.recipe)) issues.push(...applyCustomDetails(project, out, connections));
+    if ((project.detailAssign && Object.keys(project.detailAssign).length) || connections.some((c) => c.recipe)) issues.push(...applyCustomDetails(projEff, out, connections));
     byId = new Map(out.map((m) => [m.id, m]));
     issues.push(...checkClashes(connections, byId));
   }

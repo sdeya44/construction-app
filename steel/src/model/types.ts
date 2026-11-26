@@ -302,6 +302,8 @@ export interface PurlinSpliceParams {
   jointOffset: Mm;
   /** מרחק שפה בפלטה */
   edge: Mm;
+  /** מנוע חיבור ההמשך (G9, שלב D): 'recipe' = המתכון `purlinSpliceRecipe` על אתר אמצע מחליף את הקוד הישן; חסר/'legacy' = הקוד הישן */
+  engine?: 'legacy' | 'recipe';
 }
 
 export interface BuildingParams {

@@ -11,6 +11,7 @@ import { zAt, type SectionTopology } from '../model/section';
 import { defaultSideConn } from '../model/defaults';
 import { buildKneeBraces } from './knee';
 import { CLEAT_PLATE_RECIPE_ID, CLEAT_RUN_RECIPE_ID, CLEAT_SEAM_RECIPE_ID, CLEAT_STAND_RECIPE_ID, BASE_EMBEDDED_RECIPE_ID, BASE_BOLTED_RECIPE_ID, BASE_BOLTED_B500_RECIPE_ID, SIDE_RECIPE_ID } from './convRecipes';
+import { PURLIN_SPLICE_RECIPE_ID } from './spliceRecipes';
 import { purlinParams } from './purlins';
 
 /** מידות בורג/אום/דיסקית לפי ISO 4017/4032/7089 (מידע גיאומטרי בלבד — לא מאומת). */
@@ -501,7 +502,10 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       const arr = splicePlates.get(pur.id) ?? [];
       arr.push({ id: pid, y0: t + y0p, y1: t + y1p, T: sp0.plateT });
       splicePlates.set(pur.id, arr);
-      res.connections.push({ id, type: 'purlin-splice', label, members: [pur.id], parts: [pid, ...bolts.map((x) => x.id)], bolts, welds: [], status: statusOf(project, id), fixity: 'pinned', overridden: false });
+      // מתכון מובנה (G9, שלב D): אתר אמצע `פטה|s:k`; בורג 8.8 ISO 4017. אחרת — הקוד הישן
+      const spliceRcp = sp0.engine === 'recipe' && sp0.bolt.grade === '8.8' && sp0.bolt.standard === 'ISO 4017'
+        ? { recipe: { id: PURLIN_SPLICE_RECIPE_ID, own: true, params: { T: sp0.plateT, H, oL, oR, edge: sp0.edge, row: rowMode ? 1 : 0, gV, d: sp0.bolt.d, cl: sp0.bolt.clearance }, sites: [`${pur.id}|s:${k + 1}`] } } : {};
+      res.connections.push({ id, type: 'purlin-splice', label, members: [pur.id], parts: [pid, ...bolts.map((x) => x.id)], bolts, welds: [], status: statusOf(project, id), fixity: 'pinned', overridden: false, ...spliceRcp });
     });
   }
 
