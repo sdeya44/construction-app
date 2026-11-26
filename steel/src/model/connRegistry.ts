@@ -118,6 +118,11 @@ export function customParamDefs(det: CustomDetail): (ParamDef & { group?: string
 }
 
 /** משפחת האלמנט הראשי של חיבור מותאם (פרט סטודיו/מתכון מובנה) לפי מזהה האלמנט באתר — רק משפחות שמזהה האלמנט שלהן ידוע */
+/** מזהי חיבורים מובנים שמתכוני G9 (אתר אמצע / עוגן) מחליפים תחת אותו מזהה */
+const RECIPE_ID_RE = /^C\.(?:(?:PS|RS|WS)\.|BR\.[RW])/;
+/** סוג החיבור המובנה לכל משפחה שנבנית ממתכון על אתר אמצע/עוגן */
+const MID_TYPE: Partial<Record<ConnFamily, Connection['type']>> = { psplice: 'purlin-splice', bsplice: 'beam-splice', roofx: 'brace-cross', wallx: 'brace-cross' };
+
 function customFamily(c: Pick<Connection, 'custom'>): ConnFamily | null {
   const mid = c.custom?.site.split('|')[0] ?? '';
   if (mid.startsWith('KB.')) return 'knee';
@@ -128,7 +133,10 @@ function customFamily(c: Pick<Connection, 'custom'>): ConnFamily | null {
 
 /** משפחת חיבור לפי מזהה וסוג; חיבור מותאם — משפחת האלמנט הראשי (נפתח בו האשף כמו בחיבור המובנה שהוחלף) */
 export function familyOf(c: Pick<Connection, 'id' | 'type'> & Partial<Pick<Connection, 'custom'>>): ConnFamily | null {
-  if (c.type === 'custom') return customFamily(c);
+  // חיבור ממתכון (G9) נושא את מזהה החיבור המובנה שהחליף — המשפחה נגזרת ממנו; פרט מותאם של המשתמש (`C.CD.*`) — לפי האתר
+  if (c.type === 'custom') return customFamily(c) ?? (RECIPE_ID_RE.test(c.id) ? familyOf({ id: c.id, type: 'brace' }) : null);
+  if (c.id.startsWith('C.PS.')) return 'psplice';
+  if (/^C\.(RS|WS)\./.test(c.id)) return 'bsplice';
   if (c.id.startsWith('C.KB.')) return 'knee';
   if (/^C\.RS\d+\./.test(c.id)) return 'strut';
   if (c.id.startsWith('C.BR.R')) return 'roofx';
@@ -141,6 +149,8 @@ export function familyOf(c: Pick<Connection, 'id' | 'type'> & Partial<Pick<Conne
 
 /** החיבור המובנה שחיבור מותאם החליף: מזהה, משתתפים וחלק ראשי — מספיק לזיהוי המצב באשף (לא נשמר במודל) */
 function underlyingConn(d: DerivedModel, c: Connection, f: ConnFamily): Connection {
+  // אתר אמצע/עוגן: מזהה החיבור זהה לזה שהוחלף — מספיק להחזיר אותו בסוגו המקורי
+  if (/\|[sp]:/.test(c.custom!.site) && MID_TYPE[f]) return { ...c, type: MID_TYPE[f]! };
   const mid = c.custom!.site.split('|')[0];
   const host = c.members.find((x) => x !== mid);
   if (f === 'cleat') {
