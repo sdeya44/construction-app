@@ -1,5 +1,5 @@
 import { add, norm, scale, sub, v3, type Vec3 } from '../core/vec';
-import { KNEE_FIN_LTCHORD_RECIPE_ID, KNEE_FIN_LTTRUSS_RECIPE_ID } from './convRecipes';
+import { KNEE_FIN_LTCHORD_RECIPE_ID, KNEE_FIN_LTTRUSS_RECIPE_ID, LOCK_PLATE_RECIPE_ID } from './convRecipes';
 import type { BoltInfo, Connection, LockTrussParams, Member, ValidationIssue, WeldInfo } from '../model/types';
 import { getProfile, tryProfile, type Profile } from '../profiles/library';
 import { makeBolt } from './connections';
@@ -49,6 +49,8 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
   const bothTongue = (lt.connA ?? lt.conn) === 'tongue' && (lt.connB ?? lt.conn) === 'tongue';
   const recipeOn = lt.engine === 'recipe' && bothTongue && (lt.finOrient ?? 'horizontal') === 'horizontal' && ['RHS', 'SHS'].includes(col.family) && ['RHS', 'SHS'].includes(cpf.family)
     && lt.bolt.grade === '8.8' && lt.bolt.standard === 'ISO 4017' && lt.bolt.clearance === 2;
+  // מתכון פלטת קצה (אתר של 3 אלמנטים: עמוד + סיב משני צדיו — אתר זוגי): עמוד RHS/SHS, בורג 8.8 ISO 4017 עם חור d+2
+  const plateRecipeOn = lt.engine === 'recipe' && ['RHS', 'SHS'].includes(col.family) && lt.bolt.grade === '8.8' && lt.bolt.standard === 'ISO 4017' && lt.bolt.clearance === 2;
   const bays = lt.continuous ? Array.from({ length: nb }, (_, i) => i) : [...locked];
   const joints = new Map<string, { colId: string; z: number; yC: number; ends: { chordId: string; plateId: string; sg: number; yF: number; lab: string }[] }>();
   for (const bay of bays) {
@@ -152,6 +154,11 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
     }
     const welds: WeldInfo[] = jt.ends.map((e) => ({ id: `${cid}.W.${e.plateId.split('.').slice(-2, -1)[0]}`, connId: cid, type: 'fillet' as const, a: lt.weldSize, length: 2 * (cpf.props.b + cpf.props.h), location: 'shop' as const, between: [e.chordId, e.plateId] as [string, string], from: v3(xo, e.yF, jt.z), to: v3(xo, e.yF, jt.z + 1) }));
     out.connections.push({ id: cid, type: 'knee', label: `${jt.ends[0].lab} — ${jt.ends.length > 1 ? 'סיבים משני צדי העמוד' : 'סיב לעמוד'}: פלטות קצה ${pd.W}×${pd.H}×${t}, 4×M${lt.bolt.d} דרך העמוד`,
-      members: [jt.colId, ...jt.ends.map((e) => e.chordId)], parts: [...jt.ends.map((e) => e.plateId), ...bolts.map((b) => b.id)], bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: false });
+      members: [jt.colId, ...jt.ends.map((e) => e.chordId)], parts: [...jt.ends.map((e) => e.plateId), ...bolts.map((b) => b.id)], bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: false,
+      ...(plateRecipeOn ? (() => {
+        const siteOf = (e: { chordId: string; sg: number }) => `${e.chordId}|${e.sg > 0 ? 'start' : 'end'}`; // A (sg +1) = ההתחלה, B (sg −1) = הסוף
+        const siteParams = Object.fromEntries(jt.ends.map((e) => [siteOf(e), { bld: lo ? (e === lo ? 1 : 0) : 1, prt: lo && hi ? 1 : 0, hiS: e.sg > 0 ? 1 : 0 }]));
+        return { recipe: { id: LOCK_PLATE_RECIPE_ID, own: true, params: { t, Hp: pd.H, Wp: pd.W, g: pd.g, pv: pd.pv, d: lt.bolt.d, cl: lt.bolt.clearance, a: lt.weldSize, wl: 2 * (cpf.props.b + cpf.props.h), ctw: tw }, sites: jt.ends.map(siteOf), siteParams, ...(lo && hi ? { pairs: { [siteOf(lo)]: siteOf(hi) } } : {}) } };
+      })() : {}) });
   }
 }

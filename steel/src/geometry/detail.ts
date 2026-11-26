@@ -427,6 +427,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         const cand: Member[] = [...members.filter((m) => m.kind === 'plate' || m.kind === 'cleat'), ...(opts.extra ?? []), ...(op.noMain ? [] : [main]), ...(s.host ? [s.host] : [])];
         const testers = cand.map((m) => ({ m, t: new PrismTester(m) }));
         const own = plates.get(hs.plate)?.memberId;
+        const scanR = op.reach !== undefined ? Math.ceil(ev(op.reach, `${op.id}.reach`)) + 60 : 200; // חלון הסריקה לאורך הבורג
         hs.cs.forEach((c, i) => {
           // סריקה לאורך ציר הבורג: קטעי חומר רציפים סביב הפלטה של החורים
           const segs: { m: string; lo: number; hi: number }[] = [];
@@ -436,8 +437,8 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
             const edge = (a: number, b: number) => { for (let it = 0; it < 14; it++) { const mdl = (a + b) / 2; if (inside(mdl)) a = mdl; else b = mdl; } return b; };
             // קטעים רציפים בלבד (בחתך I — כל אגף בנפרד)
             let run: number | null = null;
-            for (let k = -200; k <= 201; k += 1) {
-              const In = k <= 200 && inside(k);
+            for (let k = -scanR; k <= scanR + 1; k += 1) {
+              const In = k <= scanR && inside(k);
               if (In && run === null) run = k;
               if (!In && run !== null) { segs.push({ m: m.id, lo: edge(run, run - 1), hi: edge(k - 1, k) }); run = null; }
             }
@@ -446,7 +447,8 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
           if (!start) { errors[op.id] = 'הבורג לא עובר בשום חלק'; return; }
           let lo = start.lo, hi = start.hi; const used = new Set([start.m]);
           // ברגי עוגן: רק הפלטה — לא מצרפים את חומר העמוד שמעליה (גם כשהבורג בתוך שטח החתך, כמו בקוד הישן)
-          for (let ch = !op.anchor; ch;) { ch = false; for (const g of segs) if (!used.has(g.m) && g.lo <= hi + 2 && g.hi >= lo - 2) { lo = Math.min(lo, g.lo); hi = Math.max(hi, g.hi); used.add(g.m); ch = true; } }
+          const gap = op.reach !== undefined ? ev(op.reach, `${op.id}.reach`) : 2;
+          for (let ch = !op.anchor; ch;) { ch = false; for (const g of segs) if (!used.has(g.m) && g.lo <= hi + gap && g.hi >= lo - gap) { lo = Math.min(lo, g.lo); hi = Math.max(hi, g.hi); used.add(g.m); ch = true; } }
           if (used.size < 2 && !op.anchor) issues.push({ code: 'CD_BOLT', severity: 'warning', elementId: cid, message: `פרט ${det.name}: בורג ${op.id}-${i + 1} עובר בחלק אחד בלבד — חסרה פלטה נגדית?` });
           // ברגי עוגן: הראש/האום מעל הפלטה (w + m + 2P), האורך = עיגון + עובי + אותו מרווח — כמו הקוד הישן
           const hb = hw(d), lead = op.anchor ? hb.w + hb.m + 2 * hb.P : 0;

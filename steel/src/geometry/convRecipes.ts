@@ -18,16 +18,17 @@ export const KNEE_FIN_BEAM_RECIPE_ID = 'conv-knee-fin-bb-beam';
 export const KNEE_FIN_BBDIAG_RECIPE_ID = 'conv-knee-fin-bb-diag';
 export const KNEE_FIN_LTCHORD_RECIPE_ID = 'conv-knee-fin-lt-chord';
 export const KNEE_FIN_LTTRUSS_RECIPE_ID = 'conv-knee-fin-lt-truss';
+export const LOCK_PLATE_RECIPE_ID = 'conv-lock-plate';
 export const SIDE_RECIPE_ID = 'conv-side';
 export const BASE_EMBEDDED_RECIPE_ID = 'conv-base-embedded';
 export const BASE_BOLTED_RECIPE_ID = 'conv-base-bolted';
 export const BASE_BOLTED_B500_RECIPE_ID = 'conv-base-bolted-b500';
 
 /** סוג החיבור המובנה שהמתכון מחליף — לחתימות שמבוססות על סוגי חיבורים (קיבוץ מסגרות זהות בשרטוטים) */
-export const RECIPE_CONN_TYPE: Record<string, 'knee' | 'brace' | 'purlin-cleat' | 'base' | 'rafter-side'> = { [KNEE_FIN_RECIPE_ID]: 'knee', [STRUT_FIN_RECIPE_ID]: 'brace', [STRUT_END_RECIPE_ID]: 'brace', [STRUT_WELD_RECIPE_ID]: 'brace', [CLEAT_RUN_RECIPE_ID]: 'purlin-cleat', [CLEAT_PLATE_RECIPE_ID]: 'purlin-cleat', [CLEAT_SEAM_RECIPE_ID]: 'purlin-cleat', [CLEAT_STAND_RECIPE_ID]: 'purlin-cleat', [KNEE_FIN_BEAM_RECIPE_ID]: 'knee', [KNEE_FIN_BBDIAG_RECIPE_ID]: 'knee', [KNEE_FIN_LTCHORD_RECIPE_ID]: 'knee', [KNEE_FIN_LTTRUSS_RECIPE_ID]: 'knee', [SIDE_RECIPE_ID]: 'rafter-side', [BASE_EMBEDDED_RECIPE_ID]: 'base', [BASE_BOLTED_RECIPE_ID]: 'base', [BASE_BOLTED_B500_RECIPE_ID]: 'base' };
+export const RECIPE_CONN_TYPE: Record<string, 'knee' | 'brace' | 'purlin-cleat' | 'base' | 'rafter-side'> = { [KNEE_FIN_RECIPE_ID]: 'knee', [STRUT_FIN_RECIPE_ID]: 'brace', [STRUT_END_RECIPE_ID]: 'brace', [STRUT_WELD_RECIPE_ID]: 'brace', [CLEAT_RUN_RECIPE_ID]: 'purlin-cleat', [CLEAT_PLATE_RECIPE_ID]: 'purlin-cleat', [CLEAT_SEAM_RECIPE_ID]: 'purlin-cleat', [CLEAT_STAND_RECIPE_ID]: 'purlin-cleat', [KNEE_FIN_BEAM_RECIPE_ID]: 'knee', [KNEE_FIN_BBDIAG_RECIPE_ID]: 'knee', [KNEE_FIN_LTCHORD_RECIPE_ID]: 'knee', [KNEE_FIN_LTTRUSS_RECIPE_ID]: 'knee', [LOCK_PLATE_RECIPE_ID]: 'knee', [SIDE_RECIPE_ID]: 'rafter-side', [BASE_EMBEDDED_RECIPE_ID]: 'base', [BASE_BOLTED_RECIPE_ID]: 'base', [BASE_BOLTED_B500_RECIPE_ID]: 'base' };
 
 /** מתכונים מובנים לפי מזהה (מחוץ ל-`project.customDetails`): מחולים אוטומטית לפי `Connection.recipe` */
-export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe(), [CLEAT_RUN_RECIPE_ID]: () => cleatRunRecipe(), [CLEAT_PLATE_RECIPE_ID]: () => cleatPlateRecipe(), [CLEAT_SEAM_RECIPE_ID]: () => cleatSeamRecipe(), [CLEAT_STAND_RECIPE_ID]: () => cleatStandRecipe(), [KNEE_FIN_BEAM_RECIPE_ID]: () => kneeFinRecipe('קורת אגד', KNEE_FIN_BEAM_RECIPE_ID), [KNEE_FIN_BBDIAG_RECIPE_ID]: () => kneeFinRecipe('אלכסון אגד', KNEE_FIN_BBDIAG_RECIPE_ID), [KNEE_FIN_LTCHORD_RECIPE_ID]: () => kneeFinRecipe('סיב נעילה', KNEE_FIN_LTCHORD_RECIPE_ID), [KNEE_FIN_LTTRUSS_RECIPE_ID]: () => kneeFinRecipe('חגורת מסבך', KNEE_FIN_LTTRUSS_RECIPE_ID), [SIDE_RECIPE_ID]: () => sideRecipe(), [BASE_EMBEDDED_RECIPE_ID]: () => baseEmbeddedRecipe(), [BASE_BOLTED_RECIPE_ID]: () => baseBoltedRecipe('8.8', 'ISO 4017'), [BASE_BOLTED_B500_RECIPE_ID]: () => baseBoltedRecipe('B500', 'מוט מצולע') };
+export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe(), [CLEAT_RUN_RECIPE_ID]: () => cleatRunRecipe(), [CLEAT_PLATE_RECIPE_ID]: () => cleatPlateRecipe(), [CLEAT_SEAM_RECIPE_ID]: () => cleatSeamRecipe(), [CLEAT_STAND_RECIPE_ID]: () => cleatStandRecipe(), [KNEE_FIN_BEAM_RECIPE_ID]: () => kneeFinRecipe('קורת אגד', KNEE_FIN_BEAM_RECIPE_ID), [KNEE_FIN_BBDIAG_RECIPE_ID]: () => kneeFinRecipe('אלכסון אגד', KNEE_FIN_BBDIAG_RECIPE_ID), [KNEE_FIN_LTCHORD_RECIPE_ID]: () => kneeFinRecipe('סיב נעילה', KNEE_FIN_LTCHORD_RECIPE_ID), [KNEE_FIN_LTTRUSS_RECIPE_ID]: () => kneeFinRecipe('חגורת מסבך', KNEE_FIN_LTTRUSS_RECIPE_ID), [LOCK_PLATE_RECIPE_ID]: () => lockPlateRecipe(), [SIDE_RECIPE_ID]: () => sideRecipe(), [BASE_EMBEDDED_RECIPE_ID]: () => baseEmbeddedRecipe(), [BASE_BOLTED_RECIPE_ID]: () => baseBoltedRecipe('8.8', 'ISO 4017'), [BASE_BOLTED_B500_RECIPE_ID]: () => baseBoltedRecipe('B500', 'מוט מצולע') };
 
 /**
  * אלכסון עמוד-קורה, פח + לשונית בחריץ — שקול ל-`finJoint` ב-`geometry/finJoint.ts` (פרט הלקוח 15.11.2026).
@@ -317,6 +318,34 @@ export function sideRecipe(): CustomDetail {
       { k: 'plate', id: 'P1', name: 'פלטת קצה', ref: R('host', 'hit', 'ev*dz', '0'), mode: 'flat', spin: '90', off: '0', shape: 'rect', w: 'Hp', h: 'w', t: 't', ch: '0', corners: [false, false, false, false] },
       { k: 'holes', id: 'H1', ref: R('P1', 'z-'), rows: 'cols', cols: 'nr', px: 'rp', py: 'gauge', d0: 'd + cl' },
       { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true, grip: 'gt', noMain: true, headUp: 'Z' },
+      { k: 'weld', id: 'W1', part: 'P1', a: 'a', site: false, to: 'main', len: 'wl', exact: true },
+    ],
+  };
+}
+
+/**
+ * מסבך נעילה, סגנון פלטת קצה (G4 — אתר של שלושה אלמנטים: עמוד + סיב/חגורה משני צדיו): פלטה אנכית מרותכת לקצה הסיב (מסגריה), צמודה לפני העמוד;
+ * 4 ברגים ארוכים עוברים דרך הפלטות ודרך שני דפנות העמוד (בעמוד קצה — פלטה אחת). **ללא מודל חדש:** אתר זוגי (`pairs`) כמו תמוכה עם פלטת קצה —
+ * כל קצה בונה פלטה וריתוך משלו, והברגים נבנים באתר אחד (`bld`: הצד הנמוך של Y, או היחיד) כשהפלטה שכנגד משתתפת בסריקה (`prt`).
+ * `hiS` = 1 בצד הגבוה (נורמל +Y): כיוון הבורג הפוך — תמיד +Y, כמו בקוד הישן.
+ * הפרמטרים מהחיבור: t, Hp (גובה הפלטה, לאורך הציר), Wp (רוחב), g/pv (מרווח ברגים לרוחב/לגובה), d/cl, a, wl (היקף חתך הסיב), ctw (רוחב העמוד בין הדפנות).
+ */
+export function lockPlateRecipe(): CustomDetail {
+  return {
+    id: LOCK_PLATE_RECIPE_ID, name: 'מסבך נעילה: פלטת קצה לעמוד (הסבה)', family: 'any', category: 'brace',
+    note: 'שקול לחיבור פלטת הקצה של מסבך הנעילה: פלטה מרותכת לסיב, 4 ברגים דרך העמוד; משני צדי העמוד — אותם ברגים.',
+    vars: [
+      { name: 't', expr: '10', note: 'עובי הפלטה' }, { name: 'Hp', expr: '250', note: 'גובה הפלטה' }, { name: 'Wp', expr: '130', note: 'רוחב הפלטה' },
+      { name: 'g', expr: '50', note: 'מרווח ברגים לרוחב' }, { name: 'pv', expr: '170', note: 'מרווח ברגים לגובה' },
+      { name: 'd', expr: '16', note: 'קוטר בורג' }, { name: 'cl', expr: '2', note: 'תוספת קוטר חור' }, { name: 'a', expr: '4', note: 'גודל ריתוך' },
+      { name: 'wl', expr: '0', note: 'היקף חתך הסיב' }, { name: 'ctw', expr: '200', note: 'רוחב העמוד בכיוון הברגים' },
+      { name: 'bld', expr: '1', note: 'האתר הזה בונה את הברגים' }, { name: 'prt', expr: '0', note: 'יש פלטה גם בצד השני של העמוד' }, { name: 'hiS', expr: '0', note: '1 = הצד הגבוה של העמוד' },
+    ],
+    ops: [
+      { k: 'cut', id: 'C1', kind: 'perp', at: 't' },
+      { k: 'plate', id: 'P1', name: 'פלטת קצה לסיב', ref: R('host', 'hit'), mode: 'flat', spin: '-90', off: '0', shape: 'rect', w: 'Hp', h: 'Wp', t: 't', ch: '0', corners: [false, false, false, false] },
+      { k: 'holes', id: 'H1', ref: R('P1', 'z-'), rows: '2', cols: '2', px: 'pv', py: 'g', d0: 'd + cl', rev: 'hiS' },
+      { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true, grip: 'ctw + t*(1 + prt)', when: 'bld', noMain: true, headUp: 'Z', reach: 'ctw' },
       { k: 'weld', id: 'W1', part: 'P1', a: 'a', site: false, to: 'main', len: 'wl', exact: true },
     ],
   };
