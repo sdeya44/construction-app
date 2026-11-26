@@ -64,3 +64,32 @@ test('ANGLE-E1: סטודיו — כלי זוויתן: נוסף בלחיצה על
   await shot(page, 'ANGLE_E1');
   expect(errors).toEqual([]);
 });
+
+test('STK-E1: סטודיו — פתקיות מידה על דפנות (ברירת מחדל): שם, משתנה וערך; בלי חפיפה; מעבר לקווי מידה', async ({ page }) => {
+  const errors = await boot(page);
+  await openNav(page, 'b:knee'); await page.getByTestId('kb-on').check();
+  await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
+  await page.getByTestId('ks-sec-conn').click(); await page.getByTestId('ks-sec-conn').click(); await page.getByTestId('cb-lib').click(); await page.getByTestId('studio-start').click();
+  await expect(page.getByTestId('detail-studio')).toBeVisible();
+  await page.waitForTimeout(900);
+  const vis = () => page.evaluate(() => [...document.querySelectorAll<HTMLElement>('button.dim-tag.sticker')].filter((e) => e.style.display !== 'none' && e.style.visibility === 'visible').map((e) => { const r = e.getBoundingClientRect(); return { t: e.innerText.replace(/\s+/g, ' '), x0: r.left, x1: r.right, y0: r.top, y1: r.bottom }; }));
+  const a = await vis();
+  expect(a.length).toBeGreaterThanOrEqual(2);
+  // כל פתקית: שם בעברית + ערך + שם המשתנה (mb / mh / hb ...)
+  for (const x of a) { expect(x.t).toMatch(/=\s*\d/); expect(x.t).toMatch(/\b(mb|mh|mt|mtf|hb|[A-Z]\d+\.[whkt])\b/); }
+  const hasMb = a.some((x) => /\bmb\b/.test(x.t)), hasMh = a.some((x) => /\bmh\b/.test(x.t));
+  expect(hasMb || hasMh).toBe(true);
+  for (let i = 0; i < a.length; i++) for (let j = 0; j < i; j++) { const p = a[i]!, q = a[j]!; expect(p.x0 < q.x1 && p.x1 > q.x0 && p.y0 < q.y1 && p.y1 > q.y0, `${p.t} ↔ ${q.t}`).toBe(false); }
+  await shot(page, 'STK_E1');
+  // סיבוב המצלמה: הקבוצה הגלויה משתנה (דופן שהסתובבה לאחור מאבדת את הפתקית)
+  const box = (await page.getByTestId('ds-canvas').boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.8); await page.mouse.down(); await page.mouse.move(box.x + box.width * 0.5 + 420, box.y + box.height * 0.8, { steps: 12 }); await page.mouse.up();
+  await page.waitForTimeout(500);
+  const b = await vis();
+  expect(b.map((x) => x.t).sort().join('|')).not.toBe(a.map((x) => x.t).sort().join('|'));
+  // קווי מידה
+  await page.getByTestId('ds-dimmode').click();
+  await page.waitForTimeout(500);
+  expect(await page.locator('button.dim-tag.sticker:visible').count()).toBe(0);
+  expect(errors).toEqual([]);
+});

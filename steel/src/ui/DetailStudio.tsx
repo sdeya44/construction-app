@@ -51,7 +51,8 @@ const r5 = (x: number) => Math.round(x / 5) * 5;
 /** פתיחת בונה הנוסחאות משדה כלשהו */
 const FxCtx = createContext<{ open: (t: FxTarget) => void; det: CustomDetail | null }>({ open: () => {}, det: null });
 /** תגית מידה: a,b על הגיאומטריה; c = מרכז הבעלים (הקו מוסט הרחק ממנו במסך); grp = פעולה (P1…) או 'site' */
-interface Tag { k: string; a: Vec3; b: Vec3; c?: Vec3; grp?: string }
+/** `n` = פתקית על דופן: נורמל הדופן (החוצה) ו-`c` נקודת העוגן עליה; מוצגת רק כשהדופן פונה למצלמה. `id` = מפתח ייחודי כשאותה מידה על כמה דפנות. */
+interface Tag { k: string; a: Vec3; b: Vec3; c?: Vec3; grp?: string; n?: Vec3; id?: string }
 const fmt = (x: number | undefined) => (x === undefined || !Number.isFinite(x) ? '—' : String(Math.round(x * 10) / 10));
 
 function Studio({ siteKey: key }: { siteKey: string }) {
@@ -74,6 +75,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
   const [fx, setFx] = useState<FxTarget | null>(null);
   const [fxTokens, setFxTokens] = useState<string[]>([]);
   const [showDims, setShowDims] = useState(true);
+  const [dimMode, setDimMode] = useState<'stick' | 'lines'>('stick');
   const pKey = parseSiteKey(preview);
   const pMain = base.byId.get(pKey.id);
   const site = useMemo(() => (pMain ? findSite(base.members, pMain, pKey.end) : null), [base, pMain, pKey.end]);
@@ -116,6 +118,34 @@ function Studio({ siteKey: key }: { siteKey: string }) {
       T.push({ k: `${id}.h`, a: add(add(top, scale(g.Y, -g.h / 2)), scale(g.X, g.w / 2)), b: add(add(top, scale(g.Y, g.h / 2)), scale(g.X, g.w / 2)), c: g.center, grp: id });
     }
     return T.map((t) => ({ ...t, c: t.c ?? s.P, grp: t.grp ?? 'site' }));
+  }, [site, res]);
+  /** פתקיות על דפנות (ברירת מחדל): כל מידה על הדופן שהיא מודדת — האלמנט (רוחב על הדופן העליונה, גובה על הדופן הצדדית, עובי על הקצה), הפלטות והמארח */
+  const stickTags = useMemo<Tag[]>(() => {
+    if (!site || !res || site.cross) return [];
+    const s = site, T: Tag[] = [];
+    const along = res.sEnd + Math.max(110, s.mh * 1.2);
+    const mk = (k: string, c: Vec3, n: Vec3, grp: string, id: string): Tag => ({ k, id, a: c, b: c, c, n, grp });
+    for (const sg of [1, -1]) {
+      T.push(mk('mb', add(add(s.P, scale(s.u, along)), scale(s.a, (sg * s.mh) / 2)), scale(s.a, sg), 'site', `mb@${sg}`));
+      T.push(mk('mh', add(add(s.P, scale(s.u, along + 80)), scale(s.w, (sg * s.mb) / 2)), scale(s.w, sg), 'site', `mh@${sg}`));
+    }
+    const mt = res.values.mt ?? 0, mtf = res.values.mtf ?? 0, endC = add(s.P, scale(s.u, res.sEnd));
+    if (mt > 0) T.push(mk('mt', add(endC, scale(s.a, s.mh / 2 - mt / 2)), scale(s.u, -1), 'site', 'mt@end'));
+    if (mtf > 0 && Math.abs(mtf - mt) > 0.01) T.push(mk('mtf', add(add(endC, scale(s.a, s.mh / 2 - mtf / 2)), scale(s.w, -s.mb / 4)), scale(s.u, -1), 'site', 'mtf@end'));
+    if (s.host) {
+      const fr = res.frame({ on: 'host', face: 'hit' });
+      const hb = res.values.hb ?? 0;
+      if (fr && hb > 0) T.push(mk('hb', add(fr.base, scale(fr.e1, -Math.max(160, s.mh * 1.6))), fr.n, 'site', 'hb@hit'));
+    }
+    for (const [id, g] of res.plates) {
+      for (const sg of [1, -1]) {
+        const face = add(g.center, scale(g.Z, (sg * g.t) / 2));
+        T.push(mk(`${id}.w`, add(face, scale(g.Y, g.h / 4)), scale(g.Z, sg), id, `${id}.w@${sg}`));
+        T.push(mk(`${id}.h`, add(face, scale(g.Y, -g.h / 4)), scale(g.Z, sg), id, `${id}.h@${sg}`));
+        T.push(mk(`${id}.t`, add(g.center, scale(g.X, (sg * g.w) / 2)), scale(g.X, sg), id, `${id}.t@${sg}`));
+      }
+    }
+    return T;
   }, [site, res]);
   const fxGroups = useMemo(() => [
     { title: 'האלמנט', items: ['mh', 'mb', 'mt', 'mtf'] },
@@ -280,8 +310,9 @@ function Studio({ siteKey: key }: { siteKey: string }) {
         </aside>
         <section className="studio-stage">
           <Viewer res={res} site={site} others={others} sel={sel} armed={armed} onSelect={setSel} onPlace={(h) => { if (armed && place(armed, h)) setArmed(null); }} onMove={moveSel}
-            tags={showDims || fx ? (sel && !fx ? tags.filter((t) => t.grp === sel || t.grp === 'site') : tags) : []} tagLabel={(k) => `${varLabel(k, det)} = ${fmt(res.values[k])}`} onTag={onTag} pickMode={!!fx} />
+            tags={showDims || fx ? (() => { const base = dimMode === 'stick' && stickTags.length ? stickTags : tags; return sel && !fx ? base.filter((t) => t.grp === sel || t.grp === 'site') : base; })() : []} tagLabel={(k) => `${varLabel(k, det)} = ${fmt(res.values[k])}`} onTag={onTag} pickMode={!!fx} />
           <button className={`btn small studio-dims${showDims ? ' on' : ''}`} onClick={() => setShowDims(!showDims)} data-testid="ds-dims">שמות מידות</button>
+          <button className={`btn small studio-dims2${dimMode === 'stick' ? ' on' : ''}`} onClick={() => setDimMode(dimMode === 'stick' ? 'lines' : 'stick')} data-testid="ds-dimmode" title="פתקיות על הדפנות / קווי מידה">{dimMode === 'stick' ? 'פתקיות על דפנות' : 'קווי מידה'}</button>
           <div className="studio-status" data-testid="ds-status">{msg || (fx ? 'בונה נוסחה: לחצו על תגית מידה בשרטוט כדי להוסיף אותה לנוסחה' : armed ? `כלי: ${TOOLS.flatMap((x) => x[1]).find((t) => t[0] === armed)?.[1]} — ${HINT[armed.split(':')[0]]} · לחיצה = הנחה, גרירה = סיבוב · Esc לביטול` : 'גררו כלי מהמחסן אל המודל, או לחצו על כלי ואז על המודל. גרירה על הרקע = סיבוב, גלגלת = זום')}</div>
           {preview !== key && <div className="studio-preview">תצוגה על קצה אחר: {base.byId.get(pKey.id)?.label} <button className="btn small" onClick={() => setPreview(key)}>חזרה</button></div>}
         </section>
@@ -607,10 +638,30 @@ function Viewer({ res, site, others, sel, armed, onSelect, onPlace, onMove, tags
           const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
           const parts: string[] = [];
           const f1 = (v: number) => v.toFixed(1);
-          const byK = new Map(tagsRef.current.map((t) => [t.k, t]));
+          const byK = new Map(tagsRef.current.map((t) => [t.id ?? t.k, t]));
           box.querySelectorAll<HTMLElement>('button.dim-tag[data-k]').forEach((el) => {
-            const tg = byK.get(el.dataset.k ?? ''); if (!tg) { el.style.display = 'none'; return; }
+            const tg = byK.get(el.dataset.id ?? el.dataset.k ?? ''); if (!tg) { el.style.display = 'none'; return; }
             el.style.display = ''; // למדידת הרוחב (תגית חדשה מתחילה מוסתרת — visibility)
+            if (tg.n && tg.c) {
+              // פתקית על דופן: נראית רק כשהדופן פונה למצלמה; נדחפת למעלה/למטה אם חופפת פתקית אחרת; נקודת עוגן + קו קצר כשהוזזה
+              const Pw = tg.c, dx = cam.position.x - Pw.x, dy = cam.position.y - Pw.y, dz = cam.position.z - Pw.z, dl = Math.hypot(dx, dy, dz) || 1;
+              const fv = (tg.n.x * dx + tg.n.y * dy + tg.n.z * dz) / dl;
+              const S = scr(Pw);
+              if (fv < 0.16 || !S.ok) { el.style.display = 'none'; return; }
+              el.classList.add('sticker');
+              const hw = el.offsetWidth / 2 + 3, hh = el.offsetHeight / 2 + 2;
+              let oy = NaN;
+              for (const lv of [0, 1, -1, 2, -2, 3, -3]) {
+                const qy = S.y + lv * (hh * 2 + 2), r = { x0: S.x - hw, x1: S.x + hw, y0: qy - hh, y1: qy + hh };
+                if (!placed.some((z) => r.x0 < z.x1 && r.x1 > z.x0 && r.y0 < z.y1 && r.y1 > z.y0)) { placed.push(r); oy = qy; break; }
+              }
+              if (Number.isNaN(oy)) { el.style.display = 'none'; return; }
+              const hotS = el.matches(':hover') ? ' hot' : '';
+              parts.push(`<g class="sd-stk${hotS}" data-k="${tg.k}"><circle cx="${f1(S.x)}" cy="${f1(S.y)}" r="3.2"/>${Math.abs(oy - S.y) > 1 ? `<line x1="${f1(S.x)}" y1="${f1(S.y)}" x2="${f1(S.x)}" y2="${f1(oy)}"/>` : ''}</g>`);
+              el.style.left = `${S.x}px`; el.style.top = `${oy}px`; el.style.opacity = String(Math.min(1, 0.4 + fv * 1.1)); el.style.visibility = 'visible';
+              return;
+            }
+            el.classList.remove('sticker'); el.style.opacity = '';
             const A = scr(tg.a), B = scr(tg.b), Cc = scr(tg.c ?? tg.a);
             const L = Math.hypot(B.x - A.x, B.y - A.y);
             if (!A.ok || !B.ok || L < 18) { el.style.display = 'none'; return; }
@@ -768,7 +819,7 @@ function Viewer({ res, site, others, sel, armed, onSelect, onPlace, onMove, tags
       <canvas ref={cvRef} className="studio-cv" data-testid="ds-canvas" />
       <div ref={tagBox} className={`dim-tags${pickMode ? ' pick' : ''}`}>
         <svg className="dim-svg" />
-        {tags.map((t) => <button key={t.k} data-k={t.k} className="dim-tag" style={{ visibility: 'hidden' }} onClick={() => onTag(t.k)} data-testid={`tag-${t.k}`} title={t.k}
+        {tags.map((t) => <button key={t.id ?? t.k} data-k={t.k} data-id={t.id ?? t.k} className={`dim-tag${t.n ? ' sticker' : ''}`} style={{ visibility: 'hidden' }} onClick={() => onTag(t.k)} data-testid={`tag-${t.k}`} title={t.k}
           onPointerEnter={() => { if (ctx.current) ctx.current.dirty = true; }} onPointerLeave={() => { if (ctx.current) ctx.current.dirty = true; }}>{tagLabel(t.k)} <span className="mono">{t.k}</span></button>)}
       </div>
     </>

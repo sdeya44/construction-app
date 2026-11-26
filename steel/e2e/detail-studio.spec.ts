@@ -9,6 +9,8 @@ const openStudio = async (page: import('@playwright/test').Page) => {
   await page.getByTestId('ks-sec-conn').click(); await page.getByTestId('cb-lib').click(); // 1.63: פרט מהספרייה / סטודיו — בבלוק המחבר
   await page.getByTestId('studio-start').click();
   await expect(page.getByTestId('detail-studio')).toBeVisible();
+  // ברירת המחדל מ-1.92: פתקיות על דפנות. בדיקות הסטודיו הקיימות בודקות את מצב "קווי מידה" (DS-03/DS-05) ולכן עוברות אליו; פתקיות — e2e/studio-mates.spec.ts STK-E1
+  await page.getByTestId('ds-dimmode').click();
 };
 
 test('DS-01: סטודיו פרטים — פרט מוכן, בדיקות ירוקות, החלה על כל הדומים', async ({ page }) => {

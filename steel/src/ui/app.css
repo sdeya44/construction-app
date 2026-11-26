@@ -1483,3 +1483,12 @@ span.step-done-b { color: #1f7a45; font-size: 12px; font-weight: 600; }
 .dim-svg g.hot circle { fill: #e8761c; }
 .dim-tag:hover { background: #e8761c; border-color: #e8761c; color: #fff; }
 .dim-tag:hover .mono { color: #fde2c8; }
+
+/* פתקיות מידה על דפנות (סטודיו הפרטים): פתק צהוב עם שם המידה, המשתנה והערך; נקודת עוגן על הדופן */
+.dim-tag.sticker { background: #fff3b0; border-color: #d9b800; color: #4a3b00; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.25); font-weight: 600; }
+.dim-tag.sticker .mono { color: #7a6200; }
+.dim-tag.sticker:hover { background: #ffd24a; border-color: #b58f00; color: #2f2500; }
+.dim-tags.pick .dim-tag.sticker { background: #1f8a4c; border-color: #1f8a4c; color: #fff; }
+.dim-svg .sd-stk circle { fill: #b58f00; stroke: #fff; stroke-width: 1; }
+.dim-svg .sd-stk line { stroke: #b58f00; stroke-width: 1; stroke-dasharray: 2 2; }
+.dim-svg .sd-stk.hot circle { fill: #e8761c; }
