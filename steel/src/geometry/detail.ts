@@ -572,7 +572,8 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
   for (const o of opts.others ?? []) for (const p of parts) tests.push([p, o]);
   for (const [x, y] of tests) {
     const c = clash(x, y);
-    if (c) issues.push({ code: 'CLASH', severity: 'error', elementId: x.id, message: `פרט ${det.name}: התנגשות ${x.label} ↔ ${y.label} — חדירה ${c.depth.toFixed(1)} מ"מ` });
+    // דיסקית: סבולת ליציאה קלה (פילט/רדיוס שורש מול שפת הטבעת) — חדירה עד 1 מ"מ אינה התנגשות (קוטר חיצוני בסבולת, רדיוסי כיפוף לא מדגמנים)
+    if (c && !(x.id.endsWith('.W') && c.depth <= 1)) issues.push({ code: 'CLASH', severity: 'error', elementId: x.id, message: `פרט ${det.name}: התנגשות ${x.label} ↔ ${y.label} — חדירה ${c.depth.toFixed(1)} מ"מ` });
   }
   if (!s.host && !BUILTIN_RECIPES[det.id]) issues.push({ code: 'CD_FREE', severity: 'info', elementId: cid, message: `פרט ${det.name}: קצה חופשי — לא נמצא אלמנט מארח מול הקצה` });
   for (const [k, e] of Object.entries(errors)) issues.push({ code: 'CD_EXPR', severity: 'error', elementId: cid, message: `פרט ${det.name}: ${k} — ${e}` });

@@ -719,7 +719,7 @@ export function checkClashes(conns: Connection[], byId: Map<string, Member>): Va
     if (seen.has(key)) return;
     seen.add(key);
     const c = clash(a, b);
-    if (c) out.push({ code: 'CLASH', severity: 'error', elementId: a.id, message: `התנגשות ${a.id} ↔ ${b.id}: חדירה ${c.depth.toFixed(1)} מ"מ${note}` });
+    if (c && !(a.id.endsWith('.W') && c.depth <= 1)) out.push({ code: 'CLASH', severity: 'error', elementId: a.id, message: `התנגשות ${a.id} ↔ ${b.id}: חדירה ${c.depth.toFixed(1)} מ"מ${note}` });
   };
   const ridgeGroup: Member[] = [];
   const spliceChecks: Connection[] = [];
