@@ -25,6 +25,7 @@ const CFGS: Cfg[] = [
   { name: 'I מרותך', mod: (p) => { spl(p); p.settings.spliceJoint = { beams: 'welded', columns: 'welded' }; } },
   { name: 'RHS פלנץ', mod: (p) => { spl(p); p.building.rafterProfile = 'RHS300x200x10'; p.building.columnProfile = 'SHS200x200x8'; } },
   { name: 'RHS מרותך', mod: (p) => { spl(p); p.building.rafterProfile = 'RHS300x200x10'; p.building.columnProfile = 'SHS200x200x8'; p.settings.spliceJoint = { beams: 'welded', columns: 'welded' }; } },
+  { name: 'קורה נושאת (flush — פלטה סמויה מלמעלה)', mod: (p) => { const f = p.building.frames; p.building.transfers = [{ id: 'T1', lineId: 'L', from: f[0]!.id, to: f[3]!.id, removed: [f[1]!.id, f[2]!.id], profile: 'IPE600', support: 'A1', seat: 'B1' }]; p.settings.stockLength = 6000; } },
   { name: 'פלטות חיזוק — נשאר הקוד הישן', legacyOnly: true, mod: (p) => { spl(p); p.settings.spliceStiffeners = true; p.splices['F1.COL.L'] = []; p.splices['F3.COL.R'] = []; } },
 ];
 const proj = (c: Cfg, recipe: boolean) => { const p = newProject('c', defaultBuilding()); c.mod(p); if (recipe) p.settings.spliceEngine = 'recipe'; return p; };
