@@ -19,7 +19,7 @@ type V = { x: number; y: number; z: number };
 const dist = (a: V, b: V) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 const dot = (a: V, b: V) => a.x * b.x + a.y * b.y + a.z * b.z;
 
-interface Cfg { name: string; patch: Partial<LockTrussParams>; plate?: boolean }
+interface Cfg { name: string; patch: Partial<LockTrussParams>; plate?: boolean; col?: string }
 const CFGS: Cfg[] = [
   { name: 'ברירת מחדל (לשונית)', patch: { conn: 'tongue' } },
   { name: 'RHS60 · M12 · פח 8 · מסבך מתחת', patch: { conn: 'tongue', chord: 'RHS60x60x4', diag: 'RHS60x60x4', bolt: { ...defaultLockTruss().bolt, d: 12 }, plateT: 8, position: 'below' } },
@@ -27,10 +27,12 @@ const CFGS: Cfg[] = [
   { name: 'לשונית בשני הצדדים (A/B)', patch: { conn: 'plate', connA: 'tongue', connB: 'tongue' } },
   { name: 'פלטת קצה · ברירת מחדל (4×M16 דרך העמוד, אתר זוגי)', patch: { conn: 'plate' }, plate: true },
   { name: 'פלטת קצה · RHS60 · M12 · פלטה 8 · ללא סיב רציף', patch: { conn: 'plate', chord: 'RHS60x60x4', diag: 'RHS60x60x4', bolt: { ...defaultLockTruss().bolt, d: 12 }, plateT: 8, continuous: false }, plate: true },
+  { name: 'עמוד I (HEA200) · לשונית', patch: { conn: 'tongue' }, col: 'HEA200' },
+  { name: 'עמוד I (HEA200) · פלטת קצה דרך הווב', patch: { conn: 'plate' }, plate: true, col: 'HEA200' },
   { name: 'צד A פלטה וצד B לשונית (מעורב)', patch: { conn: 'plate', connA: 'plate', connB: 'tongue' }, plate: true },
 ];
 const proj = (c: Cfg, recipe: boolean) => {
-  const b = defaultBuilding(); b.columnProfile = 'RHS200x200x8';
+  const b = defaultBuilding(); b.columnProfile = c.col ?? 'RHS200x200x8';
   b.bracing.walls = { ...b.bracing.walls, enabled: true, type: 'truss', truss: { ...defaultLockTruss(), ...c.patch, ...(recipe ? { engine: 'recipe' as const } : {}) } };
   return newProject('c', b);
 };

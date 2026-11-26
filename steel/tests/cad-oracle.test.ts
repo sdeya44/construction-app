@@ -285,3 +285,33 @@ describe('CAD-12 הסבה (שלב D, G4): מסבך נעילה — פלטת קצ�
     expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
   }, 300000);
 });
+
+describe('CAD-13 הסבה (שלב D): אגד B ומסבך נעילה על עמוד I — פני הווב האמיתיים (`th`)', () => {
+  it('אגד B על HEA200: גופים תקינים, בלי חדירות — ובדיוק כמו הפרט הישן', async () => {
+    const { defaultPortal } = await import('../src/geometry/portal');
+    const b = defaultBuilding(); b.columnProfile = 'HEA200';
+    b.bracing.walls = { ...b.bracing.walls, enabled: true, type: 'portal', portal: defaultPortal() };
+    const p0 = newProject('conv', b), d0 = generate(p0);
+    const p1 = structuredClone(p0); p1.building.bracing.walls.portal = { ...defaultPortal(), engine: 'recipe' };
+    const d1 = generate(p1);
+    const neu = d1.connections.filter((c) => c.custom && /^BB\.[12]\.L\b/.test(c.custom.site));
+    const old = d0.connections.filter((c) => /^C\.BB\.[12]\.L\./.test(c.id));
+    expect(neu.length).toBeGreaterThan(5);
+    expect(old.length).toBe(neu.length);
+    expect(cadFindings(cadAudit(K, d0, old))).toEqual([]);
+    expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
+  }, 300000);
+  it('מסבך נעילה (פלטת קצה דרך הווב) על HEA200: כמו הפרט הישן', async () => {
+    const { defaultLockTruss } = await import('../src/geometry/lockTruss');
+    const b = defaultBuilding(); b.columnProfile = 'HEA200';
+    b.bracing.walls = { ...b.bracing.walls, enabled: true, type: 'truss', truss: { ...defaultLockTruss(), conn: 'plate' } };
+    const p0 = newProject('conv', b), d0 = generate(p0);
+    const p1 = structuredClone(p0); p1.building.bracing.walls.truss = { ...defaultLockTruss(), conn: 'plate', engine: 'recipe' };
+    const d1 = generate(p1);
+    const neu = d1.connections.filter((c) => c.custom && c.custom.detailId === 'conv-lock-plate' && /^LT\.[12]\.L\.C\b/.test(c.custom.site));
+    const old = d0.connections.filter((c) => /^C\.LT\.L\.F[123]\.COL\.L\.\d+$/.test(c.id) && c.members.some((m) => /^LT\.[12]\.L\.C$/.test(m)));
+    expect(neu.length).toBeGreaterThan(2);
+    expect(cadFindings(cadAudit(K, d0, old))).toEqual([]);
+    expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
+  }, 300000);
+});

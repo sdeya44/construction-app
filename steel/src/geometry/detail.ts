@@ -26,8 +26,10 @@ export interface Site {
   key: string;
   main: Member; end: End;
   host: Member | null;
-  /** נקודת מפגש ציר האלמנט עם פני המארח */
+  /** נקודת מפגש ציר האלמנט עם פני המארח (תיבת החתך) */
   P: Vec3;
+  /** פגיעה במתאר החתך האמיתי של מארח I/U (למשל פני הווב כשהקרן באה מהצד) ונורמל הפן שנפגע; חסר כשזהה לתיבה. רק פרטים שמבקשים (`th`) משתמשים בה */
+  Pt?: Vec3; nt?: Vec3;
   /** ציר האלמנט, מהמארח אל האלמנט */
   u: Vec3;
   /** נורמל פני המארח (לכיוון האלמנט); בקצה חופשי = u */
@@ -103,6 +105,32 @@ function rayHit(o: Vec3, d: Vec3, m: Member): { t: number; n: Vec3; depth: numbe
   return best;
 }
 
+/** כניסת הקרן למתאר החתך האמיתי (מערכת מקומית u,v של המארח) — לחתך I/U שבו פני התיבה אינם פני החומר. null כשאין שוני מהתיבה */
+function trueHit(o: Vec3, d: Vec3, m: Member, tBox: number): { t: number; n: Vec3 } | null {
+  const { f } = rayGeom(m);
+  const prof = getProfile(m.profile), s = memberSolid(m);
+  const ring = prof.outline.outer.map((p) => ({ u: p.u + s.du, v: p.v + s.dv }));
+  const r0 = sub(o, m.start);
+  const p0 = { u: dot(r0, f.u), v: dot(r0, f.v) }, dd = { u: dot(d, f.u), v: dot(d, f.v) };
+  if (Math.hypot(dd.u, dd.v) < 1e-9) return null;
+  let best: { t: number; n: Vec3 } | null = null;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i]!, b = ring[(i + 1) % ring.length]!;
+    const ex = b.u - a.u, ey = b.v - a.v;
+    const den = dd.u * ey - dd.v * ex; // קרן × קטע
+    if (Math.abs(den) < 1e-9) continue;
+    const t = ((a.u - p0.u) * ey - (a.v - p0.v) * ex) / den, w = ((a.u - p0.u) * dd.v - (a.v - p0.v) * dd.u) / den;
+    if (w < -1e-6 || w > 1 + 1e-6 || t < tBox - 1e-6) continue;
+    // נורמל החוצה של הקטע; רק קטע שהקרן נכנסת דרכו (נגד הנורמל)
+    const len2 = Math.hypot(ex, ey) || 1;
+    let nu = ey / len2, nv = -ex / len2;
+    if (nu * dd.u + nv * dd.v > 0) { nu = -nu; nv = -nv; }
+    if (nu * dd.u + nv * dd.v > -1e-9) continue;
+    if (!best || t < best.t) best = { t, n: add(scale(f.u, nu), scale(f.v, nv)) };
+  }
+  return best;
+}
+
 /** מציאת אתר לקצה אלמנט: המארח שהציר פוגע בו (עד 600 מ"מ מעבר לקצה), או קצה חופשי. */
 export function findSite(members: Member[], m: Member, end: End): Site | null {
   if (!tryProfile(m.profile)) return null;
@@ -121,6 +149,8 @@ export function findSite(members: Member[], m: Member, end: End): Site | null {
   }
   const u = scale(dOut, -1);
   const P = best ? add(o, scale(dOut, best.t)) : E;
+  const th = best && rayGeom(best.m).isI ? trueHit(o, dOut, best.m, best.t) : null;
+  const Pt0 = th && th.t - best!.t > 0.5 ? add(o, scale(dOut, th.t)) : undefined;
   const n = best ? best.n : u;
   let w0 = cross(n, u);
   if (len(w0) < 0.05) { const f = localFrame(m); w0 = sub(f.v, scale(u, dot(f.v, u))); }
@@ -145,6 +175,7 @@ export function findSite(members: Member[], m: Member, end: End): Site | null {
   return {
     key: siteKey(m.id, end), main: m, end, host: best?.m ?? null, P: Pc, u, n, a, w, hand, handA, mh, mb,
     hd: best?.depth ?? 0, webOff: best?.webOff ?? null, hostAxis: best ? localFrame(best.m).ex : null, ang, E, O,
+    ...(Pt0 ? { Pt: Pt0 !== undefined && Pc !== P ? sub(Pt0, sub(P, Pc)) : Pt0, nt: th!.n } : {}),
   };
 }
 
@@ -265,7 +296,9 @@ export function detailParamValues(members: Member[], key: string, det: CustomDet
 
 /** בניית פרט על אתר. טהור — אינו משנה את האלמנט המקורי. */
 export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: string; material?: string; others?: Member[]; /** ערכי מופע (מתכון v2): שם משתנה ⇒ ערך, דורסים את נוסחת המשתנה */ overrides?: Record<string, number>; /** חלקים נוספים (פלטות של האתר שכנגד באתר זוגי) שהברגים נסרקים דרכם */ extra?: Member[] } = {}): DetailResult {
-  const s = site, cid = opts.connId ?? `C.CD.${s.key.replace('|', '.').replace(':', '.')}`, mat = opts.material ?? s.main.material;
+  // `th` (פרמטר חיבור): הפרט נבנה על פני החומר האמיתיים של מארח I/U (למשל פני הווב), לא על תיבת החתך
+  const s: Site = opts.overrides?.th && site.Pt ? { ...site, P: site.Pt, n: site.nt ?? site.n } : site;
+  const cid = opts.connId ?? `C.CD.${s.key.replace('|', '.').replace(':', '.')}`, mat = opts.material ?? s.main.material;
   const vals: Vars = siteVars(s), errors: Record<string, string> = {}, issues: ValidationIssue[] = [];
   const ev = (src: string | number | undefined, key: string, dflt = 0) => {
     const r = tryExpr(src ?? dflt, vals, dflt);

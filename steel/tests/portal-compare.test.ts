@@ -19,16 +19,18 @@ type V = { x: number; y: number; z: number };
 const dist = (a: V, b: V) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 const dot = (a: V, b: V) => a.x * b.x + a.y * b.y + a.z * b.z;
 
-interface Cfg { name: string; patch: Partial<PortalBraceParams> }
+interface Cfg { name: string; patch: Partial<PortalBraceParams>; col?: string }
 const CFGS: Cfg[] = [
   { name: 'ברירת מחדל', patch: {} },
   { name: 'RHS80 · M12 · 4 ברגים בקצה אלכסון · פח 10', patch: { brace: 'RHS80x80x4', beam: 'RHS80x80x4', bolt: { ...defaultPortal().bolt, d: 12 }, boltsPerEnd: 4, plateT: 10 } },
   { name: 'הפוך · ללא קורה רציפה · ריתוך 6', patch: { invert: true, continuous: false, weldSize: 6 } },
   { name: 'קורה 4 ברגים · זווית 40°', patch: { beamBolts: 4, angle: 40 } },
+  { name: 'עמוד I (HEA200) — פגיעה במתאר האמיתי (פני הווב)', patch: {}, col: 'HEA200' },
+  { name: 'עמוד I (IPE240) · M12 · פח 10', patch: { bolt: { ...defaultPortal().bolt, d: 12 }, plateT: 10 }, col: 'IPE240' },
 ];
 const proj = (c: Cfg, recipe: boolean) => {
   const b = defaultBuilding();
-  b.columnProfile = 'RHS200x200x8';
+  b.columnProfile = c.col ?? 'RHS200x200x8';
   b.bracing.walls = { ...b.bracing.walls, enabled: true, type: 'portal', portal: { ...defaultPortal(), ...c.patch, ...(recipe ? { engine: 'recipe' as const } : {}) } };
   return newProject('c', b);
 };

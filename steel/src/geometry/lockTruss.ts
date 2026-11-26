@@ -47,10 +47,11 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
   if (Math.min(zCont, zSec) - ch / 2 < L.zBase + 800) { out.issues.push({ code: 'BRACE_SHORT', severity: 'warning', message: `נעילה אופקית ציר ${L.label}: גובה לא מספיק למסבך בגובה ${H}` }); return; }
   // מתכון מובנה (שלב D): לשונית שוכבת בשני הצדדים, עמוד/סיב RHS/SHS, בורג 8.8 ISO 4017 עם חור d+2. הציר נשמר ללא ההסטה — המתכון מחיל אותה (כמו קורת אגד)
   const bothTongue = (lt.connA ?? lt.conn) === 'tongue' && (lt.connB ?? lt.conn) === 'tongue';
-  const recipeOn = lt.engine === 'recipe' && bothTongue && (lt.finOrient ?? 'horizontal') === 'horizontal' && ['RHS', 'SHS'].includes(col.family) && ['RHS', 'SHS'].includes(cpf.family)
+  const colI = ['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(col.family); // `th`: הפרט על פני הווב האמיתיים
+  const recipeOn = lt.engine === 'recipe' && bothTongue && (lt.finOrient ?? 'horizontal') === 'horizontal' && (['RHS', 'SHS'].includes(col.family) || colI) && ['RHS', 'SHS'].includes(cpf.family)
     && lt.bolt.grade === '8.8' && lt.bolt.standard === 'ISO 4017' && lt.bolt.clearance === 2;
   // מתכון פלטת קצה (אתר של 3 אלמנטים: עמוד + סיב משני צדיו — אתר זוגי): עמוד RHS/SHS, בורג 8.8 ISO 4017 עם חור d+2
-  const plateRecipeOn = lt.engine === 'recipe' && ['RHS', 'SHS'].includes(col.family) && lt.bolt.grade === '8.8' && lt.bolt.standard === 'ISO 4017' && lt.bolt.clearance === 2;
+  const plateRecipeOn = lt.engine === 'recipe' && (['RHS', 'SHS'].includes(col.family) || colI) && lt.bolt.grade === '8.8' && lt.bolt.standard === 'ISO 4017' && lt.bolt.clearance === 2;
   const bays = lt.continuous ? Array.from({ length: nb }, (_, i) => i) : [...locked];
   const joints = new Map<string, { colId: string; z: number; yC: number; ends: { chordId: string; plateId: string; sg: number; yF: number; lab: string }[] }>();
   for (const bay of bays) {
@@ -90,7 +91,7 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
           const j = finJoint({ cid, desc: c.id.endsWith('C') ? 'סיב נעילה' : 'חגורת מסבך', hostId: colId, memberId: c.id, P: Pj, n, d: n, pn: horiz ? Z : X, side: 1, prof: cpf, profile: lt.chord, finT: lt.plateT, tongueT: lt.plateT, bolt: lt.bolt, bolts: 2, weldSize: lt.weldSize, mat: L.mat });
           out.members.push(...j.members); out.issues.push(...j.issues);
           out.connections.push({ id: cid, type: 'knee', label: `${lab} — ${c.id.endsWith('C') ? 'סיב' : 'חגורה'} לעמוד (לשונית)`, members: [colId, c.id], parts: j.parts, bolts: j.bolts, welds: j.welds, status: 'not-verified', fixity: 'pinned', overridden: false,
-            ...(recipeOn ? { recipe: { id: c.id.endsWith('C') ? KNEE_FIN_LTCHORD_RECIPE_ID : KNEE_FIN_LTTRUSS_RECIPE_ID, params: { d: lt.bolt.d, nb: 2, ft: lt.plateT, tt: lt.plateT, sd: 1, bs: 1, wa: lt.weldSize }, sites: [`${c.id}|${k === 'A' ? 'start' : 'end'}`] } } : {}) });
+            ...(recipeOn ? { recipe: { id: c.id.endsWith('C') ? KNEE_FIN_LTCHORD_RECIPE_ID : KNEE_FIN_LTTRUSS_RECIPE_ID, params: { d: lt.bolt.d, nb: 2, ft: lt.plateT, tt: lt.plateT, sd: 1, bs: 1, wa: lt.weldSize, ...(colI ? { th: 1 } : {}) }, sites: [`${c.id}|${k === 'A' ? 'start' : 'end'}`] } } : {}) });
           pts.push(recipeOn ? sub(j.start, scale(Z, lt.plateT)) : j.start); // מתכון: ציר ללא ההסטה (פח + לשונית)/2 = T
           endReach = Math.max(endReach, j.tongueL + 25);
         }
@@ -158,7 +159,7 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
       ...(plateRecipeOn ? (() => {
         const siteOf = (e: { chordId: string; sg: number }) => `${e.chordId}|${e.sg > 0 ? 'start' : 'end'}`; // A (sg +1) = ההתחלה, B (sg −1) = הסוף
         const siteParams = Object.fromEntries(jt.ends.map((e) => [siteOf(e), { bld: lo ? (e === lo ? 1 : 0) : 1, prt: lo && hi ? 1 : 0, hiS: e.sg > 0 ? 1 : 0 }]));
-        return { recipe: { id: LOCK_PLATE_RECIPE_ID, own: true, params: { t, Hp: pd.H, Wp: pd.W, g: pd.g, pv: pd.pv, d: lt.bolt.d, cl: lt.bolt.clearance, a: lt.weldSize, wl: 2 * (cpf.props.b + cpf.props.h), ctw: tw }, sites: jt.ends.map(siteOf), siteParams, ...(lo && hi ? { pairs: { [siteOf(lo)]: siteOf(hi) } } : {}) } };
+        return { recipe: { id: LOCK_PLATE_RECIPE_ID, own: true, params: { t, Hp: pd.H, Wp: pd.W, g: pd.g, pv: pd.pv, d: lt.bolt.d, cl: lt.bolt.clearance, a: lt.weldSize, wl: 2 * (cpf.props.b + cpf.props.h), ctw: tw, ...(colI ? { th: 1 } : {}) }, sites: jt.ends.map(siteOf), siteParams, ...(lo && hi ? { pairs: { [siteOf(lo)]: siteOf(hi) } } : {}) } };
       })() : {}) });
   }
 }

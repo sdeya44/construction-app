@@ -61,13 +61,14 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
   const horiz = (pp.finOrient ?? 'horizontal') === 'horizontal';
   // מתכון מובנה (שלב D): חתכי RHS/SHS, בורג 8.8 ISO 4017 עם חור d+2; קורת האגד — רק בפח ולשונית שוכבים
   const HOLLOW = ['RHS', 'SHS'];
-  // עמוד I: האתר מוצא את פני תיבת החתך (קצה האגף) ולא את פני הווב שאליו מרותך הפח — נשאר בקוד הישן (פער: פני מארח לפי החתך האמיתי)
-  const colHollow = ['RHS', 'SHS'].includes(cp.family);
-  const specOk = pp.engine === 'recipe' && colHollow && pp.bolt.grade === '8.8' && pp.bolt.standard === 'ISO 4017' && pp.bolt.clearance === 2;
+  // עמוד I: `th` — הפרט נבנה על פני הווב האמיתיים (פגיעה במתאר החתך) ולא על תיבת החתך (קצה האגף)
+  const colI = ['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(cp.family);
+  const colOk = ['RHS', 'SHS'].includes(cp.family) || colI;
+  const specOk = pp.engine === 'recipe' && colOk && pp.bolt.grade === '8.8' && pp.bolt.standard === 'ISO 4017' && pp.bolt.clearance === 2;
   // קורת האגד (פח ולשונית שוכבים): במצב מתכון הציר נשמר ללא ההסטה (על קו הפח) והמתכון מחיל אותה — אחרת היא מוחלת פעמיים.
   // אלכסונים: הציר כבר על מישור הלשונית וממורכז על המארח (`findSite` ממרכז היסט < 25 מ"מ) — `bs: 0`, הפח מוזז מהציר ב-T
   const unshift = (start: Vec3, pnV: Vec3, dV: Vec3, sd: 1 | -1) => { const dn = norm(dV); return sub(start, scale(norm(sub(pnV, scale(dn, dot(pnV, dn)))), sd * T)); };
-  const rcp = (ok: boolean, rid: string, member: string, end: 'start' | 'end', nb: number, sd: 1 | -1, bs = 1) => (specOk && ok ? { recipe: { id: rid, params: { d: pp.bolt.d, nb, ft: T, tt: T, sd, bs, wa: pp.weldSize }, sites: [`${member}|${end}`] } } : {});
+  const rcp = (ok: boolean, rid: string, member: string, end: 'start' | 'end', nb: number, sd: 1 | -1, bs = 1) => (specOk && ok ? { recipe: { id: rid, params: { d: pp.bolt.d, nb, ft: T, tt: T, sd, bs, wa: pp.weldSize, ...(colI ? { th: 1 } : {}) }, sites: [`${member}|${end}`] } } : {});
   for (const bay of bays) {
     const f0 = L.frames[bay], f1 = L.frames[bay + 1];
     const key = `${bay + 1}.${L.side}`;
