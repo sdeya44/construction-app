@@ -1,7 +1,8 @@
-import { norm, sub, v3 } from '../core/vec';
+import { dot, norm, scale, sub, v3, type Vec3 } from '../core/vec';
 import type { Connection, Member, PortalBraceParams, ValidationIssue } from '../model/types';
 import { getProfile, tryProfile } from '../profiles/library';
 import { finJoint } from './finJoint';
+import { KNEE_FIN_BBDIAG_RECIPE_ID, KNEE_FIN_BEAM_RECIPE_ID } from './convRecipes';
 
 /** אגד B (ברירת מחדל): קורת RHS100/100/5 בין העמודים, שני אלכסוני RHS60/60/4 ב-45°, פלטות 12, M16 */
 export function defaultPortal(): PortalBraceParams {
@@ -58,6 +59,15 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
   const T = pp.plateT; // הסטת ציר ה-RHS מהפח: (פח + לשונית) / 2
   // חיבור קורת האגד: פח ולשונית שוכבים (ברירת מחדל) — הקורה על ציר העמודים; אחרת במישור הקיר והקורה מוסטת ב-T
   const horiz = (pp.finOrient ?? 'horizontal') === 'horizontal';
+  // מתכון מובנה (שלב D): חתכי RHS/SHS, בורג 8.8 ISO 4017 עם חור d+2; קורת האגד — רק בפח ולשונית שוכבים
+  const HOLLOW = ['RHS', 'SHS'];
+  // עמוד I: האתר מוצא את פני תיבת החתך (קצה האגף) ולא את פני הווב שאליו מרותך הפח — נשאר בקוד הישן (פער: פני מארח לפי החתך האמיתי)
+  const colHollow = ['RHS', 'SHS'].includes(cp.family);
+  const specOk = pp.engine === 'recipe' && colHollow && pp.bolt.grade === '8.8' && pp.bolt.standard === 'ISO 4017' && pp.bolt.clearance === 2;
+  // קורת האגד (פח ולשונית שוכבים): במצב מתכון הציר נשמר ללא ההסטה (על קו הפח) והמתכון מחיל אותה — אחרת היא מוחלת פעמיים.
+  // אלכסונים: הציר כבר על מישור הלשונית וממורכז על המארח (`findSite` ממרכז היסט < 25 מ"מ) — `bs: 0`, הפח מוזז מהציר ב-T
+  const unshift = (start: Vec3, pnV: Vec3, dV: Vec3, sd: 1 | -1) => { const dn = norm(dV); return sub(start, scale(norm(sub(pnV, scale(dn, dot(pnV, dn)))), sd * T)); };
+  const rcp = (ok: boolean, rid: string, member: string, end: 'start' | 'end', nb: number, sd: 1 | -1, bs = 1) => (specOk && ok ? { recipe: { id: rid, params: { d: pp.bolt.d, nb, ft: T, tt: T, sd, bs, wa: pp.weldSize }, sites: [`${member}|${end}`] } } : {});
   for (const bay of bays) {
     const f0 = L.frames[bay], f1 = L.frames[bay + 1];
     const key = `${bay + 1}.${L.side}`;
@@ -75,10 +85,11 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
       if (!hollow && bp.props.b / 2 + T > inner / 2 + 0.5) out.issues.push({ code: 'PLATE_WIDE', severity: 'warning', elementId: cid, message: `${lab}: קורת האגד המוסטת ${hollow ? 'רחבה מפני העמוד' : 'אינה נכנסת בין אגפי העמוד'} (${Math.round(inner)})` });
       return { cid, col, j, label: `${lab} — קורה לעמוד` };
     });
-    out.members.push({ id: bid, kind: 'beam', label: lab, start: ends[0].j.start, end: ends[1].j.start, profile: pp.beam, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: Z, source: 'generated', manualPlacement: false, partDesc: `קורת אגד ${pp.beam}` });
+    const beamR = specOk && horiz && HOLLOW.includes(bp.family);
+    out.members.push({ id: bid, kind: 'beam', label: lab, start: beamR ? unshift(ends[0].j.start, Z, v3(0, 1, 0), 1) : ends[0].j.start, end: beamR ? unshift(ends[1].j.start, Z, v3(0, -1, 0), 1) : ends[1].j.start, profile: pp.beam, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: Z, source: 'generated', manualPlacement: false, partDesc: `קורת אגד ${pp.beam}` });
     for (const e of ends) {
       out.members.push(...e.j.members); out.issues.push(...e.j.issues);
-      out.connections.push({ id: e.cid, type: 'knee', label: e.label, members: [e.col, bid], parts: e.j.parts, bolts: e.j.bolts, welds: e.j.welds, status: 'not-verified', fixity: 'pinned', overridden: false });
+      out.connections.push({ id: e.cid, type: 'knee', label: e.label, members: [e.col, bid], parts: e.j.parts, bolts: e.j.bolts, welds: e.j.welds, status: 'not-verified', fixity: 'pinned', overridden: false, ...rcp(horiz && HOLLOW.includes(bp.family), KNEE_FIN_BEAM_RECIPE_ID, bid, e.cid.endsWith('.E0') ? 'start' : 'end', pp.beamBolts ?? 2, 1) });
     }
     if (!withDiag) continue;
     // שני אלכסונים: מווב העמוד בגובה zBot−drop אל תחתית הקורה, בזווית מהאופק; הפוך — מראש הקורה עד zTop+drop בעמוד
@@ -94,7 +105,7 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
       out.members.push({ id: kid, kind: 'brace', label: `${lab} — אלכסון`, start: jc.start, end: jb.start, profile: pp.brace, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: X, source: 'generated', manualPlacement: false, partDesc: `אלכסון אגד B ${pp.brace}` });
       for (const [cid, j, hostId, t] of [[cidC, jc, col, 'אלכסון לעמוד'], [cidB, jb, bid, 'אלכסון לקורה']] as const) {
         out.members.push(...j.members); out.issues.push(...j.issues);
-        out.connections.push({ id: cid, type: 'knee', label: `${lab} — ${t}`, members: [hostId, kid], parts: j.parts, bolts: j.bolts, welds: j.welds, status: 'not-verified', fixity: 'pinned', overridden: false });
+        out.connections.push({ id: cid, type: 'knee', label: `${lab} — ${t}`, members: [hostId, kid], parts: j.parts, bolts: j.bolts, welds: j.welds, status: 'not-verified', fixity: 'pinned', overridden: false, ...rcp(HOLLOW.includes(kp.family) && T < 25, KNEE_FIN_BBDIAG_RECIPE_ID, kid, cid.endsWith('C') ? 'start' : 'end', pp.boltsPerEnd ?? 2, -1, 0) });
       }
     }
   }

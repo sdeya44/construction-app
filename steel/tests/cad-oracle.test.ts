@@ -234,3 +234,20 @@ describe('CAD-09 הסבה (שלב D): חיבור צד (קורה לצד עמוד)
     expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
   }, 300000);
 });
+
+describe('CAD-10 הסבה (שלב D): אגד B (קורה + אלכסונים; פח + לשונית) כמתכון', () => {
+  it('גופים תקינים, חורים חותכים, ריתוכים במגע, בלי חדירות — ובדיוק כמו הפרט הישן', async () => {
+    const { defaultPortal } = await import('../src/geometry/portal');
+    const b = defaultBuilding(); b.columnProfile = 'RHS200x200x8';
+    b.bracing.walls = { ...b.bracing.walls, enabled: true, type: 'portal', portal: defaultPortal() };
+    const p0 = newProject('conv', b), d0 = generate(p0);
+    const p1 = structuredClone(p0); p1.building.bracing.walls.portal = { ...defaultPortal(), engine: 'recipe' };
+    const d1 = generate(p1);
+    const neu = d1.connections.filter((c) => c.custom && /^BB\.[12]\.L\b/.test(c.custom.site));
+    const old = d0.connections.filter((c) => /^C\.BB\.[12]\.L\./.test(c.id));
+    expect(neu.length).toBeGreaterThan(5);
+    expect(old.length).toBe(neu.length);
+    expect(cadFindings(cadAudit(K, d0, old))).toEqual([]);
+    expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
+  }, 300000);
+});

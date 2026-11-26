@@ -416,7 +416,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         Object.assign(vals, { [`${op.id}.px`]: px, [`${op.id}.py`]: py, [`${op.id}.d0`]: d0 });
         const cs: Vec3[] = [];
         for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) if (!op.ring || i === 0 || i === rows - 1 || j === 0 || j === cols - 1) cs.push(at(fr, along + (i - (rows - 1) / 2) * py, across + (j - (cols - 1) / 2) * px));
-        holeSets.set(op.id, { cs, axis: fr.n, d0, plate: op.ref.on });
+        holeSets.set(op.id, { cs, axis: op.rev !== undefined && ev(op.rev, `${op.id}.rev`) ? scale(fr.n, -1) : fr.n, d0, plate: op.ref.on });
       } else if (op.k === 'bolts') {
         if (op.when !== undefined && op.when !== '' && !ev(op.when, `${op.id}.when`, 1)) continue;
         const hs = holeSets.get(op.holes);
@@ -598,14 +598,19 @@ export function applyCustomDetails(project: Project, members: Member[], connecti
   const lib = new Map((project.customDetails ?? []).map((d) => [d.id, d]));
   // אינדקס מזהים אחד לכל הריצה (ולא בנייה מחדש בכל אתר) — מתעדכן עם כל הוספה/הסרה/החלפה של אלמנט
   const index = new Map(members.map((x) => [x.id, x]));
+  const orig = new Map<string, Member>();
   for (const [key, did] of Object.entries(assign)) {
     const det = lib.get(did) ?? builtinRecipe(did);
     const { id, end } = parseSiteKey(key);
     const idx = members.findIndex((m) => m.id === id);
     if (idx < 0) continue; // האלמנט לא קיים במודל הנוכחי (מסגרת שנמחקה וכד')
     if (!det) { issues.push({ code: 'CD_MISSING', severity: 'warning', elementId: id, message: `פרט מותאם לא נמצא בספרייה עבור ${id}` }); continue; }
-    const m = members[idx];
-    const site = findSite(members, m, end);
+    // כל קצה נבנה מהאלמנט המקורי (לפני שהקצה השני הוחל): אחרת הקצה הראשון מטה את הציר והשני נמדד על ציר מוטה (רעש עיגול בפרטים תלויי-זווית)
+    const cur = members[idx];
+    const m = orig.get(id) ?? cur;
+    orig.set(id, m);
+    const sees = () => (m === cur ? members : members.map((x) => (x === cur ? m : x)));
+    const site = findSite(sees(), m, end);
     if (!site) continue;
     // הסרת חלקי חיבור קיימים בקצה הזה
     const ownConn = site.cross?.conn ?? own[key];
@@ -622,7 +627,7 @@ export function applyCustomDetails(project: Project, members: Member[], connecti
       if (c.type !== 'custom' && !c.bolts.length && !c.parts.some((p) => members.some((x) => x.id === p && REMOVABLE.has(x.kind) && !kill.has(p)))) connections.splice(i, 1);
     }
     for (let i = members.length - 1; i >= 0; i--) if (kill.has(members[i].id)) { index.delete(members[i].id); members.splice(i, 1); }
-    const site2 = findSite(members, m, end) ?? site;
+    const site2 = findSite(sees(), m, end) ?? site;
     // אלמנטים סמוכים (פטות, קושרות, פלטות של חיבורים אחרים) — לבדיקת התנגשות עם חלקי הפרט
     const box = { c: site2.P, r: 900 };
     const others = members.filter((x) => x.id !== m.id && x.id !== site2.host?.id && x.kind !== 'bolt' && ['column', 'rafter', 'purlin', 'cleat', 'plate', 'brace', 'beam', 'girt'].includes(x.kind)
@@ -637,7 +642,10 @@ export function applyCustomDetails(project: Project, members: Member[], connecti
     }
     const r = buildDetail(site2, det, { material: project.building.material, others, overrides: ovr(key), extra });
     const k = members.findIndex((x) => x.id === m.id);
-    if (k >= 0) { members[k] = r.main; index.set(r.main.id, r.main); }
+    if (k >= 0) {
+      const merged: Member = site2.cross ? r.main : { ...members[k]!, ...(end === 'start' ? { start: r.main.start, startCut: r.main.startCut } : { end: r.main.end, endCut: r.main.endCut }), connId: r.main.connId };
+      members[k] = merged; index.set(merged.id, merged);
+    }
     members.push(...r.members);
     for (const x of r.members) index.set(x.id, x);
     connections.push(r.conn);

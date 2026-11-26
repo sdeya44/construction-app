@@ -319,6 +319,9 @@ export function PortalFields({ lineId }: { lineId?: string } = {}) {
     <div className="field"><label>קורת אגד בשאר המפתחים</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="pb-cont" checked={p.continuous ?? true} onChange={(e) => set({ continuous: e.target.checked })} />{(p.continuous ?? true) ? 'כן — ללא אלכסונים' : 'לא'}</label></div>
   </>;
   const conn = <>
+    <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} title="חיבורי אגד B (פח + לשונית) נבנים ממתכון במקום מהקוד הישן — בעמודי RHS/SHS ואלכסוני/קורת RHS/SHS בבורג 8.8 ISO 4017 בלבד (עמוד I — תמיד הקוד הישן). השוואה אוטומטית מול הקוד הישן ירוקה; כבוי = הקוד הישן (ברירת מחדל, גיבוי).">
+      <input type="checkbox" data-testid="pb-recipe" checked={p.engine === 'recipe'} onChange={(e) => set({ engine: e.target.checked ? 'recipe' : 'legacy' })} />
+      <span>בנה ממתכון (מנוע חדש) — כבוי: הקוד הישן</span></label>
     <div className="field"><label>חיבור קורת האגד לעמוד</label>
       <select className="inp" data-testid="pb-orient" value={p.finOrient ?? 'horizontal'} onChange={(e) => set({ finOrient: e.target.value as 'horizontal' | 'vertical' })}>
         <option value="horizontal">פח ולשונית שוכבים — הקורה על ציר העמודים</option><option value="vertical">פח ולשונית במישור הקיר — הקורה מוסטת בעובי פח</option>

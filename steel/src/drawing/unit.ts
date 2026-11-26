@@ -25,7 +25,7 @@ export function braceUnits(p: Project, d: DerivedModel): BraceUnit[] {
     const ks = [`${m.id}.K1`, `${m.id}.K2`].filter((id) => d.byId.has(id));
     if (!ks.length) continue; // קורת אגד בלי אלכסונים — שרטוט מכלול רגיל מספיק
     const key = m.id.slice(3);
-    const conns = d.connections.filter((c) => c.id.startsWith(`C.BB.${key}.`));
+    const conns = d.connections.filter((c) => c.id.startsWith(`C.BB.${key}.`) || c.id.startsWith(`C.CD.BB.${key}.`)); // כולל חיבורי אגד שנבנו ממתכון
     raw.push({ id: m.id, title: m.label, core: [m.id, ...ks], conns, hosts: [...new Set(conns.flatMap((c) => c.members))].filter((id) => d.byId.get(id)?.kind === 'column'), refs: [m.label] });
   }
   // אלכסוני Y בקורה נושאת: KT.<קורה>.<מסגרת>
