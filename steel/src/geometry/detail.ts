@@ -182,13 +182,13 @@ export function siteVars(s: Site): Vars {
   return {
     mh: s.mh, mb: s.mb, pb: mp.props.b ?? mp.props.h, mt: mp.dims.t ?? mp.dims.tw ?? 5, mtf: mp.dims.tf ?? mp.dims.t ?? 5,
     hh: hp?.props.h ?? 0, hr: hp?.dims.r ?? 0, ph: mp.props.h, hb: hp?.props.b ?? 0, htf: hp?.dims.tf ?? hp?.dims.t ?? 0, htw: hp?.dims.tw ?? hp?.dims.t ?? 0,
-    hd: s.hd, ang: Math.max(1, s.ang), hs: s.hand, ha: s.handA, wo: s.cross?.wo ?? 0, cs: s.cross?.cs ?? 1, sr: s.cross?.sr ?? 90, xs: s.cross ? (dot(scale(cross(scale(s.a, -1), s.u), s.hand), s.w) >= 0 ? 1 : -1) : 1,
+    hd: s.hd, ang: Math.max(1, s.ang), hs: s.hand, ha: s.handA, wo: s.cross?.wo ?? 0, cs: s.cross?.cs ?? 1, sr: s.cross?.sr ?? 90, ev: ((s.u.z - s.n.z * dot(s.u, s.n)) >= 0 ? 1 : -1), xs: s.cross ? (dot(scale(cross(scale(s.a, -1), s.u), s.hand), s.w) >= 0 ? 1 : -1) : 1,
   };
 }
 export const VAR_HELP: [string, string][] = [
   ['mh', 'גובה חתך האלמנט (במישור)'], ['mb', 'רוחב חתך האלמנט (ניצב למישור)'], ['pb', 'רוחב החתך b לפי הפרופיל (בלי קשר לכיוון ההנחה)'], ['ph', 'גובה החתך h לפי הפרופיל'], ['hr', 'רדיוס שורש (r) של חתך המארח'], ['mt', 'עובי דופן/ווב האלמנט'], ['mtf', 'עובי אגף האלמנט'],
   ['hh', 'גובה חתך המארח'], ['hb', 'רוחב חתך המארח'], ['htf', 'עובי אגף המארח'], ['htw', 'עובי ווב המארח'], ['hd', 'עומק המארח בכיוון הפגיעה'],
-  ['ang', 'זווית בין ציר האלמנט לפני המארח (90 = ניצב)'], ['hs', 'כיוון קנוני ±1 של w: הסטה/היסט ב-hs·x הולכים לאותו צד מוחלט בשני קצוות האלמנט'], ['ha', 'כיוון קנוני ±1 של a (כמו hs, לציר a): היסט ב-ha·x באותו צד מוחלט בשני הקצוות'], ['wo', 'תושבת פטה: מרחק פני הווב מציר הפטה'], ['xs', 'תושבת פטה: כיוון ±1 של "לרוחב" על פני הווב (a-) ביחס לציר הפטה — היסט xs·x הולך לאורך הפטה'],
+  ['ang', 'זווית בין ציר האלמנט לפני המארח (90 = ניצב)'], ['hs', 'כיוון קנוני ±1 של w: הסטה/היסט ב-hs·x הולכים לאותו צד מוחלט בשני קצוות האלמנט'], ['ha', 'כיוון קנוני ±1 של a (כמו hs, לציר a): היסט ב-ha·x באותו צד מוחלט בשני הקצוות'], ['wo', 'תושבת פטה: מרחק פני הווב מציר הפטה'], ['ev', 'כיוון ±1 של הרכיב האנכי של e1 בפנים המארח (הטלת ציר האלמנט על הפנים) — היסט ev·x הולך כלפי מעלה'], ['xs', 'תושבת פטה: כיוון ±1 של "לרוחב" על פני הווב (a-) ביחס לציר הפטה — היסט xs·x הולך לאורך הפטה'],
 ];
 
 export interface Frame { base: Vec3; n: Vec3; e1: Vec3; e2: Vec3; hand: 1 | -1 }
@@ -423,7 +423,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         if (!hs) { errors[op.id] = 'אין קבוצת חורים — הוסיפו קודם חורים'; continue; }
         const d = Math.round(ev(op.d, `${op.id}.d`, 16));
         vals[`${op.id}.d`] = d;
-        const cand: Member[] = [...members.filter((m) => m.kind === 'plate' || m.kind === 'cleat'), ...(opts.extra ?? []), main, ...(s.host ? [s.host] : [])];
+        const cand: Member[] = [...members.filter((m) => m.kind === 'plate' || m.kind === 'cleat'), ...(opts.extra ?? []), ...(op.noMain ? [] : [main]), ...(s.host ? [s.host] : [])];
         const testers = cand.map((m) => ({ m, t: new PrismTester(m) }));
         const own = plates.get(hs.plate)?.memberId;
         hs.cs.forEach((c, i) => {
@@ -453,7 +453,8 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
           const head = add(c, scale(hs.axis, lo - lead));
           let ru = frame({ on: hs.plate, face: 'z+' })?.e1 ?? s.a;
           if (Math.abs(dot(ru, hs.axis)) > 0.99) ru = s.a; // כיוון הראש לא מקביל לציר הבורג (בסיס: e1 = ציר העמוד)
-          if (op.anchor && Math.abs(hs.axis.x) < 0.5) ru = v3(1, 0, 0); // ברגי עוגן אנכיים: הראש מכוון ל-X העולמי (כמו הקוד הישן)
+          if (op.headUp) ru = op.headUp === 'Z' ? v3(0, 0, 1) : v3(1, 0, 0);
+          else if (op.anchor && Math.abs(hs.axis.x) < 0.5) ru = v3(1, 0, 0); // ברגי עוגן אנכיים: הראש מכוון ל-X העולמי (כמו הקוד הישן)
           bolts.push(makeBolt(`${cid}.${op.id}.${i + 1}`, cid, head, hs.axis, { d, grade: op.grade, standard: op.standard ?? 'ISO 4017', clearance: Math.max(1, hs.d0 - d) }, grip, op.site ? 'site' : 'shop', [...used], ru, members, op.anchor ? ev(op.anchor, `${op.id}.anchor`) + grip + lead : undefined));
         });
       } else if (op.k === 'weld') {

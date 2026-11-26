@@ -217,3 +217,20 @@ describe('CAD-08 הסבה (שלב D): פלטת בסיס (מבוטנת / ברגי
     expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
   }, 300000);
 });
+
+describe('CAD-09 הסבה (שלב D): חיבור צד (קורה לצד עמוד) כמתכון', () => {
+  for (const tpl of ['stepped', 'gable-center'] as const) it(`${tpl}: גופים תקינים, חורים חותכים, ריתוכים במגע, בלי חדירות — ובדיוק כמו הפרט הישן`, async () => {
+    const { SECTION_TEMPLATES } = await import('../src/model/section');
+    const p0 = newProject('conv', defaultBuilding());
+    p0.building.section = SECTION_TEMPLATES.find((t) => t.id === tpl)!.make();
+    const d0 = generate(p0);
+    const p1 = structuredClone(p0); p1.building.sideEngine = 'recipe';
+    const d1 = generate(p1);
+    const neu = d1.connections.filter((c) => c.custom && c.custom.detailId === 'conv-side' && /^F[12]\./.test(c.custom.site));
+    const old = d0.connections.filter((c) => /^C\.SIDE\.F[12]\./.test(c.id));
+    expect(neu.length).toBeGreaterThan(1);
+    expect(old.length).toBe(neu.length);
+    expect(cadFindings(cadAudit(K, d0, old))).toEqual([]);
+    expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
+  }, 300000);
+});

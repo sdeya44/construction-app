@@ -10,7 +10,7 @@ import { checkEavePlate } from './eavePlate';
 import { zAt, type SectionTopology } from '../model/section';
 import { defaultSideConn } from '../model/defaults';
 import { buildKneeBraces } from './knee';
-import { CLEAT_PLATE_RECIPE_ID, CLEAT_RUN_RECIPE_ID, CLEAT_SEAM_RECIPE_ID, CLEAT_STAND_RECIPE_ID, BASE_EMBEDDED_RECIPE_ID, BASE_BOLTED_RECIPE_ID, BASE_BOLTED_B500_RECIPE_ID } from './convRecipes';
+import { CLEAT_PLATE_RECIPE_ID, CLEAT_RUN_RECIPE_ID, CLEAT_SEAM_RECIPE_ID, CLEAT_STAND_RECIPE_ID, BASE_EMBEDDED_RECIPE_ID, BASE_BOLTED_RECIPE_ID, BASE_BOLTED_B500_RECIPE_ID, SIDE_RECIPE_ID } from './convRecipes';
 import { purlinParams } from './purlins';
 
 /** מידות בורג/אום/דיסקית לפי ISO 4017/4032/7089 (מידע גיאומטרי בלבד — לא מאומת). */
@@ -344,7 +344,10 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       if (prm.gauge / 2 - nutR < tw / 2 + 2) issue({ code: 'BOLT_ACCESS', severity: 'warning', elementId: id, message: `${label}: אום בתוך העמוד קרוב לווב — הגדל מרווח ברגים` });
       if (zTop > (col!.end.z) + 1) issue({ code: 'SIDE_ABOVE', severity: 'error', elementId: id, message: `${label}: הפלטה גבוהה מראש העמוד — הגבה את העמוד או הנמך את המישור` });
       const welds: WeldInfo[] = [{ id: `${id}.W1`, connId: id, type: 'fillet', a: prm.weldSize, length: outlinePerimeter(raf!.profile), location: 'shop', between: [raf!.id, pid], from: v3(xc, f.y, tos), to: v3(xc, f.y, tos) }];
-      res.connections.push({ id, type: 'rafter-side', label, members: [col!.id, raf!.id], parts: [pid, ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'rigid', overridden: !!project.connectionOverrides[id] });
+      // מתכון מובנה (שלב D): קורה → עמוד (לא קיר), מפרט בורג מוכר
+      const sideRcp = b.sideEngine === 'recipe' && prm.bolt.grade === '8.8' && prm.bolt.standard === 'ISO 4017'
+        ? { recipe: { id: SIDE_RECIPE_ID, own: true, params: { t: prm.t, w: prm.w, Hp, dz: raf!.anchor === 'top' ? -hv / 2 : 0, cols: prm.cols, gauge: prm.gauge, nr: zs.length, rp: zs.length > 1 ? (Hp - 2 * e) / (zs.length - 1) : 0, d: prm.bolt.d, cl: prm.bolt.clearance, a: prm.weldSize, gt: prm.t + tfc, wl: outlinePerimeter(raf!.profile) }, sites: [`${raf!.id}|${jn.end === 'b' ? 'end' : 'start'}`] } } : {};
+      res.connections.push({ id, type: 'rafter-side', label, members: [col!.id, raf!.id], parts: [pid, ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'rigid', overridden: !!project.connectionOverrides[id], ...sideRcp });
     }
 
     // ---- בסיס. embedded (ברירת מחדל, לפי החלטת המשתמש): פלטה מבוטנת + מוטות עיגון מרותכים במסגריה, העמוד מרותך בשטח.

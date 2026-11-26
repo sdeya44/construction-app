@@ -326,6 +326,8 @@ export interface BuildingParams {
   lineBase?: Record<string, Mm>;
   /** מנוע פלטות הבסיס (שלב D): 'recipe' = המתכונים `baseEmbeddedRecipe`/`baseBoltedRecipe` מחליפים את הקוד הישן (פלטה מבוטנת / ברגי עוגן; `pile` תמיד בקוד הישן); חסר/'legacy' = הקוד הישן */
   baseEngine?: 'legacy' | 'recipe';
+  /** מנוע חיבור הצד (קורה לצד עמוד, שלב D): 'recipe' = `sideRecipe` מחליף את הקוד הישן בפלטת קצה מוברגת לאגף העמוד; סככה צמודה לקיר (עוגנים כימיים) תמיד בקוד הישן; חסר/'legacy' = הקוד הישן */
+  sideEngine?: 'legacy' | 'recipe';
   purlins: PurlinSystem;
   bracing: BracingParams;
   /** חתך מודולרי (שורות עמודים ומישורי גג). חסר = מצב קלאסי לפי roofType/width/eave/ridge */
@@ -859,7 +861,7 @@ export type DetailOp =
       /** עם clipHost: עומק מישור החיתוך לתוך המארח מפני הפגיעה (למשל פני הווב מאחורי קצה האגפים בחתך I שנפגע מהצד) */ clipOff?: Expr }
   | { k: 'endplate'; id: string; t: Expr; w: Expr; h: Expr; dx: Expr; dy: Expr }
   | { k: 'holes'; id: string; ref: DetailRef; rows: Expr; cols: Expr; px: Expr; py: Expr; d0: Expr; /** G5: רק חורי ההיקף של הרשת (בלי הפנימיים) */ ring?: boolean }
-  | { k: 'bolts'; id: string; holes: string; d: Expr; grade: string; site: boolean; /** תקן הבורג (ברירת מחדל ISO 4017) */ standard?: string; /** אורך אחיזה (grip) מפורש במקום המדוד בסריקה (המדידה מעוגלת למ"מ ומשתמשת בעובי הווב של הגוף) — כמו החישוב האנליטי בקוד הישן; גבול אורך תקני רגיש ל-0.1 מ"מ */ grip?: Expr; /** ברגי עוגן: אורך עיגון מתחת לפלטה (מ"מ) — הבורג ארוך מעובי הפלטה בעוד הראש/האום מעליה (ראש מוסט כלפי מעלה ב-w+m+2P); בלי אזהרת "בורג בחלק אחד" */ anchor?: Expr; /** התנאי: הפעולה מתבצעת רק כשהביטוי ≠ 0 (אתר זוגי: הברגים נבנים באתר אחד בלבד) */ when?: Expr }
+  | { k: 'bolts'; id: string; holes: string; d: Expr; grade: string; site: boolean; /** תקן הבורג (ברירת מחדל ISO 4017) */ standard?: string; /** האלמנט הראשי (מרותך לפלטה) לא משתתף בסריקת הבורג — בורג שחולף ליד שפתו לא "נצמד" אליו */ noMain?: boolean; /** כיוון ראש הבורג (ציר עולמי) — כמו הקוד הישן; ברירת מחדל: לפי הפרט */ headUp?: 'X' | 'Z'; /** אורך אחיזה (grip) מפורש במקום המדוד בסריקה (המדידה מעוגלת למ"מ ומשתמשת בעובי הווב של הגוף) — כמו החישוב האנליטי בקוד הישן; גבול אורך תקני רגיש ל-0.1 מ"מ */ grip?: Expr; /** ברגי עוגן: אורך עיגון מתחת לפלטה (מ"מ) — הבורג ארוך מעובי הפלטה בעוד הראש/האום מעליה (ראש מוסט כלפי מעלה ב-w+m+2P); בלי אזהרת "בורג בחלק אחד" */ anchor?: Expr; /** התנאי: הפעולה מתבצעת רק כשהביטוי ≠ 0 (אתר זוגי: הברגים נבנים באתר אחד בלבד) */ when?: Expr }
   | { k: 'slot'; id: string; L: Expr; w: Expr; dir: 'a' | 'w' }
   | { k: 'vent'; id: string; d: Expr; at: Expr }
   | { k: 'rod'; id: string; ref: DetailRef; d: Expr; L: Expr; /** מוט בכל חור של קבוצת חורים (במקום מוט בודד): מתחיל במישור החורים, לכיוון ציר הקבוצה; החורים נרשמים גם בפלטה (`to`) */ holes?: string; /** פלטה שהמוטות מרותכים אליה (מזהה פעולת פלטה) וגודל הריתוך */ to?: string; a?: Expr; /** תיאור וחומר המוט (ברירת מחדל: "מוט הברגה" וחומר הפרויקט) */ label?: string; material?: string; /** המשך תיאור החלק אחרי "L=אורך" */ desc?: string }

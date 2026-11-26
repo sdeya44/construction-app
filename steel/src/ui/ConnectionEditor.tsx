@@ -4,7 +4,7 @@ import {
   applyIssueFixes, applyTemplate, resetCleat, resetConnection, saveTemplate, setBuilding, setCleat, setCleatAll, setConnection, setConnectionDefault,
 } from '../commands/commands';
 import { effCleat } from '../geometry/connections';
-import { RECIPE_CONN_TYPE } from '../geometry/convRecipes';
+import { RECIPE_CONN_TYPE, SIDE_RECIPE_ID } from '../geometry/convRecipes';
 import type { Vec3 } from '../core/vec';
 import type { ApprovalStatus, CleatParams, Connection, PlateConnParams, ValidationIssue } from '../model/types';
 import { store, useStore } from '../store';
@@ -58,7 +58,7 @@ export function ConnectionEditor() {
     <div className="panel-body"><div className="hint">החיבור {id0} אינו קיים במודל הנוכחי.</div><button className="btn" onClick={() => store.set({ activeConn: null })}>סגירה</button></div>
   );
   // בסיס שנבנה ממתכון: נערך כמו בסיס רגיל (הגדרות וחריגים לפי מזהה החיבור הישן)
-  const id = baseIdOf(c0), c: Connection = id !== c0.id ? { ...c0, type: 'base' } : c0;
+  const id = baseIdOf(c0), isSideRcp = c0.custom?.detailId === SIDE_RECIPE_ID, c: Connection = id !== c0.id ? { ...c0, type: 'base' } : isSideRcp ? { ...c0, type: 'rafter-side' } : c0;
   const issues = d.issues.filter((i) => i.elementId === id0 || i.elementId === id || c.parts.includes(i.elementId ?? '') || (i.code === 'CLASH' && c.parts.some((x) => i.message.includes(x))));
   const isCleat = c.type === 'purlin-cleat';
   const cleatId = isCleat ? c.parts[0] : '';
@@ -123,6 +123,11 @@ export function ConnectionEditor() {
 
       {c.type === 'eave' && eff?.split !== false && <div className="hint">שתי הפלטות מרותכות במסגריה (לעמוד ולתחתית הקורה) ומוברגות זו לזו בשטח. הברגים בפינות: מחוץ לרוחב אגף הקורה ומחוץ להיטל העמוד, לגישת מפתח.</div>}
       {c.type === 'brace' && <div className="issue warning"><span className="ic">!</span>{c.label}. החלקים: {c.parts.join(', ')}.</div>}
+      {(isSideRcp || (c.type === 'rafter-side' && c.id.startsWith('C.SIDE.'))) && (
+        <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} title="חיבור קורה לצד עמוד (גג מדורג / עמוד ברכס) נבנה ממתכון במקום מהקוד הישן. סככה צמודה לקיר (עוגנים כימיים) תמיד בקוד הישן. השוואה אוטומטית מול הקוד הישן ירוקה; כבוי = הקוד הישן (ברירת מחדל, גיבוי). חל על כל חיבורי הצד במבנה.">
+          <input type="checkbox" data-testid="side-recipe" checked={p.building.sideEngine === 'recipe'} onChange={(e) => store.exec(setBuilding({ sideEngine: e.target.checked ? 'recipe' : 'legacy' }))} />
+          <span>בנה ממתכון (מנוע חדש) — כבוי: הקוד הישן</span></label>
+      )}
       {eff && c.type === 'base' && <>
         <ScopeToggle value={baseScope} onChange={setBaseScope} oneLabel="רק הבסיס הזה" testId="cp-scope" />
         <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} title="פלטה מבוטנת וברגי עוגן נבנים ממתכון במקום מהקוד הישן (עמוד אנכי; 'טמון בכלונס' תמיד בקוד הישן). השוואה אוטומטית מול הקוד הישן ירוקה; כבוי = הקוד הישן (ברירת מחדל, גיבוי). חל על כל הבסיסים במבנה.">
