@@ -10,7 +10,7 @@ import { unzipSync } from 'fflate';
 import { defaultBuilding, newProject } from '../src/model/defaults';
 import { generate } from '../src/geometry/generate';
 import { defaultKneeBraces } from '../src/geometry/knee';
-import { buildDetail, detailPresets, findSite } from '../src/geometry/detail';
+import { buildDetail, detailPresets, findSite, needsHost, presetFits } from '../src/geometry/detail';
 import { computeFabrication } from '../src/fab/marks';
 import { dstvZip, partToNc1 } from '../src/fab/dstv';
 import type { CustomDetail } from '../src/model/types';
@@ -78,5 +78,31 @@ describe('PP-01/02 פלטה אל פלטה', () => {
     const names = Object.keys(unzipSync(dstvZip(p, d, fab).zip));
     const marks = new Set(pl.map((x) => x.mark));
     for (const m of marks) expect(names).toContain(`${m}.nc1`);
+  });
+});
+
+describe('FIT הצעת פרטים מוכנים לפי האתר', () => {
+  it('FIT-01: פרט שמרתך אל המארח לא מוצע בקצה חופשי; "פלטה אל פלטה" רק לאלמנט חלול/זוויתן על מארח I', () => {
+    const d = generate(proj());
+    const pp = detailPresets().find((x) => x.id === 'preset-plate-plate')!, fin = detailPresets().find((x) => x.id === 'preset-fin')!, fl = detailPresets().find((x) => x.id === 'preset-flange')!;
+    expect(needsHost(pp)).toBe(true); expect(needsHost(fin)).toBe(true); expect(needsHost(fl)).toBe(false);
+    const free = d.members.filter((m) => m.kind === 'column').map((m) => findSite(d.members, m, 'start')!).find((s) => !s.host)!;
+    expect(free).toBeTruthy();
+    expect(presetFits(pp, free)).toBe(false); expect(presetFits(fin, free)).toBe(false);
+    const brace = d.members.find((m) => m.id.startsWith('KB.'))!;
+    expect(presetFits(pp, findSite(d.members, brace, 'start')!)).toBe(true);
+    const rafter = d.members.find((m) => m.kind === 'rafter')!; // IPE על עמוד C — לא נבדק לפרט הזה
+    expect(presetFits(pp, findSite(d.members, rafter, 'start')!)).toBe(false);
+  });
+  it('FIT-02: כל פרט מוכן (בסיס) שמוצע לאתר — נבנה בלי שגיאות נוסחה/ריתוך ובלי חריגה, בכל אתרי הפרויקט', () => {
+    const d = generate(proj());
+    const base = detailPresets().filter((x) => ['preset-flange', 'preset-fin', 'preset-plate-plate', 'preset-cleat-plate'].includes(x.id));
+    let n = 0; const bad: string[] = [];
+    for (const m of d.members.filter((x) => ['column', 'rafter', 'brace', 'beam', 'purlin'].includes(x.kind))) for (const end of ['start', 'end'] as const) {
+      let s; try { s = findSite(d.members, m, end); } catch { continue; } if (!s) continue;
+      for (const det of base) { if (!presetFits(det, s)) continue; n++; try { const r = buildDetail(s, det); if (Object.keys(r.errors).length) bad.push(`${det.id} ${m.id}|${end}: ${JSON.stringify(r.errors)}`); } catch (e) { bad.push(`${det.id} ${m.id}|${end}: EXC ${String(e).slice(0, 80)}`); } }
+    }
+    expect(n).toBeGreaterThan(40);
+    expect(bad).toEqual([]);
   });
 });

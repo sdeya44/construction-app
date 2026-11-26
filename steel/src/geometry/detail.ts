@@ -802,10 +802,17 @@ export function similarSites(members: Member[], key: string, withProfile = true,
 
 // ---------- פרטים מוכנים לספרייה ----------
 /** האם פרט מוכן מתאים לאתר (לפי תנאי ההתאמה שלו); פרט בלי תנאים — מתאים לכל אתר שאינו תושבת */
+/** האם הפרט מרתך אל המארח: ריתוך מפורש `to:'host'`, או ריתוך של פלטה היושבת על המארח בלי יעד מפורש */
+export function needsHost(det: CustomDetail): boolean {
+  const onHost = new Set(det.ops.filter((o) => o.k === 'plate' && o.ref.on === 'host').map((o) => o.id));
+  return det.ops.some((o) => o.k === 'weld' && (o.to === 'host' || (o.to === undefined && onHost.has(o.part))));
+}
 export function presetFits(det: CustomDetail, site: Site | null): boolean {
   if (!site) return false;
   if ((det.family === 'cleat') !== !!site.cross) return false;
   if ((det.family === 'splice') !== !!site.mid) return false;
+  // קצה חופשי (אין מארח): לא מציעים פרט שמרתך משהו אל המארח — הבנייה נכשלת ב-"אין למה לרתך"
+  if (!site.host && needsHost(det)) return false;
   const mt = det.match;
   if (!mt) return true;
   const fam = (id?: string) => (id ? tryProfile(id)?.family ?? '' : '');
@@ -885,6 +892,7 @@ function basePresets(): CustomDetail[] {
     },
     {
       id: 'preset-plate-plate', name: 'פלטה אל פלטה (4 ברגים)', family: 'any',
+      match: { member: ['RHS', 'SHS', 'CHS', 'L'], host: ['IPE', 'HEA', 'HEB', 'HEM', 'INP'] },
       note: 'פלטה מרותכת למארח ופלטה שנייה מרותכת לקצה האלמנט, שתיהן מוברגות זו לזו. רוחב הפלטות = הגדול מבין רוחב האלמנט ורוחב המארח + תוספת; הגובה = היטל האלמנט על המארח + תוספת. הברגים מהדקים את הפלטות בלבד.',
       vars: [
         { name: 'd', expr: '16', note: 'קוטר בורג' }, { name: 'd0', expr: 'd+2', note: 'קוטר חור' }, { name: 'e', expr: 'max(30, r5(1.5*d0))', note: 'מרחק שפה' },

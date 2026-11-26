@@ -1509,3 +1509,5 @@ span.step-done-b { color: #1f7a45; font-size: 12px; font-weight: 600; }
 .ssc-legend code { background: #fff3b0; color: #4a3b00; border-radius: 3px; padding: 0 3px; font-weight: 700; }
 .ssc-legend b { color: #14202b; }
 @media (max-width: 900px) { .ssc-row { flex-direction: column; } }
+
+.ssc-note { font-size: 11px; color: var(--muted, #566674); background: rgba(255,255,255,.92); border-radius: 6px; padding: 3px 8px; max-width: 390px; }

@@ -116,3 +116,20 @@ test('SEC-E1: סטודיו — כרטיסי חתך עם שם המשתנה והע
   await expect(page.getByTestId('sec-card-main')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test('SEC-E2: כרטיס החתך משמש כמקור לבחירת משתנה בבונה הנוסחאות (mb ← נוסחה)', async ({ page }) => {
+  const errors = await boot(page);
+  await openNav(page, 'b:knee'); await page.getByTestId('kb-on').check();
+  await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
+  await page.getByTestId('ks-sec-conn').click(); await page.getByTestId('ks-sec-conn').click(); await page.getByTestId('cb-lib').click(); await page.getByTestId('studio-start').click();
+  const site = await page.evaluate(() => { const S = (window as any).__kspStudio; return S.screenOf(S.site()); });
+  await page.getByTestId('ds-tool-plate:rect').click(); await page.mouse.click(site.x - 25, site.y + 40);
+  await expect(page.getByTestId('ds-op-P1')).toBeVisible();
+  await page.getByTestId('ds-P1-w-fx').click();
+  await expect(page.getByTestId('fx-builder')).toBeVisible();
+  for (let i = 0; i < 6 && await page.getByTestId('fx-back').count(); i++) await page.getByTestId('fx-back').click();
+  await page.getByTestId('sec-tag-m-mb').click();
+  await page.getByTestId('fx-ok').click();
+  await expect(page.getByTestId('ds-P1-w')).toHaveValue(/\bmb\b/); // הבונה עטף ב-max( ) — העיקר: mb נכנס מכרטיס החתך
+  expect(errors).toEqual([]);
+});

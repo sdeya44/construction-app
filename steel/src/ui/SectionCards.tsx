@@ -66,6 +66,7 @@ export function SectionCards({ mainProfile, hostProfile, values, det, onTag }: {
   return (
     <div className="ssc-cards" data-testid="sec-cards">
       <button className="btn small" onClick={() => setOpen(!open)} data-testid="sec-toggle" aria-expanded={open}>חתכים והמשתנים שלהם {open ? '▾' : '▸'}</button>
+      {open && <div className="ssc-note">מידות החתך כפי שהאלמנט מונח בפרט: mh = במישור הפרט, mb = ניצב לו (לכן הן עשויות להיות מוחלפות ביחס לשרטוט הקטלוגי).</div>}
       {open && <div className="ssc-row">
         <Card title="האלמנט" profile={mainProfile} vars={mainVars} values={values} det={det} onTag={onTag} />
         {hostProfile && <Card title="המארח" profile={hostProfile} vars={hostVars} values={values} det={det} onTag={onTag} />}
