@@ -507,6 +507,9 @@ export function XConnFields() {
         <GussetSchematic />
         <div className="field"><label>קוטר בורג</label><BoltSelect testId="brc-d" d={br.conn.bolt.d} onChange={(d) => set({ conn: { ...br.conn, bolt: { ...br.conn.bolt, d } } })} /></div>
         <div className="field"><label>בורג בהצטלבות</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="brc-cross" checked={br.conn.crossBolt} onChange={(e) => set({ conn: { ...br.conn, crossBolt: e.target.checked } })} />{br.conn.crossBolt ? 'כן' : 'לא'}</label></div>
+        {br.conn.crossBolt && <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} title="בורג ההצטלבות (ופח המילוי) נבנה ממתכון על אתר עוגן במקום מהקוד הישן. השוואה אוטומטית ירוקה; כבוי = הקוד הישן.">
+          <input type="checkbox" data-testid="brc-cross-recipe" checked={br.conn.engine === 'recipe'} onChange={(e) => { const engine = e.target.checked ? 'recipe' : 'legacy'; set({ conn: { ...br.conn, engine }, ...(br.roof.rod ? { roof: { ...br.roof, rod: { ...br.roof.rod, engine } } } : {}) }); }} />
+          <span>בנה ממתכון (מנוע חדש) — כבוי: הקוד הישן</span></label>}
   </>;
 }
 

@@ -172,6 +172,8 @@ export interface RafterStrutParams {
  * עובר דרך חור אובלי בווב הקורה (בגלל זווית האלכסון); בצד השני זוויתן קצר עם חור (התאמת זווית) ואום.
  */
 export interface RodEndParams {
+  /** מנוע בורג ההצטלבות (G9, שלב D): 'recipe' = ממתכון על אתר עוגן; חסר/'legacy' = הקוד הישן */
+  engine?: 'legacy' | 'recipe';
   /** קוטר מוט ההברגה */
   d: Mm;
   /** אורך המוט */
@@ -290,6 +292,8 @@ export interface BraceConnParams {
   weldSize: Mm;
   /** בורג בהצטלבות האלכסונים */
   crossBolt: boolean;
+  /** מנוע ההצטלבות (G9, שלב D): 'recipe' = בורג ההצטלבות (ופח המילוי) ממתכון על אתר עוגן; חסר/'legacy' = הקוד הישן */
+  engine?: 'legacy' | 'recipe';
 }
 
 /** חיבור המשך לפטה: פלטה בצד הפנימי של הווב, 2 ברגים בכל פטה (סה"כ 4) */
@@ -844,8 +848,12 @@ export interface Connection {
   /** חיבור מובנה שמוחלף אוטומטית במתכון מובנה (ראו `KneeBraceParams.finEngine`): מזהה המתכון וערכי הפרמטרים לשני הקצוות */
   recipe?: { id: string; params: Record<string, number>; /** המתכון מחליף בדיוק את חלקי החיבור הזה (לא כל חלק סמוך בקצה, כמו פחי קושרות ליד בסיס העמוד) */ own?: boolean; /** קצוות האתר (מפתחות `אלמנט|start/end`); חסר = שני קצוות האלמנט הראשון ברשימת החלקים */ sites?: string[];
     /** ערכים נוספים לכל אתר (מעל `params`) — למשל מי בונה את הברגים המשותפים */ siteParams?: Record<string, Record<string, number>>;
-    /** אתר זוגי: אתר שבונה ברגים משותפים ← האתר שכנגד (הפלטה שלו משתתפת בסריקת הברגים) */ pairs?: Record<string, string> };
+    /** אתר זוגי: אתר שבונה ברגים משותפים ← האתר שכנגד (הפלטה שלו משתתפת בסריקת הברגים) */ pairs?: Record<string, string>;
+    /** אתרי עוגן (G9, מפתח `אלמנט|p:שם`): מיקום וכיוונים מפורשים שהחיבור המובנה מספק, כשאין קצה/תפר טבעי (למשל הצטלבות קושרות X) */ anchors?: Record<string, SiteAnchor> };
 }
+
+/** אתר עוגן: נקודה `P` (עולמית), כיוון `a` (נורמל הפנים a±), `up` (כיוון e1 של הפנים), `bu` (כיוון ראש הבורג), החיבור המובנה שמוחלף (`conn`) והאלמנט השני שהברגים עוברים בו (`partner`) */
+export interface SiteAnchor { conn: string; P: [number, number, number]; a: [number, number, number]; up: [number, number, number]; bu?: [number, number, number]; partner?: string }
 
 // ---------- פרטי חיבור מותאמים ----------
 

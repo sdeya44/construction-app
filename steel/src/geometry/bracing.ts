@@ -10,6 +10,7 @@ import { localFrame } from './frame';
 import { buildFlyBraces, buildLineTies, buildSagRods } from './roofExtras';
 import { buildRafterStruts, defaultRafterStruts, strutCutsIn, strutLines, strutPlateHalf } from './rafterStruts';
 import { bolt } from '../model/defaults';
+import { BRACE_CROSS_GUSSET_RECIPE_ID, BRACE_CROSS_ROD_RECIPE_ID } from './crossRecipes';
 
 /** פרט מוט הברגה (תוכנית 110): M18 L=250 מרותך בחפיפה 100, זוויתן דסקית L50/50/5 L=100, בורג הצטלבות M12 */
 export function defaultRodEnd(): RodEndParams {
@@ -359,6 +360,12 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
   return res;
 }
 
+/** מתכון הצטלבות (G9): אתר עוגן על הזוויתן הראשון בנקודת הבורג; `a` = נורמל מישור הקושרות, `up` = ניצב לזוויתן במישור (כיוון הפלטה), `bu` = כיוון הזוויתן (ראש הבורג) */
+function crossRecipe(id: string, cid: string, l1: string, l2: string, P: Vec3, n: Vec3, ex1: Vec3, params: Record<string, number>): Pick<Connection, 'recipe'> {
+  const key = `${l1}|p:X`, up = cross(ex1, n);
+  return { recipe: { id, own: true, params, sites: [key], anchors: { [key]: { conn: cid, P: [P.x, P.y, P.z], a: [n.x, n.y, n.z], up: [up.x, up.y, up.z], bu: [ex1.x, ex1.y, ex1.z], partner: l2 } } } };
+}
+
 /** קו ברגים סטנדרטי מגב זוויתן לפי רוחב הרגל (מקובל; אינו מאומת מקטלוג). */
 export function angleGauge(leg: number): number {
   const T: Record<number, number> = { 40: 22, 45: 25, 50: 28, 60: 35, 65: 35, 70: 40, 75: 40, 80: 45, 90: 50, 100: 55, 120: 50 };
@@ -471,7 +478,10 @@ function xBrace(res: BracingResult, b: BuildingParams, bc: BraceConnParams, key:
       });
       const head = add(X, scale(n, tg / 2 + t));
       const bo = makeBolt(`${cid}.B1`, cid, head, scale(n, -1), bc.bolt, 2 * t + tg, 'site', [l1.id, fid, l2.id], a, res.members);
-      res.connections.push({ id: cid, type: 'brace-cross', label: `${label} — הצטלבות`, members: [l1.id, l2.id], parts: [fid, bo.id], bolts: [bo], welds: [], status: 'not-verified', fixity: 'pinned', overridden: false });
+      // מתכון מובנה (G9, שלב D): אתר עוגן `זוויתן1|p:X` בנקודת הבורג; בורג 8.8 ISO 4017. אחרת — הקוד הישן
+      const crossRcp = bc.engine === 'recipe' && bc.bolt.grade === '8.8' && bc.bolt.standard === 'ISO 4017'
+        ? crossRecipe(BRACE_CROSS_GUSSET_RECIPE_ID, cid, l1.id, l2.id, X, n, a, { tg, fw, d: bc.bolt.d, cl: bc.bolt.clearance, t }) : {};
+      res.connections.push({ id: cid, type: 'brace-cross', label: `${label} — הצטלבות`, members: [l1.id, l2.id], parts: [fid, bo.id], bolts: [bo], welds: [], status: 'not-verified', fixity: 'pinned', overridden: false, ...crossRcp });
     }
   }
 }
@@ -582,7 +592,8 @@ function xBraceRod(res: BracingResult, b: BuildingParams, rp: RodEndParams, cros
       const Q = add(X, scale(add(l1.lat, l2.lat), sOff / (1 + cl)));
       const cid = `C.BR.${key}.X`;
       const bo = makeBolt(`${cid}.B1`, cid, add(Q, scale(n, t)), scale(n, -1), { d: rp.crossD, grade: '8.8', standard: 'ISO 4017', clearance: 2 }, 2 * t, 'site', [l1.id, l2.id], a, res.members);
-      res.connections.push({ id: cid, type: 'brace-cross', label: `${label} — הצטלבות (גב אל גב, בורג M${rp.crossD})`, members: [l1.id, l2.id], parts: [bo.id], bolts: [bo], welds: [], status: 'not-verified', fixity: 'pinned', overridden: false });
+      const crossRcp = rp.engine === 'recipe' ? crossRecipe(BRACE_CROSS_ROD_RECIPE_ID, cid, l1.id, l2.id, Q, n, a, { d: rp.crossD, cl: 2, t }) : {};
+      res.connections.push({ id: cid, type: 'brace-cross', label: `${label} — הצטלבות (גב אל גב, בורג M${rp.crossD})`, members: [l1.id, l2.id], parts: [bo.id], bolts: [bo], welds: [], status: 'not-verified', fixity: 'pinned', overridden: false, ...crossRcp });
     }
   }
 }

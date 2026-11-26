@@ -2,14 +2,14 @@ import { add, cross, dot, len, norm, rotateAxis, scale, sub, v3, type Plane, typ
 import CONN_LIBRARY from './data/connLibrary.json';
 import { tryExpr, type Vars } from '../core/expr';
 import { getProfile, tryProfile } from '../profiles/library';
-import type { BoltInfo, Connection, CustomDetail, DetailOp, DetailParam, DetailRef, Member, Project, ValidationIssue, WeldInfo } from '../model/types';
+import type { BoltInfo, Connection, CustomDetail, SiteAnchor, DetailOp, DetailParam, DetailRef, Member, Project, ValidationIssue, WeldInfo } from '../model/types';
 import { localFrame } from './frame';
 import { memberSolid } from './solid';
 import { axialExtent } from './parts';
 import { clash, PrismTester } from './clash';
 import { hw, makeBolt } from './connections';
 import { BUILTIN_RECIPES } from './convRecipes';
-import { midSite } from './midSite';
+import { anchorSite, midSite } from './midSite';
 
 /**
  * פרטי חיבור מותאמים — "מתכון": רשימת פעולות (חיתוך, פלטות, חורים, ברגים, ריתוך...) שכל אחת יושבת על פנים
@@ -20,7 +20,7 @@ import { midSite } from './midSite';
 
 /** קצה אלמנט, או חציה (x:מזהה מסגרת) — פטה שעוברת מעל קורת גג (תושבת פטה) */
 /** קצה אלמנט, חציה (x:מזהה מסגרת), או אתר באמצע האלמנט (s:k — חיבור ההמשך ה-k, מ-1, ברשימת התפרים הממוינת; G9) */
-export type End = 'start' | 'end' | `x:${string}` | `s:${number}`;
+export type End = 'start' | 'end' | `x:${string}` | `s:${number}` | `p:${string}`;
 const STRUCT = new Set(['column', 'rafter', 'beam', 'purlin', 'girt', 'brace']);
 const REMOVABLE = new Set(['plate', 'cleat', 'bolt', 'anchor']);
 
@@ -54,11 +54,11 @@ export interface Site {
   cross?: { conn: string; wo: number; cs: number; sr: number };
   /** אתר באמצע האלמנט (G9, חיבור המשך): האלמנט רציף ואינו נחתך. `conn` — מזהה החיבור המובנה שמוחלף; `t` — מיקום על הציר; `wa`/`ww` — היסט פני החומר לאורך a / w (פנים a±/w±);
    *  `up` — כיוון e1 של הפנים (למשל כלפי מעלה לאורך הווב); `xs` — סימן e2 של פנים a- ביחס לציר האלמנט */
-  mid?: { conn: string; t: number; k: number; wa: number; ww: number; up: Vec3; xs: 1 | -1 };
+  mid?: { conn: string; t: number; k: number; wa: number; ww: number; up: Vec3; xs: 1 | -1; /** כיוון ראש הבורג (ברירת מחדל `up`) */ bu?: Vec3; /** אלמנט שני שהברגים עוברים בו (הצטלבות) */ partner?: string };
 }
 
 /** הקשר לפתרון אתרי אמצע: מיקומי חיבורי ההמשך האפקטיביים (כולל אוטומטיים) לפי מזהה אלמנט */
-export interface SiteCtx { splices?: Record<string, number[]> }
+export interface SiteCtx { splices?: Record<string, number[]>; /** אתרי עוגן שחיבורים מובנים סיפקו (`Connection.recipe.anchors`), לפי מפתח אתר מלא */ anchors?: Record<string, SiteAnchor> }
 
 export const siteKey = (memberId: string, end: End) => `${memberId}|${end}`;
 export function parseSiteKey(k: string): { id: string; end: End } { const i = k.lastIndexOf('|'); return { id: k.slice(0, i), end: k.slice(i + 1) as End }; }
@@ -143,6 +143,7 @@ function trueHit(o: Vec3, d: Vec3, m: Member, tBox: number): { t: number; n: Vec
 export function findSite(members: Member[], m: Member, end: End, ctx?: SiteCtx): Site | null {
   if (!tryProfile(m.profile)) return null;
   if (end.startsWith('s:')) return midSite(m, Number(end.slice(2)), ctx?.splices?.[m.id]);
+  if (end.startsWith('p:')) return anchorSite(m, end as `p:${string}`, ctx?.anchors?.[siteKey(m.id, end)]);
   if (end.startsWith('x:')) return crossSite(members, m, end.slice(2));
   const E = end === 'start' ? m.start : m.end, O = end === 'start' ? m.end : m.start;
   const L = len(sub(E, O)); if (L < 1) return null;
@@ -504,7 +505,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
           const grip = op.grip !== undefined && op.grip !== '' ? ev(op.grip, `${op.id}.grip`) : Math.round(hi - lo);
           const head = add(c, scale(hs.axis, lo - lead));
           let ru = frame({ on: hs.plate, face: 'z+' })?.e1 ?? s.a;
-          if (Math.abs(dot(ru, hs.axis)) > 0.99) ru = s.mid?.up ?? s.a; // כיוון הראש לא מקביל לציר הבורג (בסיס: e1 = ציר העמוד)
+          if (Math.abs(dot(ru, hs.axis)) > 0.99) ru = s.mid?.bu ?? s.mid?.up ?? s.a; // כיוון הראש לא מקביל לציר הבורג (בסיס: e1 = ציר העמוד)
           if (op.headUp) ru = op.headUp === 'Z' ? v3(0, 0, 1) : v3(1, 0, 0);
           else if (op.anchor && Math.abs(hs.axis.x) < 0.5) ru = v3(1, 0, 0); // ברגי עוגן אנכיים: הראש מכוון ל-X העולמי (כמו הקוד הישן)
           bolts.push(makeBolt(`${cid}.${op.id}.${i + 1}`, cid, head, hs.axis, { d, grade: op.grade, standard: op.standard ?? 'ISO 4017', clearance: Math.max(1, hs.d0 - d) }, grip, op.site ? 'site' : 'shop', [...used], ru, members, op.anchor ? ev(op.anchor, `${op.id}.anchor`) + grip + lead : undefined));
@@ -632,7 +633,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
 
   const conn: Connection = {
     id: cid, type: 'custom', label: `${det.name} — ${s.main.label} (${s.mid ? `חיבור המשך ${(s.mid.t / 1000).toFixed(3)} מ'` : s.cross ? `תושבת ${s.host?.label ?? ''}` : s.end === 'start' ? 'התחלה' : 'סוף'})`,
-    members: [...(s.host ? [s.host.id] : []), s.main.id], parts: [...members.filter((m) => !(m.kind === 'bolt')).map((m) => m.id), ...bolts.map((b) => b.id)],
+    members: [...(s.host ? [s.host.id] : []), s.main.id, ...(s.mid?.partner ? [s.mid.partner] : [])], parts: [...members.filter((m) => !(m.kind === 'bolt')).map((m) => m.id), ...bolts.map((b) => b.id)],
     bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: true, vents: vents.length ? vents : undefined, ...(connHoles ? { holes: connHoles } : {}), custom: { detailId: det.id, site: s.key },
   };
   return { site: s, main, members, conn, issues, values: vals, errors, plates, frame, sEnd };
@@ -645,13 +646,13 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
 export function applyCustomDetails(project: Project, members: Member[], connections: Connection[]): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   // שיוך מפורש (פרויקט) קודם; שיוך משתמע ממתכון מובנה (`Connection.recipe`) — רק לקצוות שאין להם שיוך מפורש
-  const { assign: implicit, params: implicitParams, pairs, own } = recipeSites(project, connections);
+  const { assign: implicit, params: implicitParams, pairs, own, anchors } = recipeSites(project, connections);
   const assign: Record<string, string> = { ...implicit, ...(project.detailAssign ?? {}) };
   const lib = new Map((project.customDetails ?? []).map((d) => [d.id, d]));
   // אינדקס מזהים אחד לכל הריצה (ולא בנייה מחדש בכל אתר) — מתעדכן עם כל הוספה/הסרה/החלפה של אלמנט
   const index = new Map(members.map((x) => [x.id, x]));
   const orig = new Map<string, Member>();
-  const ctx: SiteCtx = { splices: project.splices };
+  const ctx: SiteCtx = { splices: project.splices, anchors };
   for (const [key, did] of Object.entries(assign)) {
     const det = lib.get(did) ?? builtinRecipe(did);
     const { id, end } = parseSiteKey(key);
@@ -691,6 +692,7 @@ export function applyCustomDetails(project: Project, members: Member[], connecti
     const ovr = (k: string) => (implicitParams[k] || project.detailParams?.[k] ? { ...implicitParams[k], ...project.detailParams?.[k] } : undefined);
     // אתר זוגי: הפלטה של האתר שכנגד נבנית מראש (טהור) כדי שהברגים המשותפים יעברו גם דרכה
     let extra: Member[] | undefined;
+    if (site2.mid?.partner) { const pm0 = index.get(site2.mid.partner); if (pm0) extra = [pm0]; }
     const pk = pairs[key];
     if (pk) {
       const pp = parseSiteKey(pk), pm = members.find((x) => x.id === pp.id), ps = pm ? findSite(members, pm, pp.end, ctx) : null;
@@ -721,11 +723,11 @@ export function builtinRecipe(id: string): CustomDetail | undefined {
 export function findDetail(project: Project, id: string): CustomDetail | undefined { return (project.customDetails ?? []).find((x) => x.id === id) ?? builtinRecipe(id); }
 
 /** קצוות שמתכון מובנה מוחל עליהם אוטומטית (חיבור עם `recipe`): שיוך וערכי פרמטרים לשני קצוות האלמנט הראשי של החיבור */
-function recipeSites(project: Project, connections: Connection[]): { assign: Record<string, string>; params: Record<string, Record<string, number>>; pairs: Record<string, string>; own: Record<string, string> } {
-  const assign: Record<string, string> = {}, params: Record<string, Record<string, number>> = {}, pairs: Record<string, string> = {}, own: Record<string, string> = {};
+function recipeSites(project: Project, connections: Connection[]): { assign: Record<string, string>; params: Record<string, Record<string, number>>; pairs: Record<string, string>; own: Record<string, string>; anchors: Record<string, SiteAnchor> } {
+  const assign: Record<string, string> = {}, params: Record<string, Record<string, number>> = {}, pairs: Record<string, string> = {}, own: Record<string, string> = {}, anchors: Record<string, SiteAnchor> = {};
   for (const c of connections) {
     if (!c.recipe) continue;
-    for (const k of c.recipe.sites ?? ['start', 'end'].map((end) => `${c.parts[0]}|${end}`)) { if (project.detailAssign?.[k]) continue; assign[k] = c.recipe.id; params[k] = { ...c.recipe.params, ...c.recipe.siteParams?.[k] }; if (c.recipe.own) own[k] = c.id; }
+    for (const k of c.recipe.sites ?? ['start', 'end'].map((end) => `${c.parts[0]}|${end}`)) { if (project.detailAssign?.[k]) continue; assign[k] = c.recipe.id; params[k] = { ...c.recipe.params, ...c.recipe.siteParams?.[k] }; if (c.recipe.own) own[k] = c.id; const an = c.recipe.anchors?.[k]; if (an) anchors[k] = an; }
     // אתר זוגי: אם לאחד מהצדדים הוקצה במפורש פרט אחר — הצד הנותר בונה את הברגים לבדו (ללא שותף)
     for (const [b, q] of Object.entries(c.recipe.pairs ?? {})) {
       const ab = assign[b] === c.recipe.id, aq = assign[q] === c.recipe.id;
@@ -734,7 +736,7 @@ function recipeSites(project: Project, connections: Connection[]): { assign: Rec
       else if (aq) params[q] = { ...params[q], bld: 1, prt: 0 };
     }
   }
-  return { assign, params, pairs, own };
+  return { assign, params, pairs, own, anchors };
 }
 
 /** חלקי החיבורים הקיימים בקצה האלמנט (פלטות, זוויתנים, ברגים, עיגונים) — מוחלפים בפרט המותאם */

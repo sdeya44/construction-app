@@ -239,6 +239,9 @@ export function RoofPanel({ section }: { section?: RoofSection } = {}) {
       <div className="panel-title">חלוקה לחלקי ייצור</div>
       <Help>אורך חומר גלם: {(p.settings.stockLength / 1000).toFixed(2)} מ'. ההצעה ממקמת חיבורי המשך מעל מסגרות, רק במקום הנדרש — לא בכל מסגרת. חיבור המשך בפטת C/Z: פלטה בצד הפנימי של הווב ו-4 ברגים, 2 בכל פטה.</Help>
       <PurlinSpliceSchematic sp={pu.splice} purlinH={tryProfile(purlinParams(pu, 'left').profile)?.props.h ?? 200} onSet={(patch) => exec(setPurlinSystem({ splice: { ...pu.splice, ...patch } }))} />
+      <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} title="חיבור ההמשך של הפטות (פלטה בצד הפנימי של הווב + 2 ברגים בכל פטה, C/Z) נבנה ממתכון על אתר באמצע האלמנט במקום מהקוד הישן. השוואה אוטומטית מול הקוד הישן ירוקה; כבוי = הקוד הישן.">
+        <input type="checkbox" data-testid="splice-recipe" checked={pu.splice.engine === 'recipe'} onChange={(e) => exec(setPurlinSystem({ splice: { ...pu.splice, engine: e.target.checked ? 'recipe' : 'legacy' } }))} />
+        <span>בנה ממתכון (מנוע חדש) — כבוי: הקוד הישן</span></label>
       <div className="field"><label>קוטר בורג</label><BoltSelect testId="ps-d" d={pu.splice.bolt.d} onChange={(d) => exec(setPurlinSystem({ splice: { ...pu.splice, bolt: { ...pu.splice.bolt, d } } }))} /></div>
       <div className="field"><label>אורך קטע פטה</label>
         <select className="inp" data-testid="piece-bays" value={pu.pieceBays ?? 0} onChange={(e) => exec(setPurlinSystem({ pieceBays: Number(e.target.value) }))}>

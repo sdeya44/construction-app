@@ -4,6 +4,7 @@
  * כפיפה פשוטה בפטות ותמירות באלכסונים. התוצאה: קטן מדי (כתום) / מתאים (ירוק) / גדול מדי (סגול).
  * כל הספים ניתנים לעריכה בהגדרות הפרויקט (settings.sizing).
  */
+import { RECIPE_CONN_TYPE } from '../geometry/convRecipes';
 import { getProfile, tryProfile } from '../profiles/library';
 import { getMaterial } from '../profiles/materials';
 import { purlinParams } from '../geometry/purlins';
@@ -95,7 +96,7 @@ function buildContext(p: Project, d: DerivedModel): Ctx {
     const k = m.purlin!.paramKey ?? (m.purlin!.side === 'R' ? 'right' : 'left');
     purlinS.set(m.id, purlinParams(p.building.purlins, k).spacing);
   }
-  const crossed = new Set(d.connections.filter((c) => c.type === 'brace-cross').flatMap((c) => c.members));
+  const crossed = new Set(d.connections.filter((c) => c.type === 'brace-cross' || (c.custom && RECIPE_CONN_TYPE[c.custom.detailId] === 'brace-cross')).flatMap((c) => c.members));
   // מפתח הקורה הגדול במסגרת (לעמודים)
   const frameSpan = new Map<string, number>();
   const frameRafH = new Map<string, number>();
