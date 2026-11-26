@@ -607,9 +607,16 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
     const poly = pm.contour ? pm.contour.map((q) => [q.s, q.u] as [number, number]) : [[0, -b / 2], [L, -b / 2], [L, b / 2], [0, b / 2]] as [number, number][];
     for (const bo of bolts.filter((x) => x.holesIn.includes(pm.id))) {
       const r = sub(bo.p, pm.start), q: [number, number] = [dot(r, f.ex), dot(r, f.u)];
-      let dmin = Infinity;
-      for (let i = 0; i < poly.length; i++) { const A = poly[i], B = poly[(i + 1) % poly.length]; const dx = B[0] - A[0], dy = B[1] - A[1], LL = dx * dx + dy * dy || 1; const tt = Math.max(0, Math.min(1, ((q[0] - A[0]) * dx + (q[1] - A[1]) * dy) / LL)); dmin = Math.min(dmin, Math.hypot(A[0] + tt * dx - q[0], A[1] + tt * dy - q[1])); }
-      if (dmin < 1.2 * d0Of(bo) - 0.5) { issues.push({ code: 'CD_EDGE', severity: 'warning', elementId: cid, message: `פרט ${det.name}: ${pm.label} — מרחק שפה לחור ${dmin.toFixed(0)} < 1.2·d0 = ${(1.2 * d0Of(bo)).toFixed(0)} מ"מ` }); break; }
+      let dmin = Infinity, horiz = false;
+      for (let i = 0; i < poly.length; i++) { const A = poly[i], B = poly[(i + 1) % poly.length]; const dx = B[0] - A[0], dy = B[1] - A[1], LL = dx * dx + dy * dy || 1; const tt = Math.max(0, Math.min(1, ((q[0] - A[0]) * dx + (q[1] - A[1]) * dy) / LL)); const dd = Math.hypot(A[0] + tt * dx - q[0], A[1] + tt * dy - q[1]); if (dd < dmin) { dmin = dd; horiz = Math.abs(dx) >= Math.abs(dy); } }
+      if (dmin < 1.2 * d0Of(bo) - 0.5) {
+        // תיקון בלחיצה (רק לפלטה מלבנית שיש לה פעולה): הקצה האופקי (לאורך w) מוגבל בגובה h, והאנכי ברוחב w; כל צד מקבל מחצית
+        const opId = pm.id.startsWith(`${cid}.`) ? pm.id.slice(cid.length + 1) : '', pOp = det.ops.find((o) => o.k === 'plate' && o.id === opId) as Extract<DetailOp, { k: 'plate' }> | undefined;
+        const add = Math.ceil(((1.2 * d0Of(bo) - dmin) * 2) / 5) * 5, field: 'w' | 'h' = horiz ? 'h' : 'w';
+        const studioFix = pOp && pOp.shape === 'rect' ? { label: `הגדל ${field === 'w' ? 'רוחב' : 'גובה'} פלטה ${opId} ב-${add} מ"מ`, op: opId, field, add } : undefined;
+        issues.push({ code: 'CD_EDGE', severity: 'warning', elementId: cid, message: `פרט ${det.name}: ${pm.label} — מרחק שפה לחור ${dmin.toFixed(0)} < 1.2·d0 = ${(1.2 * d0Of(bo)).toFixed(0)} מ"מ`, ...(studioFix ? { studioFix } : {}) });
+        break;
+      }
     }
   }
   const slot = det.ops.some((o) => o.k === 'slot');

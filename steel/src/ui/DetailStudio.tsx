@@ -1,4 +1,4 @@
-import { stackPlate, flushElementTo, type MateResult } from '../geometry/mates';
+import { stackPlate, flushElementTo, growPlate, promoteToParam, type MateResult } from '../geometry/mates';
 import { Help } from './fields';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { appendValue, FormulaBuilder, readable, toTokens, varLabel, type FxTarget } from './FormulaBuilder';
@@ -303,7 +303,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
           <ParamsCard det={det} res={res} setDet={setDet} />
           <section className="ss-card"><h4>בדיקות</h4>
             <ul className="ss-checks" data-testid="ds-checks">
-              {res.issues.filter((i) => i.severity !== 'info').map((i, k) => <li key={k} className={i.severity}>{i.message.replace(/^פרט [^:]*: /, '')}</li>)}
+              {res.issues.filter((i) => i.severity !== 'info').map((i, k) => <li key={k} className={i.severity}>{i.message.replace(/^פרט [^:]*: /, '')}{i.studioFix && <> <button className="btn small" data-testid="ds-fix" onClick={() => { const f = i.studioFix!; const r = growPlate(det, f.op, f.field, f.add); if ('error' in r) setMsg(r.error); else { setDet(() => r.det); setSel(r.sel); setMsg(''); } }}>תקן: {i.studioFix.label}</button></>}</li>)}
               {!res.issues.some((i) => i.severity !== 'info') && <li className="ok">אין התנגשויות ואין שגיאות. {res.conn.bolts.length ? `${res.conn.bolts.length} ברגים · ` : ''}{res.conn.welds.filter((w) => w.location === 'shop').length} ריתוכי מסגריה</li>}
             </ul>
           </section>
@@ -383,7 +383,7 @@ function refFromHit(h: Hit, res: DetailResult, s: Site, tool: ToolId): DetailRef
 }
 
 /** שדה נוסחה: טקסט חופשי + הערך המחושב + שגיאה */
-function EF({ label, value, onChange, vkey, res, hint, testId }: { label: string; value: string; onChange: (v: string) => void; vkey: string; res: DetailResult; hint?: string; testId?: string }) {
+function EF({ label, value, onChange, vkey, res, hint, testId, onParam }: { label: string; value: string; onChange: (v: string) => void; vkey: string; res: DetailResult; hint?: string; testId?: string; onParam?: () => void }) {
   const err = res.errors[vkey];
   const fx = useContext(FxCtx);
   const plain = /^-?[0-9.]+$/.test(value.trim());
@@ -393,6 +393,7 @@ function EF({ label, value, onChange, vkey, res, hint, testId }: { label: string
       <span className="ef-in">
         <input className="inp mono" value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId} spellCheck={false} aria-label={label} />
         <button className="fx-btn" title="בונה נוסחה בלחצנים" aria-label={`בונה נוסחה — ${label}`} data-testid={testId ? `${testId}-fx` : undefined} onClick={() => fx.open({ title: label, value, apply: onChange })}>ƒ</button>
+        {onParam && <button className="fx-btn" title="הפוך לשדה באשף החיבורים (פרמטר) — בלי נוסחה" aria-label={`הפוך לפרמטר — ${label}`} data-testid={testId ? `${testId}-param` : undefined} onClick={onParam}>⚙</button>}
       </span>
       <span className="ef-v">{err ? err : `= ${fmt(res.values[vkey])}`}</span>
       {!plain && !err && value.trim() && <span className="ef-read">{readable(value, fx.det ?? undefined)}</span>}
@@ -427,9 +428,9 @@ function OpProps({ op, det, res, patch, mate }: { op: DetailOp; det: CustomDetai
         </div>
         <label className="ef"><span className="ef-l">שם</span><input className="inp" value={op.name ?? ''} placeholder="פלטה" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className="ef"><span className="ef-l">צורה</span><select className="inp" value={op.shape} onChange={(e) => patch({ shape: e.target.value })}><option value="rect">מלבן</option><option value="cham">מלבן עם קיטום</option><option value="tri">משולש</option><option value="round">עגול</option></select></label>
-        <EF label={op.shape === 'round' ? 'קוטר' : 'רוחב w'} value={op.w} onChange={(v) => patch({ w: v })} vkey={k('w')} res={res} testId={`ds-${op.id}-w`} hint="לאורך ציר X של הפלטה" />
-        {op.shape !== 'round' && <EF label="גובה h" value={op.h} onChange={(v) => patch({ h: v })} vkey={k('h')} res={res} testId={`ds-${op.id}-h`} />}
-        <EF label="עובי t" value={op.t} onChange={(v) => patch({ t: v })} vkey={k('t')} res={res} testId={`ds-${op.id}-t`} />
+        <EF label={op.shape === 'round' ? 'קוטר' : 'רוחב w'} value={op.w} onChange={(v) => patch({ w: v })} vkey={k('w')} res={res} testId={`ds-${op.id}-w`} hint="לאורך ציר X של הפלטה" onParam={() => mate((d) => promoteToParam(d, op.id, 'w', res.values[k('w')]))} />
+        {op.shape !== 'round' && <EF label="גובה h" value={op.h} onChange={(v) => patch({ h: v })} vkey={k('h')} res={res} testId={`ds-${op.id}-h`} onParam={() => mate((d) => promoteToParam(d, op.id, 'h', res.values[k('h')]))} />}
+        <EF label="עובי t" value={op.t} onChange={(v) => patch({ t: v })} vkey={k('t')} res={res} testId={`ds-${op.id}-t`} onParam={() => mate((d) => promoteToParam(d, op.id, 't', res.values[k('t')]))} />
         {op.shape === 'cham' && <><EF label="קיטום" value={op.ch} onChange={(v) => patch({ ch: v })} vkey={k('ch')} res={res} />
           <div className="ss-row">{['↗', '↖', '↙', '↘'].map((s, i) => <button key={i} className={`btn small${op.corners[i] ? ' on' : ''}`} onClick={() => { const c = [...op.corners] as typeof op.corners; c[i] = !c[i]; patch({ corners: c }); }}>{s}</button>)}</div></>}
         <div className="ss-row"><span className="ef-l">מישור</span><button className={`btn small${op.mode === 'flat' ? ' on' : ''}`} onClick={() => patch({ mode: 'flat' })} data-testid={`ds-${op.id}-flat`}>שוכבת על הפנים</button><button className={`btn small${op.mode === 'stand' ? ' on' : ''}`} onClick={() => patch({ mode: 'stand' })} data-testid={`ds-${op.id}-stand`}>ניצבת לפנים</button></div>

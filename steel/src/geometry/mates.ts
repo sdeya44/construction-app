@@ -44,3 +44,45 @@ export function flushElementTo(det: CustomDetail, plateId: string): MateResult {
   const id = `C${n}`;
   return { det: { ...det, ops: [...det.ops, { k: 'cut', id, kind: 'host', at }] }, sel: id };
 }
+
+const num = (s: string) => /^-?\d+(\.\d+)?$/.test(s.trim());
+const ident = (s: string) => /^[A-Za-z_]\w*$/.test(s.trim());
+const plus = (expr: string, add: number) => (num(expr) ? String(Math.round((Number(expr) + add) * 100) / 100) : `${expr.trim()} + ${add}`);
+
+/**
+ * תיקון בלחיצה: הגדלת מידה (`w`/`h`) של פלטה ב-`add` מ"מ. אם המידה מקושרת לפלטה אחרת (`P1.w`) — מגדילים את המקור (שתי הפלטות נשארות זהות);
+ * אם היא שם משתנה — מגדילים את המשתנה; אחרת — את הביטוי עצמו.
+ */
+export function growPlate(det: CustomDetail, plateId: string, field: 'w' | 'h', add: number, depth = 0): MateResult {
+  const op = plateOf(det, plateId);
+  if (!op) return { error: 'הפלטה לא קיימת' };
+  if (depth > 8) return { error: 'קישור מעגלי בין מידות הפלטות' };
+  const cur = String(op[field]);
+  const link = new RegExp(`^([A-Za-z_]\\w*)\\.${field}$`).exec(cur.trim());
+  if (link && plateOf(det, link[1]!)) return growPlate(det, link[1]!, field, add, depth + 1);
+  if (ident(cur) && det.vars.some((v) => v.name === cur.trim())) {
+    const name = cur.trim();
+    return { det: { ...det, vars: det.vars.map((v) => (v.name === name ? { ...v, expr: plus(v.expr, add) } : v)) }, sel: plateId };
+  }
+  return { det: { ...det, ops: det.ops.map((o) => (o.id === plateId && o.k === 'plate' ? { ...o, [field]: plus(cur, add) } : o)) as DetailOp[] }, sel: plateId };
+}
+
+/**
+ * "הפוך לפרמטר": מידה של פלטה (`w`/`h`/`t`) הופכת למשתנה בשם `${op}${field}` (למשל `P1w`) ולשדה באשף החיבורים עם תווית — בלי נוסחה.
+ * `value` (הערך הנוכחי במ"מ) קובע את טווח השדה: חצי עד פי שלושה.
+ */
+export function promoteToParam(det: CustomDetail, plateId: string, field: 'w' | 'h' | 't', value?: number): MateResult {
+  const op = plateOf(det, plateId);
+  if (!op) return { error: 'בחרו פלטה' };
+  const cur = String(op[field]).trim();
+  if (ident(cur) && det.params?.some((p) => p.name === cur)) return { error: 'המידה כבר פרמטר' };
+  let name = `${plateId}${field}`, n = 2;
+  while (det.vars.some((v) => v.name === name)) name = `${plateId}${field}${n++}`;
+  const label = `${field === 'w' ? 'רוחב' : field === 'h' ? 'גובה' : 'עובי'} ${op.name ?? 'פלטה'} ${plateId}`;
+  const base = value !== undefined && Number.isFinite(value) && value > 0 ? value : num(cur) ? Number(cur) : 100;
+  const param = { name, label, kind: 'number' as const, unit: 'מ"מ', min: Math.max(1, Math.floor(base / 2)), max: Math.ceil(base * 3), group: 'פלטות' };
+  return {
+    det: { ...det, vars: [...det.vars, { name, expr: cur, note: label }], params: [...(det.params ?? []), param], ops: det.ops.map((o) => (o.id === plateId && o.k === 'plate' ? { ...o, [field]: name } : o)) as DetailOp[] },
+    sel: plateId,
+  };
+}

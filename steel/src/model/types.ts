@@ -954,6 +954,8 @@ export interface ValidationIssue {
   fix?: { label: string; purlinKey: string; patch: Partial<PurlinSideParams> };
   /** הצעת תיקון לתומך פטה: לכל תומכי הצד, או לתומך בודד (cleatId) */
   cleatFix?: { label: string; side: string; cleatId?: string; patch: Partial<CleatParams> };
+  /** תיקון בלחיצה בסטודיו הפרטים: הגדלת מידה של פלטה (`w`/`h`) ב-`add` מ"מ — ראו `growPlate` ב-`geometry/mates.ts` */
+  studioFix?: { label: string; op: string; field: 'w' | 'h'; add: number };
 }
 
 export interface RoofInfo {
