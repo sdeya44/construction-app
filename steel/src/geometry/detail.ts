@@ -7,7 +7,7 @@ import { localFrame } from './frame';
 import { memberSolid } from './solid';
 import { axialExtent } from './parts';
 import { clash, PrismTester } from './clash';
-import { makeBolt } from './connections';
+import { hw, makeBolt } from './connections';
 import { BUILTIN_RECIPES } from './convRecipes';
 
 /**
@@ -280,6 +280,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
     if (op.k === 'plate' && op.shape === 'round') vals[`${op.id}.h`] = vals[`${op.id}.w`];
   }
   const members: Member[] = [], bolts: BoltInfo[] = [], welds: WeldInfo[] = [], vents: NonNullable<Connection['vents']> = [];
+  let connHoles: Connection['holes'];
   const plates = new Map<string, PlateGeom>();
   // חיתוך: ברירת מחדל — מקביל לפני המארח, בפנים
   const cutOp = det.ops.find((o) => o.k === 'cut') as Extract<DetailOp, { k: 'cut' }> | undefined;
@@ -306,10 +307,11 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
     else { const by = ev(shiftOp.by, shiftOp.id); vals[`${shiftOp.id}.by`] = by; sh = scale(s.w, by); cutPlane = { point: add(cutPlane.point, sh), normal: cutPlane.normal }; }
   }
   const endPt = add(add(s.P, scale(s.u, sEnd)), sh);
+  const mainPt = cutOp?.keep ? add(s.P, sh) : endPt;
   // חיתוך ניצב לציר = קצה ישר (כמו בפרופיל רגיל) — בלי מישור חיתוך מפורש, כדי שהחלק, הגיליונות וה-NC1 יהיו זהים לקצה שנבנה בקוד
   const squareEnd = cutOp?.kind === 'perp';
   const cutFld = squareEnd ? undefined : cutPlane;
-  const main: Member = s.cross ? s.main : { ...s.main, ...(s.end === 'start' ? { start: endPt, startCut: cutFld } : { end: endPt, endCut: cutFld }), connId: s.main.connId };
+  const main: Member = s.cross ? s.main : { ...s.main, ...(s.end === 'start' ? { start: mainPt, startCut: cutFld } : { end: mainPt, endCut: cutFld }), connId: s.main.connId };
   if (s.cross && cutOp) errors[cutOp.id] = 'בתושבת פטה הפטה רציפה — אין חיתוך';
   vals.send = sEnd;
   let endT = 0;
@@ -413,7 +415,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         const along = ev(op.ref.along, `${op.id}.along`), across = ev(op.ref.across, `${op.id}.across`);
         Object.assign(vals, { [`${op.id}.px`]: px, [`${op.id}.py`]: py, [`${op.id}.d0`]: d0 });
         const cs: Vec3[] = [];
-        for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) cs.push(at(fr, along + (i - (rows - 1) / 2) * py, across + (j - (cols - 1) / 2) * px));
+        for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) if (!op.ring || i === 0 || i === rows - 1 || j === 0 || j === cols - 1) cs.push(at(fr, along + (i - (rows - 1) / 2) * py, across + (j - (cols - 1) / 2) * px));
         holeSets.set(op.id, { cs, axis: fr.n, d0, plate: op.ref.on });
       } else if (op.k === 'bolts') {
         if (op.when !== undefined && op.when !== '' && !ev(op.when, `${op.id}.when`, 1)) continue;
@@ -442,10 +444,17 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
           const start = segs.find((g) => g.m === own) ?? segs.find((g) => g.lo <= 0.5 && g.hi >= -0.5);
           if (!start) { errors[op.id] = 'הבורג לא עובר בשום חלק'; return; }
           let lo = start.lo, hi = start.hi; const used = new Set([start.m]);
-          for (let ch = true; ch;) { ch = false; for (const g of segs) if (!used.has(g.m) && g.lo <= hi + 2 && g.hi >= lo - 2) { lo = Math.min(lo, g.lo); hi = Math.max(hi, g.hi); used.add(g.m); ch = true; } }
-          if (used.size < 2) issues.push({ code: 'CD_BOLT', severity: 'warning', elementId: cid, message: `פרט ${det.name}: בורג ${op.id}-${i + 1} עובר בחלק אחד בלבד — חסרה פלטה נגדית?` });
-          const head = add(c, scale(hs.axis, lo));
-          bolts.push(makeBolt(`${cid}.${op.id}.${i + 1}`, cid, head, hs.axis, { d, grade: op.grade, standard: 'ISO 4017', clearance: Math.max(1, hs.d0 - d) }, op.grip !== undefined && op.grip !== '' ? ev(op.grip, `${op.id}.grip`) : Math.round(hi - lo), op.site ? 'site' : 'shop', [...used], frame({ on: hs.plate, face: 'z+' })?.e1 ?? s.a, members));
+          // ברגי עוגן: רק הפלטה — לא מצרפים את חומר העמוד שמעליה (גם כשהבורג בתוך שטח החתך, כמו בקוד הישן)
+          for (let ch = !op.anchor; ch;) { ch = false; for (const g of segs) if (!used.has(g.m) && g.lo <= hi + 2 && g.hi >= lo - 2) { lo = Math.min(lo, g.lo); hi = Math.max(hi, g.hi); used.add(g.m); ch = true; } }
+          if (used.size < 2 && !op.anchor) issues.push({ code: 'CD_BOLT', severity: 'warning', elementId: cid, message: `פרט ${det.name}: בורג ${op.id}-${i + 1} עובר בחלק אחד בלבד — חסרה פלטה נגדית?` });
+          // ברגי עוגן: הראש/האום מעל הפלטה (w + m + 2P), האורך = עיגון + עובי + אותו מרווח — כמו הקוד הישן
+          const hb = hw(d), lead = op.anchor ? hb.w + hb.m + 2 * hb.P : 0;
+          const grip = op.grip !== undefined && op.grip !== '' ? ev(op.grip, `${op.id}.grip`) : Math.round(hi - lo);
+          const head = add(c, scale(hs.axis, lo - lead));
+          let ru = frame({ on: hs.plate, face: 'z+' })?.e1 ?? s.a;
+          if (Math.abs(dot(ru, hs.axis)) > 0.99) ru = s.a; // כיוון הראש לא מקביל לציר הבורג (בסיס: e1 = ציר העמוד)
+          if (op.anchor && Math.abs(hs.axis.x) < 0.5) ru = v3(1, 0, 0); // ברגי עוגן אנכיים: הראש מכוון ל-X העולמי (כמו הקוד הישן)
+          bolts.push(makeBolt(`${cid}.${op.id}.${i + 1}`, cid, head, hs.axis, { d, grade: op.grade, standard: op.standard ?? 'ISO 4017', clearance: Math.max(1, hs.d0 - d) }, grip, op.site ? 'site' : 'shop', [...used], ru, members, op.anchor ? ev(op.anchor, `${op.id}.anchor`) + grip + lead : undefined));
         });
       } else if (op.k === 'weld') {
         const a = ev(op.a, `${op.id}.a`, 5);
@@ -470,7 +479,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
           else for (let i = 0; i < g.poly.length; i++) { const p = g.poly[i], q = g.poly[(i + 1) % g.poly.length]; if (Math.abs(p[0] - x0) < 0.5 && Math.abs(q[0] - x0) < 0.5) { length += 2 * Math.abs(q[1] - p[1]); from = add(add(g.center, scale(g.X, x0)), scale(g.Y, p[1])); toP = add(add(g.center, scale(g.X, x0)), scale(g.Y, q[1])); } }
         }
         if (op.len !== undefined && op.len !== '') length = ev(op.len, `${op.id}.len`);
-        welds.push({ id: `${cid}.${op.id}`, connId: cid, type: 'fillet', a, length: Math.round(length), location: op.site ? 'site' : 'shop', between: [g.memberId, to], from, to: toP });
+        welds.push({ id: `${cid}.${op.id}`, connId: cid, type: 'fillet', a, length: op.exact ? length : Math.round(length), location: op.site ? 'site' : 'shop', between: [g.memberId, to], from, to: toP });
         if (op.site && !BUILTIN_RECIPES[det.id]) issues.push({ code: 'CD_SITE_WELD', severity: 'warning', elementId: cid, message: `פרט ${det.name}: ריתוך בשטח — סותר את עיקרון הגלוון (ריתוך במסגריה, ברגים בשטח)` });
       } else if (op.k === 'vent') {
         const d = ev(op.d, `${op.id}.d`, 12), atS = ev(op.at, `${op.id}.at`, 30);
@@ -504,6 +513,17 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
           id: g.memberId, kind: 'cleat', label: desc, start: sub(Q, scale(yd, w / 2)), end: add(Q, scale(yd, w / 2)), profile: `L${Math.round(H)}x${Math.round(B)}x${Math.round(t)}`, material: mat,
           rollDeg: 0, mirror: dot(cross(up, Yw), dd) < 0, anchor: 'corner', refUp: up, source: 'generated', manualPlacement: false, connId: cid, partDesc: desc,
         });
+      } else if (op.k === 'rod' && op.holes) {
+        // מוט בכל חור של הקבוצה (G5/G6): מרותך לפלטה `to`, והחורים נרשמים בפלטה
+        const hs = holeSets.get(op.holes), pg = op.to ? plates.get(op.to) : undefined;
+        if (!hs || !pg) { errors[op.id] = 'אין קבוצת חורים או פלטה למוטות'; continue; }
+        const d = ev(op.d, `${op.id}.d`, 20), L = ev(op.L, `${op.id}.L`, 200), a = ev(op.a, `${op.id}.a`, 5);
+        hs.cs.forEach((c, i) => {
+          const id = `${cid}.${op.id}${i + 1}`;
+          members.push({ id, kind: 'anchor', label: op.label ? `${op.label} Φ${Math.round(d)}` : `מוט הברגה M${Math.round(d)}×${Math.round(L)}`, start: c, end: add(c, scale(hs.axis, L)), profile: `RD${Math.round(d)}`, material: op.material ?? mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: s.a, source: 'generated', manualPlacement: false, connId: cid, partDesc: op.label ? `${op.label} Φ${Math.round(d)}${op.desc ? ` L=${Math.round(L)} ${op.desc}` : ''}` : `מוט הברגה M${Math.round(d)}×${Math.round(L)}` });
+          welds.push({ id: `${cid}.${op.id}W${i + 1}`, connId: cid, type: 'fillet', a, length: Math.round(Math.PI * d), location: 'shop', between: [pg.memberId, id], from: c, to: c });
+          (connHoles ??= []).push({ id: `${cid}.${op.id}H${i + 1}`, memberId: pg.memberId, p: c, axis: hs.axis, d: hs.d0 });
+        });
       } else if (op.k === 'rod') {
         const fr = frame(op.ref);
         if (!fr) { errors[op.id] = 'הפנים לא קיימות'; continue; }
@@ -534,7 +554,9 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
   const slot = det.ops.some((o) => o.k === 'slot');
   const parts = members.filter((m) => m.kind === 'plate' || m.kind === 'anchor');
   const hard = [main, ...(s.host ? [s.host] : [])];
-  const bh = members.filter((m) => m.kind === 'bolt' && /\.(H|N)$/.test(m.id));
+  // ברגי עוגן עוברים בפלטה (ובחתך העמוד) מעצם הגדרתם — לא נבדקים (כמו בקוד הישן)
+  const anchorPre = det.ops.filter((o) => o.k === 'bolts' && o.anchor).map((o) => `${cid}.${o.id}.`);
+  const bh = members.filter((m) => m.kind === 'bolt' && /\.(H|N)$/.test(m.id) && !anchorPre.some((x) => m.id.startsWith(x)));
   const tests: [Member, Member][] = [];
   for (const p of parts) {
     for (const h of hard) {
@@ -543,20 +565,21 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
       tests.push([p, h]);
     }
   }
-  for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) tests.push([parts[i], parts[j]]);
+  const rodThru = new Set(det.ops.filter((o) => o.k === 'rod' && o.holes && o.to).map((o) => `${cid}.${(o as { to: string }).to}`));
+  for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) { if ((parts[i].kind === 'anchor' && rodThru.has(parts[j].id)) || (parts[j].kind === 'anchor' && rodThru.has(parts[i].id))) continue; tests.push([parts[i], parts[j]]); } // מוט עוגן עובר בחור הפלטה
   for (const b of bh) for (const h of [...hard, ...parts]) tests.push([b, h]);
   for (const o of opts.others ?? []) for (const p of parts) tests.push([p, o]);
   for (const [x, y] of tests) {
     const c = clash(x, y);
     if (c) issues.push({ code: 'CLASH', severity: 'error', elementId: x.id, message: `פרט ${det.name}: התנגשות ${x.label} ↔ ${y.label} — חדירה ${c.depth.toFixed(1)} מ"מ` });
   }
-  if (!s.host) issues.push({ code: 'CD_FREE', severity: 'info', elementId: cid, message: `פרט ${det.name}: קצה חופשי — לא נמצא אלמנט מארח מול הקצה` });
+  if (!s.host && !BUILTIN_RECIPES[det.id]) issues.push({ code: 'CD_FREE', severity: 'info', elementId: cid, message: `פרט ${det.name}: קצה חופשי — לא נמצא אלמנט מארח מול הקצה` });
   for (const [k, e] of Object.entries(errors)) issues.push({ code: 'CD_EXPR', severity: 'error', elementId: cid, message: `פרט ${det.name}: ${k} — ${e}` });
 
   const conn: Connection = {
     id: cid, type: 'custom', label: `${det.name} — ${s.main.label} (${s.cross ? `תושבת ${s.host?.label ?? ''}` : s.end === 'start' ? 'התחלה' : 'סוף'})`,
     members: [...(s.host ? [s.host.id] : []), s.main.id], parts: [...members.filter((m) => !(m.kind === 'bolt')).map((m) => m.id), ...bolts.map((b) => b.id)],
-    bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: true, vents: vents.length ? vents : undefined, custom: { detailId: det.id, site: s.key },
+    bolts, welds, status: 'not-verified', fixity: 'pinned', overridden: true, vents: vents.length ? vents : undefined, ...(connHoles ? { holes: connHoles } : {}), custom: { detailId: det.id, site: s.key },
   };
   return { site: s, main, members, conn, issues, values: vals, errors, plates, frame, sEnd };
 }
@@ -568,7 +591,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
 export function applyCustomDetails(project: Project, members: Member[], connections: Connection[]): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   // שיוך מפורש (פרויקט) קודם; שיוך משתמע ממתכון מובנה (`Connection.recipe`) — רק לקצוות שאין להם שיוך מפורש
-  const { assign: implicit, params: implicitParams, pairs } = recipeSites(project, connections);
+  const { assign: implicit, params: implicitParams, pairs, own } = recipeSites(project, connections);
   const assign: Record<string, string> = { ...implicit, ...(project.detailAssign ?? {}) };
   const lib = new Map((project.customDetails ?? []).map((d) => [d.id, d]));
   // אינדקס מזהים אחד לכל הריצה (ולא בנייה מחדש בכל אתר) — מתעדכן עם כל הוספה/הסרה/החלפה של אלמנט
@@ -583,8 +606,9 @@ export function applyCustomDetails(project: Project, members: Member[], connecti
     const site = findSite(members, m, end);
     if (!site) continue;
     // הסרת חלקי חיבור קיימים בקצה הזה
-    const kill = partsToReplace(members, connections, m, site.E, site.O, site.cross?.conn, index);
-    if (site.cross) { const i = connections.findIndex((c) => c.id === site.cross!.conn); if (i >= 0) connections.splice(i, 1); }
+    const ownConn = site.cross?.conn ?? own[key];
+    const kill = partsToReplace(members, connections, m, site.E, site.O, ownConn, index);
+    if (ownConn) { const i = connections.findIndex((c) => c.id === ownConn); if (i >= 0) connections.splice(i, 1); }
     for (const c of connections) {
       if (!c.parts.some((p) => kill.has(p)) && !c.bolts.some((b) => kill.has(b.id))) continue;
       c.parts = c.parts.filter((p) => !kill.has(p));
@@ -631,11 +655,11 @@ export function builtinRecipe(id: string): CustomDetail | undefined {
 export function findDetail(project: Project, id: string): CustomDetail | undefined { return (project.customDetails ?? []).find((x) => x.id === id) ?? builtinRecipe(id); }
 
 /** קצוות שמתכון מובנה מוחל עליהם אוטומטית (חיבור עם `recipe`): שיוך וערכי פרמטרים לשני קצוות האלמנט הראשי של החיבור */
-function recipeSites(project: Project, connections: Connection[]): { assign: Record<string, string>; params: Record<string, Record<string, number>>; pairs: Record<string, string> } {
-  const assign: Record<string, string> = {}, params: Record<string, Record<string, number>> = {}, pairs: Record<string, string> = {};
+function recipeSites(project: Project, connections: Connection[]): { assign: Record<string, string>; params: Record<string, Record<string, number>>; pairs: Record<string, string>; own: Record<string, string> } {
+  const assign: Record<string, string> = {}, params: Record<string, Record<string, number>> = {}, pairs: Record<string, string> = {}, own: Record<string, string> = {};
   for (const c of connections) {
     if (!c.recipe) continue;
-    for (const k of c.recipe.sites ?? ['start', 'end'].map((end) => `${c.parts[0]}|${end}`)) { if (project.detailAssign?.[k]) continue; assign[k] = c.recipe.id; params[k] = { ...c.recipe.params, ...c.recipe.siteParams?.[k] }; }
+    for (const k of c.recipe.sites ?? ['start', 'end'].map((end) => `${c.parts[0]}|${end}`)) { if (project.detailAssign?.[k]) continue; assign[k] = c.recipe.id; params[k] = { ...c.recipe.params, ...c.recipe.siteParams?.[k] }; if (c.recipe.own) own[k] = c.id; }
     // אתר זוגי: אם לאחד מהצדדים הוקצה במפורש פרט אחר — הצד הנותר בונה את הברגים לבדו (ללא שותף)
     for (const [b, q] of Object.entries(c.recipe.pairs ?? {})) {
       const ab = assign[b] === c.recipe.id, aq = assign[q] === c.recipe.id;
@@ -644,7 +668,7 @@ function recipeSites(project: Project, connections: Connection[]): { assign: Rec
       else if (aq) params[q] = { ...params[q], bld: 1, prt: 0 };
     }
   }
-  return { assign, params, pairs };
+  return { assign, params, pairs, own };
 }
 
 /** חלקי החיבורים הקיימים בקצה האלמנט (פלטות, זוויתנים, ברגים, עיגונים) — מוחלפים בפרט המותאם */

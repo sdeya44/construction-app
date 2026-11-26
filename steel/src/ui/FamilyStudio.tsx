@@ -1,3 +1,4 @@
+import { baseIdOf } from './ConnectionEditor';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { setBuilding, setMemberProps, setPurlinSide } from '../commands/commands';
 import { defaultRidgeReinf } from '../model/defaults';
@@ -250,7 +251,7 @@ export const FAMILIES: Record<FamKey, FamDef> = {
     conn: () => null,
     // 1.63: המחברים של המסגרת — ראש עמוד, רכס, פלטת בסיס (חיבור טיפוסי אחד לכל סוג)
     connTabs: ({ d }) => (([['eave', 'ראש עמוד (עמוד-קורה)'], ['ridge', 'רכס'], ['base', 'פלטת בסיס']] as const).map(([t, title], i) => {
-      const cs = d.connections.filter((c) => c.type === t && /^C\.(EAVE|RIDGE|BASE)\./.test(c.id));
+      const cs = d.connections.filter((c) => (baseIdOf(c) !== c.id ? 'base' : c.type) === t && /^C\.(EAVE|RIDGE|BASE)\./.test(baseIdOf(c)));
       const c0 = cs[0];
       return c0 ? { key: t, title: `מחבר ${i + 1} — ${title}`, sub: `${cs.length} חיבורים`, connId: c0.id, single: true,
         body: <><Note>פלטות, ברגים וריתוכים — בעורך החיבור (חל על כל החיבורים הזהים; חריג לחיבור בודד — מהמודל).</Note>

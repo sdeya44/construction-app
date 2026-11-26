@@ -1,9 +1,10 @@
 import { ConnPreview } from './ConnPreview';
 import { useState } from 'react';
 import {
-  applyIssueFixes, applyTemplate, resetCleat, resetConnection, saveTemplate, setCleat, setCleatAll, setConnection, setConnectionDefault,
+  applyIssueFixes, applyTemplate, resetCleat, resetConnection, saveTemplate, setBuilding, setCleat, setCleatAll, setConnection, setConnectionDefault,
 } from '../commands/commands';
 import { effCleat } from '../geometry/connections';
+import { RECIPE_CONN_TYPE } from '../geometry/convRecipes';
 import type { Vec3 } from '../core/vec';
 import type { ApprovalStatus, CleatParams, Connection, PlateConnParams, ValidationIssue } from '../model/types';
 import { store, useStore } from '../store';
@@ -40,20 +41,25 @@ export function MemberConnections({ memberId }: { memberId: string }) {
   );
 }
 
+/** חיבור בסיס שנבנה ממתכון (`baseEngine`): מזהה החיבור הישן (`C.BASE.מסגרת.צד`) — מפתח ההגדרות והחריגים שלו */
+export const baseIdOf = (c: Connection): string => (c.custom && RECIPE_CONN_TYPE[c.custom.detailId] === 'base' ? `C.BASE.${c.custom.site.split('|')[0]!.replace('.COL.', '.')}` : c.id);
+
 /** עורך חיבורים: פרמטרים, ברגים, ריתוכים, חתך, סטטוס ותבניות. השינויים נשמרים לחיבור הבודד. */
 export function ConnectionEditor() {
-  const id = useStore((s) => s.activeConn);
+  const id0 = useStore((s) => s.activeConn);
   const d = useStore((s) => s.derived);
   const p = useStore((s) => s.project);
   const [tplName, setTplName] = useState('');
   const [tab, setTab] = useState<'plate' | 'bolts' | 'admin'>('plate');
   const [baseScope, setBaseScope] = useState<'all' | 'one'>('all');
-  if (!id) return null;
-  const c = d.connById.get(id);
-  if (!c) return (
-    <div className="panel-body"><div className="hint">החיבור {id} אינו קיים במודל הנוכחי.</div><button className="btn" onClick={() => store.set({ activeConn: null })}>סגירה</button></div>
+  if (!id0) return null;
+  const c0 = d.connById.get(id0);
+  if (!c0) return (
+    <div className="panel-body"><div className="hint">החיבור {id0} אינו קיים במודל הנוכחי.</div><button className="btn" onClick={() => store.set({ activeConn: null })}>סגירה</button></div>
   );
-  const issues = d.issues.filter((i) => i.elementId === id || c.parts.includes(i.elementId ?? '') || (i.code === 'CLASH' && c.parts.some((x) => i.message.includes(x))));
+  // בסיס שנבנה ממתכון: נערך כמו בסיס רגיל (הגדרות וחריגים לפי מזהה החיבור הישן)
+  const id = baseIdOf(c0), c: Connection = id !== c0.id ? { ...c0, type: 'base' } : c0;
+  const issues = d.issues.filter((i) => i.elementId === id0 || i.elementId === id || c.parts.includes(i.elementId ?? '') || (i.code === 'CLASH' && c.parts.some((x) => i.message.includes(x))));
   const isCleat = c.type === 'purlin-cleat';
   const cleatId = isCleat ? c.parts[0] : '';
   const side = isCleat ? (d.byId.get(c.members[0])?.purlin?.paramKey ?? (d.byId.get(c.members[0])?.purlin?.side === 'R' ? 'right' : 'left')) : 'left';
@@ -62,7 +68,7 @@ export function ConnectionEditor() {
   const cl: CleatParams | null = isCleat ? effCleat(p, side, cleatId) : null;
   const setP = (patch: Partial<PlateConnParams>) => store.exec(setConnection(id, patch));
   const setC = (patch: Partial<CleatParams>) => store.exec(setCleat(side, patch, cleatId));
-  const sameType = d.connections.filter((x) => x.type === c.type).map((x) => x.id);
+  const sameType = d.connections.filter((x) => (baseIdOf(x) !== x.id ? 'base' : x.type) === c.type).map(baseIdOf);
 
   return (
     <div className="panel-body" data-testid="conn-editor">
@@ -91,7 +97,7 @@ export function ConnectionEditor() {
         ))}
       </div>
       {tab === 'plate' && <>
-      {familyOf(c) && <button className="btn primary" style={{ width: '100%', margin: '4px 0 8px' }} data-testid="conn-wizard-open" onClick={() => store.set({ connWizard: c.id })}>אשף חיבורים — פרטים מתאימים למצב הזה ✎</button>}
+      {familyOf(c0) && <button className="btn primary" style={{ width: '100%', margin: '4px 0 8px' }} data-testid="conn-wizard-open" onClick={() => store.set({ connWizard: c.id })}>אשף חיבורים — פרטים מתאימים למצב הזה ✎</button>}
       <PlateWizard c={c} />
       <SectionSvg c={c} />
       </>}
@@ -119,6 +125,9 @@ export function ConnectionEditor() {
       {c.type === 'brace' && <div className="issue warning"><span className="ic">!</span>{c.label}. החלקים: {c.parts.join(', ')}.</div>}
       {eff && c.type === 'base' && <>
         <ScopeToggle value={baseScope} onChange={setBaseScope} oneLabel="רק הבסיס הזה" testId="cp-scope" />
+        <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} title="פלטה מבוטנת וברגי עוגן נבנים ממתכון במקום מהקוד הישן (עמוד אנכי; 'טמון בכלונס' תמיד בקוד הישן). השוואה אוטומטית מול הקוד הישן ירוקה; כבוי = הקוד הישן (ברירת מחדל, גיבוי). חל על כל הבסיסים במבנה.">
+          <input type="checkbox" data-testid="base-recipe" checked={p.building.baseEngine === 'recipe'} onChange={(e) => store.exec(setBuilding({ baseEngine: e.target.checked ? 'recipe' : 'legacy' }))} />
+          <span>בנה ממתכון (מנוע חדש) — כבוי: הקוד הישן</span></label>
         <DetailTiles label="סוג פרט בסיס" testId="cp-mode" value={eff.mode ?? 'embedded'} onChange={(k) => (baseScope === 'all' ? store.exec(setConnectionDefault('base', { mode: k })) : setP({ mode: k }))} options={[
           { key: 'embedded', title: 'פלטה מבוטנת', desc: 'פלטה עם מוטות עיגון מרותכים מבוטנת ביסוד; העמוד מרותך אליה בשטח', pic: PIC.baseEmbedded },
           { key: 'bolted', title: 'ברגי עיגון', desc: 'פלטה מרותכת לעמוד במסגריה, ברגי עיגון בשטח', pic: PIC.baseBolted },

@@ -201,3 +201,19 @@ describe('CAD-07 הסבה (שלב D): תושבת פטה (זוויתן / פלטה
     expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
   }, 300000);
 });
+
+describe('CAD-08 הסבה (שלב D): פלטת בסיס (מבוטנת / ברגי עוגן) כמתכון', () => {
+  for (const mode of ['embedded', 'bolted'] as const) it(`${mode}: גופים תקינים, חורים חותכים, ריתוכים במגע, בלי חדירות — ובדיוק כמו הפרט הישן`, async () => {
+    const p0 = newProject('conv', defaultBuilding());
+    p0.connectionDefaults.base = { ...p0.connectionDefaults.base, mode };
+    const d0 = generate(p0);
+    const p1 = structuredClone(p0); p1.building.baseEngine = 'recipe';
+    const d1 = generate(p1);
+    const neu = d1.connections.filter((c) => c.custom && /^conv-base/.test(c.custom.detailId) && /^F[12]\./.test(c.custom.site));
+    const old = d0.connections.filter((c) => c.type === 'base' && neu.some((n) => `C.BASE.${n.custom!.site.split('|')[0]!.replace('.COL.', '.')}` === c.id));
+    expect(neu.length).toBe(4);
+    expect(old.length).toBe(4);
+    expect(cadFindings(cadAudit(K, d0, old))).toEqual([]);
+    expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
+  }, 300000);
+});

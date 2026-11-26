@@ -10,7 +10,7 @@ import { checkEavePlate } from './eavePlate';
 import { zAt, type SectionTopology } from '../model/section';
 import { defaultSideConn } from '../model/defaults';
 import { buildKneeBraces } from './knee';
-import { CLEAT_PLATE_RECIPE_ID, CLEAT_RUN_RECIPE_ID, CLEAT_SEAM_RECIPE_ID, CLEAT_STAND_RECIPE_ID } from './convRecipes';
+import { CLEAT_PLATE_RECIPE_ID, CLEAT_RUN_RECIPE_ID, CLEAT_SEAM_RECIPE_ID, CLEAT_STAND_RECIPE_ID, BASE_EMBEDDED_RECIPE_ID, BASE_BOLTED_RECIPE_ID, BASE_BOLTED_B500_RECIPE_ID } from './convRecipes';
 import { purlinParams } from './purlins';
 
 /** מידות בורג/אום/דיסקית לפי ISO 4017/4032/7089 (מידע גיאומטרי בלבד — לא מאומת). */
@@ -407,7 +407,18 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
         welds.push({ id: `${id}.W1`, connId: id, type: 'fillet', a: prm.weldSize, length: outlinePerimeter(col!.profile), location: 'shop', between: [col!.id, pid], from: top, to: top });
       }
       if (prm.l < cp.props.h + 2 * prm.weldSize || prm.w < cp.props.b + 2 * prm.weldSize) issue({ code: 'PLATE_SMALL', severity: 'warning', elementId: id, message: `${label}: הפלטה קטנה מחתך העמוד בתוספת מקום לריתוך` });
-      res.connections.push({ id, type: 'base', label, ...(baseHoles[id] ? { holes: baseHoles[id] } : {}), members: [col!.id], parts: [pid, ...bolts.map((x) => x.id), ...res.members.filter((m) => m.connId === id && m.kind === 'anchor').map((m) => m.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'pinned', overridden: !!project.connectionOverrides[id] });
+      // מתכון מובנה (שלב D): עמוד אנכי שציר a שלו לאורך X או Y, פלטה מבוטנת / ברגי עוגן במפרט מוכר. `pile` — תמיד הקוד הישן
+      let baseRecipe: Pick<Connection, 'recipe'> | Record<string, never> = {};
+      if (b.baseEngine === 'recipe') {
+        const lfb = localFrame(col!), us = norm(sub(col!.end, col!.start));
+        const wv = sub(lfb.v, scale(us, dot(lfb.v, us))), ab = norm(cross(norm(wv), us));
+        const sw = Math.abs(ab.y) > 0.999 ? 1 : Math.abs(ab.x) > 0.999 ? 0 : -1;
+        const rid = embedded ? BASE_EMBEDDED_RECIPE_ID : prm.bolt.grade === '8.8' && prm.bolt.standard === 'ISO 4017' ? BASE_BOLTED_RECIPE_ID : prm.bolt.grade === 'B500' && prm.bolt.standard === 'מוט מצולע' ? BASE_BOLTED_B500_RECIPE_ID : null;
+        if (rid && sw >= 0 && Math.abs(us.z) > 0.999 && lfb.length > prm.t) {
+          baseRecipe = { recipe: { id: rid, own: true, params: { l: prm.l, w: prm.w, t: prm.t, rows: prm.rows, pitch: prm.pitch, cols: prm.cols, gauge: prm.gauge, d: prm.bolt.d, cl: embedded ? 2 : prm.bolt.clearance, a: prm.weldSize, al: prm.anchorLength ?? (embedded ? 800 : 500), wl: outlinePerimeter(col!.profile), sw }, sites: [`${col!.id}|start`] } };
+        }
+      }
+      res.connections.push({ id, type: 'base', label, ...(baseHoles[id] ? { holes: baseHoles[id] } : {}), members: [col!.id], parts: [pid, ...bolts.map((x) => x.id), ...res.members.filter((m) => m.connId === id && m.kind === 'anchor').map((m) => m.id)], bolts, welds, status: statusOf(project, id), fixity: project.connectionOverrides[id]?.fixity ?? 'pinned', overridden: !!project.connectionOverrides[id], ...baseRecipe });
     }
   }
 

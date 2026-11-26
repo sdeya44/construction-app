@@ -16,6 +16,8 @@ import type { Bom } from '../fab/bom';
 import type { Fabrication, MarkedPart } from '../fab/marks';
 import { findDetail } from '../geometry/detail';
 import { BUILTIN_RECIPES, RECIPE_CONN_TYPE } from '../geometry/convRecipes';
+/** סוג החיבור האפקטיבי: חיבור שנבנה ממתכון מובנה נחשב לסוג החיבור שהוחלף (בסיס וכו') */
+const effType = (c: Connection) => (c.custom ? RECIPE_CONN_TYPE[c.custom.detailId] ?? c.type : c.type);
 import type { Connection, DerivedModel, DrawingRecord, DrawingType, Member, Project } from '../model/types';
 import { declutterDims, drawArea, fitScale, frameAndTitle, newSheet, today, View, type P, type Sheet, type SheetSize, type TitleInfo } from './sheet';
 
@@ -53,7 +55,7 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
   out.push({ id: 'D-ERECT', type: 'erection', number: 'G-02', title: 'תוכנית הרכבה – סימון כל מכלול במקומו' });
   out.push({ id: 'D-SEQ', type: 'sequence', number: 'G-03', title: 'סדר הקמה ומשקלי הרמה (הצעה)' });
   out.push({ id: 'D-ROOF', type: 'roof-plan', number: 'R-01', title: 'תוכנית גג ופריסת פטות' });
-  if (d.connections.some((c) => c.type === 'base')) out.push({ id: 'D-ANCHOR', type: 'anchor-plan', number: 'B-01', title: 'תוכנית ברגי עיגון ופלטות בסיס' });
+  if (d.connections.some((c) => effType(c) === 'base')) out.push({ id: 'D-ANCHOR', type: 'anchor-plan', number: 'B-01', title: 'תוכנית ברגי עיגון ופלטות בסיס' });
   // מסגרות זהות (אותם סימוני מכלול וחיבורים) — גיליון "חתך מסגרת טיפוסי" אחד לכל קבוצה
   for (const [k, g] of frameGroups(p, d, fab).entries()) {
     const ax = g.map((fid) => p.building.frames.findIndex((f) => f.id === fid) + 1);
@@ -497,8 +499,8 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       // הפניות לפרטי חיבור (עיגול מקווקו + תג מספר הגיליון)
       const cat = drawingCatalog(p, d, fab);
       const seen = new Set<string>();
-      for (const c of d.connections.filter((x) => (x.type === 'eave' || x.type === 'ridge' || x.type === 'base') && x.id.split('.').includes(f.id))) {
-        const ref = cat.find((x) => x.id === `D-CONN-${c.type}`); if (!ref) continue;
+      for (const c of d.connections.filter((x) => (x.type === 'eave' || x.type === 'ridge' || effType(x) === 'base') && (x.id.split('.').includes(f.id) || (x.custom && x.members.some((id) => d.byId.get(id)?.frameId === f.id))))) {
+        const ref = cat.find((x) => x.id === (c.custom ? `D-CONN-cd-${c.custom.detailId}` : `D-CONN-${c.type}`)); if (!ref) continue;
         const pm = c.parts.map((id) => d.byId.get(id)).find((m): m is Member => !!m && m.kind === 'plate'); if (!pm) continue;
         const q = v.p((pm.start.x + pm.end.x) / 2, (pm.start.z + pm.end.z) / 2);
         const key = `${c.type}:${Math.round(q.x)}`; if (seen.has(key)) continue; seen.add(key);
@@ -538,7 +540,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       openingsOn(v, side, (t) => b.frames.reduce((mn, f) => Math.min(mn, f.y), Infinity) + t);
       // פלטות בסיס וראש עמוד, וחתכי הקורות/קורות אגד שנשענות על קו העמודים
       const colIds = new Set(ms.filter((m) => m.kind === 'column').map((m) => m.id));
-      for (const c of d.connections.filter((c) => (c.type === 'base' || c.type === 'eave') && c.members.some((id) => colIds.has(id)))) {
+      for (const c of d.connections.filter((c) => (effType(c) === 'base' || c.type === 'eave') && c.members.some((id) => colIds.has(id)))) {
         for (const pid of c.parts) { const pm = d.byId.get(pid); if (pm && pm.kind === 'plate') edges(pm, pr, v, 'THIN'); }
       }
       for (const m of d.members.filter((x) => x.kind === 'beam' && Math.abs(x.start.x - x0) < 400 && Math.abs(x.end.x - x0) < 400)) edges(m, pr, v);
@@ -787,7 +789,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
     }
     case 'anchor-plan': {
       const pr: Proj = (q) => ({ x: q.x, y: q.y });
-      const bases = d.connections.filter((c) => c.type === 'base');
+      const bases = d.connections.filter((c) => effType(c) === 'base');
       const plateOf = (c: Connection) => c.parts.map((id) => d.byId.get(id)).find((m): m is Member => !!m && m.kind === 'plate');
       const anchorsOf = (c: Connection): P[] => [
         ...c.parts.map((id) => d.byId.get(id)).filter((m): m is Member => !!m && m.kind === 'anchor').map((m) => ({ x: m.start.x, y: m.start.y })),

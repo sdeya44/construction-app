@@ -1,4 +1,4 @@
-import type { CustomDetail, DetailRef } from '../model/types';
+import type { CustomDetail, DetailOp, DetailRef } from '../model/types';
 
 /**
  * מתכוני הסבה (שלב C): פרטים מובנים שנכתבו מחדש כמתכון, לצורך השוואה אוטומטית מול הקוד הישן.
@@ -14,12 +14,15 @@ export const CLEAT_RUN_RECIPE_ID = 'conv-cleat-run';
 export const CLEAT_PLATE_RECIPE_ID = 'conv-cleat-plate';
 export const CLEAT_SEAM_RECIPE_ID = 'conv-cleat-seam';
 export const CLEAT_STAND_RECIPE_ID = 'conv-cleat-stand';
+export const BASE_EMBEDDED_RECIPE_ID = 'conv-base-embedded';
+export const BASE_BOLTED_RECIPE_ID = 'conv-base-bolted';
+export const BASE_BOLTED_B500_RECIPE_ID = 'conv-base-bolted-b500';
 
 /** סוג החיבור המובנה שהמתכון מחליף — לחתימות שמבוססות על סוגי חיבורים (קיבוץ מסגרות זהות בשרטוטים) */
-export const RECIPE_CONN_TYPE: Record<string, 'knee' | 'brace' | 'purlin-cleat'> = { [KNEE_FIN_RECIPE_ID]: 'knee', [STRUT_FIN_RECIPE_ID]: 'brace', [STRUT_END_RECIPE_ID]: 'brace', [STRUT_WELD_RECIPE_ID]: 'brace', [CLEAT_RUN_RECIPE_ID]: 'purlin-cleat', [CLEAT_PLATE_RECIPE_ID]: 'purlin-cleat', [CLEAT_SEAM_RECIPE_ID]: 'purlin-cleat', [CLEAT_STAND_RECIPE_ID]: 'purlin-cleat' };
+export const RECIPE_CONN_TYPE: Record<string, 'knee' | 'brace' | 'purlin-cleat' | 'base'> = { [KNEE_FIN_RECIPE_ID]: 'knee', [STRUT_FIN_RECIPE_ID]: 'brace', [STRUT_END_RECIPE_ID]: 'brace', [STRUT_WELD_RECIPE_ID]: 'brace', [CLEAT_RUN_RECIPE_ID]: 'purlin-cleat', [CLEAT_PLATE_RECIPE_ID]: 'purlin-cleat', [CLEAT_SEAM_RECIPE_ID]: 'purlin-cleat', [CLEAT_STAND_RECIPE_ID]: 'purlin-cleat', [BASE_EMBEDDED_RECIPE_ID]: 'base', [BASE_BOLTED_RECIPE_ID]: 'base', [BASE_BOLTED_B500_RECIPE_ID]: 'base' };
 
 /** מתכונים מובנים לפי מזהה (מחוץ ל-`project.customDetails`): מחולים אוטומטית לפי `Connection.recipe` */
-export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe(), [CLEAT_RUN_RECIPE_ID]: () => cleatRunRecipe(), [CLEAT_PLATE_RECIPE_ID]: () => cleatPlateRecipe(), [CLEAT_SEAM_RECIPE_ID]: () => cleatSeamRecipe(), [CLEAT_STAND_RECIPE_ID]: () => cleatStandRecipe() };
+export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe(), [CLEAT_RUN_RECIPE_ID]: () => cleatRunRecipe(), [CLEAT_PLATE_RECIPE_ID]: () => cleatPlateRecipe(), [CLEAT_SEAM_RECIPE_ID]: () => cleatSeamRecipe(), [CLEAT_STAND_RECIPE_ID]: () => cleatStandRecipe(), [BASE_EMBEDDED_RECIPE_ID]: () => baseEmbeddedRecipe(), [BASE_BOLTED_RECIPE_ID]: () => baseBoltedRecipe('8.8', 'ISO 4017'), [BASE_BOLTED_B500_RECIPE_ID]: () => baseBoltedRecipe('B500', 'מוט מצולע') };
 
 /**
  * אלכסון עמוד-קורה, פח + לשונית בחריץ — שקול ל-`finJoint` ב-`geometry/finJoint.ts` (פרט הלקוח 15.11.2026).
@@ -238,6 +241,52 @@ export function cleatStandRecipe(): CustomDetail {
       { k: 'holes', id: 'H1', ref: R('main', 'a-', 'hh0 + (rows - 1)*rp/2', '0'), rows: 'rows', cols: '1', px: '0', py: 'rp', d0: 'd + cl' },
       { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true, grip: 'gt' },
       { k: 'weld', id: 'W1', part: 'A1', a: 'a', site: false, to: 'host', len: '4*lg' },
+    ],
+  };
+}
+
+const BASE_VARS = [
+  { name: 'l', expr: '230', note: 'אורך הפלטה (לאורך X העולמי)' }, { name: 'w', expr: '230', note: 'רוחב הפלטה (לאורך Y)' }, { name: 't', expr: '20', note: 'עובי הפלטה' },
+  { name: 'rows', expr: '3', note: 'שורות (לאורך X)' }, { name: 'pitch', expr: '80', note: 'מרווח בין שורות' }, { name: 'cols', expr: '3', note: 'עמודות (לאורך Y)' }, { name: 'gauge', expr: '80', note: 'מרווח בין עמודות' },
+  { name: 'd', expr: '20', note: 'קוטר מוט/בורג עיגון' }, { name: 'cl', expr: '2', note: 'תוספת קוטר חור' }, { name: 'a', expr: '4', note: 'גודל ריתוך' }, { name: 'al', expr: '800', note: 'אורך עיגון מתחת לפלטה' },
+  { name: 'wl', expr: '0', note: 'אורך ריתוך העמוד לפלטה (היקף החתך)' },
+  { name: 'sw', expr: '0', note: '1 = ציר a של העמוד לאורך Y (הרשת מוחלפת)' }, { name: 'sp', expr: 'if(sw, 0, 90)', note: 'סיבוב הפלטה כך שהאורך l ילך לאורך X' },
+  { name: 'nA', expr: 'if(sw, cols, rows)' }, { name: 'pA', expr: 'if(sw, gauge, pitch)' }, { name: 'nB', expr: 'if(sw, rows, cols)' }, { name: 'pB', expr: 'if(sw, pitch, gauge)' },
+];
+const BASE_PLATE = (name: string): DetailOp => ({ k: 'plate', id: 'P1', name, ref: R('main', 'end'), mode: 'flat', spin: 'sp', off: '0', shape: 'rect', w: 'l', h: 'w', t: 't', ch: '0', corners: [false, false, false, false] });
+
+/**
+ * פלטת בסיס מבוטנת — פלטה מתחת לעמוד (פני הפלטה העליונים = קצה העמוד), מוטות עיגון מרותכים בחורי ההיקף של הרשת (G5), העמוד מרותך לפלטה בשטח (חריג מאושר).
+ * הפרמטרים מהחיבור: l, w, t, rows/pitch (לאורך X), cols/gauge (לאורך Y), d, cl (תוספת חור), a, al (אורך עיגון), wl (היקף חתך העמוד), sw (הרשת מוחלפת כשציר a של העמוד לאורך Y).
+ */
+export function baseEmbeddedRecipe(): CustomDetail {
+  return {
+    id: BASE_EMBEDDED_RECIPE_ID, name: 'פלטת בסיס מבוטנת (הסבה)', family: 'base', category: 'support',
+    note: 'שקול לפלטת הבסיס המבוטנת: פלטה, מוטות עיגון מרותכים בהיקף הרשת, העמוד מרותך לפלטה בשטח.',
+    vars: BASE_VARS,
+    ops: [
+      BASE_PLATE('פלטה מבוטנת'),
+      { k: 'holes', id: 'H1', ref: R('main', 'end'), rows: 'nA', cols: 'nB', px: 'pB', py: 'pA', d0: 'd + cl', ring: true },
+      { k: 'rod', id: 'A', ref: R('main', 'end'), d: 'd', L: 'al + t', holes: 'H1', to: 'P1', a: 'a', label: 'מוט עיגון', material: 'S235', desc: '— עובר בפלטה, צמוד לפניה העליונים ומרותך סביב החור' },
+      { k: 'weld', id: 'W1', part: 'P1', a: 'a', site: true, to: 'main', len: 'wl', exact: true },
+    ],
+  };
+}
+
+/**
+ * פלטת בסיס עם ברגי עוגן — פלטה מרותכת לעמוד במסגריה (העמוד נחתך בעובי הפלטה), ברגי עוגן בכל נקודות הרשת (בשטח). `grade`/`standard`: מפרט הבורג של הבסיס.
+ */
+export function baseBoltedRecipe(grade: string, standard: string): CustomDetail {
+  return {
+    id: grade === '8.8' ? BASE_BOLTED_RECIPE_ID : BASE_BOLTED_B500_RECIPE_ID, name: `פלטת בסיס מוברגת (הסבה${grade === '8.8' ? '' : ', ' + grade})`, family: 'base', category: 'support',
+    note: 'שקול לפלטת בסיס עם ברגי עוגן: פלטה מרותכת לעמוד במסגריה, ברגי עוגן בשטח.',
+    vars: BASE_VARS.map((v) => (v.name === 'al' ? { ...v, expr: '500' } : v)).concat([{ name: 'tc', expr: 't', note: 'עומק חיתוך העמוד (עובי הפלטה)' }]),
+    ops: [
+      { k: 'cut', id: 'C1', kind: 'host', at: 'tc', keep: true },
+      BASE_PLATE('פלטת בסיס'),
+      { k: 'holes', id: 'H1', ref: R('main', 'end'), rows: 'nA', cols: 'nB', px: 'pB', py: 'pA', d0: 'd + cl' },
+      { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade, standard, site: true, grip: 't', anchor: 'al' },
+      { k: 'weld', id: 'W1', part: 'P1', a: 'a', site: false, to: 'main', len: 'wl', exact: true },
     ],
   };
 }

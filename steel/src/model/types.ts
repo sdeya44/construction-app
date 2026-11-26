@@ -324,6 +324,8 @@ export interface BuildingParams {
   baseElevation: Mm;
   /** מפלס תחתית העמודים לכל ציר (פני חגורה / יסוד), מפלס מוחלט ביחס ל-±0.00; חסר = baseElevation */
   lineBase?: Record<string, Mm>;
+  /** מנוע פלטות הבסיס (שלב D): 'recipe' = המתכונים `baseEmbeddedRecipe`/`baseBoltedRecipe` מחליפים את הקוד הישן (פלטה מבוטנת / ברגי עוגן; `pile` תמיד בקוד הישן); חסר/'legacy' = הקוד הישן */
+  baseEngine?: 'legacy' | 'recipe';
   purlins: PurlinSystem;
   bracing: BracingParams;
   /** חתך מודולרי (שורות עמודים ומישורי גג). חסר = מצב קלאסי לפי roofType/width/eave/ridge */
@@ -832,7 +834,7 @@ export interface Connection {
   /** פרט מותאם: מזהה הפרט ומפתח האתר */
   custom?: { detailId: string; site: string };
   /** חיבור מובנה שמוחלף אוטומטית במתכון מובנה (ראו `KneeBraceParams.finEngine`): מזהה המתכון וערכי הפרמטרים לשני הקצוות */
-  recipe?: { id: string; params: Record<string, number>; /** קצוות האתר (מפתחות `אלמנט|start/end`); חסר = שני קצוות האלמנט הראשון ברשימת החלקים */ sites?: string[];
+  recipe?: { id: string; params: Record<string, number>; /** המתכון מחליף בדיוק את חלקי החיבור הזה (לא כל חלק סמוך בקצה, כמו פחי קושרות ליד בסיס העמוד) */ own?: boolean; /** קצוות האתר (מפתחות `אלמנט|start/end`); חסר = שני קצוות האלמנט הראשון ברשימת החלקים */ sites?: string[];
     /** ערכים נוספים לכל אתר (מעל `params`) — למשל מי בונה את הברגים המשותפים */ siteParams?: Record<string, Record<string, number>>;
     /** אתר זוגי: אתר שבונה ברגים משותפים ← האתר שכנגד (הפלטה שלו משתתפת בסריקת הברגים) */ pairs?: Record<string, string> };
 }
@@ -849,21 +851,21 @@ export type Expr = string;
  */
 export interface DetailRef { on: 'main' | 'host' | string; face: string; along: Expr; across: Expr }
 export type DetailOp =
-  | { k: 'cut'; id: string; kind: 'perp' | 'host' | 'vert' | 'horiz'; at: Expr }
+  | { k: 'cut'; id: string; kind: 'perp' | 'host' | 'vert' | 'horiz'; at: Expr; /** מישור החיתוך מפורש, אבל נקודת ההתחלה/הסיום של האלמנט נשארת במקומה (כמו חיתוך עמוד בעובי פלטת הבסיס) */ keep?: boolean }
   /** הסטת קצה האלמנט הראשי (ציר + חיתוך) ניצב למישור (לאורך w) — למשל בעובי הפח, כשהלשונית מחליפה את מקומו. לא חל על תושבת פטה */
   | { k: 'shift'; id: string; by: Expr }
   | { k: 'plate'; id: string; name?: string; /* סיומת לתיאור החלק, אחרי המידות (למשל "(תפר פטה)") */ suffix?: string; ref: DetailRef; mode: 'flat' | 'stand'; spin: Expr; off: Expr; shape: 'rect' | 'cham' | 'tri' | 'rtri' | 'round'; /* rtri: משולש ישר-זווית — ציר החלק לאורך הניצב הראשון (פינת הזווית הישרה), סדר קודקודים: פינה, לאורך הרוחב, לאורך הציר, וכיוון v של החלק (refUp) כלפי +Y העולמי — כמו משולש התמיכה בקוד הישן */ w: Expr; h: Expr; t: Expr; ch: Expr; corners: [boolean, boolean, boolean, boolean];
       /** קצה הפלטה שליד המארח נחתך בזווית במישור פני המארח (חיתוך קצה בחלק — מופיע בגיליון ובזווית ה-NC1) */ clipHost?: boolean;
       /** עם clipHost: עומק מישור החיתוך לתוך המארח מפני הפגיעה (למשל פני הווב מאחורי קצה האגפים בחתך I שנפגע מהצד) */ clipOff?: Expr }
   | { k: 'endplate'; id: string; t: Expr; w: Expr; h: Expr; dx: Expr; dy: Expr }
-  | { k: 'holes'; id: string; ref: DetailRef; rows: Expr; cols: Expr; px: Expr; py: Expr; d0: Expr }
-  | { k: 'bolts'; id: string; holes: string; d: Expr; grade: string; site: boolean; /** אורך אחיזה (grip) מפורש במקום המדוד בסריקה (המדידה מעוגלת למ"מ ומשתמשת בעובי הווב של הגוף) — כמו החישוב האנליטי בקוד הישן; גבול אורך תקני רגיש ל-0.1 מ"מ */ grip?: Expr; /** התנאי: הפעולה מתבצעת רק כשהביטוי ≠ 0 (אתר זוגי: הברגים נבנים באתר אחד בלבד) */ when?: Expr }
+  | { k: 'holes'; id: string; ref: DetailRef; rows: Expr; cols: Expr; px: Expr; py: Expr; d0: Expr; /** G5: רק חורי ההיקף של הרשת (בלי הפנימיים) */ ring?: boolean }
+  | { k: 'bolts'; id: string; holes: string; d: Expr; grade: string; site: boolean; /** תקן הבורג (ברירת מחדל ISO 4017) */ standard?: string; /** אורך אחיזה (grip) מפורש במקום המדוד בסריקה (המדידה מעוגלת למ"מ ומשתמשת בעובי הווב של הגוף) — כמו החישוב האנליטי בקוד הישן; גבול אורך תקני רגיש ל-0.1 מ"מ */ grip?: Expr; /** ברגי עוגן: אורך עיגון מתחת לפלטה (מ"מ) — הבורג ארוך מעובי הפלטה בעוד הראש/האום מעליה (ראש מוסט כלפי מעלה ב-w+m+2P); בלי אזהרת "בורג בחלק אחד" */ anchor?: Expr; /** התנאי: הפעולה מתבצעת רק כשהביטוי ≠ 0 (אתר זוגי: הברגים נבנים באתר אחד בלבד) */ when?: Expr }
   | { k: 'slot'; id: string; L: Expr; w: Expr; dir: 'a' | 'w' }
   | { k: 'vent'; id: string; d: Expr; at: Expr }
-  | { k: 'rod'; id: string; ref: DetailRef; d: Expr; L: Expr }
+  | { k: 'rod'; id: string; ref: DetailRef; d: Expr; L: Expr; /** מוט בכל חור של קבוצת חורים (במקום מוט בודד): מתחיל במישור החורים, לכיוון ציר הקבוצה; החורים נרשמים גם בפלטה (`to`) */ holes?: string; /** פלטה שהמוטות מרותכים אליה (מזהה פעולת פלטה) וגודל הריתוך */ to?: string; a?: Expr; /** תיאור וחומר המוט (ברירת מחדל: "מוט הברגה" וחומר הפרויקט) */ label?: string; material?: string; /** המשך תיאור החלק אחרי "L=אורך" */ desc?: string }
   /** זוויתן L כחלק (פרופיל L, לא פלטה): הרגל הניצבת (גובה H לאורך e1 של הפנים) צמודה לפנים, רגל הבסיס (B) לאורך נורמל הפנים; אורך w לאורך Y העולמי, ממורכז. מצטרף למפת הפלטות כרגל הניצבת (חורים/ברגים/ריתוך) */
   | { k: 'angle'; id: string; name?: string; ref: DetailRef; H: Expr; B: Expr; t: Expr; w: Expr; /* זוויתן עומד: ציר החלק לאורך e1 של הפנים (למעלה, אורך w), רגל מוברגת צמודה לפנים, הפינה מוסטת ב-off לאורך +Y; שם הפרופיל הקנוני (L40x4 לרגליים שוות) */ vert?: boolean; off?: Expr }
-  | { k: 'weld'; id: string; /** מזהה פלטה, או 'main' = ריתוך ישיר של האלמנט הראשי למארח (דורש `len`) */ part: string; a: Expr; site: boolean; /** אורך ריתוך מפורש (מ"מ); בלי — לפי היקף/צלע הפלטה */ len?: Expr; /** למה לרתך: main / host / מזהה פלטה. ברירת מחדל — הרכיב שהפלטה יושבת עליו */ to?: string };
+  | { k: 'weld'; id: string; /** מזהה פלטה, או 'main' = ריתוך ישיר של האלמנט הראשי למארח (דורש `len`) */ part: string; a: Expr; site: boolean; /** אורך ללא עיגול למ"מ שלם (כמו היקף חתך בקוד הישן) */ exact?: boolean; /** אורך ריתוך מפורש (מ"מ); בלי — לפי היקף/צלע הפלטה */ len?: Expr; /** למה לרתך: main / host / מזהה פלטה. ברירת מחדל — הרכיב שהפלטה יושבת עליו */ to?: string };
 export interface DetailVar { name: string; expr: Expr; note?: string }
 /**
  * פרמטר שמוצג באשף (מתכון v2). קשור למשתנה בשם `name`: ערך למופע דורס את נוסחת המשתנה, ובלי ערך — הנוסחה (ברירת המחדל).
