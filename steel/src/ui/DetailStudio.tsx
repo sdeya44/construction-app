@@ -1,3 +1,4 @@
+import { stackPlate, flushElementTo, type MateResult } from '../geometry/mates';
 import { Help } from './fields';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { appendValue, FormulaBuilder, readable, toTokens, varLabel, type FxTarget } from './FormulaBuilder';
@@ -297,7 +298,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
               {!det.ops.length && <li className="muted">ריק — גררו כלי, או בחרו פרט מוכן.</li>}
             </ol>
           </section>
-          {sel && det.ops.find((o) => o.id === sel) && <OpProps op={det.ops.find((o) => o.id === sel)!} det={det} res={res} patch={(p) => patchOp(sel, p)} />}
+          {sel && det.ops.find((o) => o.id === sel) && <OpProps op={det.ops.find((o) => o.id === sel)!} det={det} res={res} patch={(p) => patchOp(sel, p)} mate={(fn) => { const r = fn(det); if ('error' in r) setMsg(r.error); else { setDet(() => r.det); setSel(r.sel); setMsg(''); } }} />}
           <VarsCard det={det} res={res} setDet={setDet} />
           <ParamsCard det={det} res={res} setDet={setDet} />
           <section className="ss-card"><h4>בדיקות</h4>
@@ -399,7 +400,7 @@ function EF({ label, value, onChange, vkey, res, hint, testId }: { label: string
   );
 }
 
-function OpProps({ op, det, res, patch }: { op: DetailOp; det: CustomDetail; res: DetailResult; patch: (p: Record<string, unknown>) => void }) {
+function OpProps({ op, det, res, patch, mate }: { op: DetailOp; det: CustomDetail; res: DetailResult; patch: (p: Record<string, unknown>) => void; mate: (fn: (d: CustomDetail) => MateResult) => void }) {
   const k = (f: string) => `${op.id}.${f}`;
   const plates = det.ops.filter((o) => o.k === 'plate' || o.k === 'endplate').map((o) => o.id);
   const refEditor = (ref: DetailRef) => (
@@ -420,6 +421,10 @@ function OpProps({ op, det, res, patch }: { op: DetailOp; det: CustomDetail; res
   return (
     <section className="ss-card" data-testid="ds-props"><h4>{OPNAME[op.k]} <span className="mono">{op.id}</span></h4>
       {op.k === 'plate' && <>
+        <div className="ss-row" data-testid="ds-mates" title="הצמדות — מתרגמות לפעולות קיימות (פלטה על פלטה, חיתוך מקביל למארח)">
+          <button className="btn small" data-testid="ds-mate-stack" onClick={() => mate((d) => stackPlate(d, op.id))}>פלטה זהה מעליה</button>
+          <button className="btn small" data-testid="ds-mate-flush" onClick={() => mate((d) => flushElementTo(d, op.id))}>הצמד את קצה האלמנט אליה</button>
+        </div>
         <label className="ef"><span className="ef-l">שם</span><input className="inp" value={op.name ?? ''} placeholder="פלטה" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className="ef"><span className="ef-l">צורה</span><select className="inp" value={op.shape} onChange={(e) => patch({ shape: e.target.value })}><option value="rect">מלבן</option><option value="cham">מלבן עם קיטום</option><option value="tri">משולש</option><option value="round">עגול</option></select></label>
         <EF label={op.shape === 'round' ? 'קוטר' : 'רוחב w'} value={op.w} onChange={(v) => patch({ w: v })} vkey={k('w')} res={res} testId={`ds-${op.id}-w`} hint="לאורך ציר X של הפלטה" />
