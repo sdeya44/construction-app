@@ -182,13 +182,13 @@ export function siteVars(s: Site): Vars {
   return {
     mh: s.mh, mb: s.mb, pb: mp.props.b ?? mp.props.h, mt: mp.dims.t ?? mp.dims.tw ?? 5, mtf: mp.dims.tf ?? mp.dims.t ?? 5,
     hh: hp?.props.h ?? 0, hr: hp?.dims.r ?? 0, ph: mp.props.h, hb: hp?.props.b ?? 0, htf: hp?.dims.tf ?? hp?.dims.t ?? 0, htw: hp?.dims.tw ?? hp?.dims.t ?? 0,
-    hd: s.hd, ang: Math.max(1, s.ang), hs: s.hand, ha: s.handA, wo: s.cross?.wo ?? 0, cs: s.cross?.cs ?? 1, sr: s.cross?.sr ?? 90,
+    hd: s.hd, ang: Math.max(1, s.ang), hs: s.hand, ha: s.handA, wo: s.cross?.wo ?? 0, cs: s.cross?.cs ?? 1, sr: s.cross?.sr ?? 90, xs: s.cross ? (dot(scale(cross(scale(s.a, -1), s.u), s.hand), s.w) >= 0 ? 1 : -1) : 1,
   };
 }
 export const VAR_HELP: [string, string][] = [
   ['mh', 'גובה חתך האלמנט (במישור)'], ['mb', 'רוחב חתך האלמנט (ניצב למישור)'], ['pb', 'רוחב החתך b לפי הפרופיל (בלי קשר לכיוון ההנחה)'], ['ph', 'גובה החתך h לפי הפרופיל'], ['hr', 'רדיוס שורש (r) של חתך המארח'], ['mt', 'עובי דופן/ווב האלמנט'], ['mtf', 'עובי אגף האלמנט'],
   ['hh', 'גובה חתך המארח'], ['hb', 'רוחב חתך המארח'], ['htf', 'עובי אגף המארח'], ['htw', 'עובי ווב המארח'], ['hd', 'עומק המארח בכיוון הפגיעה'],
-  ['ang', 'זווית בין ציר האלמנט לפני המארח (90 = ניצב)'], ['hs', 'כיוון קנוני ±1 של w: הסטה/היסט ב-hs·x הולכים לאותו צד מוחלט בשני קצוות האלמנט'], ['ha', 'כיוון קנוני ±1 של a (כמו hs, לציר a): היסט ב-ha·x באותו צד מוחלט בשני הקצוות'], ['wo', 'תושבת פטה: מרחק פני הווב מציר הפטה'],
+  ['ang', 'זווית בין ציר האלמנט לפני המארח (90 = ניצב)'], ['hs', 'כיוון קנוני ±1 של w: הסטה/היסט ב-hs·x הולכים לאותו צד מוחלט בשני קצוות האלמנט'], ['ha', 'כיוון קנוני ±1 של a (כמו hs, לציר a): היסט ב-ha·x באותו צד מוחלט בשני הקצוות'], ['wo', 'תושבת פטה: מרחק פני הווב מציר הפטה'], ['xs', 'תושבת פטה: כיוון ±1 של "לרוחב" על פני הווב (a-) ביחס לציר הפטה — היסט xs·x הולך לאורך הפטה'],
 ];
 
 export interface Frame { base: Vec3; n: Vec3; e1: Vec3; e2: Vec3; hand: 1 | -1 }
@@ -348,13 +348,13 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
   const at = (fr: Frame, along: number, across: number) => add(add(fr.base, scale(fr.e1, along)), scale(fr.e2, across));
   const targetOf = (on: string) => on === 'main' ? s.main.id : on === 'host' ? (s.host?.id ?? '') : (plates.get(on)?.memberId ?? '');
 
-  const plateMember = (g: PlateGeom, name: string, contour: boolean, rt = false): Member => {
+  const plateMember = (g: PlateGeom, name: string, contour: boolean, rt = false, suffix = ''): Member => {
     const xs = g.poly.map((p) => p[0]), ys = g.poly.map((p) => p[1]);
     const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), yc = rt ? g.poly[0][1] : (y0 + y1) / 2;
     const W = (x: number, y: number) => add(add(g.center, scale(g.X, x)), scale(g.Y, y));
     const start = W(x0, yc), end = W(x1, yc);
     const b = Math.round(y1 - y0), t = Math.round(g.t);
-    const desc = `${name} PL${t}×${b}×${Math.round(x1 - x0)}`;
+    const desc = `${name} PL${t}×${b}×${Math.round(x1 - x0)}${suffix ? ` ${suffix}` : ''}`;
     const m: Member = {
       id: g.memberId, kind: 'plate', label: desc, start, end, profile: `PL${b}x${t}`, material: mat, rollDeg: 0, mirror: false,
       anchor: 'center', refUp: rt && g.Z.y < 0 ? scale(g.Z, -1) : g.Z, source: 'generated', manualPlacement: false, connId: cid, partDesc: contour && !rt ? `${desc} (צורה)` : desc,
@@ -384,7 +384,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         const poly = platePoly(op.shape, w, h, ch, op.corners);
         const g: PlateGeom = { id: op.id, center, X, Y, Z, t, w, h, poly, hand: fr.hand, memberId: `${cid}.${op.id}`, target: targetOf(op.ref.on) };
         plates.set(op.id, g);
-        const pm = plateMember(g, op.name || 'פלטה', op.shape !== 'rect' && !(op.shape === 'cham' && (ch <= 0 || !op.corners.some(Boolean))), op.shape === 'rtri');
+        const pm = plateMember(g, op.name || 'פלטה', op.shape !== 'rect' && !(op.shape === 'cham' && (ch <= 0 || !op.corners.some(Boolean))), op.shape === 'rtri', op.suffix);
         // clipHost: קצה הפלטה שליד המארח נחתך במישור פני המארח (זווית חיתוך בחלק — כמו בקוד הישן, ו-NC1 מקבל את זווית החיתוך)
         if (op.clipHost && s.host && !s.cross) {
           const cut = { point: sub(s.P, scale(s.n, op.clipOff ? ev(op.clipOff, `${op.id}.clipOff`) : 0)), normal: scale(s.n, -1) };
@@ -483,6 +483,19 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         const Q = at(fr, ev(op.ref.along, `${op.id}.along`), ev(op.ref.across, `${op.id}.across`));
         const up = fr.e1, dd = fr.n, Yw = v3(0, 1, 0);
         let yd = fr.e2; if (dot(yd, Yw) < 0) yd = scale(yd, -1);
+        if (op.vert) {
+          // זוויתן עומד: ציר לאורך up (אורך w), רגל מוברגת צמודה לפנים (dd), הפינה מוסטת ב-off לאורך yd
+          const off = ev(op.off ?? '0', `${op.id}.off`), C0 = add(Q, scale(yd, off));
+          const prof = H === B ? `L${Math.round(H)}x${Math.round(t)}` : `L${Math.round(H)}x${Math.round(B)}x${Math.round(t)}`;
+          const desc = `${op.name || 'זוויתן עומד'} ${prof} באורך ${Math.round(w * 100) / 100}`;
+          const gv: PlateGeom = { id: op.id, center: add(add(C0, scale(up, w / 2)), scale(dd, t / 2)), X: yd, Y: up, Z: dd, t, w: B, h: w, poly: platePoly('rect', B, w, 0, [false, false, false, false]), hand: fr.hand, memberId: `${cid}.${op.id}`, target: s.host?.id ?? '' };
+          plates.set(op.id, gv);
+          members.push({
+            id: gv.memberId, kind: 'cleat', label: desc, start: C0, end: add(C0, scale(up, w)), profile: prof, material: mat,
+            rollDeg: 0, mirror: dot(cross(dd, up), Yw) < 0, anchor: 'corner', refUp: dd, source: 'generated', manualPlacement: false, connId: cid, partDesc: desc,
+          });
+          continue;
+        }
         const mid = add(Q, scale(up, H / 2));
         const g: PlateGeom = { id: op.id, center: add(mid, scale(dd, t / 2)), X: yd, Y: up, Z: dd, t, w, h: H, poly: platePoly('rect', w, H, 0, [false, false, false, false]), hand: fr.hand, memberId: `${cid}.${op.id}`, target: s.host?.id ?? '' };
         plates.set(op.id, g);

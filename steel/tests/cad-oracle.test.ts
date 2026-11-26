@@ -172,7 +172,7 @@ describe('CAD-06 הסבה (שלב D): תמוכה בין קורות — פלטת 
 });
 
 describe('CAD-07 הסבה (שלב D): תושבת פטה (זוויתן / פלטה + משולש) כמתכון', () => {
-  for (const style of ['run', 'plate'] as const) it(`${style}: גופים תקינים, חורים חותכים, ריתוכים במגע, בלי חדירות — ובדיוק כמו הפרט הישן`, async () => {
+  for (const style of ['run', 'plate', 'stand'] as const) it(`${style}: גופים תקינים, חורים חותכים, ריתוכים במגע, בלי חדירות — ובדיוק כמו הפרט הישן`, async () => {
     const b = defaultBuilding();
     for (const k of ['left', 'right'] as const) b.purlins[k] = { ...b.purlins[k], cleat: { ...b.purlins[k].cleat, style } };
     const p0 = newProject('conv', b), d0 = generate(p0);
@@ -182,6 +182,21 @@ describe('CAD-07 הסבה (שלב D): תושבת פטה (זוויתן / פלטה
     const old = d0.connections.filter((c) => c.type === 'purlin-cleat' && neu.some((n) => n.custom!.site.replace('|x:', '.') === c.id.replace('C.PC.', '')));
     expect(neu.length).toBeGreaterThan(2);
     expect(old.length).toBe(neu.length);
+    expect(cadFindings(cadAudit(K, d0, old))).toEqual([]);
+    expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
+  }, 300000);
+  it('תפר פטה מעל תומך (פלטה + משולש, 4 חורים): כמו הפרט הישן', async () => {
+    const b = defaultBuilding();
+    for (const k of ['left', 'right'] as const) b.purlins[k] = { ...b.purlins[k], cleat: { ...b.purlins[k].cleat, spliceCleat: true } };
+    const p0 = newProject('conv', b); p0.settings.autoSplice = false; p0.splices['PL.L.03'] = [12000, 24000]; p0.splices['PL.R.03'] = [12000];
+    const d0 = generate(p0);
+    const p1 = structuredClone(p0); p1.building.purlins.engine = 'recipe';
+    const d1 = generate(p1);
+    const seam = new Set(d0.issues.filter((i) => i.code === 'SPLICE_CLEAT').map((i) => i.elementId!.replace('C.PC.', '')));
+    const neu = d1.connections.filter((c) => c.custom && seam.has(c.custom.site.replace('|x:', '.')));
+    const old = d0.connections.filter((c) => seam.has(c.id.replace('C.PC.', '')));
+    expect(neu.length).toBe(3);
+    expect(old.length).toBe(3);
     expect(cadFindings(cadAudit(K, d0, old))).toEqual([]);
     expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
   }, 300000);

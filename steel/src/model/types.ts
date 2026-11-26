@@ -852,7 +852,7 @@ export type DetailOp =
   | { k: 'cut'; id: string; kind: 'perp' | 'host' | 'vert' | 'horiz'; at: Expr }
   /** הסטת קצה האלמנט הראשי (ציר + חיתוך) ניצב למישור (לאורך w) — למשל בעובי הפח, כשהלשונית מחליפה את מקומו. לא חל על תושבת פטה */
   | { k: 'shift'; id: string; by: Expr }
-  | { k: 'plate'; id: string; name?: string; ref: DetailRef; mode: 'flat' | 'stand'; spin: Expr; off: Expr; shape: 'rect' | 'cham' | 'tri' | 'rtri' | 'round'; /* rtri: משולש ישר-זווית — ציר החלק לאורך הניצב הראשון (פינת הזווית הישרה), סדר קודקודים: פינה, לאורך הרוחב, לאורך הציר, וכיוון v של החלק (refUp) כלפי +Y העולמי — כמו משולש התמיכה בקוד הישן */ w: Expr; h: Expr; t: Expr; ch: Expr; corners: [boolean, boolean, boolean, boolean];
+  | { k: 'plate'; id: string; name?: string; /* סיומת לתיאור החלק, אחרי המידות (למשל "(תפר פטה)") */ suffix?: string; ref: DetailRef; mode: 'flat' | 'stand'; spin: Expr; off: Expr; shape: 'rect' | 'cham' | 'tri' | 'rtri' | 'round'; /* rtri: משולש ישר-זווית — ציר החלק לאורך הניצב הראשון (פינת הזווית הישרה), סדר קודקודים: פינה, לאורך הרוחב, לאורך הציר, וכיוון v של החלק (refUp) כלפי +Y העולמי — כמו משולש התמיכה בקוד הישן */ w: Expr; h: Expr; t: Expr; ch: Expr; corners: [boolean, boolean, boolean, boolean];
       /** קצה הפלטה שליד המארח נחתך בזווית במישור פני המארח (חיתוך קצה בחלק — מופיע בגיליון ובזווית ה-NC1) */ clipHost?: boolean;
       /** עם clipHost: עומק מישור החיתוך לתוך המארח מפני הפגיעה (למשל פני הווב מאחורי קצה האגפים בחתך I שנפגע מהצד) */ clipOff?: Expr }
   | { k: 'endplate'; id: string; t: Expr; w: Expr; h: Expr; dx: Expr; dy: Expr }
@@ -862,7 +862,7 @@ export type DetailOp =
   | { k: 'vent'; id: string; d: Expr; at: Expr }
   | { k: 'rod'; id: string; ref: DetailRef; d: Expr; L: Expr }
   /** זוויתן L כחלק (פרופיל L, לא פלטה): הרגל הניצבת (גובה H לאורך e1 של הפנים) צמודה לפנים, רגל הבסיס (B) לאורך נורמל הפנים; אורך w לאורך Y העולמי, ממורכז. מצטרף למפת הפלטות כרגל הניצבת (חורים/ברגים/ריתוך) */
-  | { k: 'angle'; id: string; name?: string; ref: DetailRef; H: Expr; B: Expr; t: Expr; w: Expr }
+  | { k: 'angle'; id: string; name?: string; ref: DetailRef; H: Expr; B: Expr; t: Expr; w: Expr; /* זוויתן עומד: ציר החלק לאורך e1 של הפנים (למעלה, אורך w), רגל מוברגת צמודה לפנים, הפינה מוסטת ב-off לאורך +Y; שם הפרופיל הקנוני (L40x4 לרגליים שוות) */ vert?: boolean; off?: Expr }
   | { k: 'weld'; id: string; /** מזהה פלטה, או 'main' = ריתוך ישיר של האלמנט הראשי למארח (דורש `len`) */ part: string; a: Expr; site: boolean; /** אורך ריתוך מפורש (מ"מ); בלי — לפי היקף/צלע הפלטה */ len?: Expr; /** למה לרתך: main / host / מזהה פלטה. ברירת מחדל — הרכיב שהפלטה יושבת עליו */ to?: string };
 export interface DetailVar { name: string; expr: Expr; note?: string }
 /**

@@ -9,7 +9,7 @@ import { computeFabrication } from '../src/fab/marks';
 import { partToNc1 } from '../src/fab/dstv';
 import { computeBom } from '../src/fab/bom';
 import { buildSheet, drawingCatalog } from '../src/drawing/views';
-import { cleatPlateRecipe, cleatRunRecipe } from '../src/geometry/convRecipes';
+import { cleatPlateRecipe, cleatRunRecipe, cleatSeamRecipe, cleatStandRecipe } from '../src/geometry/convRecipes';
 import type { BoltInfo, DerivedModel, Member, Project, WeldInfo } from '../src/model/types';
 
 const TOL = 0.5;
@@ -17,12 +17,23 @@ type V = { x: number; y: number; z: number };
 const dist = (a: V, b: V) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 const dot = (a: V, b: V) => a.x * b.x + a.y * b.y + a.z * b.z;
 
-interface Cfg { name: string; mod: (p: Project) => void }
+interface Cfg { name: string; mod: (p: Project) => void; seam?: boolean }
+/** תפר פטה מעל תומך: תושבת פלטה + משולש עם 4 חורים מחברת את שני קצות הפטה (`spliceCleat`) */
+const seamMod = (p: Project, cleat: Record<string, unknown> = {}, prof?: string) => {
+  p.settings.autoSplice = false;
+  for (const k of ['left', 'right'] as const) p.building.purlins[k] = { ...p.building.purlins[k], ...(prof ? { profile: prof } : {}), cleat: { ...p.building.purlins[k].cleat, spliceCleat: true, ...cleat } };
+  p.splices['PL.L.03'] = [12000, 24000]; p.splices['PL.R.03'] = [12000];
+};
 const CFGS: Cfg[] = [
   { name: 'ברירת מחדל', mod: () => {} },
   { name: 'C120 · 2 שורות · 3 ברגים בשורה · M16', mod: (p) => { p.building.purlins.left = { ...p.building.purlins.left, profile: 'C120x50x13x2', cleat: { ...p.building.purlins.left.cleat, rows: 2, perRow: 3, pitch: 50, width: 200, bolt: { ...p.building.purlins.left.cleat.bolt, d: 12 } } }; } },
   { name: 'פלטה + משולש · ברירת מחדל', mod: (p) => { p.building.purlins.left = { ...p.building.purlins.left, cleat: { ...p.building.purlins.left.cleat, style: 'plate' } }; p.building.purlins.right = { ...p.building.purlins.right, cleat: { ...p.building.purlins.right.cleat, style: 'plate' } }; } },
   { name: 'פלטה + משולש · 2 שורות · 4 ברגים בשורה · M16', mod: (p) => { for (const k of ['left', 'right'] as const) p.building.purlins[k] = { ...p.building.purlins[k], profile: 'C150x50x15x2', cleat: { ...p.building.purlins[k].cleat, style: 'plate', rows: 2, rowPitch: 70, perRow: 4, pitch: 70, thickness: 10, base: 80, bolt: { ...p.building.purlins[k].cleat.bolt, d: 16 } } }; } },
+  { name: 'תפר מעל תומך · ברירת מחדל', seam: true, mod: (p) => seamMod(p) },
+  { name: 'תפר מעל תומך · C150 · 2 שורות · M16 · עובי 10', seam: true, mod: (p) => seamMod(p, { rows: 2, rowPitch: 70, thickness: 10, base: 80, bolt: { ...p.building.purlins.left.cleat.bolt, d: 16 } }, 'C150x50x15x2') },
+  { name: 'זוויתן עומד · ברירת מחדל (L40x4)', mod: (p) => { for (const k of ['left', 'right'] as const) p.building.purlins[k] = { ...p.building.purlins[k], cleat: { ...p.building.purlins[k].cleat, style: 'stand' } }; } },
+  { name: 'זוויתן עומד · L50x5 · C150 · 3 שורות · M16', mod: (p) => { for (const k of ['left', 'right'] as const) p.building.purlins[k] = { ...p.building.purlins[k], profile: 'C150x50x15x2', cleat: { ...p.building.purlins[k].cleat, style: 'stand', standProfile: 'L50x50x5', rows: 3, rowPitch: 50, bolt: { ...p.building.purlins[k].cleat.bolt, d: 16 } } }; } },
+  { name: 'זוויתן עומד · גובה וריתוך ידניים (צד שמאל בלבד)', mod: (p) => { p.building.purlins.left = { ...p.building.purlins.left, cleat: { ...p.building.purlins.left.cleat, style: 'stand', height: 90, weldSize: 3 } }; } },
   { name: 'גובה / רוחב / עובי ידניים', mod: (p) => { p.building.purlins.left = { ...p.building.purlins.left, cleat: { ...p.building.purlins.left.cleat, height: 90, width: 120, thickness: 10, base: 70, weldSize: 6 } }; } },
 ];
 const proj = (c: Cfg, recipe: boolean) => { const p = newProject('c', defaultBuilding()); c.mod(p); if (recipe) p.building.purlins.engine = 'recipe'; return p; };
@@ -37,6 +48,14 @@ describe('CLEAT-01 תושבת פטה (זוויתן): הקוד הישן מול ה
     expect(oc.length).toBeGreaterThan(10);
     expect(oldC(d1).length + nc.length).toBe(oc.length);
     expect(nc.length).toBeGreaterThan(0);
+    if (cfg.seam) {
+      // כל תושבות התפר הוסבו: אין עוד תושבת תפר בקוד הישן, וכל הודעת SPLICE_CLEAT מתייחסת לחיבור מתכון
+      const seamIds = d0.issues.filter((i) => i.code === 'SPLICE_CLEAT').map((i) => i.elementId!);
+      expect(seamIds.length).toBeGreaterThan(0);
+      const converted = new Set(nc.map((c) => c.custom!.site));
+      const siteOf = (id: string) => { const k = id.replace(/^C\.PC\./, ''), j = k.lastIndexOf('.'); return `${k.slice(0, j)}|x:${k.slice(j + 1)}`; };
+      expect(seamIds.map(siteOf).filter((i) => !converted.has(i))).toEqual([]);
+    }
     const bad: string[] = [];
     const op = oc.flatMap((c) => cleats(d0, c.parts)), np = nc.flatMap((c) => cleats(d1, c.parts));
     const keepOld = oldC(d1).flatMap((c) => cleats(d1, c.parts));
@@ -79,13 +98,13 @@ describe('CLEAT-01 תושבת פטה (זוויתן): הקוד הישן מול ה
 });
 
 describe('CLEAT-02 גיליונות השרטוט', () => {
-  for (const [cfg, rid] of [[CFGS[0]!, cleatRunRecipe().id], [CFGS[2]!, cleatPlateRecipe().id]] as const) it(`אותם גיליונות ואותה כמות ישויות (עד רעש עיגול ובחירת בועות); גיליון פרט מותאם נוסף — ${cfg.name}`, () => {
+  for (const [cfg, rids] of [[CFGS[0]!, [cleatRunRecipe().id]], [CFGS[2]!, [cleatPlateRecipe().id]], [CFGS[4]!, [cleatRunRecipe().id, cleatSeamRecipe().id]], [CFGS[6]!, [cleatStandRecipe().id]]] as const) it(`אותם גיליונות ואותה כמות ישויות (עד רעש עיגול ובחירת בועות); גיליון פרט מותאם נוסף — ${cfg.name}`, () => {
     const p0 = proj(cfg, false), d0 = generate(p0), p1 = proj(cfg, true), d1 = generate(p1);
     const run = (p: Project, d: DerivedModel) => { const f = computeFabrication(p, d), bom = computeBom(d, f); return new Map(drawingCatalog(p, d, f).map((df) => [df.id, buildSheet(df, p, d, f, bom)])); };
     const a = run(p0, d0), b = run(p1, d1);
     // כשכל התושבות הוסבו — גיליון "פרט תושבת" הרגיל נעלם והפרט המותאם מחליף אותו (חריג (ב) כמו באלכסון)
     expect([...a.keys()].filter((k) => !b.has(k)).filter((k) => k !== 'D-CONN-purlin-cleat')).toEqual([]);
-    expect([...b.keys()].filter((k) => !a.has(k))).toEqual([`D-CONN-cd-${rid}`]);
+    expect([...b.keys()].filter((k) => !a.has(k)).sort()).toEqual(rids.map((r) => `D-CONN-cd-${r}`).sort());
     const SOFT = new Set(['OUTLINE', 'THIN', 'MARK']);
     const bad: string[] = [];
     for (const [id, sa] of a) {
@@ -118,7 +137,13 @@ describe('CLEAT-03 אשף מחיבור custom', () => {
     expect(candidates(p0, sit).some((x) => x.detail === 'cleat.stand')).toBe(true);
     const p1 = applyDetail(p0, sit, 'cleat.stand', {}, 'all');
     const left = newC(generate(p1));
-    expect(left.length).toBeLessThan(cs.length); // 'כל התושבות' = כל הפטות של אותו שיפוע; שיפוע אחר נשאר במתכון
-    expect(left.every((c) => !c.custom!.site.startsWith(cs[0]!.custom!.site.split('|')[0]!.replace(/\d+$/, '')))).toBe(true);
+    // 'כל התושבות' = כל הפטות של אותו שיפוע; אחרי הסבת stand גם הוא מתכון (בנוי מהמתכון, לא מהקוד הישן)
+    const stand = left.filter((c) => c.custom!.detailId === cleatStandRecipe().id), run = left.filter((c) => c.custom!.detailId === cleatRunRecipe().id);
+    expect(stand.length).toBeGreaterThan(0);
+    expect(run.length).toBeGreaterThan(0); // שיפוע אחר נשאר זוויתן מרותך
+    expect(run.length).toBeLessThan(cs.length);
+    const pref = cs[0]!.custom!.site.split('|')[0]!.replace(/\d+$/, '');
+    expect(run.every((c) => !c.custom!.site.startsWith(pref))).toBe(true);
+    expect(stand.every((c) => c.custom!.site.startsWith(pref))).toBe(true);
   });
 });

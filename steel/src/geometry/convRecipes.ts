@@ -12,12 +12,14 @@ export const STRUT_END_RECIPE_ID = 'conv-strut-end';
 export const STRUT_WELD_RECIPE_ID = 'conv-strut-weld';
 export const CLEAT_RUN_RECIPE_ID = 'conv-cleat-run';
 export const CLEAT_PLATE_RECIPE_ID = 'conv-cleat-plate';
+export const CLEAT_SEAM_RECIPE_ID = 'conv-cleat-seam';
+export const CLEAT_STAND_RECIPE_ID = 'conv-cleat-stand';
 
 /** סוג החיבור המובנה שהמתכון מחליף — לחתימות שמבוססות על סוגי חיבורים (קיבוץ מסגרות זהות בשרטוטים) */
-export const RECIPE_CONN_TYPE: Record<string, 'knee' | 'brace' | 'purlin-cleat'> = { [KNEE_FIN_RECIPE_ID]: 'knee', [STRUT_FIN_RECIPE_ID]: 'brace', [STRUT_END_RECIPE_ID]: 'brace', [STRUT_WELD_RECIPE_ID]: 'brace', [CLEAT_RUN_RECIPE_ID]: 'purlin-cleat', [CLEAT_PLATE_RECIPE_ID]: 'purlin-cleat' };
+export const RECIPE_CONN_TYPE: Record<string, 'knee' | 'brace' | 'purlin-cleat'> = { [KNEE_FIN_RECIPE_ID]: 'knee', [STRUT_FIN_RECIPE_ID]: 'brace', [STRUT_END_RECIPE_ID]: 'brace', [STRUT_WELD_RECIPE_ID]: 'brace', [CLEAT_RUN_RECIPE_ID]: 'purlin-cleat', [CLEAT_PLATE_RECIPE_ID]: 'purlin-cleat', [CLEAT_SEAM_RECIPE_ID]: 'purlin-cleat', [CLEAT_STAND_RECIPE_ID]: 'purlin-cleat' };
 
 /** מתכונים מובנים לפי מזהה (מחוץ ל-`project.customDetails`): מחולים אוטומטית לפי `Connection.recipe` */
-export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe(), [CLEAT_RUN_RECIPE_ID]: () => cleatRunRecipe(), [CLEAT_PLATE_RECIPE_ID]: () => cleatPlateRecipe() };
+export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe(), [CLEAT_RUN_RECIPE_ID]: () => cleatRunRecipe(), [CLEAT_PLATE_RECIPE_ID]: () => cleatPlateRecipe(), [CLEAT_SEAM_RECIPE_ID]: () => cleatSeamRecipe(), [CLEAT_STAND_RECIPE_ID]: () => cleatStandRecipe() };
 
 /**
  * אלכסון עמוד-קורה, פח + לשונית בחריץ — שקול ל-`finJoint` ב-`geometry/finJoint.ts` (פרט הלקוח 15.11.2026).
@@ -188,16 +190,54 @@ export function cleatPlateRecipe(): CustomDetail {
       { name: 'e', expr: 'max(30, ceil(1.5*(d + cl)/5)*5)', note: 'מרחק שפה' }, { name: 'Bs', expr: '60', note: 'בסיס המשולש' }, { name: 'Hs', expr: 'max(40, H - 15)', note: 'גובה המשולש' },
       { name: 'W', expr: 'ceil(((nc - 1)*cp + 2*e)/5)*5', note: 'רוחב הפלטה לאורך הפטה' },
       { name: 'd', expr: '12', note: 'קוטר בורג' }, { name: 'cl', expr: '2', note: 'מרווח חור' }, { name: 'a', expr: '5', note: 'גודל ריתוך' }, { name: 'gt', expr: 'T + mt', note: 'אורך אחיזה' },
+      { name: 'sj', expr: '0', note: 'היסט מרכז התושבת לאורך הפטה (תפר פטה מעל תומך: מיקום התפר ביחס לציר התומך)' },
     ],
     ops: [
-      { k: 'plate', id: 'P1', name: 'פלטת תושבת', ref: R('host', 'hit', '0', 'cs*(wo + T/2)'), mode: 'stand', spin: '0', off: '0', shape: 'rect', w: 'H', h: 'W', t: 'T', ch: '0', corners: [false, false, false, false] },
-      { k: 'plate', id: 'G1', name: 'משולש תמיכה', ref: R('host', 'hit', '0', 'cs*(wo + T + Bs/2)'), mode: 'stand', spin: 'sr', off: '0', shape: 'rtri', w: 'Hs', h: 'Bs', t: 'T', ch: '0', corners: [false, false, false, false] },
+      { k: 'plate', id: 'P1', name: 'פלטת תושבת', ref: R('host', 'hit', 'sj', 'cs*(wo + T/2)'), mode: 'stand', spin: '0', off: '0', shape: 'rect', w: 'H', h: 'W', t: 'T', ch: '0', corners: [false, false, false, false] },
+      { k: 'plate', id: 'G1', name: 'משולש תמיכה', ref: R('host', 'hit', 'sj', 'cs*(wo + T + Bs/2)'), mode: 'stand', spin: 'sr', off: '0', shape: 'rtri', w: 'Hs', h: 'Bs', t: 'T', ch: '0', corners: [false, false, false, false] },
       // חורים על פני הפטה (פנים a-: נורמל קנוני לכיוון הווב, בשני צדי הגג), לא על הפלטה — כיוון הנורמל של פלטת stand תלוי בצד
-      { k: 'holes', id: 'H1', ref: R('main', 'a-', 'hh0 + (rows - 1)*rp/2', '0'), rows: 'rows', cols: 'nc', px: 'cp', py: 'rp', d0: 'd + cl' },
+      { k: 'holes', id: 'H1', ref: R('main', 'a-', 'hh0 + (rows - 1)*rp/2', 'xs*sj'), rows: 'rows', cols: 'nc', px: 'cp', py: 'rp', d0: 'd + cl' },
       { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true, grip: 'gt' },
       { k: 'weld', id: 'W1', part: 'P1', a: 'a', site: false, to: 'host', len: '2*W' },
       { k: 'weld', id: 'W2', part: 'G1', a: 'min(a, 5)', site: false, to: 'P1', len: '2*(Bs + Hs)' },
       { k: 'weld', id: 'W3', part: 'G1', a: 'min(a, 5)', site: false, to: 'host', len: '2*Bs' },
+    ],
+  };
+}
+
+/**
+ * תושבת פטה בתפר מעל תומך — פלטה אחת + משולש (4 חורים: 2 שורות × עמודה אחת בכל פטה) שמחברת את שני קצות הפטה.
+ * הפטה רציפה בשיוך האלמנט (התפר רק מחלק אותה לחלקי ייצור), לכן זה אתר חציה רגיל ואין צורך באתר זוגי: אותו מתכון כמו `cleatPlateRecipe`,
+ * עם היסט `sj` (מיקום התפר ביחס לציר התומך) ועמודות החורים משני צדי התפר (`cp` = 2·(5 + e)); רק תיאור הפלטה נושא "(תפר פטה)".
+ */
+export function cleatSeamRecipe(): CustomDetail {
+  const base = cleatPlateRecipe();
+  return {
+    ...base, id: CLEAT_SEAM_RECIPE_ID, name: 'תושבת פטה: תפר מעל תומך (הסבה)',
+    note: 'שקול לתושבת התפר: פלטה אחת + משולש תמיכה, 2 ברגים בשורה בכל פטה משני צדי התפר; מרותך לקורה, מוברג לשתי הפטות.',
+    ops: base.ops.map((o) => (o.k === 'plate' && o.id === 'P1' ? { ...o, suffix: '(תפר פטה)' } : o)),
+  };
+}
+
+/**
+ * תושבת פטה — זוויתן עומד (שווה-רגליים, למשל L40x4): רגל מוברגת צמודה לווב הפטה, רגל ניצבת מהווב החוצה; מרותך לקורה; חורים אנכיים בציר התומך (2 לפחות).
+ * הפרמטרים מהחיבור: hc (גובה/אורך הזוויתן), lg (רגל), t (עובי), rows/rp (שורות ומרווח, כבר מוגבלים), hh0, d/cl, a, gt, og (היסט הפינה לאורך הפטה: −(lg + t)/2 מעוגל, כמו בקוד הישן).
+ */
+export function cleatStandRecipe(): CustomDetail {
+  return {
+    id: CLEAT_STAND_RECIPE_ID, name: 'תושבת פטה: זוויתן עומד (הסבה)', family: 'cleat', category: 'support',
+    note: 'שקול לתושבת הזוויתן העומד: זוויתן שווה-רגליים מרותך לקורה, מוברג לווב הפטה בחורים אנכיים.',
+    vars: [
+      { name: 'hc', expr: 'mh', note: 'אורך הזוויתן (גובה התושבת)' }, { name: 'lg', expr: '40', note: 'רגל הזוויתן' }, { name: 't', expr: '4', note: 'עובי' },
+      { name: 'rows', expr: '2', note: 'שורות חורים (אנכיות)' }, { name: 'rp', expr: '60', note: 'מרווח בין שורות' }, { name: 'hh0', expr: '(hc - (rows - 1)*rp)/2', note: 'גובה השורה התחתונה' },
+      { name: 'og', expr: '-round((lg + t)/2)', note: 'היסט הפינה לאורך הפטה' },
+      { name: 'd', expr: '12', note: 'קוטר בורג' }, { name: 'cl', expr: '2', note: 'מרווח חור' }, { name: 'a', expr: 't', note: 'גודל ריתוך' }, { name: 'gt', expr: 't + mt', note: 'אורך אחיזה' },
+    ],
+    ops: [
+      { k: 'angle', id: 'A1', name: 'זוויתן עומד', ref: R('main', 'a+'), H: 'lg', B: 'lg', t: 't', w: 'hc', vert: true, off: 'og' },
+      { k: 'holes', id: 'H1', ref: R('main', 'a-', 'hh0 + (rows - 1)*rp/2', '0'), rows: 'rows', cols: '1', px: '0', py: 'rp', d0: 'd + cl' },
+      { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true, grip: 'gt' },
+      { k: 'weld', id: 'W1', part: 'A1', a: 'a', site: false, to: 'host', len: '4*lg' },
     ],
   };
 }
