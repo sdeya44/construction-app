@@ -86,3 +86,17 @@ test('STEP-01: גג מדורג — זיז לקורה העליונה מעבר ל�
   await shot(page, 'STEP_01');
   expect(errors).toEqual([]);
 });
+
+test('CT-02: תיבת "בנה ממתכון" בתושבות הפטה — תושבות הזוויתן נבנות ממתכון ובכיבוי חוזרות לקוד הישן', async ({ page }) => {
+  const errors = await boot(page);
+  await page.getByRole('button', { name: /שלב 4: פטות ותושבות/ }).click();
+  await page.getByRole('tab', { name: /חתך ומחברים/ }).click();
+  const custom = () => page.evaluate(() => (window as any).__ksp.store.state.derived.connections.filter((c: any) => c.custom && c.custom.site.includes('|x:')).length);
+  expect(await custom()).toBe(0);
+  const box = page.getByTestId('cleat-recipe').first();
+  await box.check();
+  expect(await custom()).toBeGreaterThan(10);
+  await box.uncheck();
+  expect(await custom()).toBe(0);
+  expect(errors).toEqual([]);
+});

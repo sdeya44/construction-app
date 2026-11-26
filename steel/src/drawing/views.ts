@@ -15,7 +15,7 @@ import { assemblyLocations } from '../fab/location';
 import type { Bom } from '../fab/bom';
 import type { Fabrication, MarkedPart } from '../fab/marks';
 import { findDetail } from '../geometry/detail';
-import { BUILTIN_RECIPES } from '../geometry/convRecipes';
+import { BUILTIN_RECIPES, RECIPE_CONN_TYPE } from '../geometry/convRecipes';
 import type { Connection, DerivedModel, DrawingRecord, DrawingType, Member, Project } from '../model/types';
 import { declutterDims, drawArea, fitScale, frameAndTitle, newSheet, today, View, type P, type Sheet, type SheetSize, type TitleInfo } from './sheet';
 
@@ -141,7 +141,7 @@ export function frameGroups(p: Project, d: DerivedModel, fab: Fabrication): stri
   for (const pt of fab.parts) { const a = fab.assemblies.find((x) => x.id === pt.assembly); if (a) asmOfM.set(pt.memberId, a.mark); }
   const sig = (fid: string) => {
     const ms = d.members.filter((m) => m.frameId === fid && (m.kind === 'column' || m.kind === 'rafter' || m.kind === 'brace')).map((m) => `${m.kind}:${asmOfM.get(m.id) ?? m.profile}:${Math.round(m.start.x)}`).sort();
-    const cs = d.connections.filter((c) => c.id.split('.').includes(fid)).map((c) => c.type).sort();
+    const cs = d.connections.filter((c) => c.id.split('.').includes(fid)).map((c) => (c.custom ? RECIPE_CONN_TYPE[c.custom.detailId] ?? c.type : c.type)).sort();
     return [...ms, '|', ...cs].join(';');
   };
   const groups = new Map<string, string[]>();
@@ -462,7 +462,8 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       const pr: Proj = (q) => ({ x: q.x, y: q.z });
       // חלקי מתכון מובנה (הסבה) שאין במזהה שלהם מסגרת (תמוכות בין קורות) שייכים למסגרת של המארח — כמו החלקים של הקוד הישן
       const recipeFrame = new Map(d.connections.filter((c) => c.custom && BUILTIN_RECIPES[c.custom.detailId]).map((c) => [c.id, d.byId.get(c.members[0] ?? '')?.frameId]));
-      const own = d.members.filter((m) => m.frameId === f.id || (m.connId && (m.connId.split('.').includes(f.id) || recipeFrame.get(m.connId) === f.id) && m.kind !== 'cleat' && !m.connId.startsWith('C.PC')));
+      const cleatRecipe = new Set(d.connections.filter((c) => c.custom && RECIPE_CONN_TYPE[c.custom.detailId] === 'purlin-cleat').map((c) => c.id)); // כמו C.PC.* בקוד הישן — לא בגיליון המסגרת
+      const own = d.members.filter((m) => !(m.connId && cleatRecipe.has(m.connId)) && (m.frameId === f.id || (m.connId && (m.connId.split('.').includes(f.id) || recipeFrame.get(m.connId) === f.id) && m.kind !== 'cleat' && !m.connId.startsWith('C.PC'))));
       const bx = boxOf(solidPts(own.filter((m) => m.kind !== 'anchor'), pr));
       bx.x0 -= 1800; bx.x1 += 1800; bx.y0 -= 1500; bx.y1 += 1200;
       const v = placeView(sh, bx, area); setScale(v);

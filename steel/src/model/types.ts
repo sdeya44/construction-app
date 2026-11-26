@@ -91,6 +91,8 @@ export interface PurlinSystem {
   planes?: Record<string, PurlinSideParams>;
   /** אורך קטע פטה במספר מפתחים (תפר מעל כל N מסגרות). 0/חסר = אוטומטי לפי אורך חומר הגלם */
   pieceBays?: number;
+  /** מנוע תושבות הפטה (שלב D): 'recipe' = המתכון `cleatRunRecipe` מחליף את הקוד הישן בתושבת זוויתן (`run`) בלי תפר/פלטת המשך מעל התומך; חסר/'legacy' = הקוד הישן */
+  engine?: 'legacy' | 'recipe';
 }
 
 /** מערכת קושרות ושורות קשירה לפטות. מפתחים (bays) לפי אינדקס: 0 = בין מסגרת 1 ל-2. */
@@ -161,12 +163,8 @@ export interface RafterStrutParams {
   detail?: RafterStrutDetail;
   /** ברגים בכל קצה (2 / 4) */
   bolts?: number;
-  /** מנוע פרט ה-fin (שלב D): 'recipe' = המתכון `strutFinRecipe` מחליף את הקוד הישן (`finJoint`); חסר/'legacy' = הקוד הישן. אין חשיפה בממשק עד אישור המשתמש */
-  finEngine?: 'legacy' | 'recipe';
-  /** כמו `finEngine`, לפרט פלטת הקצה (`endplate`, אתר זוגי) */
-  endEngine?: 'legacy' | 'recipe';
-  /** כמו `finEngine`, לפרט הריתוך הישיר (`weld`) */
-  weldEngine?: 'legacy' | 'recipe';
+  /** מנוע פרטי החיבור לווב (שלב D): 'recipe' = מתכונים מובנים (`strutFinRecipe`/`strutEndRecipe`/`strutWeldRecipe`) מחליפים את הקוד הישן בכל שלושת הפרטים (fin, endplate, weld); חסר/'legacy' = הקוד הישן */
+  engine?: 'legacy' | 'recipe';
 }
 
 /**
@@ -863,6 +861,8 @@ export type DetailOp =
   | { k: 'slot'; id: string; L: Expr; w: Expr; dir: 'a' | 'w' }
   | { k: 'vent'; id: string; d: Expr; at: Expr }
   | { k: 'rod'; id: string; ref: DetailRef; d: Expr; L: Expr }
+  /** זוויתן L כחלק (פרופיל L, לא פלטה): הרגל הניצבת (גובה H לאורך e1 של הפנים) צמודה לפנים, רגל הבסיס (B) לאורך נורמל הפנים; אורך w לאורך Y העולמי, ממורכז. מצטרף למפת הפלטות כרגל הניצבת (חורים/ברגים/ריתוך) */
+  | { k: 'angle'; id: string; name?: string; ref: DetailRef; H: Expr; B: Expr; t: Expr; w: Expr }
   | { k: 'weld'; id: string; /** מזהה פלטה, או 'main' = ריתוך ישיר של האלמנט הראשי למארח (דורש `len`) */ part: string; a: Expr; site: boolean; /** אורך ריתוך מפורש (מ"מ); בלי — לפי היקף/צלע הפלטה */ len?: Expr; /** למה לרתך: main / host / מזהה פלטה. ברירת מחדל — הרכיב שהפלטה יושבת עליו */ to?: string };
 export interface DetailVar { name: string; expr: Expr; note?: string }
 /**

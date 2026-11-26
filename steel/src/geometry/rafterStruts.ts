@@ -46,13 +46,13 @@ export function strutLines(b: BuildingParams, topo: SectionTopology, issues?: Va
 function strutRecipe(rs: RafterStrutParams, detail: RafterStrutDetail, strutFam: string, hostFam: string, nBolts: number, tp: number, sites: { key: string; s: number }[]): Pick<Connection, 'recipe'> {
   if (!['RHS', 'SHS'].includes(strutFam) || !['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(hostFam)) return {};
   const keys = sites.map((q) => q.key);
-  if (detail === 'fin' && rs.finEngine === 'recipe') return { recipe: { id: STRUT_FIN_RECIPE_ID, params: { d: rs.bolt.d, nb: nBolts, ft: tp, tt: tp }, sites: keys } };
-  if (detail === 'endplate' && rs.endEngine === 'recipe') {
+  if (detail === 'fin' && rs.engine === 'recipe') return { recipe: { id: STRUT_FIN_RECIPE_ID, params: { d: rs.bolt.d, nb: nBolts, ft: tp, tt: tp }, sites: keys } };
+  if (detail === 'endplate' && rs.engine === 'recipe') {
     const lo = sites.reduce((a, q) => (q.s < a.s ? q : a), sites[0]!), hi = sites.find((q) => q !== lo);
     const siteParams = Object.fromEntries(sites.map((q) => [q.key, { bld: q === lo ? 1 : 0, prt: sites.length > 1 ? 1 : 0 }]));
     return { recipe: { id: STRUT_END_RECIPE_ID, params: { d: rs.bolt.d, nb: nBolts, ft: tp }, sites: keys, siteParams, ...(hi ? { pairs: { [lo.key]: hi.key } } : {}) } };
   }
-  if (detail === 'weld' && rs.weldEngine === 'recipe') return { recipe: { id: STRUT_WELD_RECIPE_ID, params: {}, sites: keys } };
+  if (detail === 'weld' && rs.engine === 'recipe') return { recipe: { id: STRUT_WELD_RECIPE_ID, params: {}, sites: keys } };
   return {};
 }
 

@@ -49,7 +49,7 @@ function oldProject(c: Cfg): Project {
 }
 const strutIds = (d: DerivedModel) => d.members.filter((m) => /^RS\d+\.\d+$/.test(m.id)).map((m) => m.id);
 function assigned(p: Project, d: DerivedModel, c: Cfg): Project {
-  if (c.detail === 'endplate' || c.detail === 'weld') { const n = structuredClone(p); n.building.bracing.rafterStruts![c.detail === 'weld' ? 'weldEngine' : 'endEngine'] = 'recipe'; return n; }
+  if (c.detail === 'endplate' || c.detail === 'weld') { const n = structuredClone(p); n.building.bracing.rafterStruts!.engine = 'recipe'; return n; }
   const det = strutFinRecipe();
   const keys = strutIds(d).flatMap((id) => [`${id}|start`, `${id}|end`]);
   let n = assignDetail(keys, det).run(p);
@@ -159,22 +159,16 @@ describe('STRUT-03 דגל finEngine ואשף', () => {
     const p0 = oldProject(cfg), d0 = generate(p0);
     expect(d0.connections.some((c) => c.custom)).toBe(false);
     const explicit = assigned(p0, d0, cfg), dE = generate(explicit);
-    const p1 = structuredClone(p0); p1.building.bracing.rafterStruts!.finEngine = 'recipe';
+    const p1 = structuredClone(p0); p1.building.bracing.rafterStruts!.engine = 'recipe';
     const d1 = generate(p1);
     expect(p1.detailAssign).toBeUndefined();
     expect(newConns(d1).length).toBe(strutIds(d0).length * 2);
     expect(sig(p1, d1)).toEqual(sig(explicit, dE));
-    const p2 = structuredClone(p0); p2.building.bracing.rafterStruts!.finEngine = 'legacy';
+    const p2 = structuredClone(p0); p2.building.bracing.rafterStruts!.engine = 'legacy';
     expect(sig(p2, generate(p2))).toEqual(sig(p0, d0));
   });
-  it('פרט אחר (endplate / weld) נשאר בקוד הישן גם עם recipe', () => {
-    for (const det of ['endplate', 'weld'] as const) {
-      const p = oldProject(cfg); p.building.bracing.rafterStruts!.detail = det; p.building.bracing.rafterStruts!.finEngine = 'recipe';
-      expect(generate(p).connections.some((c) => c.custom)).toBe(false);
-    }
-  });
   it('אשף החיבורים נפתח מחיבור custom של תמוכה, וחזרה לפלטת קצה מבטלת את המתכון', () => {
-    const p0 = oldProject(cfg); p0.building.bracing.rafterStruts!.finEngine = 'recipe';
+    const p0 = oldProject(cfg); p0.building.bracing.rafterStruts!.engine = 'recipe';
     const d0 = generate(p0), cs = newConns(d0);
     expect(cs.length).toBeGreaterThan(4);
     for (const c of cs) {
@@ -186,19 +180,26 @@ describe('STRUT-03 דגל finEngine ואשף', () => {
     const sit = situationOf(p0, d0, cs[0]!.id)!;
     expect(readCurrent(p0, sit).detail).toBe('strut.fin');
     expect(candidates(p0, sit).some((x) => x.detail === 'strut.endplate')).toBe(true);
+    // עם engine=recipe הפרט החדש נבנה גם הוא ממתכון (אחד לכל פרט)
     const p1 = applyDetail(p0, sit, 'strut.endplate', {}, 'all');
+    expect([...new Set(newConns(generate(p1)).map((c) => c.custom!.detailId))]).toEqual(['conv-strut-end']);
+    p1.building.bracing.rafterStruts!.engine = 'legacy';
     expect(newConns(generate(p1)).length).toBe(0);
   });
 });
 
 /** STRUT-04: פלטת קצה (אתר זוגי) וריתוך ישיר — דגלים, אשף, ושיוך מפורש לצד אחד בלבד */
 describe('STRUT-04 endplate / weld: דגלים, אשף ואתר זוגי', () => {
-  const flag = (c: Cfg, k: 'endEngine' | 'weldEngine') => { const p = oldProject(c); p.building.bracing.rafterStruts![k] = 'recipe'; return p; };
-  it('ללא דגל = קוד ישן; דגל של פרט אחר לא משפיע', () => {
-    const e = oldProject(END_CFGS[0]!); e.building.bracing.rafterStruts!.finEngine = 'recipe'; e.building.bracing.rafterStruts!.weldEngine = 'recipe';
-    expect(generate(e).connections.some((c) => c.custom)).toBe(false);
-    const w = oldProject(WELD_CFGS[0]!); w.building.bracing.rafterStruts!.finEngine = 'recipe'; w.building.bracing.rafterStruts!.endEngine = 'recipe';
-    expect(generate(w).connections.some((c) => c.custom)).toBe(false);
+  const flag = (c: Cfg, _k?: string) => { const p = oldProject(c); p.building.bracing.rafterStruts!.engine = 'recipe'; return p; };
+  it('ללא דגל / legacy = קוד ישן; engine=recipe חל על שלושת הפרטים', () => {
+    for (const cfg of [CFGS[0]!, END_CFGS[0]!, WELD_CFGS[0]!]) {
+      const p = oldProject(cfg);
+      expect(generate(p).connections.some((c) => c.custom)).toBe(false);
+      p.building.bracing.rafterStruts!.engine = 'legacy';
+      expect(generate(p).connections.some((c) => c.custom)).toBe(false);
+      p.building.bracing.rafterStruts!.engine = 'recipe';
+      expect(newConns(generate(p)).length).toBeGreaterThan(2);
+    }
   });
   it('אשף מחיבור custom (פלטת קצה / ריתוך) וחזרה לפרט הרגיל', () => {
     for (const [cfg, k] of [[END_CFGS[0]!, 'endEngine'], [WELD_CFGS[0]!, 'weldEngine']] as const) {
@@ -208,6 +209,8 @@ describe('STRUT-04 endplate / weld: דגלים, אשף ואתר זוגי', () =>
       expect(sit.family).toBe('strut');
       expect(readCurrent(p0, sit).detail).toBe(`strut.${cfg.detail}`);
       const p1 = applyDetail(p0, sit, 'strut.fin', {}, 'all');
+      expect([...new Set(newConns(generate(p1)).map((c) => c.custom!.detailId))]).toEqual(['conv-strut-fin']);
+      p1.building.bracing.rafterStruts!.engine = 'legacy';
       expect(newConns(generate(p1)).length).toBe(0);
     }
   });

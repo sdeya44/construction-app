@@ -550,6 +550,9 @@ export function RafterStrutConnFields() {
       { key: 'fin', title: 'פח + לשונית', desc: STRUT_DETAIL_HE.fin + ' — פח מרותך לווב (מסגריה), לשונית בחריץ ה-RHS, מוברגים בחפיפה בשטח', pic: PIC.fin },
       { key: 'weld', title: 'ריתוך ישיר', desc: STRUT_DETAIL_HE.weld + ' — ריתוך היקפי, ללא פחים וברגים', pic: PIC.weld },
     ]} />
+    {['RHS', 'SHS'].includes(tryProfile(rs.profile)?.family ?? '') && <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} title="פרט החיבור נבנה ממתכון (סטודיו) במקום מהקוד הישן. השוואה אוטומטית מול הקוד הישן ירוקה; כבוי = הקוד הישן (ברירת מחדל, גיבוי). חל על התמוכות בקורות I בלבד.">
+      <input type="checkbox" data-testid="rs-recipe" checked={rs.engine === 'recipe'} onChange={(e) => save({ engine: e.target.checked ? 'recipe' : 'legacy' })} />
+      <span>בנה ממתכון (מנוע חדש) — כבוי: הקוד הישן</span></label>}
     {det !== 'weld' && <>
       <div className="field"><label>{det === 'fin' ? 'עובי פח ולשונית' : 'עובי פלטת קצה'}</label><NumField testId="rs-t" value={rs.plateT} suffix='מ"מ' onCommit={(v) => save({ plateT: Math.max(6, v) })} /></div>
       <div className="field"><label>ברגים בכל קצה</label>

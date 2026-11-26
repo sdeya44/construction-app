@@ -43,8 +43,8 @@ const HINT: Record<string, string> = {
   plate: 'על כל פנים: האלמנט, המארח או פלטה', endplate: 'על האלמנט — נצמדת לקצה', cut: 'על האלמנט — במקום החיתוך', slot: 'על האלמנט', vent: 'על האלמנט',
   holes: 'על פלטה', bolts: 'על פלטה (חורים נוספים אוטומטית)', rod: 'על כל פנים', weld: 'על פלטה — מרותכת למה שהיא יושבת עליו',
 };
-const OPNAME: Record<DetailOp['k'], string> = { plate: 'פלטה', endplate: 'פלטת קצה', cut: 'חיתוך', shift: 'הסטת קצה', slot: 'חריץ', vent: 'אוורור', holes: 'חורים', bolts: 'ברגים', rod: 'מוט הברגה', weld: 'ריתוך' };
-const PREFIX: Record<DetailOp['k'], string> = { plate: 'P', endplate: 'E', cut: 'C', shift: 'M', slot: 'S', vent: 'V', holes: 'H', bolts: 'B', rod: 'R', weld: 'W' };
+const OPNAME: Record<DetailOp['k'], string> = { plate: 'פלטה', endplate: 'פלטת קצה', cut: 'חיתוך', shift: 'הסטת קצה', slot: 'חריץ', vent: 'אוורור', holes: 'חורים', bolts: 'ברגים', rod: 'מוט הברגה', weld: 'ריתוך', angle: 'זוויתן' };
+const PREFIX: Record<DetailOp['k'], string> = { plate: 'P', endplate: 'E', cut: 'C', shift: 'M', slot: 'S', vent: 'V', holes: 'H', bolts: 'B', rod: 'R', weld: 'W', angle: 'L' };
 const FACE_NAME: Record<string, string> = { end: 'קצה', 'a+': 'דופן במישור +', 'a-': 'דופן במישור −', 'w+': 'דופן צד +', 'w-': 'דופן צד −', hit: 'פני המגע', opp: 'פנים נגדיות', web: 'ווב', 'z+': 'פנים +', 'z-': 'פנים −' };
 const r5 = (x: number) => Math.round(x / 5) * 5;
 /** פתיחת בונה הנוסחאות משדה כלשהו */

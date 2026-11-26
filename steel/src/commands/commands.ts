@@ -353,7 +353,7 @@ function writePurlinParams(n: Project, key: string, v: PurlinSideParams) {
   else n.building.purlins.planes = { ...(n.building.purlins.planes ?? {}), [key]: v };
 }
 
-export function setPurlinSystem(patch: Partial<Pick<PurlinSystem, 'material' | 'monoStart' | 'splice' | 'pieceBays'>>): Command {
+export function setPurlinSystem(patch: Partial<Pick<PurlinSystem, 'material' | 'monoStart' | 'splice' | 'pieceBays' | 'engine'>>): Command {
   return {
     label: 'עדכון מערכת פטות',
     run: (p) => {

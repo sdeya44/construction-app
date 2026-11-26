@@ -10,6 +10,7 @@ import { checkEavePlate } from './eavePlate';
 import { zAt, type SectionTopology } from '../model/section';
 import { defaultSideConn } from '../model/defaults';
 import { buildKneeBraces } from './knee';
+import { CLEAT_RUN_RECIPE_ID } from './convRecipes';
 import { purlinParams } from './purlins';
 
 /** מידות בורג/אום/דיסקית לפי ISO 4017/4032/7089 (מידע גיאומטרי בלבד — לא מאומת). */
@@ -634,7 +635,10 @@ export function buildConnections(project: Project, members: Member[], byId: Map<
       if (pp.family === 'C' && protrude > pp.dims.b - tw) issue({ code: 'BOLT_LONG', severity: 'warning', elementId: cid, message: `${label}: הבורג בולט מעבר לרוחב אגף הפטה` });
     }
     const welds = weldsX;
-    res.connections.push({ id, type: 'purlin-cleat', label: `פטה-קורה ${sp.purlinId} / ${sp.frameId}`, members: [pur.id, raf.id], parts: [cid, ...extraParts, ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: 'pinned', overridden: !!project.cleatOverrides[cid] });
+    res.connections.push({ id, type: 'purlin-cleat', label: `פטה-קורה ${sp.purlinId} / ${sp.frameId}`, members: [pur.id, raf.id], parts: [cid, ...extraParts, ...bolts.map((x) => x.id)], bolts, welds, status: statusOf(project, id), fixity: 'pinned', overridden: !!project.cleatOverrides[cid],
+      // מתכון מובנה (שלב D): רק תושבת זוויתן רגילה בפטת C/Z, בלי פלטת המשך שעוברת בה בורג
+      ...(project.building.purlins.engine === 'recipe' && style === 'run' && (pp.family === 'C' || pp.family === 'Z') && ((prm.perRow - 1) / 2) * prm.pitch + d0 / 2 < prm.width / 2 && top + d0 / 2 < H && hh0 - d0 / 2 > 0 && bolts.every((b2) => b2.holesIn.length === 2 && b2.p.y - d0 / 2 >= yMin + 1.2 * d0 - 0.01 && b2.p.y + d0 / 2 <= yMax - 1.2 * d0 + 0.01)
+        ? { recipe: { id: CLEAT_RUN_RECIPE_ID, params: { H, B: prm.base, t: prm.thickness, W: prm.width, rows: prm.rows, perRow: prm.perRow, pitch: prm.pitch, rowPitch: prm.rowPitch, hh0, d: prm.bolt.d, cl: prm.bolt.clearance, a: prm.weldSize, gt: prm.thickness + tw }, sites: [`${pur.id}|x:${sp.frameId}`] } } : {}) });
   }
 
   // כלל ייצור: ריתוך רק במסגריה

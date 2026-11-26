@@ -10,9 +10,13 @@ export const KNEE_FIN_RECIPE_ID = 'conv-knee-fin';
 export const STRUT_FIN_RECIPE_ID = 'conv-strut-fin';
 export const STRUT_END_RECIPE_ID = 'conv-strut-end';
 export const STRUT_WELD_RECIPE_ID = 'conv-strut-weld';
+export const CLEAT_RUN_RECIPE_ID = 'conv-cleat-run';
+
+/** סוג החיבור המובנה שהמתכון מחליף — לחתימות שמבוססות על סוגי חיבורים (קיבוץ מסגרות זהות בשרטוטים) */
+export const RECIPE_CONN_TYPE: Record<string, 'knee' | 'brace' | 'purlin-cleat'> = { [KNEE_FIN_RECIPE_ID]: 'knee', [STRUT_FIN_RECIPE_ID]: 'brace', [STRUT_END_RECIPE_ID]: 'brace', [STRUT_WELD_RECIPE_ID]: 'brace', [CLEAT_RUN_RECIPE_ID]: 'purlin-cleat' };
 
 /** מתכונים מובנים לפי מזהה (מחוץ ל-`project.customDetails`): מחולים אוטומטית לפי `Connection.recipe` */
-export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe() };
+export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe(), [STRUT_FIN_RECIPE_ID]: () => strutFinRecipe(), [STRUT_END_RECIPE_ID]: () => strutEndRecipe(), [STRUT_WELD_RECIPE_ID]: () => strutWeldRecipe(), [CLEAT_RUN_RECIPE_ID]: () => cleatRunRecipe() };
 
 /**
  * אלכסון עמוד-קורה, פח + לשונית בחריץ — שקול ל-`finJoint` ב-`geometry/finJoint.ts` (פרט הלקוח 15.11.2026).
@@ -141,6 +145,30 @@ export function strutWeldRecipe(): CustomDetail {
     ops: [
       { k: 'cut', id: 'C1', kind: 'perp', at: 'gap - wd' },
       { k: 'weld', id: 'W1', part: 'main', a: 'wa', site: true, len: '2*(pb + ph)' },
+    ],
+  };
+}
+
+/**
+ * תושבת פטה — זוויתן L מרותך לקורה (מסגריה), מוברג לווב הפטה (שטח) — שקול לסגנון `run` ב-`connections.ts`. אתר חציה (`פטה|x:מסגרת`).
+ * כל הפרמטרים מגיעים מהחיבור (`Connection.recipe.params`, כולל חריגי תושבת בודדת): גובה H, רגל בסיס B, עובי t, רוחב W, שורות/ברגים בשורה, מרווחים, גובה שורה תחתונה hh0,
+ * קוטר/מרווח חור, ריתוך a, ואורך אחיזה gt (עובי + עובי דופן הפטה, כמו בקוד הישן).
+ */
+export function cleatRunRecipe(): CustomDetail {
+  return {
+    id: CLEAT_RUN_RECIPE_ID, name: 'תושבת פטה: זוויתן מרותך (הסבה)', family: 'cleat', category: 'support',
+    note: 'שקול לתושבת הזוויתן: זוויתן L מרותך לקורה, מוברג לווב הפטה.',
+    vars: [
+      { name: 'H', expr: 'mh', note: 'גובה הרגל הניצבת' }, { name: 'B', expr: '60', note: 'רגל הבסיס' }, { name: 't', expr: '8', note: 'עובי' }, { name: 'W', expr: '100', note: 'רוחב לאורך הפטה' },
+      { name: 'rows', expr: '1', note: 'שורות' }, { name: 'perRow', expr: '2', note: 'ברגים בשורה' }, { name: 'pitch', expr: '60', note: 'מרווח בשורה' }, { name: 'rowPitch', expr: '60', note: 'מרווח בין שורות' },
+      { name: 'hh0', expr: '(H - (rows - 1)*rowPitch)/2', note: 'גובה השורה התחתונה מפני הקורה' },
+      { name: 'd', expr: '12', note: 'קוטר בורג' }, { name: 'cl', expr: '2', note: 'מרווח חור' }, { name: 'a', expr: '5', note: 'גודל ריתוך' }, { name: 'gt', expr: 't + mt', note: 'אורך אחיזה' },
+    ],
+    ops: [
+      { k: 'angle', id: 'A1', name: 'זוויתן', ref: R('main', 'a+'), H: 'H', B: 'B', t: 't', w: 'W' },
+      { k: 'holes', id: 'H1', ref: R('A1', 'z-', 'hh0 + (rows - 1)*rowPitch/2 - H/2', '0'), rows: 'rows', cols: 'perRow', px: 'pitch', py: 'rowPitch', d0: 'd + cl' },
+      { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true, grip: 'gt' },
+      { k: 'weld', id: 'W1', part: 'A1', a: 'a', site: false, to: 'host', len: 'W + 2*B' },
     ],
   };
 }

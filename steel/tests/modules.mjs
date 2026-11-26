@@ -27,7 +27,7 @@ export const MODULES = {
   purlins: {
     title: 'פטות, תושבות, חיבורי המשך',
     src: ['src/geometry/purlins.ts', 'src/geometry/autoSplice.ts'],
-    tests: ['tests/purlins.test.ts', 'tests/splice.test.ts', 'tests/autosplice.test.ts', 'tests/steep.test.ts', cad('· beam-splice'), cad('· purlin-')],
+    tests: ['tests/purlins.test.ts', 'tests/cleat-compare.test.ts', { file: 'tests/cad-oracle.test.ts', t: 'CAD-07' }, 'tests/splice.test.ts', 'tests/autosplice.test.ts', 'tests/steep.test.ts', cad('· beam-splice'), cad('· purlin-')],
     e2e: ['e2e/m2.spec.ts', 'e2e/m3.spec.ts', 'e2e/cleat-types.spec.ts'],
   },
   bracing: {

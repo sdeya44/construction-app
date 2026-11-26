@@ -47,3 +47,20 @@ test('RS-01: תמוכות בין הקורות — שורה מציר א לכיו�
   expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'CLASH'))).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+test('RS-02: תיבת "בנה ממתכון" — פרט החיבור לווב נבנה ממתכון ובכיבוי חוזר לקוד הישן', async ({ page }) => {
+  const errors = await boot(page);
+  await openNav(page, 'b:roof');
+  await page.getByTestId('ks-sec-geo').click();
+  await page.getByTestId('rs-add').click();
+  await page.getByTestId('rs-dist-0').fill('4000'); await page.getByTestId('rs-dist-0').press('Enter');
+  const custom = () => page.evaluate(() => (window as any).__ksp.store.state.derived.connections.filter((c: any) => c.custom && /^RS1\./.test(c.custom.site)).length);
+  expect(await custom()).toBe(0);
+  await page.getByTestId('rs-recipe').check();
+  expect(await custom()).toBeGreaterThan(2);
+  await page.getByTestId('rs-detail-fin').first().click();
+  expect(await custom()).toBeGreaterThan(2);
+  await page.getByTestId('rs-recipe').uncheck();
+  expect(await custom()).toBe(0);
+  expect(errors).toEqual([]);
+});

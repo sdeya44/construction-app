@@ -420,7 +420,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         if (!hs) { errors[op.id] = 'אין קבוצת חורים — הוסיפו קודם חורים'; continue; }
         const d = Math.round(ev(op.d, `${op.id}.d`, 16));
         vals[`${op.id}.d`] = d;
-        const cand: Member[] = [...members.filter((m) => m.kind === 'plate'), ...(opts.extra ?? []), main, ...(s.host ? [s.host] : [])];
+        const cand: Member[] = [...members.filter((m) => m.kind === 'plate' || m.kind === 'cleat'), ...(opts.extra ?? []), main, ...(s.host ? [s.host] : [])];
         const testers = cand.map((m) => ({ m, t: new PrismTester(m) }));
         const own = plates.get(hs.plate)?.memberId;
         hs.cs.forEach((c, i) => {
@@ -474,6 +474,22 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
       } else if (op.k === 'vent') {
         const d = ev(op.d, `${op.id}.d`, 12), atS = ev(op.at, `${op.id}.at`, 30);
         for (const sg of [1, -1]) vents.push({ memberId: s.main.id, p: add(add(s.P, scale(s.u, sEnd + atS)), scale(s.a, (sg * s.mh) / 2)), axis: scale(s.a, -sg), d });
+      } else if (op.k === 'angle') {
+        const H = ev(op.H, `${op.id}.H`, 100), B = ev(op.B, `${op.id}.B`, 60), t = ev(op.t, `${op.id}.t`, 8), w = ev(op.w, `${op.id}.w`, 100);
+        Object.assign(vals, { [`${op.id}.H`]: H, [`${op.id}.B`]: B, [`${op.id}.t`]: t, [`${op.id}.w`]: w });
+        const fr = frame(op.ref);
+        if (!fr) { errors[op.id] = 'הפנים שנבחרו לא קיימות באתר הזה'; continue; }
+        const Q = at(fr, ev(op.ref.along, `${op.id}.along`), ev(op.ref.across, `${op.id}.across`));
+        const up = fr.e1, dd = fr.n, Yw = v3(0, 1, 0);
+        let yd = fr.e2; if (dot(yd, Yw) < 0) yd = scale(yd, -1);
+        const mid = add(Q, scale(up, H / 2));
+        const g: PlateGeom = { id: op.id, center: add(mid, scale(dd, t / 2)), X: yd, Y: up, Z: dd, t, w, h: H, poly: platePoly('rect', w, H, 0, [false, false, false, false]), hand: fr.hand, memberId: `${cid}.${op.id}`, target: s.host?.id ?? '' };
+        plates.set(op.id, g);
+        const desc = `${op.name || 'זוויתן'} L${Math.round(H)}×${Math.round(B)}×${Math.round(t)}, רוחב ${Math.round(w)}`;
+        members.push({
+          id: g.memberId, kind: 'cleat', label: desc, start: sub(Q, scale(yd, w / 2)), end: add(Q, scale(yd, w / 2)), profile: `L${Math.round(H)}x${Math.round(B)}x${Math.round(t)}`, material: mat,
+          rollDeg: 0, mirror: dot(cross(up, Yw), dd) < 0, anchor: 'corner', refUp: up, source: 'generated', manualPlacement: false, connId: cid, partDesc: desc,
+        });
       } else if (op.k === 'rod') {
         const fr = frame(op.ref);
         if (!fr) { errors[op.id] = 'הפנים לא קיימות'; continue; }
