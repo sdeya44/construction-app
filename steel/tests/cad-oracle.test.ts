@@ -315,3 +315,32 @@ describe('CAD-13 הסבה (שלב D): אגד B ומסבך נעילה על עמו
     expect(cadFindings(cadAudit(K, d1, neu))).toEqual([]);
   }, 300000);
 });
+
+describe('CAD-14 הסבה (שלב D, G9): אתר אמצע / עוגן — חיבורי המשך והצטלבות קושרות כמתכון', () => {
+  const same = (d0: ReturnType<typeof generate>, old: ReturnType<typeof generate>['connections'], d1: ReturnType<typeof generate>, neu: ReturnType<typeof generate>['connections']) => {
+    expect(neu.length).toBeGreaterThan(0);
+    expect(neu.length).toBe(old.length);
+    // הפרט החדש מקבל בדיוק את אותם ממצאי CAD כמו הישן (הקורה רציפה במודל — חפיפת פלטות המשך בתוכה אינה חדשה)
+    expect(cadFindings(cadAudit(K, d1, neu))).toEqual(cadFindings(cadAudit(K, d0, old)));
+  };
+  it('חיבור המשך פטה', () => {
+    const mk = (r: boolean) => { const p = newProject('conv', defaultBuilding()); p.settings.autoSplice = false; p.splices['PL.L.03'] = [7000, 15000]; p.splices['PL.R.03'] = [9000]; if (r) p.building.purlins.splice = { ...p.building.purlins.splice, engine: 'recipe' }; return p; };
+    const d0 = generate(mk(false)), d1 = generate(mk(true));
+    same(d0, d0.connections.filter((c) => c.type === 'purlin-splice'), d1, d1.connections.filter((c) => c.custom?.site.includes('|s:')));
+  }, 300000);
+  it('הצטלבות קושרות X (פח מילוי ומוט הברגה)', async () => {
+    const { defaultRodEnd } = await import('../src/geometry/bracing');
+    for (const rod of [false, true]) {
+      const mk = (r: boolean) => { const p = newProject('conv', defaultBuilding()); if (rod) { p.building.bracing.roof.endDetail = 'rod'; p.building.bracing.roof.rod = defaultRodEnd(); } if (r) { p.building.bracing.conn = { ...p.building.bracing.conn, engine: 'recipe' }; if (p.building.bracing.roof.rod) p.building.bracing.roof.rod = { ...p.building.bracing.roof.rod, engine: 'recipe' }; } return p; };
+      const d0 = generate(mk(false)), d1 = generate(mk(true));
+      same(d0, d0.connections.filter((c) => c.type === 'brace-cross'), d1, d1.connections.filter((c) => c.custom?.site.includes('|p:')));
+    }
+  }, 300000);
+  it('חיבור המשך קורה/עמוד: פלטות קצה מוברגות, מרותך, פלנץ', () => {
+    for (const [prof, joint] of [['IPE300', undefined], ['IPE300', 'welded'], ['RHS300x200x10', undefined]] as const) {
+      const mk = (r: boolean) => { const p = newProject('conv', defaultBuilding()); p.settings.autoSplice = false; p.splices['F1.RAF.L'] = [3500, 6500]; p.splices['F2.RAF.R'] = [5000]; p.building.rafterProfile = prof; if (joint) p.settings.spliceJoint = { beams: joint, columns: joint }; if (r) p.settings.spliceEngine = 'recipe'; return p; };
+      const d0 = generate(mk(false)), d1 = generate(mk(true));
+      same(d0, d0.connections.filter((c) => c.type === 'beam-splice'), d1, d1.connections.filter((c) => c.custom?.site.includes('|s:') && /^C\.(RS|WS)\./.test(c.id)));
+    }
+  }, 300000);
+});

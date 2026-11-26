@@ -54,7 +54,7 @@ export interface Site {
   cross?: { conn: string; wo: number; cs: number; sr: number };
   /** אתר באמצע האלמנט (G9, חיבור המשך): האלמנט רציף ואינו נחתך. `conn` — מזהה החיבור המובנה שמוחלף; `t` — מיקום על הציר; `wa`/`ww` — היסט פני החומר לאורך a / w (פנים a±/w±);
    *  `up` — כיוון e1 של הפנים (למשל כלפי מעלה לאורך הווב); `xs` — סימן e2 של פנים a- ביחס לציר האלמנט */
-  mid?: { conn: string; t: number; k: number; wa: number; ww: number; up: Vec3; xs: 1 | -1; /** כיוון ראש הבורג (ברירת מחדל `up`) */ bu?: Vec3; /** אלמנט שני שהברגים עוברים בו (הצטלבות) */ partner?: string };
+  mid?: { conn: string; t: number; k: number; wa: number; ww: number; up: Vec3; xs: 1 | -1; /** כיוון ראש הבורג (ברירת מחדל `up`) */ bu?: Vec3; /** האלמנט עובר דרך הפלטות (חיבור המשך בקורה/עמוד): אין בדיקת התנגשות מול האלמנט וברגים לא נסרקים דרכו */ through?: boolean; /** סימן ימניות המערכת המקומית (ex,u,v): +1 כש-ex×u = v */ rh?: 1 | -1; /** אלמנט שני שהברגים עוברים בו (הצטלבות) */ partner?: string };
 }
 
 /** הקשר לפתרון אתרי אמצע: מיקומי חיבורי ההמשך האפקטיביים (כולל אוטומטיים) לפי מזהה אלמנט */
@@ -224,7 +224,7 @@ export function siteVars(s: Site): Vars {
   return {
     mh: s.mh, mb: s.mb, pb: mp.props.b ?? mp.props.h, mt: mp.dims.t ?? mp.dims.tw ?? 5, mtf: mp.dims.tf ?? mp.dims.t ?? 5,
     hh: hp?.props.h ?? 0, hr: hp?.dims.r ?? 0, ph: mp.props.h, hb: hp?.props.b ?? 0, htf: hp?.dims.tf ?? hp?.dims.t ?? 0, htw: hp?.dims.tw ?? hp?.dims.t ?? 0,
-    hd: s.hd, ang: Math.max(1, s.ang), hs: s.hand, ha: s.handA, wo: s.cross?.wo ?? s.mid?.wa ?? 0, cs: s.cross?.cs ?? 1, sr: s.cross?.sr ?? 90, ev: ((s.u.z - s.n.z * dot(s.u, s.n)) >= 0 ? 1 : -1), xs: s.cross ? (dot(scale(cross(scale(s.a, -1), s.u), s.hand), s.w) >= 0 ? 1 : -1) : s.mid ? s.mid.xs : 1,
+    hd: s.hd, ang: Math.max(1, s.ang), hs: s.hand, ha: s.handA, wo: s.cross?.wo ?? s.mid?.wa ?? 0, cs: s.cross?.cs ?? 1, sr: s.cross?.sr ?? 90, ev: ((s.u.z - s.n.z * dot(s.u, s.n)) >= 0 ? 1 : -1), xs: s.cross ? (dot(scale(cross(scale(s.a, -1), s.u), s.hand), s.w) >= 0 ? 1 : -1) : s.mid ? s.mid.xs : 1, rh: s.mid?.rh ?? 1,
   };
 }
 export const VAR_HELP: [string, string][] = [
@@ -369,9 +369,13 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
       else if (ref.face === 'end') { if (planar) return null; base = add(add(s.P, scale(s.u, sEnd - endT)), sh); n = scale(s.u, -1); e1 = s.a; }
       else if (s.mid) {
         // אתר אמצע: פנים a±/w± לפי כיוון מוחלט של הצירים (בלי כיוון קנוני), במרחק היסט החומר; e1 לאורך `up`
-        const sg = ref.face.endsWith('-') ? -1 : 1, isA = ref.face.startsWith('a');
-        if (!isA && !ref.face.startsWith('w')) return null;
-        n = scale(isA ? s.a : s.w, sg); base = add(s.P, scale(n, isA ? s.mid.wa : s.mid.ww)); e1 = s.mid.up;
+        // u± = ניצב לציר האלמנט (מישור התפר); a±/w± = לאורך הציר, בהיסט `wa`/`ww`; e1 = `up`, ואם הוא מקביל לנורמל — הציר האחר
+        const sg = ref.face.endsWith('-') ? -1 : 1, k0 = ref.face[0];
+        if (k0 === 'u') { n = scale(s.u, sg); base = s.P; e1 = s.mid.up; }
+        else if (k0 === 'a' || k0 === 'w') {
+          const isA = k0 === 'a'; n = scale(isA ? s.a : s.w, sg); base = add(s.P, scale(n, isA ? s.mid.wa : s.mid.ww));
+          e1 = Math.abs(dot(s.mid.up, n)) > 0.99 ? (isA ? s.w : s.a) : s.mid.up;
+        } else return null;
       } else if (s.cross) {
         // פטה: פני הווב (a+ בצד התושבת), e1 כלפי מעלה
         if (!ref.face.startsWith('a')) return null;
@@ -474,7 +478,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         if (!hs) { errors[op.id] = 'אין קבוצת חורים — הוסיפו קודם חורים'; continue; }
         const d = Math.round(ev(op.d, `${op.id}.d`, 16));
         vals[`${op.id}.d`] = d;
-        const cand: Member[] = [...members.filter((m) => m.kind === 'plate' || m.kind === 'cleat'), ...(opts.extra ?? []), ...(op.noMain ? [] : [main]), ...(s.host ? [s.host] : [])];
+        const cand: Member[] = [...members.filter((m) => m.kind === 'plate' || m.kind === 'cleat'), ...(opts.extra ?? []), ...(op.noMain || s.mid?.through ? [] : [main]), ...(s.host ? [s.host] : [])];
         const testers = cand.map((m) => ({ m, t: new PrismTester(m) }));
         const own = plates.get(hs.plate)?.memberId;
         const scanR = op.reach !== undefined ? Math.ceil(ev(op.reach, `${op.id}.reach`)) + 60 : 200; // חלון הסריקה לאורך הבורג
@@ -533,7 +537,8 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
           else for (let i = 0; i < g.poly.length; i++) { const p = g.poly[i], q = g.poly[(i + 1) % g.poly.length]; if (Math.abs(p[0] - x0) < 0.5 && Math.abs(q[0] - x0) < 0.5) { length += 2 * Math.abs(q[1] - p[1]); from = add(add(g.center, scale(g.X, x0)), scale(g.Y, p[1])); toP = add(add(g.center, scale(g.X, x0)), scale(g.Y, q[1])); } }
         }
         if (op.len !== undefined && op.len !== '') length = ev(op.len, `${op.id}.len`);
-        welds.push({ id: `${cid}.${op.id}`, connId: cid, type: 'fillet', a, length: op.exact ? length : Math.round(length), location: op.site ? 'site' : 'shop', between: [g.memberId, to], from, to: toP });
+        if (op.ax !== undefined && s.mid) { from = add(s.P, scale(s.u, ev(op.ax, `${op.id}.ax`))); toP = from; }
+        welds.push({ id: `${cid}.${op.id}`, connId: cid, type: 'fillet', a, length: op.exact ? length : Math.round(length), location: op.site ? 'site' : 'shop', between: s.mid ? [to, g.memberId] : [g.memberId, to], from, to: toP });
         if (op.site && !BUILTIN_RECIPES[det.id]) issues.push({ code: 'CD_SITE_WELD', severity: 'warning', elementId: cid, message: `פרט ${det.name}: ריתוך בשטח — סותר את עיקרון הגלוון (ריתוך במסגריה, ברגים בשטח)` });
       } else if (op.k === 'vent') {
         const d = ev(op.d, `${op.id}.d`, 12), atS = ev(op.at, `${op.id}.at`, 30);
@@ -607,7 +612,7 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
   }
   const slot = det.ops.some((o) => o.k === 'slot');
   const parts = members.filter((m) => m.kind === 'plate' || m.kind === 'anchor');
-  const hard = [main, ...(s.host ? [s.host] : [])];
+  const hard = [...(s.mid?.through ? [] : [main]), ...(s.host ? [s.host] : [])];
   // ברגי עוגן עוברים בפלטה (ובחתך העמוד) מעצם הגדרתם — לא נבדקים (כמו בקוד הישן)
   const anchorPre = det.ops.filter((o) => o.k === 'bolts' && o.anchor).map((o) => `${cid}.${o.id}.`);
   const bh = members.filter((m) => m.kind === 'bolt' && /\.(H|N|W)$/.test(m.id) && !anchorPre.some((x) => m.id.startsWith(x)));
@@ -667,7 +672,7 @@ export function applyCustomDetails(project: Project, members: Member[], connecti
     const site = findSite(sees(), m, end, ctx);
     if (!site) continue;
     // הסרת חלקי חיבור קיימים בקצה הזה
-    const ownConn = site.cross?.conn ?? site.mid?.conn ?? own[key];
+    const ownConn = site.cross?.conn ?? own[key] ?? site.mid?.conn;
     const kill = partsToReplace(members, connections, m, site.E, site.O, ownConn, index);
     if (ownConn) { const i = connections.findIndex((c) => c.id === ownConn); if (i >= 0) connections.splice(i, 1); }
     const touched = new Set<Connection>();
@@ -698,7 +703,7 @@ export function applyCustomDetails(project: Project, members: Member[], connecti
       const pp = parseSiteKey(pk), pm = members.find((x) => x.id === pp.id), ps = pm ? findSite(members, pm, pp.end, ctx) : null;
       if (ps) extra = buildDetail(ps, det, { material: project.building.material, others, overrides: ovr(pk) }).members.filter((x) => x.kind === 'plate');
     }
-    const r = buildDetail(site2, det, { material: project.building.material, others, overrides: ovr(key), extra });
+    const r = buildDetail(site2, det, { material: project.building.material, others, overrides: ovr(key), extra, ...(site2.mid && ownConn ? { connId: ownConn } : {}) });
     const k = members.findIndex((x) => x.id === m.id);
     if (k >= 0) {
       const merged: Member = site2.cross || site2.mid ? r.main : { ...members[k]!, ...(end === 'start' ? { start: r.main.start, startCut: r.main.startCut } : { end: r.main.end, endCut: r.main.endCut }), connId: r.main.connId };

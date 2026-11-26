@@ -160,6 +160,9 @@ export function StructurePanel({ section }: { section?: StructSection } = {}) {
             </select></div>
         ))}
         <div className="field"><label>פלטות חיזוק בחיבור המשך קורה</label><label className="badge" style={{ cursor: 'pointer' }}><input type="checkbox" data-testid="splice-stiff" checked={!!p.settings.spliceStiffeners} onChange={(e) => store.exec(setSettings({ spliceStiffeners: e.target.checked }))} />{p.settings.spliceStiffeners ? 'כן — משולשים מעל ומתחת' : 'לא'}</label></div>
+        <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} title="חיבורי ההמשך של קורות ועמודים (פלטות קצה מוברגות, פלנץ לצינור, מרותך) נבנים ממתכון על אתר באמצע האלמנט במקום מהקוד הישן. פלטות חיזוק משולשות — תמיד הקוד הישן. השוואה אוטומטית ירוקה; כבוי = הקוד הישן.">
+          <input type="checkbox" data-testid="beam-splice-recipe" checked={p.settings.spliceEngine === 'recipe'} onChange={(e) => store.exec(setSettings({ spliceEngine: e.target.checked ? 'recipe' : 'legacy' }))} />
+          <span>חיבורי המשך: בנה ממתכון (מנוע חדש) — כבוי: הקוד הישן</span></label>
       </>}
       </>}
 

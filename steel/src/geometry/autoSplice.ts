@@ -5,6 +5,11 @@ import { axialExtent, BEAM_SPLICE_T } from './parts';
 import { proposeSplices } from './purlins';
 import { localFrame } from './frame';
 import { hw, makeBolt } from './connections';
+import { BEAM_SPLICE_BOLTED_RECIPE_ID, BEAM_SPLICE_FLANGE_RECIPE_ID, BEAM_SPLICE_WELDED_BOX_RECIPE_ID, BEAM_SPLICE_WELDED_I_RECIPE_ID } from './spliceRecipes';
+
+/** מתכון מובנה לחיבור המשך (G9): אתר אמצע `אלמנט|s:k`, מחליף את החיבור הישן במזהה זהה */
+const spliceRecipe = (on: boolean, id: string, mid: string, k: number, params: Record<string, number>): Pick<Connection, 'recipe'> | Record<string, never> =>
+  on ? { recipe: { id, own: true, params, sites: [`${mid}|s:${k}`] } } : {};
 
 const AUTO_KINDS = new Set(['rafter', 'column', 'beam', 'purlin']);
 /** שורות קשירה לפטות (זוויתן ארוך) — חלוקה גם להן */
@@ -101,8 +106,8 @@ export function buildBeamSplices(project: Project, members: Member[], splices: R
     if (!ts.length) continue;
     const pr = tryProfile(m.profile);
     const welded = (m.kind === 'column' ? project.settings.spliceJoint?.columns : project.settings.spliceJoint?.beams) === 'welded';
-    if (welded && pr) { weldedSplice(m, pr, ts, auto, out); continue; }
-    if (pr && (pr.family === 'RHS' || pr.family === 'SHS')) { boxFlangeSplice(m, pr, ts, auto, out, bolt, eE, nutR); continue; }
+    if (welded && pr) { weldedSplice(m, pr, ts, auto, out, project.settings.spliceEngine === 'recipe'); continue; }
+    if (pr && (pr.family === 'RHS' || pr.family === 'SHS')) { boxFlangeSplice(m, pr, ts, auto, out, bolt, eE, nutR, project.settings.spliceEngine === 'recipe'); continue; }
     if (!pr || !['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(pr.family)) continue;
     const f = localFrame(m);
     const h = pr.props.h, b = pr.props.b, tf = pr.dims.tf ?? 10, tw = pr.dims.tw ?? 7;
@@ -155,6 +160,8 @@ export function buildBeamSplices(project: Project, members: Member[], splices: R
       out.connections.push({
         id, type: 'beam-splice', label: `חיבור המשך ${m.label} (${(t / 1000).toFixed(2)} מ')${auto.has(m.id) ? ' — אוטומטי' : ''}`,
         members: [m.id], parts: [...plates, ...bolts.map((x) => x.id)], bolts, welds, status: 'not-verified', fixity: 'rigid', overridden: false,
+        // פלטות חיזוק משולשות (`spliceStiffeners`, לא flush) — תמיד הקוד הישן
+        ...(project.settings.spliceStiffeners && !flush ? {} : spliceRecipe(project.settings.spliceEngine === 'recipe', BEAM_SPLICE_BOLTED_RECIPE_ID, m.id, k + 1, { T, W, Hp, pc, g, vOut, vIn, flush: flush ? 1 : 0, d: bolt.d, cl: bolt.clearance, per: Math.round(per), a: 6 })),
       });
     });
   }
@@ -166,7 +173,7 @@ export function buildBeamSplices(project: Project, members: Member[], splices: R
  * חיבור המשך מוברג לצינור מלבני/ריבועי (פלנץ): שתי פלטות קצה PL20 מרותכות סביב קצות הצינור (מסגריה),
  * רחבות מהצינור לצדדים בלבד — הברגים מחוץ לדפנות הצד (גישה לאום), ללא בליטה מעל/מתחת לחגורה.
  */
-function boxFlangeSplice(m: Member, pr: Profile, ts: number[], auto: Set<string>, out: { members: Member[]; connections: Connection[]; issues: ValidationIssue[] }, bolt: { d: number; grade: string; standard: string; clearance: number }, eE: number, nutR: number) {
+function boxFlangeSplice(m: Member, pr: Profile, ts: number[], auto: Set<string>, out: { members: Member[]; connections: Connection[]; issues: ValidationIssue[] }, bolt: { d: number; grade: string; standard: string; clearance: number }, eE: number, nutR: number, rcp: boolean) {
   const f = localFrame(m);
   const T = 20, h = pr.props.h, b = pr.props.b;
   const vc = m.anchor === 'top' ? -h / 2 : 0;
@@ -193,6 +200,7 @@ function boxFlangeSplice(m: Member, pr: Profile, ts: number[], auto: Set<string>
     out.connections.push({
       id, type: 'beam-splice', label: `חיבור המשך פלנץ ${m.label} (${(t / 1000).toFixed(2)} מ')${auto.has(m.id) ? ' — אוטומטי' : ''}`,
       members: [m.id], parts: [...plates, ...bolts.map((x) => x.id)], bolts, welds, status: 'not-verified', fixity: 'rigid', overridden: false,
+      ...spliceRecipe(rcp, BEAM_SPLICE_FLANGE_RECIPE_ID, m.id, k + 1, { T, W, Hp, a, nr: rows.length, pv: rows.length > 1 ? Math.abs(rows[0]! - rows[1]!) : 0, d: bolt.d, cl: bolt.clearance, per: Math.round(2 * (b + h)), aw: 6 }),
     });
   });
 }
@@ -201,7 +209,7 @@ function boxFlangeSplice(m: Member, pr: Profile, ts: number[], auto: Set<string>
  * חיבור המשך מרותך במסגריה (פרטי הלקוח "פרט הארכת אגדים / עמוד"): פלטות כיסוי t=12 על שני האגפים ושתי פלטות ווב,
  * ב-RHS — פלטה בשני צדדים. כל פלטה מרותכת לשני החלקים ⇒ החלקים והפלטות הם מכלול אחד (יוצא מהמסגריה שלם).
  */
-function weldedSplice(m: Member, pr: NonNullable<ReturnType<typeof tryProfile>>, ts: number[], auto: Set<string>, out: { members: Member[]; connections: Connection[]; issues: ValidationIssue[] }) {
+function weldedSplice(m: Member, pr: NonNullable<ReturnType<typeof tryProfile>>, ts: number[], auto: Set<string>, out: { members: Member[]; connections: Connection[]; issues: ValidationIssue[] }, rcp: boolean) {
   const f = localFrame(m);
   const h = pr.props.h, b = pr.props.b;
   const isI = ['IPE', 'HEA', 'HEB', 'HEM', 'INP'].includes(pr.family);
@@ -239,6 +247,9 @@ function weldedSplice(m: Member, pr: NonNullable<ReturnType<typeof tryProfile>>,
     out.connections.push({
       id, type: 'beam-splice', label: `חיבור המשך מרותך ${m.label} (${(t / 1000).toFixed(2)} מ')${auto.has(m.id) ? ' — אוטומטי' : ''} — מסגריה`,
       members: [m.id], parts: plates.map((x) => x.id), bolts: [], welds, status: 'not-verified', fixity: 'rigid', overridden: false,
+      ...(isI
+        ? spliceRecipe(rcp, BEAM_SPLICE_WELDED_I_RECIPE_ID, m.id, k + 1, { wf: r10((b * 2) / 3), hw: r10(h - 2 * tf - 2 * r - 40), L: 500, T, a: 6 })
+        : spliceRecipe(rcp, BEAM_SPLICE_WELDED_BOX_RECIPE_ID, m.id, k + 1, { wp: r10(b - 20), L: 600, T: 10, a: 6 })),
     });
   });
 }

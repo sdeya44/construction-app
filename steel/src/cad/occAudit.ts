@@ -12,6 +12,7 @@
  *   4. כל ריתוך: שני החלקים נוגעים (מרווח ≤ WELD_GAP_MAX) ואין חדירת נפח ביניהם.
  *   5. בתוך כל חיבור: אין חדירת נפח בין שני חלקים כלשהם.
  */
+import { RECIPE_CONN_TYPE } from '../geometry/convRecipes';
 import type { Connection, DerivedModel, Member } from '../model/types';
 import { localFrame } from '../geometry/frame';
 import { getProfile } from '../profiles/library';
@@ -19,6 +20,9 @@ import { webCenterU } from '../geometry/purlins';
 import { cachedSolidPure } from '../drawing/solidCache';
 
 /** מרווח מקסימלי (מ"מ) בין שני חלקים מרותכים. ריתוך פינה מגשר על מרווח קטן (למשל מוט עיגון Ø20 בחור Ø22 = 1 מ"מ). */
+/** חיבור המשך קורה/עמוד — המובנה, או זה שנבנה ממתכון (G9) */
+const isBeamSplice = (c: Connection) => c.type === 'beam-splice' || (!!c.custom && RECIPE_CONN_TYPE[c.custom.detailId] === 'beam-splice');
+
 export const WELD_GAP_MAX = 2;
 /** סף חדירת נפח (מ"מ³) — מתחתיו נחשב רעש נומרי */
 export const OVERLAP_TOL = 1;
@@ -134,7 +138,7 @@ export function removedRegions(m: Member, d: DerivedModel): { t0: number; t1: nu
       else if (u1 - u0 >= ut1 - ut0 - 1 && v1 - v0 < (vt1 - vt0) / 2) out.push({ t0: tt0, t1: tt1, u0: -BIG, u1: BIG, v0: v0 - 0.5, v1: v1 + 0.5 });
     }
   }
-  for (const c of conns.filter((x) => x.type === 'beam-splice' && x.members.includes(m.id))) {
+  for (const c of conns.filter((x) => isBeamSplice(x) && x.members.includes(m.id))) {
     const ps = c.parts.filter((id) => /\.PL[12]$/.test(id)).map((id) => d.byId.get(id)).filter(Boolean) as Member[];
     if (ps.length < 2) continue;
     const ts = ps.flatMap((pm) => [...cachedSolidPure(pm).startRing, ...cachedSolidPure(pm).endRing].map((q) => loc(q).t));
@@ -170,7 +174,7 @@ export function cadAudit(K: CadKernel, d: DerivedModel, conns: Connection[] = d.
     for (const id of ids) {
       const m = d.byId.get(id);
       if (!m) continue; // ברגים אינם אלמנטים
-      const row: PartRow = { id, kind: m.kind, profile: m.profile, valid: false, solids: 0, volume: 0, meshVolume: meshVolume(cachedSolidPure(m).tris), holes: 0, pieces: 1 + d.connections.filter((c) => c.type === 'beam-splice' && c.members.includes(id)).length };
+      const row: PartRow = { id, kind: m.kind, profile: m.profile, valid: false, solids: 0, volume: 0, meshVolume: meshVolume(cachedSolidPure(m).tris), holes: 0, pieces: 1 + d.connections.filter((c) => isBeamSplice(c) && c.members.includes(id)).length };
       res.parts.push(row);
       try {
         let s = memberShape(K, m);

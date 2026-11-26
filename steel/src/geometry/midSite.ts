@@ -19,7 +19,25 @@ export function midSite(m: Member, k: number, splices: number[] | undefined): Si
   const lf = localFrame(m);
   const P = add(m.start, scale(lf.ex, t));
   if (pp.family === 'C' || pp.family === 'Z') return purlinWebSite(m, pp, lf, P, k, t);
+  if (BEAM_FAMILIES.has(pp.family)) return beamSite(m, pp, lf, k, t);
   return null;
+}
+
+const BEAM_FAMILIES = new Set(['IPE', 'HEA', 'HEB', 'HEM', 'INP', 'RHS', 'SHS']);
+
+/**
+ * קורה / עמוד (I, RHS, SHS): `P` במרכז החתך בנקודת התפר; a = v (אנכי), w = u (אופקי), up = u. פנים u± ניצבות לציר (מישור התפר, שתי פלטות הקצה לצדי התפר),
+ * a±/w± לאורך הציר (פלטות כיסוי). האלמנט עובר דרך הפלטות (`through`) — לא נבדקת התנגשות מולו. `rh` = ימניות (ex,u,v).
+ */
+function beamSite(m: Member, pp: NonNullable<ReturnType<typeof tryProfile>>, lf: ReturnType<typeof localFrame>, k: number, t: number): Site {
+  const vc = m.anchor === 'top' ? -pp.props.h / 2 : 0;
+  const P = add(add(m.start, scale(lf.ex, t)), scale(lf.v, vc));
+  const rh: 1 | -1 = dot(cross(lf.ex, lf.u), lf.v) >= 0 ? 1 : -1;
+  return {
+    key: `${m.id}|s:${k}`, main: m, end: `s:${k}`, host: null, P, u: lf.ex, n: lf.ex, a: lf.v, w: lf.u, hand: 1, handA: 1,
+    mh: pp.props.h, mb: pp.props.b ?? pp.props.h, hd: 0, webOff: null, hostAxis: null, ang: 90, E: P, O: m.start,
+    mid: { conn: `C.RS.${m.id}.${k}`, t, k, wa: 0, ww: 0, up: lf.u, xs: rh, rh, through: true },
+  };
 }
 
 /** פטה C/Z: a = כיוון הווב לצד הזוויתן (Z: u, C: −u), `up` = לאורך הווב, פנים a- = הצד הנגדי (הפנימי) של הווב */
