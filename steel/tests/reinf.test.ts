@@ -67,9 +67,11 @@ describe('ברירות מחדל לפי פרטי הלקוח (אושרו 15.11.202
     expect(r.bolts.length).toBe(8);
     expect(r.bolts.every((b) => b.d === 22)).toBe(true);
     const pl = d.byId.get('C.RIDGE.F2.PL1')!;
-    expect(pl.profile.startsWith('PL220x')).toBe(true);
-    const h = Number(pl.profile.split('x')[1]);
+    // פורמט פרופיל נוכחי: PL<רוחב>x<עובי>; האורך נקבע מציר האלמנט ומופיע ב-partDesc ("PL16×220×462")
+    expect(pl.profile).toBe('PL220x16');
+    const h = Math.hypot(pl.end.x - pl.start.x, pl.end.y - pl.start.y, pl.end.z - pl.start.z);
     expect(h).toBeGreaterThan(440); expect(h).toBeLessThan(480);
+    expect(pl.partDesc).toBe(`פלטת קצה PL16×220×${Math.ceil(h)}`);
     const e = d.connById.get('C.EAVE.F2.L')!;
     expect(e.bolts.length).toBe(4);
     expect(e.bolts.every((b) => b.d === 18)).toBe(true);
