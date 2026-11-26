@@ -7,6 +7,8 @@ import { defaultBuilding, newProject } from '../src/model/defaults';
 import { generate } from '../src/geometry/generate';
 import { kneeFinRecipe } from '../src/geometry/convRecipes';
 import { assignDetail, setDetailParam } from '../src/commands/commands';
+import { applyDetail, candidates, familyOf, readCurrent, situationOf } from '../src/model/connRegistry';
+import { representativePart } from '../src/drawing/views';
 import { computeFabrication } from '../src/fab/marks';
 import { partToNc1 } from '../src/fab/dstv';
 import { computeBom } from '../src/fab/bom';
@@ -97,7 +99,7 @@ describe('CONV-01 אלכסון עמוד-קורה פח+לשונית: הקוד ה�
 /**
  * CONV-02: גיליונות השרטוט. אין זהות בייט-בייט (ראו docs/connector-mapping.md סעיף 6): מותר רק
  *  (א) רעש עיגול ≤ 1 במספרי מידות (95 ↔ 96 בגבול חצי מ"מ), (ב) גיליון פרט האלכסון, שהוא גיליון פרט מותאם (שם ומספור שונים),
- *  (ג) בחירת החלק המייצג בגיליון הפלטות (אותו סימון, צד קריאה הפוך של החורים).
+ * (ג) נסגר ב-1.72.0: החלק המייצג בגיליון הפלטות נקבע לפי מיקום (`representativePart`) — גיליונות הפלטות זהים בטקסטים ובמידות.
  * כל השאר — אותם גיליונות, אותה כמות ישויות מכל סוג, אותם טקסטים — חייב להיות זהה.
  */
 describe('CONV-02 אלכסון עמוד-קורה: גיליונות השרטוט', () => {
@@ -110,7 +112,7 @@ describe('CONV-02 אלכסון עמוד-קורה: גיליונות השרטוט'
     const gone = [...a.keys()].filter((k) => !b.has(k)), added = [...b.keys()].filter((k) => !a.has(k));
     expect(gone).toEqual(['D-CONN-knee']);
     expect(added).toEqual([`D-CONN-cd-${kneeFinRecipe().id}`]);
-    const EXEMPT = new Set(['D-COVER', 'D-PLATES-3']);
+    const EXEMPT = new Set(['D-COVER']);
     const bad: string[] = [];
     for (const [id, sa] of a) {
       const sb = b.get(id); if (!sb) continue;
@@ -129,5 +131,91 @@ describe('CONV-02 אלכסון עמוד-קורה: גיליונות השרטוט'
     // הגיליון המותאם מכיל את אותם חלקים: כמות פלטות וברגים בטבלה
     const t = (sh: typeof a extends Map<string, infer S> ? S : never) => sh.ents.filter((e) => e.k === 'text').length;
     expect(Math.abs(t(b.get(added[0]!)!) - t(a.get('D-CONN-knee')!))).toBeLessThan(40);
+  });
+});
+
+/**
+ * CONV-03: חשיפת המתכון (1.72.0) — `kneeBraces.finEngine: 'recipe'` מחיל את המתכון אוטומטית (שיוך משתמע) ושקול להחלה מפורשת;
+ * ללא הדגל (פרויקטים קיימים) — הקוד הישן, בלי שום פרט מותאם.
+ */
+describe('CONV-03 חשיפת המתכון: finEngine', () => {
+  const cfg = CFGS[1]!; // RHS80 · M16 · 4 ברגים · פח 12
+  const sig = (p: Project, d: DerivedModel) => {
+    const f = computeFabrication(p, d);
+    return {
+      members: d.members.map((m) => `${m.id}|${m.profile}|${[m.start.x, m.start.y, m.start.z, m.end.x, m.end.y, m.end.z].map((v) => v.toFixed(1)).join(',')}`).sort(),
+      parts: f.parts.map((x) => `${x.mark}:${x.weight.toFixed(2)}:${x.holes.length}`).sort(),
+      conns: d.connections.map((c) => `${c.id}|${c.bolts.length}|${c.welds.length}`).sort(),
+    };
+  };
+  it('ברירת מחדל (ללא דגל) = קוד ישן; recipe = החלה מפורשת', () => {
+    const p0 = oldProject(cfg), d0 = generate(p0);
+    expect(d0.connections.some((c) => c.custom)).toBe(false);
+    const explicit = newProj(p0, d0, cfg), dE = generate(explicit);
+    const p1 = structuredClone(p0); (p1.building.kneeBraces as { finEngine?: string }).finEngine = 'recipe';
+    const d1 = generate(p1);
+    expect(p1.detailAssign).toBeUndefined();
+    expect(d1.connections.filter((c) => c.custom).length).toBe(d0.members.filter((m) => m.id.startsWith('KB.')).length * 2);
+    expect(sig(p1, d1)).toEqual(sig(explicit, dE));
+    // 'legacy' מפורש = כמו חסר
+    const p2 = structuredClone(p0); (p2.building.kneeBraces as { finEngine?: string }).finEngine = 'legacy';
+    expect(sig(p2, generate(p2))).toEqual(sig(p0, d0));
+  });
+  it('פרט flange / זוויתן נשארים על הקוד הישן גם עם recipe; שיוך מפורש גובר', () => {
+    const p0 = oldProject(cfg);
+    (p0.building.kneeBraces as { finEngine?: string; detail?: string }).finEngine = 'recipe';
+    (p0.building.kneeBraces as { detail?: string }).detail = 'flange';
+    expect(generate(p0).connections.some((c) => c.custom)).toBe(false);
+    const pf = oldProject(cfg); (pf.building.kneeBraces as { finEngine?: string }).finEngine = 'recipe';
+    const first = generate(pf).members.find((m) => m.id.startsWith('KB.'))!.id;
+    const other = { ...kneeFinRecipe(), id: 'other-x', name: 'אחר' };
+    const pe = assignDetail([`${first}|start`], other).run(pf);
+    const de = generate(pe);
+    expect(de.connections.filter((c) => c.custom?.site === `${first}|start`).map((c) => c.custom!.detailId)).toEqual(['other-x']);
+    expect(de.connections.filter((c) => c.custom?.site === `${first}|end`).every((c) => c.custom!.detailId === 'conv-knee-fin')).toBe(true);
+  });
+});
+
+/** אשף החיבורים נפתח גם מחיבור מסוג custom (חוב לפני שלב D): familyOf מזהה את המשפחה לפי האלמנט הראשי באתר */
+describe('CONV-04 אשף החיבורים מחיבור custom', () => {
+  it('אלכסון עם מתכון: משפחה, מצב, מועמדים, והחלפה בחזרה לפרט מובנה', () => {
+    const p0 = oldProject(CFGS[0]!);
+    (p0.building.kneeBraces as { finEngine?: string }).finEngine = 'recipe';
+    const d0 = generate(p0);
+    const cs = d0.connections.filter((c) => c.type === 'custom');
+    expect(cs.length).toBeGreaterThan(8);
+    for (const c of cs) {
+      expect(familyOf(c)).toBe('knee');
+      const sit = situationOf(p0, d0, c.id);
+      expect(sit?.family).toBe('knee');
+      expect(sit!.site!.key).toBe(c.custom!.site);
+      expect(sit!.sameCount).toBeGreaterThan(4);
+      expect(sit!.memberFamily).toBe('RHS');
+      expect(sit!.facts.every((f) => !f.v.includes('?'))).toBe(true);
+    }
+    const sit = situationOf(p0, d0, cs[0]!.id)!;
+    expect(readCurrent(p0, sit).detail).toBe('knee.fin');
+    expect(candidates(p0, sit).some((x) => x.detail === 'knee.flange')).toBe(true);
+    // מעבר לפלטת קצה מהאשף: המתכון כבר לא חל (הפרט הנבחר הוא flange)
+    const p1 = applyDetail(p0, sit, 'knee.flange', {}, 'all');
+    expect(generate(p1).connections.some((c) => c.type === 'custom')).toBe(false);
+  });
+  it('חיבור custom ללא משפחה מוכרת — אין אשף', () => {
+    expect(familyOf({ id: 'C.CD.X', type: 'custom', custom: { detailId: 'a', site: 'XYZ.1|start' } })).toBeNull();
+    expect(familyOf({ id: 'C.CD.X', type: 'custom' })).toBeNull();
+  });
+  it('החלק המייצג בגיליון הפלטות הוא קצה העמוד (הנמוך ביותר), גם בקוד הישן וגם במתכון', () => {
+    for (const recipe of [false, true]) {
+      const p = oldProject(CFGS[0]!); if (recipe) (p.building.kneeBraces as { finEngine?: string }).finEngine = 'recipe';
+      const d = generate(p), f = computeFabrication(p, d);
+      const marks = [...new Set(f.parts.filter((x) => x.kind === 'plate' && /KB\./.test(x.memberId)).map((x) => x.mark))];
+      expect(marks.length).toBeGreaterThan(1);
+      for (const mk of marks) {
+        const rep = representativePart(f.parts, d, mk)!;
+        const z = (id: string) => { const m = d.byId.get(id)!; return (m.start.z + m.end.z) / 2; };
+        const all = f.parts.filter((x) => x.mark === mk);
+        expect(z(rep.memberId)).toBeLessThanOrEqual(Math.min(...all.map((x) => z(x.memberId))) + 1);
+      }
+    }
   });
 });

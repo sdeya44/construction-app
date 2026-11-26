@@ -8,6 +8,7 @@ import { memberSolid } from './solid';
 import { axialExtent } from './parts';
 import { clash, PrismTester } from './clash';
 import { makeBolt } from './connections';
+import { BUILTIN_RECIPES } from './convRecipes';
 
 /**
  * פרטי חיבור מותאמים — "מתכון": רשימת פעולות (חיתוך, פלטות, חורים, ברגים, ריתוך...) שכל אחת יושבת על פנים
@@ -57,11 +58,27 @@ function secBox(m: Member) {
   return { u0: Math.min(...us), u1: Math.max(...us), v0: Math.min(...vs), v1: Math.max(...vs) };
 }
 
+/**
+ * נתוני פגיעת קרן שאינם תלויים בקרן (מערכת מקומית, תיבת חתך, טווח צירי): מחושבים פעם אחת לאובייקט אלמנט.
+ * `findSite` רץ לכל אתר מול כל האלמנטים במודל — בלי זה העלות ריבועית במספר האתרים (מדידה: 160 אתרים ≈ 4 שניות מתוך 6).
+ * המפתח הוא אובייקט האלמנט; אלמנט שהוחלף באובייקט חדש (ע"י פרט) מחושב מחדש.
+ */
+interface RayGeom { f: ReturnType<typeof localFrame>; bx: ReturnType<typeof secBox>; tMin: number; tMax: number; isI: boolean; tw: number }
+const rayGeomCache = new WeakMap<Member, RayGeom>();
+function rayGeom(m: Member): RayGeom {
+  let g = rayGeomCache.get(m);
+  if (!g) {
+    const prof = getProfile(m.profile), { tMin, tMax } = axialExtent(m);
+    g = { f: localFrame(m), bx: secBox(m), tMin, tMax, isI: ['IPE', 'HEA', 'HEB', 'HEM', 'INP', 'UPN', 'UPE'].includes(prof.family), tw: prof.dims.tw ?? 8 };
+    rayGeomCache.set(m, g);
+  }
+  return g;
+}
+
 /** פגיעת קרן בפריזמה של אלמנט: הפנים הראשונות שהקרן נכנסת דרכן */
 function rayHit(o: Vec3, d: Vec3, m: Member): { t: number; n: Vec3; depth: number; webOff: number | null } | null {
   if (m.contour) return null;
-  const f = localFrame(m), bx = secBox(m), { tMin, tMax } = axialExtent(m);
-  const prof = getProfile(m.profile);
+  const { f, bx, tMin, tMax, isI, tw } = rayGeom(m);
   let best: { t: number; n: Vec3; depth: number; webOff: number | null } | null = null;
   const faces: [Vec3, number, 'u' | 'v'][] = [[f.u, bx.u1, 'u'], [scale(f.u, -1), -bx.u0, 'u'], [f.v, bx.v1, 'v'], [scale(f.v, -1), -bx.v0, 'v']];
   for (const [nn, off, ax] of faces) {
@@ -77,8 +94,7 @@ function rayHit(o: Vec3, d: Vec3, m: Member): { t: number; n: Vec3; depth: numbe
     if (!best || t < best.t) {
       const depth = ax === 'u' ? bx.u1 - bx.u0 : bx.v1 - bx.v0;
       // ווב: בחתך I/U כשהפגיעה באגף (פנים v) — הווב במרכז
-      const isI = ['IPE', 'HEA', 'HEB', 'HEM', 'INP', 'UPN', 'UPE'].includes(prof.family);
-      const webOff = isI && ax === 'v' ? depth / 2 - (prof.dims.tw ?? 8) / 2 : null;
+      const webOff = isI && ax === 'v' ? depth / 2 - tw / 2 : null;
       best = { t, n: scale(nn, 1), depth, webOff };
     }
   }
@@ -508,10 +524,14 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
  */
 export function applyCustomDetails(project: Project, members: Member[], connections: Connection[]): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  const assign = project.detailAssign ?? {};
+  // שיוך מפורש (פרויקט) קודם; שיוך משתמע ממתכון מובנה (`Connection.recipe`) — רק לקצוות שאין להם שיוך מפורש
+  const { assign: implicit, params: implicitParams } = recipeSites(project, connections);
+  const assign: Record<string, string> = { ...implicit, ...(project.detailAssign ?? {}) };
   const lib = new Map((project.customDetails ?? []).map((d) => [d.id, d]));
+  // אינדקס מזהים אחד לכל הריצה (ולא בנייה מחדש בכל אתר) — מתעדכן עם כל הוספה/הסרה/החלפה של אלמנט
+  const index = new Map(members.map((x) => [x.id, x]));
   for (const [key, did] of Object.entries(assign)) {
-    const det = lib.get(did);
+    const det = lib.get(did) ?? builtinRecipe(did);
     const { id, end } = parseSiteKey(key);
     const idx = members.findIndex((m) => m.id === id);
     if (idx < 0) continue; // האלמנט לא קיים במודל הנוכחי (מסגרת שנמחקה וכד')
@@ -520,7 +540,7 @@ export function applyCustomDetails(project: Project, members: Member[], connecti
     const site = findSite(members, m, end);
     if (!site) continue;
     // הסרת חלקי חיבור קיימים בקצה הזה
-    const kill = partsToReplace(members, connections, m, site.E, site.O, site.cross?.conn);
+    const kill = partsToReplace(members, connections, m, site.E, site.O, site.cross?.conn, index);
     if (site.cross) { const i = connections.findIndex((c) => c.id === site.cross!.conn); if (i >= 0) connections.splice(i, 1); }
     for (const c of connections) {
       if (!c.parts.some((p) => kill.has(p)) && !c.bolts.some((b) => kill.has(b.id))) continue;
@@ -532,24 +552,45 @@ export function applyCustomDetails(project: Project, members: Member[], connecti
       const c = connections[i];
       if (c.type !== 'custom' && !c.bolts.length && !c.parts.some((p) => members.some((x) => x.id === p && REMOVABLE.has(x.kind) && !kill.has(p)))) connections.splice(i, 1);
     }
-    for (let i = members.length - 1; i >= 0; i--) if (kill.has(members[i].id)) members.splice(i, 1);
+    for (let i = members.length - 1; i >= 0; i--) if (kill.has(members[i].id)) { index.delete(members[i].id); members.splice(i, 1); }
     const site2 = findSite(members, m, end) ?? site;
     // אלמנטים סמוכים (פטות, קושרות, פלטות של חיבורים אחרים) — לבדיקת התנגשות עם חלקי הפרט
     const box = { c: site2.P, r: 900 };
     const others = members.filter((x) => x.id !== m.id && x.id !== site2.host?.id && x.kind !== 'bolt' && ['column', 'rafter', 'purlin', 'cleat', 'plate', 'brace', 'beam', 'girt'].includes(x.kind)
       && !x.connId?.startsWith('C.CD.') && Math.min(len(sub(x.start, box.c)), len(sub(x.end, box.c)), len(sub(scale(add(x.start, x.end), 0.5), box.c))) < box.r);
-    const r = buildDetail(site2, det, { material: project.building.material, others, overrides: project.detailParams?.[key] });
+    const r = buildDetail(site2, det, { material: project.building.material, others, overrides: implicitParams[key] || project.detailParams?.[key] ? { ...implicitParams[key], ...project.detailParams?.[key] } : undefined });
     const k = members.findIndex((x) => x.id === m.id);
-    if (k >= 0) members[k] = r.main;
+    if (k >= 0) { members[k] = r.main; index.set(r.main.id, r.main); }
     members.push(...r.members);
+    for (const x of r.members) index.set(x.id, x);
     connections.push(r.conn);
     issues.push(...r.issues);
   }
   return issues;
 }
 
+const recipeCache = new Map<string, CustomDetail>();
+/** מתכון מובנה לפי מזהה (אותו אובייקט בכל קריאה) */
+export function builtinRecipe(id: string): CustomDetail | undefined {
+  let r = recipeCache.get(id);
+  if (!r && BUILTIN_RECIPES[id]) { r = BUILTIN_RECIPES[id]!(); recipeCache.set(id, r); }
+  return r;
+}
+/** פרט לפי מזהה: הספרייה בפרויקט, ואחריה המתכונים המובנים */
+export function findDetail(project: Project, id: string): CustomDetail | undefined { return (project.customDetails ?? []).find((x) => x.id === id) ?? builtinRecipe(id); }
+
+/** קצוות שמתכון מובנה מוחל עליהם אוטומטית (חיבור עם `recipe`): שיוך וערכי פרמטרים לשני קצוות האלמנט הראשי של החיבור */
+function recipeSites(project: Project, connections: Connection[]): { assign: Record<string, string>; params: Record<string, Record<string, number>> } {
+  const assign: Record<string, string> = {}, params: Record<string, Record<string, number>> = {};
+  for (const c of connections) {
+    if (!c.recipe) continue;
+    for (const end of ['start', 'end']) { const k = `${c.parts[0]}|${end}`; if (project.detailAssign?.[k]) continue; assign[k] = c.recipe.id; params[k] = c.recipe.params; }
+  }
+  return { assign, params };
+}
+
 /** חלקי החיבורים הקיימים בקצה האלמנט (פלטות, זוויתנים, ברגים, עיגונים) — מוחלפים בפרט המותאם */
-export function partsToReplace(members: Member[], connections: Connection[], m: Member, E: Vec3, O: Vec3, crossConn?: string): Set<string> {
+export function partsToReplace(members: Member[], connections: Connection[], m: Member, E: Vec3, O: Vec3, crossConn?: string, index?: Map<string, Member>): Set<string> {
   if (crossConn) {
     const c = connections.find((x) => x.id === crossConn), kill = new Set<string>();
     if (c) { for (const p of c.parts) kill.add(p); for (const b of c.bolts) { kill.add(b.id); for (const k of ['H', 'S', 'N']) kill.add(`${b.id}.${k}`); } }
@@ -557,7 +598,7 @@ export function partsToReplace(members: Member[], connections: Connection[], m: 
   }
   const near = (p: Vec3) => len(sub(p, E)) < len(sub(p, O)) && len(sub(p, E)) < 800;
   const kill = new Set<string>();
-  const byId = new Map(members.map((x) => [x.id, x]));
+  const byId = index ?? new Map(members.map((x) => [x.id, x]));
   for (const c of connections) {
     if (c.type === 'custom' || !(c.parts.includes(m.id) || c.members.includes(m.id))) continue;
     for (const pid of c.parts) {

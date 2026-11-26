@@ -117,8 +117,17 @@ export function customParamDefs(det: CustomDetail): (ParamDef & { group?: string
   }));
 }
 
-/** משפחת חיבור לפי מזהה וסוג */
-export function familyOf(c: Pick<Connection, 'id' | 'type'>): ConnFamily | null {
+/** משפחת האלמנט הראשי של חיבור מותאם (פרט סטודיו/מתכון מובנה) לפי מזהה האלמנט באתר — רק משפחות שמזהה האלמנט שלהן ידוע */
+function customFamily(c: Pick<Connection, 'custom'>): ConnFamily | null {
+  const mid = c.custom?.site.split('|')[0] ?? '';
+  if (mid.startsWith('KB.')) return 'knee';
+  if (/^RS\d+\.\d+$/.test(mid)) return 'strut';
+  return null;
+}
+
+/** משפחת חיבור לפי מזהה וסוג; חיבור מותאם — משפחת האלמנט הראשי (נפתח בו האשף כמו בחיבור המובנה שהוחלף) */
+export function familyOf(c: Pick<Connection, 'id' | 'type'> & Partial<Pick<Connection, 'custom'>>): ConnFamily | null {
+  if (c.type === 'custom') return customFamily(c);
   if (c.id.startsWith('C.KB.')) return 'knee';
   if (/^C\.RS\d+\./.test(c.id)) return 'strut';
   if (c.id.startsWith('C.BR.R')) return 'roofx';
@@ -129,12 +138,27 @@ export function familyOf(c: Pick<Connection, 'id' | 'type'>): ConnFamily | null 
   return byType[c.type] ?? null;
 }
 
+/** החיבור המובנה שחיבור מותאם החליף: מזהה, משתתפים וחלק ראשי — מספיק לזיהוי המצב באשף (לא נשמר במודל) */
+function underlyingConn(d: DerivedModel, c: Connection, f: ConnFamily): Connection {
+  const mid = c.custom!.site.split('|')[0];
+  const host = c.members.find((x) => x !== mid);
+  if (f === 'knee') {
+    const [fr, ...rest] = mid.slice(3).split('.'), [line, plane] = rest;
+    const col = d.byId.get(`${fr}.COL.${line}`) ? `${fr}.COL.${line}` : host ?? '';
+    const raf = [`${fr}.RAF.${plane}`, `${fr}.RAF`].find((x) => d.byId.get(x)) ?? host ?? '';
+    return { ...c, id: `C.${mid}`, type: 'knee', members: [col, raf], parts: [mid] };
+  }
+  const tag = mid.split('.')[0];
+  return { ...c, id: `C.${tag}.0`, type: 'brace', members: [host ?? '', mid], parts: [mid] };
+}
+
 /** זיהוי המצב של חיבור מהמודל */
 function situationBase(p: Project, d: DerivedModel, connId: string): Situation | null {
-  const c = d.connById.get(connId);
-  if (!c) return null;
-  const f = familyOf(c);
+  const c0 = d.connById.get(connId);
+  if (!c0) return null;
+  const f = familyOf(c0);
   if (!f) return null;
+  const c = c0.type === 'custom' ? underlyingConn(d, c0, f) : c0;
   const lab = (lid: string) => d.section?.lines.find((l) => l.id === lid)?.label ?? lid;
   if (f === 'knee') {
     const br = d.byId.get(c.parts[0]); const col = d.byId.get(c.members[0]), raf = d.byId.get(c.members[1]);
@@ -142,7 +166,7 @@ function situationBase(p: Project, d: DerivedModel, connId: string): Situation |
     const v = br ? { x: br.end.x - br.start.x, z: br.end.z - br.start.z } : { x: 1, z: 1 };
     const ang = Math.round((Math.atan2(Math.abs(v.z), Math.abs(v.x)) * 180) / Math.PI);
     const mf = fam(br?.profile), hf = fam(col?.profile);
-    const same = d.connections.filter((x) => x.id.startsWith('C.KB.') && fam(d.byId.get(x.parts[0])?.profile) === mf).length;
+    const same = d.members.filter((x) => x.kind === 'brace' && /^KB\./.test(x.id) && fam(x.profile) === mf).length;
     return { family: f, connId, local: key, title: `אלכסון עמוד-קורה · ציר ${lab(key.split('.')[0])}`, memberFamily: mf, hostFamily: hf, key: `knee|${mf}|${hf}`, sameCount: same,
       facts: [{ k: 'מארח 1', v: `עמוד ${col?.profile ?? '?'}${HOLLOW.includes(hf) ? ' · דופן חלול' : ''}` }, { k: 'מארח 2', v: `קורה ${raf?.profile ?? '?'} · אגף תחתון` }, { k: 'אלמנט', v: `${br?.profile ?? '?'} (משפחה ${mf || '?'})` }, { k: 'זווית', v: `${ang}° מהאופק` }, { k: 'מישור', v: 'במישור המסגרת' }] };
   }
@@ -150,7 +174,7 @@ function situationBase(p: Project, d: DerivedModel, connId: string): Situation |
     const m = /^C\.RS(\d+)\./.exec(c.id)!; const row = (p.building.bracing.rafterStruts?.rows ?? [])[Number(m[1]) - 1];
     const st = d.byId.get(c.members[1] ?? ''), raf = d.byId.get(c.members[0]);
     const mf = fam(st?.profile);
-    return { family: f, connId, local: row?.id ?? '', title: 'תמוכה בין קורות', memberFamily: mf, hostFamily: fam(raf?.profile), key: `strut|${mf}`, sameCount: d.connections.filter((x) => /^C\.RS\d+\./.test(x.id)).length,
+    return { family: f, connId, local: row?.id ?? '', title: 'תמוכה בין קורות', memberFamily: mf, hostFamily: fam(raf?.profile), key: `strut|${mf}`, sameCount: d.connections.filter((x) => (x.type === 'custom' ? /^RS\d+\.\d+\|/.test(x.custom?.site ?? '') : /^C\.RS\d+\./.test(x.id))).length,
       facts: [{ k: 'מארח', v: `ווב קורה ${raf?.profile ?? '?'}` }, { k: 'אלמנט', v: `${st?.profile ?? '?'}` }, { k: 'זווית', v: '90° לווב' }, { k: 'מישור', v: 'אופקי, לאורך המבנה' }] };
   }
   const sameT = d.connections.filter((x) => x.type === c.type).length;

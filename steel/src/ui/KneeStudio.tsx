@@ -212,6 +212,9 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
               { key: 'flange', title: 'פלטת קצה', desc: 'פלטה מרותכת לאלכסון, מוברגת לאגף', pic: <KneePic k="flange" /> },
             ]} />
             <div className="hint">הפרט חל על שני הקצוות{scope !== 'all' ? ' — במיקום הזה' : ''}.</div>
+            {detNow === 'fin' && fam !== 'L' && <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} title="פרט ה-fin נבנה ממתכון (סטודיו) במקום מהקוד הישן. השוואה אוטומטית מול הקוד הישן ירוקה; כבוי = הקוד הישן (ברירת מחדל, גיבוי).">
+              <input type="checkbox" data-testid="kb-fin-recipe" checked={kb.finEngine === 'recipe'} onChange={(e) => store.exec(setKneeBraces({ finEngine: e.target.checked ? 'recipe' : 'legacy' }))} />
+              <span>בנה ממתכון (מנוע חדש, ניסיוני) — כבוי: הקוד הישן</span></label>}
             {detNow !== 'flange'
               ? <div className="field"><label>ברגים בקצה {end === 'C' ? '(לעמוד)' : '(לקורה)'}</label>
                   <select className="inp" data-testid="kb-bolts" value={kb.boltsPerEnd ?? 2} onChange={(e) => store.exec(setKneeBraces({ boltsPerEnd: Number(e.target.value) }))}>{[2, 4, 6].map((n) => <option key={n} value={n}>{n}×M{kb.bolt.d} — {n / 2} {n === 2 ? 'שורה' : 'שורות'} של 2</option>)}</select></div>

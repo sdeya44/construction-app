@@ -19,6 +19,7 @@
 | אלכסוני עמוד-קורה, מכפל, פרט פח+לשונית | `knee.ts`, `kneeSolve.ts`, `haunch.ts`, `finJoint.ts` | knee |
 | חיבורים: בסיס, ראש עמוד, רכס, ברגים (`makeBolt`) | `connections.ts`, `eavePlate.ts` | connections |
 | פרטים מותאמים ("מתכון" ops), פרטים מוכנים (`detailPresets`, `presetFits`); מתכון v2: `params` + ערכי מופע `detailParams` (`paramOverrides`, `shownParams`, `detailParamValues`; פקודות `setDetailParam` / `resetDetailParams` / `setDetailTemplateVar`) | `detail.ts`, `core/expr.ts`, `model/connRegistry.ts` (רישום סוגי פרט, `customParamDefs`) | connections (`tests/detailparams.test.ts`) |
+| מתכוני הסבה (שלב C/D): `BUILTIN_RECIPES`, `kneeFinRecipe`; חשיפה: `kneeBraces.finEngine`, `Connection.recipe` (שיוך משתמע ב-`applyCustomDetails`), `findDetail`; ביצועי אתרים: `rayGeom` ב-`detail.ts`; אשף מחיבור custom: `familyOf`/`underlyingConn` ב-`connRegistry.ts` | `geometry/convRecipes.ts`, `geometry/detail.ts`, `model/connRegistry.ts` | knee (`tests/kneefin-compare.test.ts` CONV-01..04), connections (`tests/connperf.test.ts`) |
 | ספריית מחברים: 7 מחברים מוכנים, ייבוא/ייצוא | `data/connLibrary.json`, `detailLibrary.ts`, `ui/DetailLibrary.tsx` (`lib-*`) | connections (e2e v167) |
 | סככת L וכיסאות `C.WS` | `wing.ts` | wing |
 | דילול עמודים / קורה נושאת | `transfer.ts` | transfer |
@@ -33,7 +34,7 @@
 | כתב כמויות, ייצוא, הזמנה, האחדה | `fab/bom.ts`, `fab/export.ts`, `fab/unify.ts` | fab |
 | DSTV/NC1, IFC | `fab/dstv.ts`, `fab/ifc.ts` | fab |
 | הרכבה, מיקום, הצעת מחיר, גדלים | `fab/sequence.ts`, `fab/location.ts`, `fab/quote.ts`, `fab/clientQuote.ts`, `model/sizing.ts` | fab |
-| קטלוג גיליונות ובניית גיליון | `drawing/views.ts` (**1241 שורות**) | drawing |
+| קטלוג גיליונות ובניית גיליון (החלק המייצג של סימון: `representativePart`) | `drawing/views.ts` (**~1260 שורות**) | drawing |
 | שרטוט חלק (כולל חריצים ל-RHS), תא פלטה והפניית חורים (`holeCallouts`), מכלול | `drawing/part.ts`, `drawing/assembly.ts` | drawing |
 | מודל גיליון ופלט | `drawing/sheet.ts`, `svg.ts`, `pdf.ts`, `dxf.ts`, `solidCache.ts` | drawing |
 | מכלול אגד B / אלכסוני Y (מבט, פרטים מוגדלים, ריתוכים, פרטי פלטות, תלת־ממד) | `drawing/unit.ts` (`braceUnits`, `braceUnitSheet`) | drawing (`tests/unit.test.ts`) |

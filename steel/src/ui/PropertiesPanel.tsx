@@ -29,6 +29,7 @@ import { ConnPreview } from './ConnPreview';
 import { sheetToSvg } from '../drawing/svg';
 import { CONN_TYPE } from './ConnectionEditor';
 import { familyOf } from '../model/connRegistry';
+import { findDetail } from '../geometry/detail';
 import { Collapsed } from './summary';
 
 const f1 = (n: number, d = 1) => n.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
@@ -221,7 +222,7 @@ function PropertiesInner() {
       {plateLike && m.kind !== 'cleat' && m.connId && (d.connById.get(m.connId)?.type === 'purlin-cleat' || d.connById.get(m.connId)?.custom?.site.includes('|x:')) && <div className="hub-set"><CleatTypePicker connId={m.connId} /></div>}
       {m.purlin && <div className="hub-set"><CleatTypePicker side={m.purlin.paramKey ?? (m.purlin.side === 'R' ? 'right' : 'left')} /></div>}
       {custom && (
-        <div className="hub-set"><div className="hub-set-h">פרט מותאם: {p.customDetails?.find((x) => x.id === custom.detailId)?.name}</div>
+        <div className="hub-set"><div className="hub-set-h">פרט מותאם: {findDetail(p, custom.detailId)?.name}</div>
           <button className="btn primary" data-testid="open-studio-part" onClick={() => store.set({ detailStudio: custom.site })}>פתח בסטודיו פרטים</button></div>
       )}
       {plateLike && !custom && <HubSettings m={m} />}
@@ -485,18 +486,17 @@ export function DetailEnds({ m }: { m: Member }) {
   const p = useStore((s) => s.project);
   const d = useStore((s) => s.derived);
   if (!DETAIL_KINDS.has(m.kind)) return null;
-  const lib = new Map((p.customDetails ?? []).map((x) => [x.id, x.name]));
   return (
     <div className="hub-set" data-testid="detail-ends">
       <div className="hub-set-h">סוג חיבור בכל קצה</div>
       <div className="cd-ends">
         {(['start', 'end'] as const).map((e) => {
-          const k = `${m.id}|${e}`, det = p.detailAssign?.[k];
+          const k = `${m.id}|${e}`, det = p.detailAssign?.[k] ?? d.connections.find((c) => c.custom?.site === k)?.custom?.detailId;
           const pt = e === 'start' ? m.start : m.end;
           const near = d.connections.filter((c) => c.type !== 'custom' && (c.members.includes(m.id) || c.parts.includes(m.id))).map((c) => c.label)[0];
           return (
             <div className="cd-end" key={e}>
-              <span>{e === 'start' ? 'קצה התחלה' : 'קצה סוף'} <span className="muted mono">z {Math.round(pt.z)}</span> · {det ? <b>{lib.get(det) ?? 'פרט מותאם'}</b> : <span className="muted">{near ? 'פרט רגיל' : 'ללא חיבור'}</span>}</span>
+              <span>{e === 'start' ? 'קצה התחלה' : 'קצה סוף'} <span className="muted mono">z {Math.round(pt.z)}</span> · {det ? <b>{findDetail(p, det)?.name ?? 'פרט מותאם'}</b> : <span className="muted">{near ? 'פרט רגיל' : 'ללא חיבור'}</span>}</span>
               <EndTypePicker memberId={m.id} end={e} />
             </div>
           );

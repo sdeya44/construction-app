@@ -494,6 +494,11 @@ export interface KneeBraceParams {
   detail?: 'fin' | 'flange' | 'stub' | 'angle';
   /** ברגים בכל קצה (בשורה לאורך הציר) */
   boltsPerEnd?: number;
+  /**
+   * מנוע פרט ה-fin (שלב C): 'legacy' (ברירת מחדל כשחסר — הקוד הישן, `finJoint`) או 'recipe' (המתכון `kneeFinRecipe`,
+   * מוחל אוטומטית על שני קצוות כל אלכסון fin ומחליף את הקוד הישן; הפרמטרים נגזרים מהשדות כאן). פרויקטים קיימים — ללא שינוי.
+   */
+  finEngine?: 'legacy' | 'recipe';
   /** פלטות קצה: עובי; רוחב/אורך — לפרט flange בלבד (בפרט stub נגזרים מהפרופיל והברגים) */
   plateT: Mm; plateW: Mm; plateL: Mm;
   bolt: BoltSpec; gauge: Mm; pitch: Mm;
@@ -822,6 +827,8 @@ export interface Connection {
   holes?: { id: string; memberId: string; p: Vec3; axis: Vec3; d: Mm; slot?: Mm }[];
   /** פרט מותאם: מזהה הפרט ומפתח האתר */
   custom?: { detailId: string; site: string };
+  /** חיבור מובנה שמוחלף אוטומטית במתכון מובנה (ראו `KneeBraceParams.finEngine`): מזהה המתכון וערכי הפרמטרים לשני הקצוות */
+  recipe?: { id: string; params: Record<string, number> };
 }
 
 // ---------- פרטי חיבור מותאמים ----------

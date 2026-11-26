@@ -6,13 +6,18 @@ import type { CustomDetail, DetailRef } from '../model/types';
  */
 const R = (on: string, face: string, along = '0', across = '0'): DetailRef => ({ on, face, along, across });
 
+export const KNEE_FIN_RECIPE_ID = 'conv-knee-fin';
+
+/** מתכונים מובנים לפי מזהה (מחוץ ל-`project.customDetails`): מחולים אוטומטית לפי `Connection.recipe` */
+export const BUILTIN_RECIPES: Record<string, () => CustomDetail> = { [KNEE_FIN_RECIPE_ID]: () => kneeFinRecipe() };
+
 /**
  * אלכסון עמוד-קורה, פח + לשונית בחריץ — שקול ל-`finJoint` ב-`geometry/finJoint.ts` (פרט הלקוח 15.11.2026).
  * פח במישור הציר המקורי, חתוך לפי פני המארח; לשונית בחריץ ה-RHS מוסטת בעובי (פח+לשונית)/2 — והאלכסון עמה.
  */
 export function kneeFinRecipe(): CustomDetail {
   return {
-    id: 'conv-knee-fin', name: 'אלכסון: פח + לשונית בחריץ (הסבה)', family: 'any', category: 'brace',
+    id: KNEE_FIN_RECIPE_ID, name: 'אלכסון: פח + לשונית בחריץ (הסבה)', family: 'any', category: 'brace',
     note: 'שקול ל-finJoint: פח מרותך למארח (חתוך בזווית), לשונית בחריץ ה-RHS, 2 ברגים בחפיפה.',
     match: { member: ['RHS', 'SHS'] },
     vars: [

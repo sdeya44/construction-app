@@ -13,7 +13,8 @@ import { getProfile, tryProfile } from '../profiles/library';
 import { erectionSequence } from '../fab/sequence';
 import { assemblyLocations } from '../fab/location';
 import type { Bom } from '../fab/bom';
-import type { Fabrication } from '../fab/marks';
+import type { Fabrication, MarkedPart } from '../fab/marks';
+import { findDetail } from '../geometry/detail';
 import type { Connection, DerivedModel, DrawingRecord, DrawingType, Member, Project } from '../model/types';
 import { declutterDims, drawArea, fitScale, frameAndTitle, newSheet, today, View, type P, type Sheet, type SheetSize, type TitleInfo } from './sheet';
 
@@ -26,6 +27,22 @@ const num = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true }
 export function bigAssembly(fab: Fabrication, mark: string): boolean {
   const a = fab.assemblies.find((x) => x.mark === mark);
   return !!a && new Set(a.parts.map((pid) => fab.byPart.get(pid)?.mark)).size > 10;
+}
+
+/**
+ * החלק המייצג של סימון בגיליון הפלטות — נקבע לפי מיקום ולא לפי סדר מזהים (שתלוי בשמות הקצוות):
+ * הנמוך ביותר (z), ואז הקרוב ביותר לתחילת הצירים (x, y). כך בפלטת אלכסון — קצה העמוד.
+ */
+export function representativePart(parts: MarkedPart[], d: DerivedModel, mk: string): MarkedPart | undefined {
+  const key = (x: MarkedPart) => { const m = d.byId.get(x.memberId); return m ? [(m.start.z + m.end.z) / 2, (m.start.x + m.end.x) / 2, (m.start.y + m.end.y) / 2] : [Infinity, Infinity, Infinity]; };
+  const less = (a: number[], b: number[]) => { for (let i = 0; i < 3; i++) { if (a[i]! < b[i]! - 1) return true; if (a[i]! > b[i]! + 1) return false; } return false; };
+  let best: MarkedPart | undefined, bk: number[] = [];
+  for (const x of parts) {
+    if (x.mark !== mk) continue;
+    const k = key(x);
+    if (!best || less(k, bk)) { best = x; bk = k; }
+  }
+  return best;
 }
 
 export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): DrawingDef[] {
@@ -54,7 +71,7 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
   // פרטים מותאמים מהספרייה — גיליון פרט לכל פרט בשימוש
   const used = [...new Map(d.connections.filter((c) => c.custom).map((c) => [c.custom!.detailId, c])).values()];
   used.forEach((c, k) => {
-    const nm = p.customDetails?.find((x) => x.id === c.custom!.detailId)?.name ?? 'פרט מותאם';
+    const nm = findDetail(p, c.custom!.detailId)?.name ?? 'פרט מותאם';
     out.push({ id: `D-CONN-cd-${c.custom!.detailId}`, type: 'connection', number: `D-${String(types.length + k + 1).padStart(2, '0')}`, title: `פרט ${nm}`, ref: c.id });
   });
   // 1.69: מכלולי אגד — אגד B ואלכסוני Y בקורה נושאת (ריתוכים, בועות, פרטי פלטות)
@@ -677,7 +694,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       const nC = single ? 1 : sh.size === 'A4' ? 3 : 4, nR = single ? 1 : 2;
       const cw = (area.x1 - area.x0) / nC, chh = (area.y1 - area.y0) / nR;
       marks.forEach((mk, i) => {
-        const pt = fab.parts.find((x) => x.mark === mk); if (!pt) return;
+        const pt = representativePart(fab.parts, d, mk); if (!pt) return;
         const r = Math.floor(i / nC), c = i % nC;
         const box = { x1: area.x1 - c * cw, x0: area.x1 - (c + 1) * cw, y1: area.y1 - r * chh, y0: area.y1 - (r + 1) * chh };
         if (c) sh.ents.push({ k: 'line', a: { x: box.x1, y: box.y0 + 3 }, b: { x: box.x1, y: box.y1 - 3 }, layer: 'THIN' });
