@@ -9,6 +9,7 @@ import type { Project } from '../model/types';
 import { Dialog } from './Dialogs';
 import { PIC } from './DetailPicker';
 import { pickFile } from '../persist/files';
+import { filterCands, loadFavs, saveFavs, toggleFav } from './connFavs';
 
 /** בדיקה חיה של פרט מועמד: בונים את המודל עם הפרט ובודקים התנגשויות ושגיאות (גיאומטריה בלבד) */
 function evalCandidate(p: Project, next: Project, family: ConnFamily) {
@@ -38,6 +39,10 @@ function WizardBody({ connId }: { connId: string }) {
   const cur = sit ? readCurrent(p, sit) : null;
   const cands = useMemo(() => (sit ? candidates(p, sit) : []), [p, sit]);
   const [showAll, setShowAll] = useState(false);
+  const [q, setQ] = useState('');
+  const [favs, setFavs] = useState<Set<string>>(() => loadFavs());
+  const [hov, setHov] = useState<string | null>(null);
+  const star = (id: string) => setFavs((f) => { const n = toggleFav(f, id); saveFavs(n); return n; });
   const [sel, setSel] = useState<string>(() => cands.find((c) => c.detail === cur?.detail && !c.preset)?.id ?? cands[0]?.id);
   const pick = cands.find((c) => c.id === sel) ?? cands[0];
   const [params, setParams] = useState<Params>(() => ({ ...(cur?.params ?? {}) }));
@@ -59,7 +64,8 @@ function WizardBody({ connId }: { connId: string }) {
   }, [next]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!sit || !cur) return <Dialog title="אשף חיבורים" onClose={close}><div className="hint">לסוג החיבור הזה אין עדיין סוגי פרט באשף — פתחו את עורך החיבור.</div></Dialog>;
   const dt = detailInfo(p, pick?.detail ?? '');
-  const vis = showAll ? cands : cands.filter((c) => c.fit.status !== 'no');
+  const vis = filterCands(showAll ? cands : cands.filter((c) => c.fit.status !== 'no'), q, favs);
+  const hc = cands.find((c) => c.id === (hov ?? pick?.id));
   const apply = () => { if (!next) return; store.exec({ label: `אשף חיבורים: ${pick!.title}${scope === 'one' ? ' (מיקום זה)' : ''}`, run: () => next }); close(); };
   const save = () => {
     const name = prompt('שם להגדרה בספרייה', `${dt?.title ?? ''} — ${Object.entries(params).filter(([k]) => dt?.params.some((q) => q.key === k)).map(([, v]) => v).join(' / ')}`);
@@ -82,17 +88,29 @@ function WizardBody({ connId }: { connId: string }) {
             <div className="hint">המצב נקבע מהמודל: סוג המארח, האלמנט והזווית — לא בוחרים סוג חיבור ידנית.</div>
             <h3 style={{ marginTop: 10 }}>הפרט כפי שהוא עכשיו</h3>
             <ConnPreview connId={connId} compact />
+            {hc && <div className="wiz-hover" data-testid="wiz-hover">
+              <h3>תצוגה מקדימה (איור הפרט) — {hc.title}</h3>
+              <div className="wiz-hover-pic">{PIC[hc.pic as keyof typeof PIC]}</div>
+              <small>{hc.desc}</small>
+              <small className={`fit-${hc.fit.status}`}>{hc.fit.status === 'ok' ? '✓' : hc.fit.status === 'warn' ? '⚠' : '✗'} {hc.fit.reason}</small>
+              <div className="hint">איור סכמטי של סוג הפרט — לא שרטוט של החיבור הזה. התוצאה בפועל נבדקת בבדיקה שבעמודה השמאלית אחרי הבחירה.</div>
+            </div>}
           </section>
           <section className="wiz-col mid">
             <div className="row" style={{ justifyContent: 'space-between' }}><h3 style={{ margin: 0 }}>פרטים מוצעים</h3>
               <div className="seg"><button className={`tbtn${!showAll ? ' on' : ''}`} onClick={() => setShowAll(false)}>מתאימים ({cands.filter((c) => c.fit.status !== 'no').length})</button><button className={`tbtn${showAll ? ' on' : ''}`} data-testid="wiz-all" onClick={() => setShowAll(true)}>הכל ({cands.length})</button></div></div>
+            <input className="inp" style={{ width: '100%', marginTop: 8 }} type="search" placeholder="חיפוש פרט (שם, תיאור, סיבה)…" aria-label="חיפוש פרט" data-testid="wiz-search" value={q} onChange={(e) => setQ(e.target.value)} />
+            {!vis.length && <div className="hint" data-testid="wiz-empty" style={{ marginTop: 8 }}>{q.trim() ? `אין פרט שמתאים ל-"${q.trim()}".` : 'אין פרטים להצגה.'}</div>}
             {vis.map((c) => (
-              <button key={c.id} className={`wiz-card${c.id === pick?.id ? ' on' : ''}${c.fit.status === 'no' ? ' no' : ''}`} data-testid={`wiz-c-${c.id}`} onClick={() => c.fit.status !== 'no' && setSel(c.id)}>
+              <div key={c.id} className="wiz-row" onMouseEnter={() => setHov(c.id)} onMouseLeave={() => setHov(null)}>
+              <button className={`wiz-star${favs.has(c.id) ? ' on' : ''}`} data-testid={`wiz-fav-${c.id}`} aria-pressed={favs.has(c.id)} aria-label={favs.has(c.id) ? 'הסר ממועדפים' : 'הוסף למועדפים'} title={favs.has(c.id) ? 'הסר ממועדפים' : 'הוסף למועדפים'} onClick={() => star(c.id)}>{favs.has(c.id) ? '★' : '☆'}</button>
+              <button className={`wiz-card${c.id === pick?.id ? ' on' : ''}${c.fit.status === 'no' ? ' no' : ''}`} data-testid={`wiz-c-${c.id}`} onFocus={() => setHov(c.id)} onBlur={() => setHov(null)} onClick={() => c.fit.status !== 'no' && setSel(c.id)}>
                 <span className="wiz-pic">{PIC[c.pic as keyof typeof PIC]}</span>
                 <span className="wiz-txt"><b>{c.title} {c.studio ? <span className="sum-pill" style={{ background: '#f1e9f7', color: '#6b3f8a' }}>מסטודיו</span> : c.preset ? <span className="sum-pill">{c.isDefault ? 'ברירת מחדל ★' : 'שמור'}</span> : <span className="sum-pill muted">מובנה</span>}{c.detail === cur.detail && !c.preset && <span className="sum-pill">נוכחי</span>}</b>
                   <small>{c.desc}</small><small className={`fit-${c.fit.status}`}>{c.fit.status === 'ok' ? '✓' : c.fit.status === 'warn' ? '⚠' : '✗'} {c.fit.reason}</small></span>
                 <span className={`sum-pill ${c.fit.status === 'ok' ? '' : c.fit.status === 'warn' ? 'warn' : 'bad'}`}>{TAG[c.fit.status]}</span>
               </button>
+              </div>
             ))}
           </section>
           <section className="wiz-col">
