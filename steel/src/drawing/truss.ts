@@ -191,8 +191,10 @@ export function trussUnitSheet(sh: Sheet, def: { ref?: string }, d: DerivedModel
       const dimLine = (xa: number, xb: number, y: number, val: number) => { E.push({ k: 'line', a: { x: xa, y }, b: { x: xb, y }, layer: 'DIM' }, { k: 'line', a: { x: xa, y: y - 1 }, b: { x: xa, y: y + 1 }, layer: 'DIM' }, { k: 'line', a: { x: xb, y: y - 1 }, b: { x: xb, y: y + 1 }, layer: 'DIM' }, { k: 'text', p: { x: (xa + xb) / 2, y: y + 0.8 }, s: String(Math.round(val)), h: 2.3, align: 'center', layer: 'DIM', bold: true }); };
       dimLine(pl[0]!.x, pRr[1]!.x, yc + sp.w / 2 / scc + 4.5, sp.pts[1]!.x - sp.pts[0]!.x);
       dimLine(pl[3]!.x, pRr[2]!.x, yc - sp.w / 2 / scc - 5.5, sp.pts[2]!.x - sp.pts[3]!.x);
-      E.push({ k: 'text', p: { x: (cx0 + cx1) / 2, y: strip.y0 + 8.5 }, s: `רוחב ${Math.round(sp.w)} · זוויות ${Math.round(sp.angS)}°/${Math.round(sp.angE)}° מהניצב`, h: 2.2, align: 'center', layer: 'DIM' });
-      E.push({ k: 'text', p: { x: (cx0 + cx1) / 2, y: strip.y0 + 4.5 }, s: `${[...k.marks].join(',') || '—'} · ${k.m.profile} · ${k.qty} יח'`, h: 2.2, align: 'center', layer: 'TEXT', bold: true });
+      const labelX = (cx0 + cx1) / 2;
+      E.push({ k: 'text', p: { x: labelX, y: strip.y0 + 8.2 }, s: `רוחב ${Math.round(sp.w)}`, h: 1.5, align: 'center', layer: 'DIM' });
+      E.push({ k: 'text', p: { x: labelX, y: strip.y0 + 5.9 }, s: `זוויות ${Math.round(sp.angS)}°/${Math.round(sp.angE)}°`, h: 1.5, align: 'center', layer: 'DIM' });
+      E.push({ k: 'text', p: { x: labelX, y: strip.y0 + 3.6 }, s: `${[...k.marks].join(',') || '—'} · ${k.m.profile} · ${k.qty} יח'`, h: 1.5, align: 'center', layer: 'TEXT', bold: true });
     });
   }
 
