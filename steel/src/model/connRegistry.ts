@@ -31,6 +31,8 @@ export interface Situation {
   side?: string;
   /** אתר הפרט המותאם (קצה האלמנט בחיבור) — לפרטי סטודיו: מפתח, זווית, משפחות, אתרים דומים */
   site?: { key: string; ang: number; mainFam: string; hostFam: string; similar: string[] };
+  /** תושבת פטה (REV-F06): מפתח השיוך של פרט סטודיו לתושבת (`פטה|x:מסגרת`) — לתושבות אין `site`, והאשף קורא/מבטל שיוך דרכו */
+  assignKey?: string;
 }
 export interface DetailType {
   id: string; family: ConnFamily; title: string; desc: string; pic: string;
@@ -213,7 +215,9 @@ function situationBase(p: Project, d: DerivedModel, connId: string): Situation |
       facts: [{ k: 'מארח', v: `${mA?.profile ?? '?'}` }, { k: 'אלמנט', v: `${mB?.profile ?? mA?.profile ?? '?'}` }, { k: 'מיקום', v: c.label }] };
   }
   if (f === 'roofx' || f === 'wallx') {
-    const br = c.parts.map((x) => d.byId.get(x)).find((x) => x?.kind === 'brace') ?? c.members.map((x) => d.byId.get(x)).find((x) => x?.kind === 'brace');
+    // REV-F05: במצב מוט החלק ה-`brace` הראשון הוא המוט (משפחה RD) — האלמנט הוא הזוויתן/החתך שאליו המוט מרותך
+    const isBr = (x?: Member) => x?.kind === 'brace' && fam(x.profile) !== 'RD';
+    const br = c.parts.map((x) => d.byId.get(x)).find(isBr) ?? c.members.map((x) => d.byId.get(x)).find(isBr);
     const pre = f === 'roofx' ? 'C.BR.R' : 'C.BR.W';
     return { family: f, connId, local: connId, oneLabel: null, title: f === 'roofx' ? 'קושרת גג X' : 'קושרת קיר X', key: f, sameCount: d.connections.filter((x) => x.id.startsWith(pre)).length, memberFamily: fam(br?.profile),
       facts: [{ k: 'אלמנט', v: `${br?.profile ?? '?'} (משפחה ${fam(br?.profile) || '?'})` }, { k: 'מארח', v: f === 'roofx' ? 'ווב קורת הגג' : 'עמוד' }, { k: 'סוג', v: CONN_HE[c.type] ?? c.type }] };
@@ -226,7 +230,8 @@ function situationBase(p: Project, d: DerivedModel, connId: string): Situation |
   if (f === 'cleat') {
     const pur = d.byId.get(c.members[0]);
     const side = pur?.purlin?.paramKey ?? (pur?.purlin?.side === 'R' ? 'right' : 'left');
-    return { family: f, connId, local: c.parts[0], side, oneLabel: 'התושבת הזו', title: 'תושבת פטה', key: `cleat|${side}`, sameCount: d.connections.filter((x) => x.type === 'purlin-cleat').length, memberFamily: fam(pur?.profile),
+    const ak = c0.type === 'custom' ? c0.custom?.site : pur ? `${pur.id}|x:${c.id.split('.').pop()}` : undefined;
+    return { family: f, connId, local: c.parts[0], side, assignKey: ak?.includes('|x:') ? ak : undefined, oneLabel: 'התושבת הזו', title: 'תושבת פטה', key: `cleat|${side}`, sameCount: d.connections.filter((x) => x.type === 'purlin-cleat').length, memberFamily: fam(pur?.profile),
       facts: [{ k: 'פטה', v: `${pur?.profile ?? '?'}` }, { k: 'קורה', v: `${mB?.profile ?? '?'}` }, { k: 'שיפוע', v: pur?.purlin?.side ?? '' }] };
   }
   if (f === 'tbsup' || f === 'tbseat') {
@@ -254,8 +259,9 @@ function situationBase(p: Project, d: DerivedModel, connId: string): Situation |
 /** הפרט הנוכחי והפרמטרים (כלליים, או של המיקום אם יש חריג) */
 export function readCurrent(p: Project, s: Situation): { detail: string; params: Params; local: boolean } {
   const b = p.building;
-  const asg = s.site ? p.detailAssign?.[s.site.key] : undefined;
-  if (asg && (p.customDetails ?? []).some((x) => x.id === asg)) return { detail: `custom:${asg}`, local: true, params: { ...(p.detailParams?.[s.site!.key] ?? {}) } };
+  const akey = s.site?.key ?? s.assignKey;
+  const asg = akey ? p.detailAssign?.[akey] : undefined;
+  if (asg && (p.customDetails ?? []).some((x) => x.id === asg)) return { detail: `custom:${asg}`, local: true, params: { ...(p.detailParams?.[akey!] ?? {}) } };
   if (s.family === 'knee') {
     const kb = b.kneeBraces ?? defaultKneeBraces();
     const ov = kb.sides?.[s.local];
@@ -275,7 +281,8 @@ export function readCurrent(p: Project, s: Situation): { detail: string; params:
   }
   if (s.family === 'roofx' || s.family === 'wallx') {
     const bc = b.bracing.conn;
-    return { detail: s.family === 'roofx' && b.bracing.roof.endDetail === 'rod' ? 'roofx.rod' : `${s.family}.gusset`, local: false, params: { gussetT: bc.gussetT, boltsPerEnd: bc.boltsPerEnd, boltD: bc.bolt.d, rodD: b.bracing.roof.rod?.d ?? 18 } };
+    // REV-F05: מוט הברגה נבנה רק בזוויתן (L) — בחתך אחר המנוע בונה פח חיבור (אזהרת ROD_PROFILE), וה"נוכחי" באשף תואם לכך
+    return { detail: s.family === 'roofx' && b.bracing.roof.endDetail === 'rod' && fam(b.bracing.roof.profile) === 'L' ? 'roofx.rod' : `${s.family}.gusset`, local: false, params: { gussetT: bc.gussetT, boltsPerEnd: bc.boltsPerEnd, boltD: bc.bolt.d, rodD: b.bracing.roof.rod?.d ?? 18 } };
   }
   if (s.family === 'portal') {
     const pt = { ...(b.bracing.walls.portal ?? defaultPortal()), ...(b.bracing.walls.linePortal?.[s.local] ?? {}) };
@@ -304,7 +311,8 @@ export function readCurrent(p: Project, s: Situation): { detail: string; params:
 /** החלה: scope 'all' = כל החיבורים באותו מצב (ההגדרה הכללית; חריגים נשמרים), 'one' = המיקום הזה בלבד */
 export function applyDetail(p: Project, s: Situation, detail: string, params: Params, scope: 'all' | 'one'): Project {
   // פרט סטודיו: שיוך לקצה הזה / לכל הקצוות הדומים; מעבר לפרט מובנה מבטל שיוך קיים באותם קצוות
-  const keys = s.site ? (scope === 'one' ? [s.site.key] : s.site.similar) : [];
+  // תושבת: אין אתר דומים — רק השיוך של התושבת הזו (REV-F06); שאר התושבות שהוקצו להן פרטים נשארות כחריגים
+  const keys = s.site ? (scope === 'one' ? [s.site.key] : s.site.similar) : s.assignKey ? [s.assignKey] : [];
   if (detail.startsWith('custom:')) {
     const det = (p.customDetails ?? []).find((x) => x.id === detail.slice(7));
     if (!det || !keys.length) return p;
@@ -406,6 +414,8 @@ export function candidates(p: Project, s: Situation): { id: string; detail: stri
       if (info.custom) return { id: x.id, detail: x.detail, title: x.name, desc: `הגדרה שמורה של "${info.title}" (מסטודיו)`, pic: info.pic, fit: studioFit(info.custom, s), preset: x, isDefault, studio: true };
       return { id: x.id, detail: x.detail, title: x.name, desc: `הגדרה שמורה של "${info.title}"`, pic: info.pic, fit: detailById(x.detail)!.fit(s), preset: x, isDefault };
     }),
+    // תושבת שכבר שויך לה פרט סטודיו: הפרט הנוכחי מופיע ברשימה (אחרת הבחירה נופלת על המובנה הראשון — מטעה)
+    ...(s.assignKey && p.detailAssign?.[s.assignKey] ? (p.customDetails ?? []).filter((x) => x.id === p.detailAssign![s.assignKey!]).map((x) => ({ id: `custom:${x.id}`, detail: `custom:${x.id}`, title: x.name, desc: x.note || 'פרט תושבת מהסטודיו — מוחל כעת', pic: 'flange', fit: { status: 'ok' as const, reason: 'מוחל כעת על התושבת הזו' }, studio: true })) : []),
     ...(s.site ? (p.customDetails ?? []).filter((x) => x.family !== 'cleat').map((x) => ({ id: `custom:${x.id}`, detail: `custom:${x.id}`, title: x.name, desc: x.note || 'פרט שנבנה בסטודיו', pic: 'flange', fit: studioFit(x, s), studio: true })) : []),
   ];
   const rank = { ok: 0, warn: 1, no: 2 } as const;

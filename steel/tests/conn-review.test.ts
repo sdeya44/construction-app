@@ -105,7 +105,7 @@ describe('REV-F03 פרמטר מקומי (קוטר בורג) נכבד בהיקף 
 import { buildSheet, drawingCatalog } from '../src/drawing/views';
 import { computeFabrication } from '../src/fab/marks';
 import { computeBom } from '../src/fab/bom';
-import { numberParts } from '../src/commands/commands';
+import { assignDetail, numberParts } from '../src/commands/commands';
 
 describe('REV-F02 גיליון פרט לכל וריאנט', () => {
   const run = (which: 'first' | 'last') => {
@@ -161,5 +161,44 @@ describe('REV-F02b פרט מותאם: וריאנט לפי ערכי המופע', 
     expect(cat.length).toBe(2);
     expect(cat[1]!.id).toBe(`D-CONN-cd-${det.id}~2`);
     expect(cat.flatMap((x) => x.refs ?? []).length).toBe(generate(p).connections.filter((c) => c.custom?.detailId === det.id).length);
+  });
+});
+
+describe('REV-F06 תושבת: פרט סטודיו/ספרייה שהוחל מוצג כנוכחי, ופרט מובנה מבטל אותו', () => {
+  it('אחרי שיוך lib-purlin-single: האשף קורא את הפרט (לא cleat.run), הוא ברשימה; בחירת מובנה מבטלת את השיוך ומחזירה חיבור מובנה', () => {
+    const p0 = numberParts().run(newProject('f06', defaultBuilding())), d0 = generate(p0);
+    const c0 = d0.connections.find((c) => c.type === 'purlin-cleat')!;
+    const lib = detailPresets().find((x) => x.id === 'lib-purlin-single')!;
+    const key = `${c0.id.split('.').slice(2, -1).join('.')}|x:${c0.id.split('.').pop()}`;
+    const p1 = assignDetail([key], lib).run({ ...p0, customDetails: [structuredClone(lib)] });
+    const d1 = generate(p1);
+    const cc = d1.connections.find((c) => c.custom?.site === key)!;
+    expect(cc, 'החיבור הומר לפרט מותאם').toBeTruthy();
+    const s1 = situationOf(p1, d1, cc.id)!;
+    expect(s1.family).toBe('cleat');
+    expect(readCurrent(p1, s1).detail).toBe(`custom:${lib.id}`);
+    expect(candidates(p1, s1).some((c) => c.detail === `custom:${lib.id}`)).toBe(true);
+    // בחירת פרט מובנה: השיוך מתבטל והחיבור חוזר להיות מובנה עם הסגנון שנבחר
+    const p2 = applyDetail(p1, s1, 'cleat.stand', {}, 'one');
+    expect(p2.detailAssign?.[key]).toBeUndefined();
+    const d2 = generate(p2), c2 = d2.connections.find((c) => c.id === c0.id)!;
+    expect(c2.type).toBe('purlin-cleat');
+    expect(readCurrent(p2, situationOf(p2, d2, c2.id)!).detail).toBe('cleat.stand');
+  });
+});
+
+describe('REV-F05 קושרת גג עם מוט: האלמנט הוא הזוויתן, לא המוט', () => {
+  const roof = (prof: string) => { const b = defaultBuilding(); b.bracing.roof.endDetail = 'rod'; b.bracing.roof.profile = prof; const p = numberParts().run(newProject('f05', b)), d = generate(p); const c = d.connections.find((x) => x.id.startsWith('C.BR.R'))!; return { p, d, s: situationOf(p, d, c.id)! }; };
+  it('L: משפחת האלמנט L (לא RD), "מוט הברגה" מתאים ונוכחי', () => {
+    const { p, s } = roof('L50x5');
+    expect(s.memberFamily).toBe('L');
+    expect(readCurrent(p, s).detail).toBe('roofx.rod');
+    expect(candidates(p, s).find((c) => c.detail === 'roofx.rod')!.fit.status).toBe('ok');
+  });
+  it('חתך שאינו L (RHS): המנוע בונה פח (בלי מוטות) והאשף מציג פח חיבור כנוכחי; מוט — לא מתאים', () => {
+    const { p, d, s } = roof('RHS50x50x4');
+    expect(d.connections.filter((c) => c.id.startsWith('C.BR.R')).some((c) => c.bolts.some((b) => b.rod))).toBe(false);
+    expect(readCurrent(p, s).detail).toBe('roofx.gusset');
+    expect(candidates(p, s).find((c) => c.detail === 'roofx.rod')!.fit.status).toBe('no');
   });
 });
