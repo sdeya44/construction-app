@@ -216,9 +216,11 @@ select.inp { padding: 0 6px; }
 
 @media (max-width: 1280px) { .workspace { --tw: 210px; --pw: 340px; } .workspace.tree-hidden { --tw: 0px; } .search-pill { width: 220px; } .conncard { grid-template-columns: 1fr; width: 300px; } .conncard .cc-svg { display: none; } }
 @media (max-width: 860px) {
-  .app { grid-template-columns: 1fr; grid-template-rows: 50px 1fr auto; }
+  .app { grid-template-columns: 1fr; grid-template-rows: 50px 1fr auto; direction: ltr; }
   .app > .rail, .app > .statusbar { display: none; }
   .app > .topbar, .app > .workspace, .app > .mode-area { grid-column: 1; }
+  .app > .mode-area { direction: ltr; }
+  .topbar { direction: rtl; }
   .app > .mnav { grid-row: 3; grid-column: 1; }
   .workspace { grid-template-columns: 1fr; position: relative; }
   .side { position: absolute; inset-inline: 0; bottom: 0; max-height: 64%; z-index: 20; border: 0; border-top: 1px solid var(--line); box-shadow: 0 -10px 30px rgba(28,36,32,.16); border-radius: 16px 16px 0 0; display: none; }
@@ -230,7 +232,8 @@ select.inp { padding: 0 6px; }
   .mnav svg { width: 21px; height: 21px; }
   .proj-name { max-width: 34vw; font-size: 13px; }
   .brand-name { font-size: 16px; }
-  .topbar { gap: 4px; padding: 0 8px; overflow: hidden; }
+  .topbar { gap: 4px; padding: 0 8px; overflow: hidden; min-width: 0; }
+  .brand { display: flex; }
   .search-pill { width: auto; padding: 0 9px; }
   .tb-btn { min-width: 40px; height: 40px; }
   .dwg-bar { gap: 4px; }

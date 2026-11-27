@@ -204,4 +204,19 @@ describe('TR-MS מסבך גג במסגרת רב-מפתחית (1.66)', () => {
       expect(d.issues.some((i) => i.code === 'TRUSS_FRAME' && i.severity === 'warning')).toBe(false);
     }
   });
+  it('TR-U10: ערכי קצה לחלוקת שדות נשארים תקינים ומסתכמים במפתח', () => {
+    const span = 12000;
+    const base = { ...defaultTrussSpec(6, 1000), symmetric: false };
+    const below = setPanelLen(base, span, 0, -500);
+    expect(below.panelLens![0]).toBe(200);
+    expect(below.panelLens!.reduce((a, x) => a + x, 0)).toBe(span);
+    const atMin = setPanelLen(base, span, 0, 200);
+    expect(atMin.panelLens![0]).toBe(200);
+    expect(atMin.panelLens!.reduce((a, x) => a + x, 0)).toBe(span);
+    const above = setPanelLen(base, span, 0, 1e9);
+    expect(above.panelLens![0]).toBe(span - 200 * 5);
+    expect(above.panelLens!.every((x) => x >= 200)).toBe(true);
+    expect(above.panelLens!.reduce((a, x) => a + x, 0)).toBe(span);
+  });
+
 });

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, expectInside, screenOf, selection, shot } from './helpers';
+import { boot, expectInside, screenOf, selection, shot, openNav } from './helpers';
 
 test('MOB-01: טלפון – יחס נכון, בחירה במגע ומחוות סיבוב', async ({ page }) => {
   const errors = await boot(page);
@@ -35,5 +35,31 @@ test('MOB-01: טלפון – יחס נכון, בחירה במגע ומחוות �
   const cam1 = await page.evaluate(() => (window as any).__ksp.viewport.panes[0].camera.position.toArray());
   expect(cam1).not.toEqual(cam0);
   expect(await selection(page)).toEqual(['F1.COL.L']);
+  expect(errors).toEqual([]);
+});
+
+
+test('MOB-02: מסבך עד שרטוטים וייצור במסך טלפון צר', async ({ page }) => {
+  const errors = await boot(page);
+  const width = await page.evaluate(() => document.documentElement.clientWidth);
+
+  await expect(page.getByTestId('m-model')).toBeVisible();
+  await page.getByTestId('m-side').click();
+  await openNav(page, 'b:truss');
+  await page.getByTestId('rt-on').check({ force: true });
+  await expect(page.getByTestId('tw-roof')).toBeVisible();
+  await page.getByTestId('m-side').click({ force: true });
+  await page.evaluate(() => (document.querySelector('[data-testid="m-drawings"]') as HTMLButtonElement).click());
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('drawings-view')).toBeVisible();
+  await page.getByTestId('dwg-search').fill('T-');
+  await page.getByTestId('dwg-D-TRUSS-1').click();
+  await expect(page.getByTestId('dwg-title')).toContainText('תוכנית מסבך');
+  await expect(page.getByTestId('dwg-svg')).toBeVisible();
+  await page.evaluate(() => (document.querySelector('[data-testid="m-production"]') as HTMLButtonElement).click());
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('production-view')).toBeVisible();
+  const docWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(docWidth, 'the page should not overflow the narrow phone viewport').toBeLessThanOrEqual(width + 1);
   expect(errors).toEqual([]);
 });

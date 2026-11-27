@@ -363,7 +363,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
     let prev = b.baseElevation; for (const z of gz) { v.dim({ x: xD, y: prev }, { x: xD, y: z }, { x: 0, y: 1 }, 0); prev = z; }
     v.level({ x: Math.max(X(xs[0]), X(xs[xs.length - 1])) + 600, y: b.baseElevation }, 0);
     for (const m of ms.filter((x) => x.wall?.role === 'post')) { const mk = asmOf(m.id); if (mk) v.text({ x: X(m.start.x) + 300, y: (m.start.z + m.end.z) / 2 }, `${mk} ${m.profile}`, 2.5, 'center', 'MARK', 90); }
-    v.text({ x: (bx.x0 + bx.x1) / 2, y: bx.y1 - 300 }, `${w === 'F' ? 'קיר קצה קדמי (ציר 1)' : `קיר קצה אחורי (ציר ${fr.length})`}  1:${v.scale}`, 3, 'center', 'TEXT', 0, true);
+    v.text({ x: (bx.x0 + bx.x1) / 2, y: bx.y1 - 300 }, w === 'F' ? 'קיר קצה קדמי (ציר 1)' : `קיר קצה אחורי (ציר ${fr.length})`, 3, 'center', 'TEXT', 0, true);
   };
 
   switch (def.type) {
@@ -563,6 +563,16 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       bx.x0 -= 2500; bx.x1 += 2500; bx.y0 -= 1500; bx.y1 += 1500;
       const v = placeView(sh, bx, area); setScale(v);
       for (const m of ms) edges(m, pr, v, m.kind === 'girt' && m.wall?.role === 'girt' ? 'THIN' : 'OUTLINE');
+      // Hidden projection of rafters on the side elevation: retain visible edges, dash only the occluded lower flange web lines.
+      for (const m of d.members.filter((x) => x.kind === 'rafter')) {
+        const pf = tryProfile(m.profile); if (!pf || Math.abs(m.end.x - m.start.x) < 1) continue;
+        const t = (x0 - m.start.x) / (m.end.x - m.start.x); if (t < -0.02 || t > 1.02) continue;
+        const zc = m.start.z + (m.end.z - m.start.z) * Math.min(1, Math.max(0, t));
+        const yc = m.start.y, halfB = pf.props.b / 2, halfH = pf.props.h / 2;
+        const face = m.anchor === 'top' ? zc - pf.props.h : zc - halfH;
+        for (const z of [face + (pf.dims.tf ?? 10), face + pf.props.h - (pf.dims.tf ?? 10)])
+          v.line({ x: yc - halfB, y: z }, { x: yc + halfB, y: z }, 'HIDDEN');
+      }
       openingsOn(v, side, (t) => b.frames.reduce((mn, f) => Math.min(mn, f.y), Infinity) + t);
       // פלטות בסיס וראש עמוד, וחתכי הקורות/קורות אגד שנשענות על קו העמודים
       const colIds = new Set(ms.filter((m) => m.kind === 'column').map((m) => m.id));
@@ -594,7 +604,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       v.line({ x: Math.min(...ys) - 1200, y: b.baseElevation }, { x: yR + 600, y: b.baseElevation }, 'THIN');
       v.level({ x: yR, y: b.baseElevation }, 0);
       v.level({ x: yR, y: eave }, eave - b.baseElevation);
-      v.text({ x: (ys[0] + ys[ys.length - 1]) / 2, y: eave + 900 }, `חזית ציר ${lineS?.label ?? (side === 'L' ? 'א' : 'ב')}  1:${v.scale}`, 3, 'center', 'TEXT', 0, true);
+      v.text({ x: (ys[0] + ys[ys.length - 1]) / 2, y: eave + 900 }, `חזית ציר ${lineS?.label ?? (side === 'L' ? 'א' : 'ב')}`, 3, 'center', 'TEXT', 0, true);
       };
       sideList.forEach((sd, i) => drawSide(sd, { ...area, y1: area.y1 - i * hh, y0: area.y1 - (i + 1) * hh }));
       break;

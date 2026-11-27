@@ -69,6 +69,9 @@ describe('TPLAN גיליון מסבך', () => {
     expect(t.some((s) => s.includes('SHS80x4'))).toBe(true);
     expect(t.filter((s) => /^\d+$/.test(s)).length).toBeGreaterThan(8); // מידות בין צמתים וגובה
     expect(sh.ents.filter((e) => e.k === 'line').length).toBeGreaterThan(200);
+    const tblNotes = sh.ents.filter((e) => e.k === 'text' && e.layer === 'TEXT' && e.p.x > 140 && e.p.x < 150 && e.p.y > 30);
+    expect(tblNotes.length).toBeGreaterThan(0);
+    expect(tblNotes.every((e) => e.k === 'text' && measure(e.s, e.h, e.bold) <= 124)).toBe(true);
   }, 120000);
   it('TPLAN-03: מסבך נושא בדילול עמודים — גיליון נבנה, כולל חיבור לעמודים', () => {
     const b = defaultBuilding(); const f = [...b.frames].sort((x, y) => x.y - y.y);

@@ -264,15 +264,34 @@ export function trussUnitSheet(sh: Sheet, def: { ref?: string }, d: DerivedModel
   const welds = [...u.conn.welds, ...u.ends.flatMap((c) => c.welds)].filter((w) => w.location === 'shop');
   const aS = [...new Set(welds.map((w) => w.a))].sort((a, b) => a - b);
   y -= 2;
+  const wrapNote = (s: string, maxWidth: number, h: number): string[] => {
+    const lines: string[] = [];
+    let line = '';
+    for (const word of s.split(/\s+/)) {
+      if (approxMeasure(word, h) > maxWidth) {
+        if (line) { lines.push(line); line = ''; }
+        let chunk = '';
+        for (const ch of word) {
+          if (chunk && approxMeasure(chunk + ch, h) > maxWidth) { lines.push(chunk); chunk = ch; }
+          else chunk += ch;
+        }
+        line = chunk;
+      } else {
+        const next = line ? `${line} ${word}` : word;
+        if (line && approxMeasure(next, h) > maxWidth) { lines.push(line); line = word; }
+        else line = next;
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  };
   for (const s of [
     `ריתוך פינתי במסגריה a=${aS.join('/') || '—'} מ"מ בכל הצמתים (${welds.length} ריתוכים); האלכסונים נחתכים לפי פיתוח החיתוך ומורתכים לחגורות במרווח 1 מ"מ.`,
     `${u.splices.length ? `חיבורי המשך בחגורה: ${u.splices.length} (פלטות מוברגות בשטח). ` : ''}חיבורי שטח מוברגים בלבד; גלוון חם לאחר ריתוך.`,
     'גיאומטריה בלבד — אין בדיקת חוזק לאלכסונים, חגורות, ברגים וריתוכים.',
     `זהה ל: ${u.refs.slice(0, 5).join(' · ')}${u.refs.length > 5 ? ` ועוד ${u.refs.length - 5}` : ''}`,
   ]) {
-    let cur = '';
-    for (const wd of s.split(' ')) { if (approxMeasure(`${cur} ${wd}`, 2.3) > tblW - 4) { T(cur.trim(), x1, 2.3); y -= 3.8; cur = wd; } else cur += ` ${wd}`; }
-    if (cur.trim()) { T(cur.trim(), x1, 2.3); y -= 3.8; }
+    for (const line of wrapNote(s, tblW - 4, 2.3)) { T(line, x1, 2.3); y -= 3.8; }
     y -= 1.2;
   }
   sh.scale = vE.scale;

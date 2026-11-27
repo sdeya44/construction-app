@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { defaultBuilding, newProject } from '../src/model/defaults';
+import { defaultCladding } from '../src/geometry/cladding';
 import { generate } from '../src/geometry/generate';
 import { computeFabrication } from '../src/fab/marks';
 import { computeBom } from '../src/fab/bom';
@@ -64,6 +65,21 @@ describe('שרטוטים', () => {
     expect(n1500).toBeGreaterThanOrEqual(10);
     expect(ts.some((x) => /^\d+\*$/.test(x))).toBe(true); // שארית
     expect(sh.size).toBe('A4'); // ברירת מחדל: A4 כשהקנ"מ סביר
+    expect(sh.title.scale).toMatch(/^1:\d+$/);
+  });
+  it('חתך צד: קווי פנים מוסתרים של קורת גג מוצגים בקו נסתר באביזר קבוע', () => {
+    const b = structuredClone(p.building);
+    b.cladding = { ...defaultCladding(), walls: { enabled: false, sides: { L: false, R: false, F: false, B: false }, panel: 'x', cover: 1000, bottom: 0 } };
+    const pp = newProject('בדיקת קווים נסתרים', b); pp.settings.paper = 'A3';
+    const dd = generate(pp), ff = computeFabrication(pp, dd), bb = computeBom(dd, ff);
+    const def = drawingCatalog(pp, dd, ff).find((x) => x.id === 'D-SIDE')!;
+    const sh = buildSheet(def, pp, dd, ff, bb);
+    const hidden = sh.ents.filter((e) => e.k === 'line' && e.layer === 'HIDDEN');
+    expect(hidden.length).toBeGreaterThan(0);
+    expect(hidden.some((e) => e.k === 'line' && e.a.x !== e.b.x)).toBe(true);
+    const title = texts(sh).find((x) => x.startsWith('חזית ציר'));
+    expect(title).toBeDefined();
+    expect(title).not.toContain(sh.title.scale);
     expect(sh.title.scale).toMatch(/^1:\d+$/);
   });
   it('חתך מסגרת: גבהים 6000 ו-6900 מהמודל, רוחב 18000, חתכי פטות ממולאים', () => {
