@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 import { boot, shot, openNav } from './helpers';
 
 test('TR-01: מסבכי גג — הפעלה, עריכת שדה וצומת בלחיצה, גובה בלחיצה, ללא שגיאות', async ({ page }) => {
@@ -150,4 +152,33 @@ test('CHEEK-E1: מסבך גג — לחיות צומת מהאשף: הפעלה מ�
   expect(s.prof).toBe('PL100x10'); expect(s.err).toEqual([]);
   await page.getByTestId('tw-roof-cheeks-on').uncheck();
   expect((await st()).cheeks).toBe(0);
+});
+
+test('TPLAN-PDF: תוכנית מסבך — ייצוא PDF כולל תוכן בעברית ומידות', async ({ page }) => {
+  await boot(page);
+  await openNav(page, 'b:truss');
+  await page.getByTestId('rt-on').check();
+  await page.getByTestId('mode-drawings').click();
+  await page.getByTestId('dwg-search').fill('T-');
+
+  const trussDrawing = page.getByTestId('dwg-D-TRUSS-1');
+  await expect(trussDrawing).toBeVisible();
+  await trussDrawing.click();
+  await expect(page.getByTestId('dwg-title')).toContainText('תוכנית מסבך');
+  await shot(page, 'TPLAN_PDF_preview');
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByTestId('dwg-pdf').click();
+  const download = await downloadPromise;
+  const pdfPath = 'e2e-results/evidence/truss-plan.pdf';
+  fs.mkdirSync('e2e-results/evidence', { recursive: true });
+  await download.saveAs(pdfPath);
+
+  const info = execFileSync('pdfinfo', [pdfPath], { encoding: 'utf8' });
+  expect(info).toMatch(/Pages:\s+1/);
+  const text = execFileSync('pdftotext', [pdfPath, '-'], { encoding: 'utf8' });
+  expect(text).toContain('מבט במישור המסבך');
+  expect(text).toContain('פיתוח חיתוך');
+  expect(text).toContain('רשימת חלקים');
+  expect(text).toMatch(/\d{3,}/);
 });
