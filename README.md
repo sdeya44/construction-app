@@ -1,3 +1,18 @@
+# מפת הפרויקטים בריפו
+
+| תיקייה | פרויקט | הערות |
+|---|---|---|
+| `/` (שורש: `index.html`, `js/`, `css/`, `sw.js`, `manifest.json`) | ניהול אתרי בנייה — יומן שטח ונוכחות (PWA + Google Sheets) | נשאר בשורש כי זו כתובת GitHub Pages החיה |
+| `boq/` | KAYAN BOQ — כתבי כמויות, הצעות וחשבונות (כולל התקנת Windows) | נבנה ע"י `.github/workflows/boq-windows.yml` |
+| `mazil-quotes/` | אפליקציית הצעות מחיר לנייד | PWA |
+| `height-cert/` | תעודות עבודה בגובה | PWA + Apps Script |
+| `quantity-calculator/` | מחשבון כמויות הנדסי (Vite) | דורש `npm install` |
+| `gantt/` | גאנט לוח זמנים | קובץ HTML עצמאי |
+| `docs/` | תיעוד ומיפוי שיחות פיתוח | |
+| `legacy/` | שאריות Visual Studio (לא בשימוש) | |
+
+---
+
 # ניהול אתרי בנייה — Production v2
 
 מערכת PWA לניהול יומי של אתרי בנייה. מבוססת על Google Sheets ו-Google Drive.
