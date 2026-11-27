@@ -81,7 +81,7 @@ export const MODULES = {
   fab: {
     title: 'ייצור: מספור, כמויות, DSTV, IFC, ניסטינג, הזמנה, האחדה, הרכבה, הצעת מחיר',
     src: ['src/fab/', 'src/model/sizing.ts'],
-    tests: ['tests/fab.test.ts', 'tests/dstv.test.ts', 'tests/nesting.test.ts', 'tests/traceability.test.ts', 'tests/export.test.ts', 'tests/order.test.ts', 'tests/unify.test.ts', 'tests/erection.test.ts', 'tests/sizing.test.ts'],
+    tests: ['tests/fab.test.ts', 'tests/dstv.test.ts', 'tests/nesting.test.ts', 'tests/traceability.test.ts', 'tests/known-answer-portal.test.ts', 'tests/export.test.ts', 'tests/order.test.ts', 'tests/unify.test.ts', 'tests/erection.test.ts', 'tests/sizing.test.ts'],
     e2e: ['e2e/m4m5.spec.ts', 'e2e/v136.spec.ts', 'e2e/sizing.spec.ts', 'e2e/nesting.spec.ts', 'e2e/traceability.spec.ts'],
   },
   drawing: {
