@@ -14,6 +14,9 @@ import { Icon } from './icons';
 import { PlateWizard } from './PlateWizard';
 import { DetailTiles, PIC, ScopeToggle } from './DetailPicker';
 import { familyOf } from '../model/connRegistry';
+import { setTrussNodeCheeks } from '../commands/commands';
+import { CHEEK_MIN } from '../geometry/truss';
+import { nodeStateText, trussOwner } from '../geometry/trussNode';
 import { CleatTypePicker } from './ConnTypePicker';
 
 const STATUS: Record<ApprovalStatus, string> = { 'not-verified': 'לא מאומת', 'for-review': 'לבדיקה', approved: 'מאושר' };
@@ -97,6 +100,7 @@ export function ConnectionEditor() {
         ))}
       </div>
       {tab === 'plate' && <>
+      {c.type === 'truss' && <TrussNodeCard connId={c.id} />}
       {familyOf(c0) && <button className="btn primary" style={{ width: '100%', margin: '4px 0 8px' }} data-testid="conn-wizard-open" onClick={() => store.set({ connWizard: c.id })}>אשף חיבורים — פרטים מתאימים למצב הזה ✎</button>}
       <PlateWizard c={c} />
       <SectionSvg c={c} />
@@ -379,5 +383,30 @@ function CleatFace({ cl, H, issues }: { cl: CleatParams; H: number; issues: Vali
       <div className="hint" style={{ margin: 0 }}>מבט על הרגל המוברגת לווב הפטה. חור Ø{d0} (M{cl.bolt.d}); מינימום מקובל לקצה ולשפה 1.2·d0 = {minE.toFixed(1)} מ"מ — מידה אדומה קטנה ממנו.</div>
       {fixes.map((i, n) => <button key={n} className="btn small primary" data-testid={`cf-fix-${n}`} onClick={() => store.exec(applyIssueFixes([i]))}>תיקון: {i.cleatFix!.label}</button>)}
     </div>
+  );
+}
+
+/** צמתי מסבך בעורך החיבור: מצב נוכחי (ריתוך ישיר / לחיות צומת) ועריכה של הערכים הקיימים בלבד. ההגדרה היא לכל המסבך — לא לצומת בודד. גיאומטריה בלבד, לא בדיקת חוזק. */
+function TrussNodeCard({ connId }: { connId: string }) {
+  const p = useStore((s) => s.project);
+  const [tick, setTick] = useState(0); // מרענן את השדות אחרי כל הזנה — ערך שהוגבל למינימום מוצג כפי שנשמר
+  const o = trussOwner(p, connId);
+  if (!o) return null;
+  const nc = o.spec.nodeCheeks;
+  const on = !!nc?.enabled;
+  const scope = o.owner === 'roof' ? `חל על כל מסבכי הגג בפרויקט (${o.count})` : `חל על המסבך הנושא ${o.transferId}`;
+  return (
+    <details className="psec" open data-testid="tn-card"><summary>צמתי המסבך</summary>
+      <div className="psec-b">
+        <div className="hint" data-testid="tn-state">{nodeStateText(o.spec)}</div>
+        <div className="hint" data-testid="tn-scope">{scope}. ההגדרה היא לכל המסבך, לא לצומת בודד.</div>
+        <label className="row"><input type="checkbox" data-testid="tn-cheeks-on" checked={on} onChange={(e) => store.exec(setTrussNodeCheeks(connId, { enabled: e.target.checked }))} /> לחיות צומת (פלטות משני צדי האלכסונים)</label>
+        {on && <>
+          <div className="field"><label>עובי לחי</label><NumField key={`t${tick}`} testId="tn-t" value={nc!.t} suffix='מ"מ' onCommit={(v) => { store.exec(setTrussNodeCheeks(connId, { t: v })); setTick((x) => x + 1); }} /></div>
+          <div className="field"><label>גובה מעל החגורה</label><NumField key={`h${tick}`} testId="tn-h" value={nc!.h} suffix='מ"מ' onCommit={(v) => { store.exec(setTrussNodeCheeks(connId, { h: v })); setTick((x) => x + 1); }} /></div>
+          <div className="hint" data-testid="tn-min">ערך קטן מהמינימום (עובי {CHEEK_MIN.t}, גובה {CHEEK_MIN.h} מ"מ) מוגבל למינימום; ערך ריק או לא מספרי אינו נשמר. גיאומטריה בלבד — אינו תכן חוזק ואינו אישור ייצור.</div>
+        </>}
+      </div>
+    </details>
   );
 }

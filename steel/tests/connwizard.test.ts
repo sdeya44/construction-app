@@ -82,7 +82,7 @@ describe('אשף חיבורים — כל סוגי החיבורים (1.46)', () =
       }
     }
     expect([...seen].sort()).toEqual(expect.arrayContaining(['base', 'bsplice', 'cleat', 'eave', 'portal', 'psplice', 'ridge', 'roofx', 'side', 'wallx']));
-  });
+  }, 60000); // ~5.5 שניות תחת עומס: ברירת המחדל של vitest 4 (5 שניות) אינה מספיקה
 });
 
 describe('אשף חיבורים — קורה נושאת, נעילה, פרטי סטודיו (1.47)', () => {

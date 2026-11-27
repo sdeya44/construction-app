@@ -27,7 +27,7 @@
 | ספריית מחברים: 7 מחברים מוכנים, ייבוא/ייצוא | `data/connLibrary.json`, `detailLibrary.ts`, `ui/DetailLibrary.tsx` (`lib-*`) | connections (e2e v167) |
 | סככת L וכיסאות `C.WS` | `wing.ts` | wing |
 | דילול עמודים / קורה נושאת | `transfer.ts` | transfer |
-| מסבכים, נעילה (לחיות צומת: `TrussSpec.nodeCheeks`, `tests/nodecheeks.test.ts` CHEEK-01..05) | `truss.ts`, `lockTruss.ts` | truss |
+| מסבכים, נעילה (לחיות צומת: `TrussSpec.nodeCheeks`, `tests/nodecheeks.test.ts` CHEEK-01..05; כרטיס "צמתי המסבך" בעורך החיבור — `geometry/trussNode.ts`, פקודה `setTrussNodeCheeks`, `TrussNodeCard` ב-`ConnectionEditor.tsx`, `tests/trussnode.test.ts`, `e2e/truss-node.spec.ts`) | `truss.ts`, `lockTruss.ts` | truss |
 | תמוכות בין קורות | `rafterStruts.ts` | struts |
 | חיפוי, מזחלות, תוספות גג | `cladding.ts`, `gutter.ts`, `roofExtras.ts` | cladding |
 

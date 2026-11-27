@@ -1,9 +1,10 @@
 import { add, rotateAxis, sub, v3, type Vec3 } from '../core/vec';
 import { degToRad } from '../core/units';
 import { generate, placementBasis } from '../geometry/generate';
-import type { CustomDetail, TransferDef, ValidationIssue, ApprovalStatus, BuildingParams, KneeBraceParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem, StockLot } from '../model/types';
+import type { CustomDetail, TransferDef, ValidationIssue, ApprovalStatus, BuildingParams, KneeBraceParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem, StockLot, TrussSpec } from '../model/types';
 import { purlinParams } from '../geometry/purlins';
 import { effectiveSplices } from '../geometry/autoSplice';
+import { withNodeCheeks } from '../geometry/trussNode';
 import { defaultKneeBraces } from '../geometry/knee';
 import { defaultSideConn } from '../model/defaults';
 import type { CustomSection } from '../model/section';
@@ -878,4 +879,9 @@ export function setTraceability(t: { lots: StockLot[]; assign: Record<string, st
       return n;
     },
   };
+}
+
+/** לחיות צומת של מסבך (גג/נושא) לפי מזהה חיבור המסבך — `geometry/trussNode.ts`; בלי מסבך כזה — אין שינוי */
+export function setTrussNodeCheeks(connId: string, patch: Partial<NonNullable<TrussSpec['nodeCheeks']>>): Command {
+  return { label: 'צמתי מסבך', run: (p) => withNodeCheeks(p, connId, patch) ?? p };
 }

@@ -11,6 +11,8 @@ import { makeBolt } from './connections';
  */
 
 const Z = v3(0, 0, 1);
+/** מינימום לפרמטרי לחיות הצומת (מ"מ) — ערכי ברירת מחדל טכניים של התוכנה (לא תכן מאושר); ערך קטן מהם מוגבל אליהם */
+export const CHEEK_MIN = { t: 4, h: 30 } as const;
 const GAP = 12; // מרווח בין אלכסונים/אנך באותו צומת (≥ t1+t2)
 const BOLT = { d: 16, grade: '8.8', standard: 'ISO 4017', clearance: 2 };
 
@@ -253,7 +255,7 @@ export function buildTrussPlane(t: TrussPlaneIn): { members: Member[]; connectio
   // לחיות צומת (F10): זוג פלטות משני צדי קצות האלכסונים בכל צומת, על פני החגורה (ניצבות למישור המסבך). אפשרי רק כשהאלכסונים צרים מהחגורה.
   const nc = t.spec.nodeCheeks;
   if (nc?.enabled) {
-    const tg = Math.max(4, nc.t), hg = Math.max(30, nc.h);
+    const tg = Math.max(CHEEK_MIN.t, nc.t), hg = Math.max(CHEEK_MIN.h, nc.h);
     for (const atTop of [false, true]) {
       const chord = atTop ? t.top : t.bot, face = atTop ? fTop : fBot;
       for (let i = 0; i <= n; i++) {

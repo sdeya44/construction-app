@@ -87,3 +87,28 @@ test('CW-03: קורה נושאת באשף — תמיכה A2 לקורה הזו; �
   await expect(page.getByTestId('wiz-c-custom:cd-x')).toContainText('מתאים לתנאי הפרט');
   expect(errors).toEqual([]);
 });
+
+test('CW-NO: אשף חיבורים — פרט שסומן "לא מתאים" אינו ניתן לבחירה, הבחירה הנוכחית נשארת, והמודל אינו משתנה; הבדיקה אחרי בחירה גיאומטרית בלבד', async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => { const k = (window as any).__ksp; k.store.exec({ label: 't', run: (p: any) => ({ ...p, building: { ...p.building, kneeBraces: { ...(p.building.kneeBraces ?? {}), enabled: true, profile: 'L50x5', drop: 800, reach: 800, angle: 45, plateT: 10, plateW: 150, plateL: 250, bolt: { d: 16, grade: '8.8', standard: 'ISO 4017', clearance: 2 }, gauge: 80, pitch: 200, weldSize: 5, exclude: [] } } }) }); });
+  const cid = await page.evaluate(() => (window as any).__ksp.store.state.derived.connections.find((c: any) => c.id.startsWith('C.KB.')).id);
+  await page.evaluate((i) => (window as any).__ksp.store.set({ activeConn: i }), cid);
+  await page.getByTestId('ks-sec-conn').click();
+  await page.getByTestId('ks-wizard').click();
+  await expect(page.getByTestId('wiz-c-knee.angle')).toContainText('נוכחי');
+  await page.getByTestId('wiz-all').click();
+  const before = JSON.stringify((await S(page)).project.building.kneeBraces);
+  await expect(page.getByTestId('wiz-c-knee.fin')).toHaveClass(/\bno\b/);
+  await expect(page.getByTestId('wiz-c-knee.fin')).toContainText('דורש פרופיל חלול');
+  await page.getByTestId('wiz-c-knee.fin').click();
+  await expect(page.getByTestId('wiz-c-knee.fin')).not.toHaveClass(/\bon\b/);
+  await expect(page.getByTestId('wiz-c-knee.angle')).toHaveClass(/\bon\b/); // הבחירה נשארה על הפרט הנוכחי
+  await expect(page.getByTestId('conn-wizard')).toContainText('זוויתן מוברג לפח — פרמטרים ובדיקה'); // עמודת הפרמטרים נשארה על הפרט הנוכחי
+  expect(JSON.stringify((await S(page)).project.building.kneeBraces)).toBe(before);
+  // פרט שמתאים לפי הרשימה: ברירת הבדיקה אחרי בחירה היא גיאומטרית בלבד ואומרת זאת במפורש
+  await page.getByTestId('wiz-c-knee.flange').click();
+  await expect(page.getByTestId('wiz-check')).toContainText('בדיקת חוזק — אינה מבוצעת');
+  await expect(page.getByTestId('wiz-check')).toContainText('התנגשויות');
+  await expect(page.getByTestId('wiz-fit-note')).toContainText('לפי סוג החתך');
+  expect(errors).toEqual([]);
+});

@@ -63,8 +63,8 @@ export const MODULES = {
   truss: {
     title: 'מסבכים ונעילה',
     src: ['src/geometry/truss.ts', 'src/geometry/lockTruss.ts'],
-    tests: ['tests/truss.test.ts', 'tests/nodecheeks.test.ts', 'tests/locktruss.test.ts', cad('· truss'), { file: 'tests/cad-oracle.test.ts', t: 'מסבך גג רב-מפתחי' }],
-    e2e: ['e2e/truss.spec.ts'],
+    tests: ['tests/truss.test.ts', 'tests/nodecheeks.test.ts', 'tests/trussnode.test.ts', 'tests/locktruss.test.ts', cad('· truss'), { file: 'tests/cad-oracle.test.ts', t: 'מסבך גג רב-מפתחי' }],
+    e2e: ['e2e/truss.spec.ts', 'e2e/truss-node.spec.ts'],
   },
   struts: {
     title: 'תמוכות בין הקורות',

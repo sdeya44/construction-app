@@ -150,6 +150,10 @@ test('CHEEK-E1: מסבך גג — לחיות צומת מהאשף: הפעלה מ�
   await page.getByTestId('tw-roof-cheek-t').fill('10'); await page.getByTestId('tw-roof-cheek-t').press('Enter');
   s = await st();
   expect(s.prof).toBe('PL100x10'); expect(s.err).toEqual([]);
+  // ערך שאינו חוקי (שלילי) — מוגבל למינימום והשדה מציג את הערך שנשמר
+  await page.getByTestId('tw-roof-cheek-t').fill('-3'); await page.getByTestId('tw-roof-cheek-t').press('Enter');
+  await expect(page.getByTestId('tw-roof-cheek-t')).toHaveValue('4');
+  expect((await st()).prof).toBe('PL100x4');
   await page.getByTestId('tw-roof-cheeks-on').uncheck();
   expect((await st()).cheeks).toBe(0);
 });
