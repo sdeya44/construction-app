@@ -19,3 +19,12 @@ test('MT-E1: פלטת ראש עמוד נבחרת ← הפוך לתבנית ← �
   expect(await page.evaluate(() => (window as any).__ksp.store.state.studioDraft ?? null)).toBeNull();
   expect(errors.filter((e) => !/WebGL|GPU|swiftshader/i.test(e))).toEqual([]);
 });
+
+test('MT-E2: פלטת בסיס ← הפוך לתבנית ← בפרט יש גם ריתוך (שלב 3)', async ({ page }) => {
+  await boot(page);
+  const pid = await page.evaluate(() => (window as any).__ksp.store.state.derived.members.find((m: any) => m.kind === 'plate' && m.connId?.startsWith('C.BASE.'))?.id);
+  await page.evaluate((i) => (window as any).__ksp.store.select([i]), pid);
+  await page.getByTestId('make-template').click();
+  await expect(page.getByTestId('detail-studio')).toBeVisible();
+  await expect(page.getByTestId('ds-ops')).toContainText('ריתוך');
+});

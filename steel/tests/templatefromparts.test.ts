@@ -55,10 +55,22 @@ describe('TFP הפוך לתבנית (שלב 1)', () => {
     expect(out.conn.bolts.length).toBe(4);
     for (const sb of srcBolts) expect(Math.min(...out.conn.bolts.map((b) => Math.hypot(b.p.x - sb.p.x, b.p.y - sb.p.y, b.p.z - sb.p.z)))).toBeLessThanOrEqual(0.3);
     for (const b of out.conn.bolts) { expect(b.holesIn.length).toBe(2); expect(b.length).toBe(srcBolts[0].length); }
+    // שלב 3: חיתוך קצה האלמנט וריתוכים — נגזרים מהמקור ומוחלים זהה
+    expect(det.ops.find((o) => o.k === 'cut')).toMatchObject({ kind: 'host', at: '24' });
+    const weldOps = det.ops.filter((o) => o.k === 'weld');
+    expect(weldOps.map((o) => [(o as Extract<DetailOp, { k: 'weld' }>).part, (o as Extract<DetailOp, { k: 'weld' }>).to]).sort()).toEqual([['P1', 'host'], ['P2', 'main']]);
+    expect(out.conn.welds.length).toBe(2);
+    const srcWelds = src.connections.flatMap((c) => c.welds).filter((w) => w.connId.startsWith('C.CD.'));
+    expect(out.conn.welds.map((w) => [w.a, w.length, w.location]).sort()).toEqual(srcWelds.map((w) => [w.a, w.length, w.location]).sort());
+    const srcMain = src.byId.get(parseSiteKey(key).id)!;
+    expect(Math.hypot(out.main.start.x - srcMain.start.x, out.main.start.y - srcMain.start.y, out.main.start.z - srcMain.start.z)).toBeLessThanOrEqual(0.3);
+    expect(r.dev!.cut).toBeLessThanOrEqual(0.3);
     // מצב "חורים בלבד" (bolts:false): בלי פעולת bolts, והאימות עדיין מכסה את החורים
     const ho = templateFromParts(src, plates.map((m) => m.id), { siteKey: key, siteMembers: generate(proj()).members, bolts: false });
     expect(ho.detail!.ops.some((o) => o.k === 'bolts')).toBe(false);
     expect(ho.dev!.holes).toBeLessThanOrEqual(0.3);
+    const nowc = templateFromParts(src, plates.map((m) => m.id), { siteKey: key, siteMembers: generate(proj()).members, cut: false, welds: false });
+    expect(nowc.detail!.ops.some((o) => o.k === 'cut' || o.k === 'weld')).toBe(false);
   });
 });
 
@@ -66,7 +78,7 @@ describe('TFP — כיסוי על חיבורים מובנים, צורות, שג�
   it('TFP-02: חיבורים מובנים (eave/base/knee/purlin-splice/brace-*): לכל סוג פלטה מוסקת, ואחרי החלה על האתר המתאר זהה', () => {
     const p0 = proj();
     const d = generate(p0), seen = new Set<string>();
-    let n = 0;
+    let n = 0, nWelds = 0, nCuts = 0;
     for (const c of d.connections) {
       if (seen.has(c.type)) continue;
       const plate = c.parts.map((x) => d.byId.get(x)).find((m) => m?.kind === 'plate');
@@ -85,8 +97,21 @@ describe('TFP — כיסוי על חיבורים מובנים, צורות, שג�
       const gotPl = got.find((g) => { const o = plateOutline(g); return typeof o !== 'string' && polyDev(o.poly, a.poly) <= 0.3; })!;
       const nGot = out.connections.flatMap((x) => x.bolts).filter((b) => b.holesIn.includes(gotPl.id)).length;
       expect(nGot, `${c.type} ברגים דרך ${plate.id}`).toBe(nSrc);
+      // ריתוכים: כל ריתוך של הפלטה לחלק שבפרט (אלמנט/מארח) משוחזר (מספר, גודל, אורך); קצה האלמנט כשנגזר חיתוך — זהה למקור
+      const sk = parseSiteKey(r.siteKey!), main0 = d.byId.get(sk.id)!;
+      const ends = new Set([sk.id, d.members.find((x) => x.id === sk.id) && findSite(d.members, main0, sk.end)?.host?.id].filter(Boolean) as string[]);
+      const wSrc = d.connections.flatMap((x) => x.welds).filter((w) => w.between.includes(plate.id) && w.between.some((y) => ends.has(y)));
+      const wGot = out.connections.flatMap((x) => x.welds).filter((w) => w.between.includes(gotPl.id));
+      nWelds += wSrc.length;
+      expect(wGot.map((w) => [w.a, Math.round(w.length), w.location]).sort(), `${c.type} ריתוכים ${plate.id}`).toEqual(expect.arrayContaining(wSrc.map((w) => [w.a, Math.round(w.length), w.location])));
+      if (r.detail.ops.some((o) => o.k === 'cut')) {
+        const m1 = out.byId.get(sk.id)!, e0 = sk.end === 'start' ? main0.start : main0.end, e1 = sk.end === 'start' ? m1.start : m1.end;
+        expect(Math.hypot(e0.x - e1.x, e0.y - e1.y, e0.z - e1.z), `${c.type} קצה האלמנט`).toBeLessThanOrEqual(0.3); nCuts++;
+      }
     }
     expect(n).toBeGreaterThanOrEqual(5);
+    expect(nWelds, 'ריתוכים שהושוו').toBeGreaterThan(0);
+    expect(nCuts, 'חיתוכי קצה שהושוו').toBeGreaterThan(0);
   });
 
   it('TFP-03: צורה מקוצצת (cham) וזווית סיבוב לא ישרה נשמרות; פלטה בעמידה (stand)', () => {

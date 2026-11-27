@@ -486,9 +486,9 @@ function MakeTemplateButton({ c }: { c: Connection }) {
     store.set({ studioDraft: r.detail, detailStudio: r.siteKey, studioConn: null });
   };
   return <div className="hub-set-row" style={{ marginTop: 6 }}>
-    <button className="btn" data-testid="make-template" onClick={make} title="יוצר פרט (פלטות, חורים, ברגים) מהפלטות שנבחרו במודל ופותח אותו בסטודיו לעריכה והפיכת מידות לפרמטרים">
+    <button className="btn" data-testid="make-template" onClick={make} title="יוצר פרט (פלטות, חורים, ברגים, ריתוכים, חיתוך קצה) מהפלטות שנבחרו במודל ופותח אותו בסטודיו לעריכה והפיכת מידות לפרמטרים">
       הפוך לתבנית{picked.length > 1 ? ` (${picked.length} פלטות)` : ''}</button>
-    <div className="hint">{picked.length ? 'הפלטות שנבחרו במודל' : 'בחרו פלטה (או כמה, מאותו קצה)'} ← פרט חדש בסטודיו. פלטות, חורים וברגים; ריתוכים וחיתוך האלמנט מוסיפים בסטודיו.</div>
+    <div className="hint">{picked.length ? 'הפלטות שנבחרו במודל' : 'בחרו פלטה (או כמה, מאותו קצה)'} ← פרט חדש בסטודיו. פלטות, חורים, ברגים, ריתוכים וחיתוך קצה האלמנט (כשאפשר לשחזר). אפשר לערוך ולהפוך מידות לפרמטרים בסטודיו.</div>
   </div>;
 }
 

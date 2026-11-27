@@ -1,6 +1,6 @@
 import { add, cross, dot, len, norm, rotateAxis, scale, sub, type Vec3 } from '../core/vec';
 import { tryProfile } from '../profiles/library';
-import type { BoltInfo, Connection, CustomDetail, DetailOp, Member } from '../model/types';
+import type { BoltInfo, Connection, CustomDetail, DetailOp, Member, WeldInfo } from '../model/types';
 import { blankDetail, buildDetail, findSite, parseSiteKey, platePoly, siteKey, type Frame, type Site } from './detail';
 import { localFrame } from './frame';
 
@@ -34,7 +34,7 @@ export interface TemplateResult {
   warnings: string[];
   infos: TemplateInfo[];
   /** סטייה מרבית (מ"מ) בהלוך-חזור: פלטות, חורים */
-  dev?: { plates: number; holes: number; bolts?: number };
+  dev?: { plates: number; holes: number; bolts?: number; welds?: number; cut?: number };
 }
 
 export interface PartsModel { members: Member[]; connections: Connection[] }
@@ -242,11 +242,57 @@ export function groupHoles(pts: [number, number][]): HGroup[] {
 
 const nameOf = (m: Member) => (m.partDesc ?? m.label ?? '').replace(/\s*PL\d.*$/, '').trim() || 'פלטה';
 
+// ---------- חיתוך קצה האלמנט (שלב 3) ----------
+
+/** מישור קצה של אלמנט: נורמל + נקודה (בלי מישור מפורש — קצה ישר, ניצב לציר) */
+function endPlaneOf(m: Member, end: 'start' | 'end'): { N: Vec3; pt: Vec3 } {
+  const cp = end === 'start' ? m.startCut : m.endCut, pt = end === 'start' ? m.start : m.end;
+  return { N: cp ? norm(cp.normal) : norm(sub(m.end, m.start)), pt };
+}
+/** קצה האלמנט שנבנה זהה לקצה במקור: נקודה (≤ TFP_TOL) ומישור (נורמל מקביל, מרחק ≤ TFP_TOL) */
+function endsMatch(a: Member, b: Member, end: 'start' | 'end'): number {
+  const A = endPlaneOf(a, end), B = endPlaneOf(b, end);
+  const dp = len(sub(A.pt, B.pt)), par = Math.abs(dot(A.N, B.N));
+  if (par < 1 - 1e-5) return Infinity;
+  return Math.max(dp, Math.abs(dot(sub(A.pt, B.pt), A.N)));
+}
+
+/**
+ * חיתוך קצה האלמנט הראשי (פעולת `cut`) מהקצה שבמודל: המועמד הראשון שהקצה שנבנה בו זהה למקור. בלי פעולה — אם ברירת המחדל
+ * (חיתוך בפני המארח) כבר זהה. מחזיר `warn` כשאי אפשר לשחזר (הפרט ימשיך בלי חיתוך).
+ */
+function inferCut(model: PartsModel, site: Site, det0: CustomDetail): { op?: DetailOp; warn?: string; dev?: number } {
+  if (site.cross || site.mid || (site.end !== 'start' && site.end !== 'end')) return {};
+  const m = model.members.find((x) => x.id === site.main.id);
+  if (!m) return {};
+  const end = site.end;
+  const M = end === 'start' ? m.start : m.end, { N } = endPlaneOf(m, end);
+  const rel = sub(M, site.P), t = dot(rel, site.u);
+  if (len(sub(rel, scale(site.u, t))) > TFP_TOL) return { warn: 'קצה האלמנט במודל אינו על ציר האתר (הסטה/היסט) — חיתוך הקצה לא הוסק' };
+  const test = (ops: DetailOp[]) => { const r = buildDetail(site, { ...det0, ops }); return endsMatch(r.main, m, end); };
+  const none = test([]);
+  if (none <= TFP_TOL) return { dev: none };
+  const hzl = Math.hypot(site.u.x, site.u.y), hz = hzl > 0.05 ? { x: site.u.x / hzl, y: site.u.y / hzl, z: 0 } : null;
+  const cands: [string, string][] = [];
+  if (site.host && Math.abs(dot(N, site.n)) > 1 - 1e-6) cands.push(['host', S(dot(rel, site.n))]);
+  if (Math.abs(dot(N, site.u)) > 1 - 1e-6) cands.push(['perp', S(t)]);
+  if (hz && Math.abs(dot(N, hz)) > 1 - 1e-6) cands.push(['vert', S(t)]);
+  if (Math.abs(N.z) > 1 - 1e-6) cands.push(['horiz', S(t)]);
+  for (const [kind, at] of cands) {
+    const op: DetailOp = { k: 'cut', id: 'C1', kind: kind as 'host' | 'perp' | 'vert' | 'horiz', at };
+    const dv = test([op]);
+    if (dv <= TFP_TOL) return { op, dev: dv };
+  }
+  return { warn: cands.length ? 'חיתוך קצה האלמנט במודל לא שוחזר בהלוך-חזור — לא הוסק' : 'מישור חיתוך הקצה במודל אינו מהסוגים הנתמכים (מקביל למארח / ניצב לציר / אנכי / אופקי) — לא הוסק' };
+}
+
 /** מנסה להסיק פרט על אתר אחד. מחזיר פרט + סטיות, או סיבת כשל */
-function inferOnSite(model: PartsModel, site: Site, srcs: SrcPlate[], id: string, name: string, opts: { bolts?: boolean }): { det?: CustomDetail; infos: TemplateInfo[]; warnings: string[]; dev?: { plates: number; holes: number; bolts?: number }; err?: string } {
+function inferOnSite(model: PartsModel, site: Site, srcs: SrcPlate[], id: string, name: string, opts: { bolts?: boolean; cut?: boolean; welds?: boolean }): { det?: CustomDetail; infos: TemplateInfo[]; warnings: string[]; dev?: { plates: number; holes: number; bolts?: number; welds?: number; cut?: number }; err?: string } {
   let det: CustomDetail = { ...blankDetail(name), id, name, vars: [], ops: [] };
   const infos: TemplateInfo[] = [], warnings: string[] = [], remaining = [...srcs], placed: { src: SrcPlate; opId: string }[] = [];
-  let k = 0;
+  let k = 0, dcut: number | undefined;
+  // חיתוך קצה האלמנט קודם לפלטות: הפנים `main.end` תלויות בו
+  if (opts.cut !== false) { const cr = inferCut(model, site, det); if (cr.op) det = { ...det, ops: [cr.op] }; if (cr.warn) warnings.push(cr.warn); dcut = cr.dev; }
   while (remaining.length) {
     const res = buildDetail(site, det);
     // כל המועמדים של כל הפלטות שנותרו, מהטוב לגרוע; הראשון שהלוך-חזור שלו (מתאר הפלטה) עובר — נבחר
@@ -341,6 +387,47 @@ function inferOnSite(model: PartsModel, site: Site, srcs: SrcPlate[], id: string
     det = { ...det, ops: [...det.ops, ...boltOps] };
   }
 
+  // ריתוכים (שלב 3): לכל זוג (פלטה, חלק) במקור — פעולת weld; אורך אוטומטי של המנוע, ואם שונה מהמקור — `len` מפורש לכל ריתוך
+  const weldOps: Extract<DetailOp, { k: 'weld' }>[] = [];
+  const srcWeldsUsed: WeldInfo[] = [];
+  if (opts.welds !== false) {
+    const order = new Map(placed.map((p, i) => [p.src.id, i]));
+    const sel = new Set(placed.map((p) => p.src.id));
+    const opOf = new Map(placed.map((p) => [p.src.id, p.opId]));
+    const all = model.connections.flatMap((c) => c.welds).filter((w) => w.between.some((x) => sel.has(x)));
+    const groups = new Map<string, { part: string; to: string; ws: WeldInfo[] }>();
+    const lost = new Set<string>();
+    for (const w of all) {
+      const [a, b] = w.between;
+      let plate: string, other: string;
+      if (sel.has(a) && sel.has(b)) { plate = order.get(a)! >= order.get(b)! ? a : b; other = plate === a ? b : a; } else { plate = sel.has(a) ? a : b; other = plate === a ? b : a; }
+      const to = sel.has(other) ? opOf.get(other)! : other === site.main.id ? 'main' : other === site.host?.id ? 'host' : null;
+      if (!to) { lost.add(other); continue; }
+      const key = `${opOf.get(plate)}|${to}|${w.a}|${w.location}`;
+      const g = groups.get(key) ?? { part: opOf.get(plate)!, to, ws: [] };
+      g.ws.push(w); groups.set(key, g);
+    }
+    if (lost.size) warnings.push(`ריתוכי הפלטות לחלקים שלא נבחרו (${[...lost].join(', ')}) — לא נכללו בפרט`);
+    let wk = 0;
+    const pairOf = (x: string, y: string) => [x, y].sort().join('|');
+    for (const [, g] of groups) {
+      const mk = (len0?: number, exact?: boolean): Extract<DetailOp, { k: 'weld' }> => ({ k: 'weld', id: `W${++wk}`, part: g.part, a: S(g.ws[0].a), site: g.ws[0].location === 'site', to: g.to, ...(len0 !== undefined ? { len: S(len0), ...(exact ? { exact: true } : {}) } : {}) });
+      const targetId = (to: string) => (to === 'main' ? site.main.id : to === 'host' ? site.host!.id : mapId.get([...opOf.entries()].find(([, v]) => v === to)![0])!);
+      const want = pairOf(mapId.get([...opOf.entries()].find(([, v]) => v === g.part)![0])!, targetId(g.to));
+      const sameLens = (ops: DetailOp[]) => {
+        const r = buildDetail(site, { ...det, ops: [...det.ops, ...weldOps, ...ops] });
+        const mine = r.conn.welds.filter((w) => pairOf(w.between[0], w.between[1]) === want && Math.abs(w.a - g.ws[0].a) < 0.01 && w.location === g.ws[0].location).map((w) => w.length).sort((x, y) => x - y);
+        const ref = g.ws.map((w) => w.length).sort((x, y) => x - y);
+        return mine.length === ref.length && mine.every((x, i) => Math.abs(x - ref[i]) <= 0.5);
+      };
+      let ops: Extract<DetailOp, { k: 'weld' }>[] = [mk()];
+      // אוטומטי לא מספיק (כמה ריתוכים לאותו זוג, או אורך שונה) ← אורך מפורש לכל ריתוך מהמקור
+      if (!sameLens(ops)) { wk -= 1; ops = g.ws.map((w) => mk(w.length, Math.abs(w.length - Math.round(w.length)) > 0.01)); }
+      weldOps.push(...ops); srcWeldsUsed.push(...g.ws);
+    }
+    det = { ...det, ops: [...det.ops, ...weldOps] };
+  }
+
   // אימות הלוך-חזור: פלטות (מתאר), חורים (דרך ברגי בדיקה זמניים לקבוצות בלי בורג) וברגים (מפרט, אחיזה, מיקום)
   const probeOps = (): DetailOp[] => hmeta.filter((h) => !boltOps.some((b) => b.holes === h.op.id)).map((h, i) => ({ k: 'bolts', id: `PB${i + 1}`, holes: h.op.id, d: '12', grade: '8.8', site: true, noMain: true, noHost: true }) as DetailOp);
   const lateral = (p: Vec3, a: Vec3, q: Vec3) => { const r = sub(q, p); return len(sub(r, scale(a, dot(r, a)))); };
@@ -387,14 +474,27 @@ function inferOnSite(model: PartsModel, site: Site, srcs: SrcPlate[], id: string
     if (mine.length > srcBolts.size) warnings.push(`בפרט שהוסק יש ${mine.length - srcBolts.size} ברגים נוספים מעבר למקור`);
     if (dhead > TFP_TOL) warnings.push(`ראש הבורג בפרט שהוסק מוסט עד ${r2(dhead)} מ"מ לאורך הציר לעומת המקור (המנוע ממקם לפי סריקת החומר)`);
   }
-  return { det, infos, warnings, dev: { plates: r2(dp), holes: r2(dh), ...(boltOps.length ? { bolts: r2(db) } : {}) } };
+  let nw = 0;
+  if (weldOps.length) {
+    // כל ריתוך מקורי (פלטה↔חלק) מופיע בבנייה מחדש: אותו זוג חלקים, גודל, מקום ואורך (±0.5 מ"מ)
+    const pairOf = (x: string, y: string) => [x, y].sort().join('|');
+    const mapped = (id: string) => mapId.get(id) ?? id;
+    const mine = built.conn.welds.map((w) => ({ ...w, pair: pairOf(w.between[0], w.between[1]) })), used = new Set<number>();
+    for (const sw of srcWeldsUsed) {
+      const pr = pairOf(mapped(sw.between[0]), mapped(sw.between[1]));
+      const i = mine.findIndex((w, j) => !used.has(j) && w.pair === pr && Math.abs(w.a - sw.a) < 0.01 && w.location === sw.location && Math.abs(w.length - sw.length) <= 0.5);
+      if (i < 0) return { infos, warnings, err: `ריתוך ${sw.id} (a=${sw.a}, L=${sw.length}) לא שוחזר בפרט שהוסק` };
+      used.add(i); nw++;
+    }
+  }
+  return { det, infos, warnings, dev: { plates: r2(dp), holes: r2(dh), ...(boltOps.length ? { bolts: r2(db) } : {}), ...(weldOps.length ? { welds: nw } : {}), ...(dcut !== undefined ? { cut: r2(dcut) } : {}) } };
 }
 
 /**
  * פרט מפלטות שנבחרו. `plateIds` — מזהי פלטות במודל (אחת או כמה). `opts.siteKey` — אתר מפורש (אחרת מנסים את קצוות האלמנטים של החיבור
  * לפי קרבה ובוחרים את הראשון שהלוך-חזור שלו עובר). `opts.id` — מזהה הפרט (ברירת מחדל קבוע; הממשק מעביר מזהה ייחודי).
  */
-export function templateFromParts(model: PartsModel, plateIds: string[], opts: { siteKey?: string; id?: string; name?: string; /** אלמנטי המודל "הנקי" לפתרון האתר (בלי פרט מותאם שהוחל על הקצה — כמו `base` בסטודיו); ברירת מחדל: `model.members` */ siteMembers?: Member[]; /** הסקת ברגים (שלב 2); false = חורים בלבד */ bolts?: boolean } = {}): TemplateResult {
+export function templateFromParts(model: PartsModel, plateIds: string[], opts: { siteKey?: string; id?: string; name?: string; /** אלמנטי המודל "הנקי" לפתרון האתר (בלי פרט מותאם שהוחל על הקצה — כמו `base` בסטודיו); ברירת מחדל: `model.members` */ siteMembers?: Member[]; /** הסקת ברגים (שלב 2); false = חורים בלבד */ bolts?: boolean; /** חיתוך קצה האלמנט (שלב 3) */ cut?: boolean; /** ריתוכים (שלב 3) */ welds?: boolean } = {}): TemplateResult {
   const res: TemplateResult = { detail: null, errors: [], warnings: [], infos: [] };
   const byId = new Map(model.members.map((m) => [m.id, m]));
   const srcs: SrcPlate[] = [];
@@ -427,7 +527,7 @@ export function templateFromParts(model: PartsModel, plateIds: string[], opts: {
     const r = inferOnSite(model, site, srcs, opts.id ?? 'cd-from-parts', name, opts);
     if (r.det) {
       const ws = [...res.warnings, ...r.warnings];
-      r.det.note = `נוצר מבחירת ${srcs.length} פלטות במודל (אתר ${key}): פלטות, חורים${r.det.ops.some((o) => o.k === 'bolts') ? ' וברגים' : ''}. ריתוכים וחיתוך קצה האלמנט — מוסיפים בסטודיו (שלב 3).${ws.length ? ` הערות הסקה: ${ws.slice(0, 6).join(' · ')}${ws.length > 6 ? ` (ועוד ${ws.length - 6})` : ''}` : ''}`;
+      r.det.note = `נוצר מבחירת ${srcs.length} פלטות במודל (אתר ${key}): פלטות, חורים${r.det.ops.some((o) => o.k === 'bolts') ? ', ברגים' : ''}. ${r.det.ops.some((o) => o.k === 'weld') ? ' ריתוכים' : ' ריתוכים — לא הוסקו'}${r.det.ops.some((o) => o.k === 'cut') ? ' וחיתוך קצה האלמנט כלולים' : ''} (ערכו בסטודיו).${ws.length ? ` הערות הסקה: ${ws.slice(0, 6).join(' · ')}${ws.length > 6 ? ` (ועוד ${ws.length - 6})` : ''}` : ''}`;
       return { ...res, detail: r.det, siteKey: key, infos: r.infos, warnings: [...res.warnings, ...r.warnings], dev: r.dev };
     }
     fails.push(`${key}: ${r.err}`);
