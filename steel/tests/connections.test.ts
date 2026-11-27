@@ -70,7 +70,7 @@ describe('CLEAT – תומכי זוויתן', () => {
         expect(errs(p)).toEqual([]);
       }
     }
-  });
+  }, 60000); // ~6 שניות בודד: ברירת המחדל של vitest (5 שניות) אינה מספיקה בגרסה 4
   it('CLEAT-03: גובה תומך ברירת מחדל עוקב אחרי גובה הפטה, אלא אם שונה ידנית', () => {
     let p = setPurlinSide('left', { profile: 'C250x80x20x3' }).run(geo());
     let { hs } = checkCleat(p, 'PL.L.02', 'F1');
