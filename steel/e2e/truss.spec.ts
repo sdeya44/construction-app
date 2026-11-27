@@ -134,3 +134,20 @@ test('TR-04: מסבך נושא — שדות קבועים (שדה שנקבע נש
   expect(await page.evaluate(() => (window as any).__ksp.store.state.derived.issues.filter((i: any) => i.code === 'CLASH').length)).toBe(0);
   await shot(page, 'TR_04_between');
 });
+
+test('CHEEK-E1: מסבך גג — לחיות צומת מהאשף: הפעלה מוסיפה פלטות, שינוי עובי, כיבוי מחזיר, ללא שגיאות', async ({ page }) => {
+  await boot(page);
+  await openNav(page, 'b:truss');
+  await page.getByTestId('rt-on').check();
+  await page.getByTestId('ks-sec-geo').click();
+  const st = () => page.evaluate(() => { const d = (window as any).__ksp.store.state.derived; return { err: d.issues.filter((i: any) => i.severity === 'error').map((i: any) => i.message), cheeks: d.members.filter((m: any) => /^TR\..*\.G\d+[TB][12]$/.test(m.id)).length, prof: d.members.find((m: any) => /^TR\..*\.G\d+[TB][12]$/.test(m.id))?.profile }; });
+  expect((await st()).cheeks).toBe(0);
+  await page.getByTestId('tw-roof-cheeks-on').check();
+  let s = await st();
+  expect(s.cheeks).toBeGreaterThan(10); expect(s.err).toEqual([]); expect(s.prof).toBe('PL100x8');
+  await page.getByTestId('tw-roof-cheek-t').fill('10'); await page.getByTestId('tw-roof-cheek-t').press('Enter');
+  s = await st();
+  expect(s.prof).toBe('PL100x10'); expect(s.err).toEqual([]);
+  await page.getByTestId('tw-roof-cheeks-on').uncheck();
+  expect((await st()).cheeks).toBe(0);
+});

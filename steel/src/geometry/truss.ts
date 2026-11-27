@@ -250,6 +250,44 @@ export function buildTrussPlane(t: TrussPlaneIn): { members: Member[]; connectio
     members.push(mk(w.id, label, w.prof, A, B, cutPlane(false, sb), cutPlane(true, st)));
     welds.push(weldOf(`${++wk}`, t.bot.memberAt(sb), w.id, A, perim(w.prof)), weldOf(`${++wk}`, t.top.memberAt(st), w.id, B, perim(w.prof)));
   }
+  // לחיות צומת (F10): זוג פלטות משני צדי קצות האלכסונים בכל צומת, על פני החגורה (ניצבות למישור המסבך). אפשרי רק כשהאלכסונים צרים מהחגורה.
+  const nc = t.spec.nodeCheeks;
+  if (nc?.enabled) {
+    const tg = Math.max(4, nc.t), hg = Math.max(30, nc.h);
+    for (const atTop of [false, true]) {
+      const chord = atTop ? t.top : t.bot, face = atTop ? fTop : fBot;
+      for (let i = 0; i <= n; i++) {
+        const here = webs.filter((w) => (atTop ? w.top : w.bot) === i);
+        if (!here.length) continue;
+        const wmax = Math.max(...here.map((w) => wIn(w.prof)));
+        const reach = here.map((w) => ({ s: sAt(w, atTop), f: wIn(w.prof) / (2 * angleTo(w, atTop)) }));
+        const lo = Math.min(...reach.map((r) => r.s - r.f)) - 20, hi = Math.max(...reach.map((r) => r.s + r.f)) + 20;
+        const sMid = (lo + hi) / 2, L = hi - lo;
+        const m = slopeAt(chord, sMid), ch = norm(add(t.e, scale(Z, m))), nn = faceN(chord, atTop, sMid);
+        // בחגורה שהשיפוע שלה משתנה בתוך אורך הלחי (רכס) — הלחי מורחקת מהפנים עד שאין חדירה לחגורה
+        const F0 = P(sMid, face(sMid));
+        const dev = Math.max(0, ...[lo, hi].map((sk) => dot(sub(P(sk, face(sk)), F0), nn))), shift = dev + 1; // + מרווח ריתוך 1 מ"מ מפני החגורה
+        const C = add(add(F0, scale(nn, shift)), scale(nn, hg / 2));
+        const off = wmax / 2 + tg / 2;
+        const host = chord.memberAt(t.nodes[i]);
+        const ids: string[] = [];
+        for (const [k, sg] of [[1, 1], [2, -1]] as const) {
+          const c = add(C, scale(pn, sg * off));
+          const id = `${t.idBase}.G${i}${atTop ? 'T' : 'B'}${k}`;
+          members.push({
+            id, kind: 'plate', label: `לחי צומת PL${tg}×${Math.round(hg)}×${Math.round(L)}`, start: sub(c, scale(ch, L / 2)), end: add(c, scale(ch, L / 2)),
+            profile: `PL${Math.round(hg)}x${tg}`, material: t.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: pn, source: 'generated', manualPlacement: false, connId: t.connId,
+            partDesc: `לחי צומת PL${tg}×${Math.round(hg)}×${Math.round(L)}`,
+          });
+          ids.push(id);
+          welds.push(weldOf(`${++wk}`, host, id, add(P(sMid, face(sMid)), scale(pn, sg * off)), 2 * L));
+          for (const w of here) welds.push(weldOf(`${++wk}`, w.id, id, add(P(sAt(w, atTop), face(sAt(w, atTop))), scale(pn, sg * off)), Math.round(hg / angleTo(w, atTop))));
+        }
+        const chordB = tryProfile(atTop ? t.spec.profiles.top : t.spec.profiles.bottom)?.props.b ?? 0;
+        if (chordB && off + tg / 2 > chordB / 2) issues.push({ code: 'TRUSS_NODE', severity: 'warning', elementId: ids[0], message: `${t.label}: לחיות צומת ${i + 1} חורגות מרוחב החגורה (${Math.round(chordB)} מ"מ) — הקטן את עובי הלחי או את רוחב האלכסון` });
+      }
+    }
+  }
   // בדיקת זוויות (30°–70° מומלץ לאלכסונים)
   for (const w of webs.filter((x) => x.kind === 'd')) {
     const a = (Math.asin(angleTo(w, false)) * 180) / Math.PI;

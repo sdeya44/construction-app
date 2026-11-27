@@ -17,7 +17,7 @@ type V3 = { x: number; y: number; z: number };
 type Box = { x0: number; x1: number; y0: number; y1: number };
 export interface TrussUnit {
   id: string; title: string; ax: 'x' | 'y'; conn: Connection;
-  chords: Member[]; webs: Member[]; ends: Connection[]; splices: Connection[]; hosts: string[]; refs: string[];
+  chords: Member[]; webs: Member[]; /** לחיות צומת (פלטות) — אם הופעלו */ cheeks: Member[]; ends: Connection[]; splices: Connection[]; hosts: string[]; refs: string[];
 }
 
 const sigOf = (ms: Member[]) => ms.map((m) => `${m.profile}:${Math.round(Math.hypot(m.end.x - m.start.x, m.end.y - m.start.y, m.end.z - m.start.z))}`).sort().join('|');
@@ -29,15 +29,16 @@ export function trussUnits(_p: Project, d: DerivedModel): TrussUnit[] {
     const roof = c.id.startsWith('C.TR.'), carry = c.id.startsWith('C.TBT.');
     if (c.type !== 'truss' || !(roof || carry)) continue;
     const key = c.id.slice(roof ? 5 : 6);
-    const webs = c.parts.map((id) => d.byId.get(id)).filter((m): m is Member => !!m);
+    const pm = c.parts.map((id) => d.byId.get(id)).filter((m): m is Member => !!m);
+    const webs = pm.filter((m) => m.kind !== 'plate'), cheeks = pm.filter((m) => m.kind === 'plate');
     const chords = [...new Set(c.members)].map((id) => d.byId.get(id)).filter((m): m is Member => !!m);
-    const all = [...webs, ...chords];
+    const all = [...webs, ...chords, ...cheeks];
     if (!webs.length || !chords.length) continue;
     const ends = d.connections.filter((x) => (roof ? x.id.startsWith(`C.TRE.${key}.`) : x.id.startsWith(`C.TBS.${key}.`)));
     const splices = roof ? d.connections.filter((x) => x.id.startsWith(`C.TRS.${key}.`)) : [];
     const hosts = [...new Set(ends.flatMap((x) => x.members))].filter((id) => d.byId.get(id)?.kind === 'column');
     const spread = (k: 'x' | 'y') => { const v = all.flatMap((m) => [m.start[k], m.end[k]]); return Math.max(...v) - Math.min(...v); };
-    raw.push({ id: c.id, title: c.label, ax: spread('x') >= spread('y') ? 'x' : 'y', conn: c, chords, webs, ends, splices, hosts, refs: [c.label], sig: `${roof ? 'R' : 'T'}|${sigOf(all)}|${ends.map((e) => e.bolts.length).join(',')}` });
+    raw.push({ id: c.id, title: c.label, ax: spread('x') >= spread('y') ? 'x' : 'y', conn: c, chords, webs, cheeks, ends, splices, hosts, refs: [c.label], sig: `${roof ? 'R' : 'T'}|${sigOf(all)}|${ends.map((e) => e.bolts.length).join(',')}` });
   }
   const out = new Map<string, TrussUnit>();
   for (const u of raw) { const e = out.get(u.sig); if (e) e.refs.push(...u.refs); else out.set(u.sig, u); }
@@ -111,7 +112,7 @@ export function trussUnitSheet(sh: Sheet, def: { ref?: string }, d: DerivedModel
   };
 
   // ---------- מבט במישור המסבך
-  const all3 = [...u.chords, ...u.webs];
+  const all3 = [...u.chords, ...u.webs, ...u.cheeks];
   const pts = all3.flatMap((m) => { const s = cachedSolidPure(m); return [...s.startRing, ...s.endRing].map(pr); });
   const bx: Box = { x0: Math.min(...pts.map((q) => q.x)) - 120, x1: Math.max(...pts.map((q) => q.x)) + 120, y0: Math.min(...pts.map((q) => q.y)) - 80, y1: Math.max(...pts.map((q) => q.y)) + 80 };
   const view = (box: Box, va: Box, reserve: { l: number; r: number; t: number; b: number }) => {
@@ -130,6 +131,7 @@ export function trussUnitSheet(sh: Sheet, def: { ref?: string }, d: DerivedModel
   const vE = view(bx, elev, { l: 6, r: 6, t: 8, b: 26 });
   cap(elev, `מבט במישור המסבך — ${u.title}`, vE.scale);
   for (const m of u.webs) drawM(vE, bx, m, 'OUTLINE');
+  for (const m of u.cheeks) drawM(vE, bx, m, 'OUTLINE');
   for (const m of u.chords) drawM(vE, bx, m, 'OUTLINE');
   for (const id of u.hosts) drawM(vE, bx, d.byId.get(id)!, 'THIN');
   // מידות: שרשרת צמתים תחתונה (c/c) + כללית; שרשרת עליונה; גובה בקצוות ובאמצע
@@ -233,7 +235,7 @@ export function trussUnitSheet(sh: Sheet, def: { ref?: string }, d: DerivedModel
   const row = (vals: string[], bold = false) => { let xr = x1; vals.forEach((t, i) => { const mx = Math.floor((cw[i]! - 1.2) / (2.3 * 0.58)); T(t.length > mx ? `${t.slice(0, mx - 1)}…` : t, xr - 1, 2.3, bold); xr -= cw[i]!; }); y -= 4; };
   row(['סימון', 'כמות', 'חתך', 'אורך ארוך', 'אורך קצר', 'זווית קצוות'], true);
   const byMark = new Map<string, { m: Member; q: number }>();
-  for (const m of [...u.chords, ...u.webs]) { const mk = markOf(m.id) || `~${m.id}`; const e = byMark.get(mk) ?? { m, q: 0 }; e.q++; byMark.set(mk, e); }
+  for (const m of [...u.chords, ...u.webs, ...u.cheeks]) { const mk = markOf(m.id) || `~${m.id}`; const e = byMark.get(mk) ?? { m, q: 0 }; e.q++; byMark.set(mk, e); }
   for (const [mk, { m, q }] of [...byMark].sort((a, b) => a[0].localeCompare(b[0], 'en', { numeric: true }))) {
     const s = cutShape(m, pr, inW(m, u.webs.includes(m)));
     row([mk.startsWith('~') ? '—' : mk, String(q), m.profile, `${Math.round(s.long)}`, `${Math.round(s.short)}`, `${Math.round(s.angS)}°/${Math.round(s.angE)}°`]);

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { hasPanelLens, panelLocks, panelsOnFrames, patternCells, resizeSpec, setPanelLen, unlockPanel, TRUSS_GROUP_HE, TRUSS_PATTERNS, trussFractions, trussPanelLens, trussUtil } from '../geometry/truss';
 import type { TrussCell, TrussSpec } from '../model/types';
 import { massPerMeter, tryProfile } from '../profiles/library';
-import { ProfilePicker } from './fields';
+import { NumField, ProfilePicker } from './fields';
 import { Schematic, type SDim } from './Schematic';
 
 const NEXT: Record<TrussCell, TrussCell> = { '/': '\\', '\\': 'X', X: '', '': '/' };
@@ -140,6 +140,13 @@ export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId
         <select className="inp" data-testid={`${testId}-splice`} value={Array.isArray(spec.splice) ? 'manual' : spec.splice} onChange={(e) => set({ splice: e.target.value === 'manual' ? [] : (e.target.value as 'auto' | 'none') })}>
           <option value="auto">אוטומטית ≤ אורך מוט</option><option value="manual">ידנית (✂ על השדה)</option><option value="none">ללא</option>
         </select>
+      </div>
+      <div className="tw-row" data-testid={`${testId}-cheeks`}>
+        <label className="tw-lbl"><input type="checkbox" data-testid={`${testId}-cheeks-on`} checked={!!spec.nodeCheeks?.enabled} onChange={(e) => set({ nodeCheeks: { t: 8, h: 100, ...(spec.nodeCheeks ?? {}), enabled: e.target.checked } })} /> לחיות צומת (פלטות משני צדי האלכסונים)</label>
+        {spec.nodeCheeks?.enabled && <>
+          <span className="tw-lbl">עובי</span><NumField testId={`${testId}-cheek-t`} value={spec.nodeCheeks.t} step={1} onCommit={(v) => set({ nodeCheeks: { ...spec.nodeCheeks!, t: Math.max(4, v) } })} />
+          <span className="tw-lbl">גובה מעל החגורה</span><NumField testId={`${testId}-cheek-h`} value={spec.nodeCheeks.h} step={5} onCommit={(v) => set({ nodeCheeks: { ...spec.nodeCheeks!, h: Math.max(30, v) } })} />
+        </>}
       </div>
       <table className="mini-table tw-prof"><thead><tr><th>קבוצה</th><th>פרופיל (סוג ← מידה)</th><th>ניצול</th></tr></thead>
         <tbody>{(Object.keys(TRUSS_GROUP_HE) as (keyof TrussSpec['profiles'])[]).map((g) => {
