@@ -1,4 +1,5 @@
 import { stackPlate, flushElementTo, growPlate, promoteToParam, type MateResult } from '../geometry/mates';
+import { constraintsOf, linkDim, unlinkDim, type DimField } from '../geometry/constraints';
 import { Help } from './fields';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { appendValue, FormulaBuilder, readable, toTokens, varLabel, type FxTarget } from './FormulaBuilder';
@@ -439,6 +440,34 @@ function EF({ label, value, onChange, vkey, res, hint, testId, onParam }: { labe
   );
 }
 
+const DIM_HE: Record<DimField, string> = { w: 'רוחב', h: 'גובה', t: 'עובי' };
+/** אילוצי פלטה (קישורי מידות, ישיבה, צמידות): רשימה, שחרור לערך קבוע וקישור מידה לפלטה אחרת — `geometry/constraints.ts` */
+function ConstraintsCard({ op, det, res, mate, plates }: { op: DetailOp; det: CustomDetail; res: DetailResult; mate: (fn: (d: CustomDetail) => MateResult) => void; plates: string[] }) {
+  const list = constraintsOf(det).filter((c) => c.op === op.id || (c.kind === 'flush' && c.plates.includes(op.id)));
+  return (
+    <div className="ss-card" data-testid="ds-constraints" style={{ margin: '4px 0' }}>
+      <h4 style={{ fontSize: 13 }}>אילוצים</h4>
+      {list.length === 0 && <div className="muted" data-testid="ds-constr-empty">אין אילוצים — כל המידות קבועות.</div>}
+      {list.map((c) => (
+        <div className="ss-row" key={c.id} data-testid={`ds-constr-${c.id}`}>
+          <span style={{ flex: 1 }}>{c.text}</span>
+          {(c.kind === 'dim-link' || c.kind === 'dim-var') && <button className="btn small" data-testid={`ds-unlink-${c.id}`} title="הופך את המידה למספר קבוע (הערך הנוכחי)" onClick={() => mate((d) => unlinkDim(d, c.op, c.field, res.values[`${c.op}.${c.field}`]))}>שחרר</button>}
+        </div>
+      ))}
+      {plates.length > 0 && (
+        <div className="ss-row">
+          <span className="ef-l">קשר מידה ל…</span>
+          {(['w', 'h', 't'] as DimField[]).map((f) => (
+            <select key={f} className="inp" data-testid={`ds-link-${f}`} value="" onChange={(e) => { const to = e.target.value; if (to) mate((d) => linkDim(d, op.id, f, to)); }}>
+              <option value="">{DIM_HE[f]}</option>{plates.map((x) => <option key={x} value={x}>{DIM_HE[f]} = {x}</option>)}
+            </select>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OpProps({ op, det, res, patch, mate }: { op: DetailOp; det: CustomDetail; res: DetailResult; patch: (p: Record<string, unknown>) => void; mate: (fn: (d: CustomDetail) => MateResult) => void }) {
   const k = (f: string) => `${op.id}.${f}`;
   const plates = det.ops.filter((o) => o.k === 'plate' || o.k === 'endplate' || o.k === 'angle').map((o) => o.id);
@@ -464,6 +493,7 @@ function OpProps({ op, det, res, patch, mate }: { op: DetailOp; det: CustomDetai
           <button className="btn small" data-testid="ds-mate-stack" onClick={() => mate((d) => stackPlate(d, op.id))}>פלטה זהה מעליה</button>
           <button className="btn small" data-testid="ds-mate-flush" onClick={() => mate((d) => flushElementTo(d, op.id))}>הצמד את קצה האלמנט אליה</button>
         </div>
+        <ConstraintsCard op={op} det={det} res={res} mate={mate} plates={det.ops.filter((o) => o.k === 'plate' && o.id !== op.id).map((o) => o.id)} />
         <label className="ef"><span className="ef-l">שם</span><input className="inp" value={op.name ?? ''} placeholder="פלטה" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className="ef"><span className="ef-l">צורה</span><select className="inp" value={op.shape} onChange={(e) => patch({ shape: e.target.value })}><option value="rect">מלבן</option><option value="cham">מלבן עם קיטום</option><option value="tri">משולש</option><option value="round">עגול</option></select></label>
         <EF label={op.shape === 'round' ? 'קוטר' : 'רוחב w'} value={op.w} onChange={(v) => patch({ w: v })} vkey={k('w')} res={res} testId={`ds-${op.id}-w`} hint="לאורך ציר X של הפלטה" onParam={() => mate((d) => promoteToParam(d, op.id, 'w', res.values[k('w')]))} />

@@ -133,3 +133,26 @@ test('SEC-E2: כרטיס החתך משמש כמקור לבחירת משתנה ב
   await expect(page.getByTestId('ds-P1-w')).toHaveValue(/\bmb\b/); // הבונה עטף ב-max( ) — העיקר: mb נכנס מכרטיס החתך
   expect(errors).toEqual([]);
 });
+
+test('CONSTR-E1: סטודיו — כרטיס אילוצים: רשימה, שחרור קישור למספר קבוע, וקישור מחדש', async ({ page }) => {
+  const errors = await boot(page);
+  await openNav(page, 'b:knee'); await page.getByTestId('kb-on').check();
+  await page.evaluate(() => (window as any).__ksp.store.select(['KB.F2.L.L.R']));
+  await page.getByTestId('ks-sec-conn').click(); await page.getByTestId('ks-sec-conn').click(); await page.getByTestId('cb-lib').click(); await page.getByTestId('studio-start').click();
+  await expect(page.getByTestId('detail-studio')).toBeVisible();
+  const site = await page.evaluate(() => { const S = (window as any).__kspStudio; return S.screenOf(S.site()); });
+  await page.getByTestId('ds-tool-plate:rect').click();
+  await page.mouse.click(site.x - 25, site.y + 40);
+  await expect(page.getByTestId('ds-op-P1')).toBeVisible();
+  await expect(page.getByTestId('ds-constr-empty')).toBeVisible();
+  await page.getByTestId('ds-mate-stack').click();
+  await expect(page.getByTestId('ds-constr-P2.w')).toBeVisible();
+  await expect(page.getByTestId('ds-constr-P2.on')).toBeVisible();
+  await page.getByTestId('ds-unlink-P2.w').click();
+  await expect(page.getByTestId('ds-P2-w')).toHaveValue(/^\d+(\.\d+)?$/);
+  await expect(page.getByTestId('ds-constr-P2.w')).toHaveCount(0);
+  await page.getByTestId('ds-link-w').selectOption('P1');
+  await expect(page.getByTestId('ds-P2-w')).toHaveValue('P1.w');
+  await expect(page.getByTestId('ds-constr-P2.w')).toBeVisible();
+  expect(errors).toEqual([]);
+});
