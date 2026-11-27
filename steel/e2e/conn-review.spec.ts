@@ -61,3 +61,24 @@ test('REV-E2 (F01): שמירת פרט סטודיו כהגדרה בספרייה, 
   await expect(page.getByTestId(`lib-${pr.id}`)).toContainText('פלטה מוברגת לפני המארח'); // שם הפרט המקורי מהסטודיו, לא קריסה
   expect(errors).toEqual([]);
 });
+
+test('REV-E3 (F09): עורך חיבור פתוח — בחירת אלמנט אחר סוגרת אותו (לא נשאר על החיבור הקודם); בחירה בתוך החיבור שומרת עליו', async ({ page }) => {
+  const errors = await boot(page);
+  const ids = await page.evaluate(() => {
+    const d = (window as any).__ksp.store.state.derived;
+    const c = d.connections.find((x: any) => x.id.startsWith('C.EAVE.'));
+    const other = d.members.find((m: any) => m.kind === 'purlin' && !c.parts.includes(m.id) && !c.members.includes(m.id));
+    return { conn: c.id, inside: c.members[0], other: other.id };
+  });
+  await page.evaluate((i) => (window as any).__ksp.store.set({ activeConn: i }), ids.conn);
+  await expect(page.getByTestId('conn-editor')).toBeVisible();
+  await expect(page.getByTestId('conn-id')).toHaveText(ids.conn);
+  // בחירה בתוך החיבור (חלק שלו) — העורך נשאר
+  await page.evaluate((i) => (window as any).__ksp.store.select([i]), ids.inside);
+  await expect(page.getByTestId('conn-editor')).toBeVisible();
+  // בחירת אלמנט שאינו שייך לחיבור (כמו לחיצה עליו בתלת-ממד) — העורך נסגר ומוצגים מאפייני האלמנט
+  await page.evaluate((i) => (window as any).__ksp.store.select([i]), ids.other);
+  await expect(page.getByTestId('conn-editor')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).__ksp.store.state.activeConn)).toBeNull();
+  expect(errors).toEqual([]);
+});

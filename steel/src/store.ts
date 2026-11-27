@@ -159,7 +159,11 @@ class Store {
       for (const id of ids) { if (s.has(id)) s.delete(id); else s.add(id); }
       sel = [...s];
     }
-    this.set({ selection: sel, pickNext: null });
+    // REV-F09: עורך חיבור פתוח נשאר רק כשהבחירה החדשה שייכת לחיבור (חלקיו/אלמנטיו); בחירה אחרת או ריקה — העורך נסגר ומוצגים מאפייני הבחירה
+    const ac = this.state.activeConn;
+    const conn = ac ? this.state.derived.connById.get(ac) : undefined;
+    const keep = !!conn && sel.length > 0 && sel.every((id) => conn.parts.includes(id) || conn.members.includes(id));
+    this.set({ selection: sel, pickNext: null, ...(ac && !keep ? { activeConn: null } : {}) });
   }
 
   setView(patch: Partial<ViewState>) { this.set({ view: { ...this.state.view, ...patch } }); }
