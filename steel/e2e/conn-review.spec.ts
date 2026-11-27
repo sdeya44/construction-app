@@ -10,6 +10,8 @@ test('REV-E1: אשף חיבורים — כניסה מחיבור: "חיבור ז�
   await page.getByTestId('ks-sec-conn').click();
   await page.getByTestId('ks-wizard').click();
   await expect(page.getByTestId('conn-wizard')).toBeVisible();
+  // F13: ההתאמה ברשימה לפי חתך/מארח/זווית — ההערה מפנה לבדיקה האמיתית אחרי הבחירה
+  await expect(page.getByTestId('wiz-fit-note')).toContainText('נבדקות בפועל');
   // F07
   await expect(page.getByTestId('wiz-scope-one')).toBeChecked();
   await expect(page.getByTestId('wiz-scope-count')).toContainText('חיבור זה בלבד');

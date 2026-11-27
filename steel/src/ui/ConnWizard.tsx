@@ -100,6 +100,7 @@ function WizardBody({ connId }: { connId: string }) {
             <div className="row" style={{ justifyContent: 'space-between' }}><h3 style={{ margin: 0 }}>פרטים מוצעים</h3>
               <div className="seg"><button className={`tbtn${!showAll ? ' on' : ''}`} onClick={() => setShowAll(false)}>מתאימים ({cands.filter((c) => c.fit.status !== 'no').length})</button><button className={`tbtn${showAll ? ' on' : ''}`} data-testid="wiz-all" onClick={() => setShowAll(true)}>הכל ({cands.length})</button></div></div>
             <input className="inp" style={{ width: '100%', marginTop: 8 }} type="search" placeholder="חיפוש פרט (שם, תיאור, סיבה)…" aria-label="חיפוש פרט" data-testid="wiz-search" value={q} onChange={(e) => setQ(e.target.value)} />
+            <div className="hint" data-testid="wiz-fit-note" style={{ marginTop: 6 }}>"מתאים" לפי סוג החתך, המארח והזווית בלבד — התנגשויות ושגיאות גיאומטריה נבדקות בפועל אחרי הבחירה (עמודה שמאלית).</div>
             {!vis.length && <div className="hint" data-testid="wiz-empty" style={{ marginTop: 8 }}>{q.trim() ? `אין פרט שמתאים ל-"${q.trim()}".` : 'אין פרטים להצגה.'}</div>}
             {vis.map((c) => (
               <div key={c.id} className="wiz-row" onMouseEnter={() => setHov(c.id)} onMouseLeave={() => setHov(null)}>
