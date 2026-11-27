@@ -4,11 +4,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { defaultBuilding, newProject } from '../src/model/defaults';
 import { defaultCladding } from '../src/geometry/cladding';
+import { defaultTrussSpec } from '../src/geometry/truss';
 import { generate } from '../src/geometry/generate';
 import { computeFabrication } from '../src/fab/marks';
 import { computeBom } from '../src/fab/bom';
 import { buildSheet, drawingCatalog, sheetHash } from '../src/drawing/views';
 import { sheetsToPdf } from '../src/drawing/pdf';
+import DxfParser from 'dxf-parser';
 import { sheetToDxf } from '../src/drawing/dxf';
 import { sheetToSvg } from '../src/drawing/svg';
 import { visualOrder } from '../src/drawing/sheet';
@@ -115,6 +117,50 @@ describe('שרטוטים', () => {
     expect(visualOrder('חתך IPE300')).toBe('IPE300 ךתח');
     expect(visualOrder('IPE300')).toBe('IPE300');
     expect(visualOrder('מרווח (1500)')).toBe('(1500) חווריימ'.replace('חווריימ', 'חוורמ'));
+  });
+  it('DXF round-trip: truss and connection geometry, layers, mm units, dimensions (file validation only, not CNC/CAM approval)', () => {
+    const parser = new DxfParser();
+    const trussProject = structuredClone(p);
+    trussProject.building.roofTruss = { enabled: true, frames: [trussProject.building.frames[0]!.id], shape: 'flat', spec: defaultTrussSpec(8, 1000, { top: trussProject.building.rafterProfile }) };
+    const trussDerived = generate(trussProject), trussFab = computeFabrication(trussProject, trussDerived), trussBom = computeBom(trussDerived, trussFab);
+    const trussDef = drawingCatalog(trussProject, trussDerived, trussFab).find((c) => c.type === 'truss-unit')!;
+    const cases = [
+      ['truss', trussDef, trussProject, trussDerived, trussFab, trussBom],
+      ['connection', cat.find((c) => c.type === 'connection')!, p, d, fab, bom],
+    ] as const;
+    for (const [name, def, model, derived, fabrication, bill] of cases) {
+      const sh = buildSheet(def, model, derived, fabrication, bill);
+      const pathOut = path.join(OUT, `${name}-roundtrip.dxf`);
+      fs.writeFileSync(pathOut, sheetToDxf(sh), 'ascii');
+      const parsed = parser.parseSync(fs.readFileSync(pathOut, 'ascii'))!;
+      expect(parsed.header.$INSUNITS, `${name}: millimeter units`).toBe(4);
+      const layers = parsed.tables.layer.layers;
+      for (const l of ['FRAME', 'OUTLINE', 'DIM', 'TEXT', 'CUT']) expect(layers[l], `${name}: ${l} layer`).toBeDefined();
+      const dxfText = parsed.entities.filter((e: any) => e.type === 'TEXT').map((e: any) => e.text as string);
+      expect(dxfText, `${name}: dimensions`).toEqual(expect.arrayContaining(sh.ents.filter((e) => e.k === 'text' && e.layer === 'DIM').map((e) => (e as Extract<typeof e, { k: 'text' }>).s).filter((s) => /^[0-9,×*.+-]+$/.test(s))));
+      expect(sheetToDxf(sh).replace(/\r/g, '')).toContain('0\nLAYER\n2\nHIDDEN\n70\n0\n62\n8\n6\nDASHED'); // exporter declares dashed hidden layer
+
+      const sourceLines = sh.ents.filter((e) => e.k === 'line').length;
+      const sourcePolys = sh.ents.filter((e) => e.k === 'poly' && e.shade === undefined).length;
+      expect(parsed.entities.filter((e: any) => e.type === 'LINE').length).toBe(sourceLines);
+      expect(parsed.entities.filter((e: any) => e.type === 'POLYLINE').length).toBe(sourcePolys);
+      const k = sh.scale || 1;
+      const close = (a: number, b: number) => Math.abs(a - b) < 0.011;
+      for (const line of sh.ents.filter((e): e is Extract<typeof e, { k: 'line' }> => e.k === 'line')) {
+        const match = parsed.entities.find((e: any) => e.type === 'LINE' && e.layer === line.layer && e.vertices.length === 2 &&
+          ((close(e.vertices[0].x, line.a.x * k) && close(e.vertices[0].y, line.a.y * k) && close(e.vertices[1].x, line.b.x * k) && close(e.vertices[1].y, line.b.y * k)) ||
+           (close(e.vertices[1].x, line.a.x * k) && close(e.vertices[1].y, line.a.y * k) && close(e.vertices[0].x, line.b.x * k) && close(e.vertices[0].y, line.b.y * k))));
+        expect(match, `${name}: ${line.layer} dimension/line geometry matches model`).toBeDefined();
+      }
+      // Compare exported contour vertices against the source sheet after the exporter's scale-to-model conversion.
+      for (const poly of sh.ents.filter((e): e is Extract<typeof e, { k: 'poly' }> => e.k === 'poly' && e.shade === undefined)) {
+        const match = parsed.entities.find((e: any) => e.type === 'POLYLINE' && e.layer === poly.layer && e.vertices.length === poly.pts.length &&
+          e.vertices.every((v: any, i: number) => close(v.x, poly.pts[i].x * k) && close(v.y, poly.pts[i].y * k)));
+        expect(match, `${name}: ${poly.layer} contour matches model`).toBeDefined();
+      }
+      const expectedDim = sh.ents.filter((e) => e.k === 'text' && e.layer === 'DIM').map((e) => (e as Extract<typeof e, { k: 'text' }>).s).filter((s) => /^[0-9,×*.+-]+$/.test(s));
+      expect(dxfText).toEqual(expect.arrayContaining(expectedDim));
+    }
   });
   it('PDF תקין: A3, עמוד לכל גיליון, טקסט ומספרים ניתנים לחילוץ', async () => {
     const sheets = cat.filter((c) => ['ga', 'roof-plan', 'frame', 'side', 'connection'].includes(c.type) || c.id === `D-PART-${fab.parts[0].mark}`).map((c) => buildSheet(c, p, d, fab, bom));

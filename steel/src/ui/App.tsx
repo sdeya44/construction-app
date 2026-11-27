@@ -1,5 +1,5 @@
 import { safeFileName } from '../persist/files';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { assignDetail, deleteMembers, restoreDeleted, setBuilding, setPurlinSide, setSection } from '../commands/commands';
 import { detailPresets } from '../geometry/detail';
 import { fromMm } from '../core/units';
@@ -11,9 +11,9 @@ import { SizingPanel } from './SizingPanel';
 import { backupDownload, fsSupported, linkedName, linkToFile, needsBackup } from '../persist/fileLink';
 import { PropertiesPanel, ScopeIsolator } from './PropertiesPanel';
 import { ProfileDatalist } from './StructurePanel';
-import { DrawingsView } from './DrawingsView';
+const DrawingsView = lazy(() => import('./DrawingsView').then((m) => ({ default: m.DrawingsView })));
+const ProductionView = lazy(() => import('./ProductionView').then((m) => ({ default: m.ProductionView })));
 import { CatalogDialog } from './CatalogDialog';
-import { ProductionView } from './ProductionView';
 import { StepsRail } from './StepsRail';
 import { CommandPalette, ConnCard, ContextBar, GutterPickHint, MarkingMenu, connectionsOf, type Cmd } from './Overlays';
 import { KIND_LABEL } from './TreePanel';
@@ -340,7 +340,7 @@ export function App() {
       </nav>
 
       <header className="topbar">
-        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.109.0</small></div>
+        <div className="brand"><span className="brand-name">KAYAN <em>STEEL PRO</em></span><small className="desk-only">1.110.0</small></div>
         <span className="tb-div desk-only" />
         <div className="proj-name" data-testid="proj-name" title={s.project.meta.name}>{s.project.meta.name}</div>
         {crumb && <span className="crumb desk-only" data-testid="crumb">‹ {crumb}</span>}
@@ -363,8 +363,8 @@ export function App() {
         <span className={`save-state ${s.saveState} desk-only`}>{s.saveState === 'saved' ? '✓ ' : ''}<span data-testid="save-state">{saveText}</span> · מהדורה {s.project.revision.current}</span>
       </header>
 
-      {mode === 'drawings' && <main className="mode-area"><DrawingsView /></main>}
-      {mode === 'production' && <main className="mode-area"><ProductionView /></main>}
+      {mode === 'drawings' && <main className="mode-area"><Suspense fallback={null}><DrawingsView /></Suspense></main>}
+      {mode === 'production' && <main className="mode-area"><Suspense fallback={null}><ProductionView /></Suspense></main>}
       <main className={`workspace${wide && !panelOpen ? ' panel-closed' : ''}${!propsPinned ? ' props-collapsed' : ''}${!propsPinned && (sel.length || s.activeConn || lp === 'nav') ? ' props-float' : ''}${treeHidden ? ' tree-hidden' : ''}${lpFull ? ' lp-full' : ''}${comp ? ' comp-open' : ''}${wide && railWide ? ' rail-wide' : ''}`} style={mode !== 'model' ? { display: 'none' } : undefined}>
         {/* 1.61: הריבון הוסר במסך רחב — הכניסה לכל רכיב מסרגל השלבים (ומחיפוש, מהמודל ומגיליון הפרמטרים) */}
         <aside className={`side side-start${sideOpen ? ' open' : ''}`} data-testid="nav-tree-pane">
