@@ -36,6 +36,7 @@
 |---|---|---|
 | מספור, חורים בחלק, מכלולים | `fab/marks.ts` | fab |
 | כתב כמויות, ייצוא, הזמנה, האחדה | `fab/bom.ts`, `fab/export.ts`, `fab/unify.ts` | fab |
+| ניסטינג ללייזר לפלטות (קונטור אמיתי, אריזה על רסטר, סיבוב 90°, DXF לכל לוח, דוח כמויות; אלגוריתם עצמאי; אינו מאומת מול מכונה) — `fab/nesting.ts` (`nestParts`, `nestPlates`, `nestSheetDxf`, `nestZip`, `nestTables`), `ui/NestingDialog.tsx` (כפתור `export-nest` בייצור) | `fab/nesting.ts`, `ui/NestingDialog.tsx` | fab (`tests/nesting.test.ts` NEST-01..04, `e2e/nesting.spec.ts`) |
 | DSTV/NC1 (ZIP: פלטות בלבד — פרופילים נחתכים במסגריה; חריץ RHS כשורות `** SLOT` ב-`partToNc1`), IFC | `fab/dstv.ts`, `fab/ifc.ts` | fab |
 | הרכבה, מיקום, הצעת מחיר, גדלים | `fab/sequence.ts`, `fab/location.ts`, `fab/quote.ts`, `fab/clientQuote.ts`, `model/sizing.ts` | fab |
 | קטלוג גיליונות ובניית גיליון (החלק המייצג של סימון: `representativePart`) | `drawing/views.ts` (**~1260 שורות**) | drawing |
