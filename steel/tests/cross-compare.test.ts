@@ -83,7 +83,7 @@ describe('CROSS-02 גיליונות השרטוט', () => {
     const SOFT = new Set(['OUTLINE', 'THIN', 'MARK']);
     const bad: string[] = [];
     const allowedNew = new Set([`D-CONN-cd-${braceCrossGussetRecipe().id}`, `D-CONN-cd-${braceCrossRodRecipe().id}`]);
-    for (const k of a.keys()) if (!b.has(k) && k !== 'D-CONN-brace-cross') bad.push(`גיליון נעלם: ${k}`);
+    for (const k of a.keys()) if (!b.has(k) && !/^D-CONN-brace-cross(~\d+)?$/.test(k)) bad.push(`גיליון נעלם: ${k}`);
     for (const k of b.keys()) if (!a.has(k) && !allowedNew.has(k)) bad.push(`גיליון חדש: ${k}`);
     for (const [id, sa] of a) {
       const sb = b.get(id); if (!sb || id === 'D-COVER' || id === 'D-CONN-brace-cross') continue;

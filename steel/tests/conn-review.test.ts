@@ -101,3 +101,65 @@ describe('REV-F03 פרמטר מקומי (קוטר בורג) נכבד בהיקף 
     expect(d1.issues.filter((i) => i.severity === 'error').map((i) => i.message)).toEqual([]);
   });
 });
+
+import { buildSheet, drawingCatalog } from '../src/drawing/views';
+import { computeFabrication } from '../src/fab/marks';
+import { computeBom } from '../src/fab/bom';
+import { numberParts } from '../src/commands/commands';
+
+describe('REV-F02 גיליון פרט לכל וריאנט', () => {
+  const run = (which: 'first' | 'last') => {
+    const p0 = proj(), d0 = generate(p0);
+    const eaves = d0.connections.filter((c) => c.type === 'eave');
+    const target = which === 'first' ? eaves[0]! : eaves[eaves.length - 1]!;
+    const t0 = p0.connectionDefaults.eave.t;
+    p0.connectionOverrides = { ...p0.connectionOverrides, [target.id]: { t: t0 + 2 } } as never;
+    const p = numberParts().run(p0), d = generate(p), fab = computeFabrication(p, d), bom = computeBom(d, fab);
+    const cat = drawingCatalog(p, d, fab).filter((x) => x.type === 'connection' && x.id.startsWith('D-CONN-eave'));
+    return { p, d, fab, bom, cat, target, t0 };
+  };
+  it('שני עוביים באותה משפחה (כרכוב) ⇒ שני גיליונות, הראשון שומר את המזהה; הרשימה מכסה את כל החיבורים; לא תלוי בסדר', () => {
+    for (const which of ['first', 'last'] as const) {
+      const { d, cat, target } = run(which);
+      const all = d.connections.filter((c) => c.type === 'eave').map((c) => c.id).sort();
+      expect(cat.length, which).toBe(2);
+      expect(cat[0]!.id).toBe('D-CONN-eave');
+      expect(cat[1]!.id).toBe('D-CONN-eave~2');
+      expect(cat[1]!.number).toMatch(/^D-\d\d\.2$/);
+      expect(cat.flatMap((x) => x.refs ?? []).sort()).toEqual(all);
+      expect(cat.some((x) => x.refs!.length === 1 && x.refs![0] === target.id)).toBe(true);
+      expect(new Set(cat.map((x) => x.number)).size).toBe(2);
+    }
+  });
+  it('כל וריאנט מציג את הפלטות שלו (PL12 / PL14) ואת רשימת המופעים', () => {
+    const { p, d, fab, bom, cat, t0 } = run('first');
+    const texts = cat.map((df) => buildSheet(df, p, d, fab, bom).ents.filter((e) => e.k === 'text').map((e) => (e as { s: string }).s).join('\n'));
+    const small = texts.find((t) => t.includes(`PL${t0}`) && !t.includes(`PL${t0 + 2}`)), big = texts.find((t) => t.includes(`PL${t0 + 2}`));
+    expect(small).toBeTruthy(); expect(big).toBeTruthy(); expect(small).not.toBe(big);
+    expect(small).toMatch(/חל על \d+ חיבורים/);
+  });
+  it('בלי וריאנטים — הקטלוג זהה לקודם (מזהה אחד, בלי סיומת)', () => {
+    const p = numberParts().run(proj()), d = generate(p), fab = computeFabrication(p, d);
+    const cat = drawingCatalog(p, d, fab).filter((x) => x.id.startsWith('D-CONN-eave'));
+    expect(cat.map((x) => x.id)).toEqual(['D-CONN-eave']);
+    expect(cat[0]!.title).toBe('פרט חיבור קורה-עמוד');
+  });
+});
+
+describe('REV-F02b פרט מותאם: וריאנט לפי ערכי המופע', () => {
+  it('אותו פרט עם ערכי מופע שונים (עובי פח) ⇒ שני גיליונות; אותם ערכים ⇒ גיליון אחד', async () => {
+    const { detailPresets } = await import('../src/geometry/detail');
+    const { assignDetail, setDetailParam } = await import('../src/commands/commands');
+    const p0 = proj(), d0 = generate(p0);
+    const keys = d0.members.filter((m) => m.id.startsWith('KB.')).flatMap((m) => [`${m.id}|start`, `${m.id}|end`]);
+    const det = structuredClone(detailPresets().find((x) => x.id === 'preset-plate-plate')!);
+    let p = assignDetail(keys, det).run(p0);
+    const one = (q: Project) => { const d = generate(q), fab = computeFabrication(numberParts().run(q), d); return drawingCatalog(q, d, fab).filter((x) => x.id.startsWith(`D-CONN-cd-${det.id}`)); };
+    expect(one(p).length).toBe(1);
+    p = setDetailParam([keys[0]!], 't', 16).run(p);
+    const cat = one(p);
+    expect(cat.length).toBe(2);
+    expect(cat[1]!.id).toBe(`D-CONN-cd-${det.id}~2`);
+    expect(cat.flatMap((x) => x.refs ?? []).length).toBe(generate(p).connections.filter((c) => c.custom?.detailId === det.id).length);
+  });
+});

@@ -98,7 +98,8 @@ describe('LOCK-02 גיליונות השרטוט', () => {
     const a = run(p0, d0), b = run(p1, d1);
     const gone = [...a.keys()].filter((k) => !b.has(k)), added = [...b.keys()].filter((k) => !a.has(k));
     // חריג (ב): גיליון הפרט הרגיל של אלכסון נעלם (אם כל האלכסונים הומרו) והפרט המותאם מחליף אותו
-    expect(gone.filter((k) => k !== 'D-CONN-knee')).toEqual([]);
+    // REV-F02: גם וריאנטי האלכסון (`knee~2`…) נעלמים יחד עם הגיליון הרגיל
+    expect(gone.filter((k) => !/^D-CONN-knee(~\d+)?$/.test(k))).toEqual([]);
     expect(added.sort()).toEqual(rids.map((r) => `D-CONN-cd-${r}`).sort());
     const SOFT = new Set(['OUTLINE', 'THIN', 'MARK']);
     const bad: string[] = [];

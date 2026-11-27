@@ -39,7 +39,7 @@ describe('שרטוטים', () => {
   const { p, d, fab, bom, cat } = setup();
   it('קטלוג: GA, תוכנית גג, חתכי מסגרת מקובצים (מסגרות זהות), גיליון חזיתות אחד, 7 פרטי חיבור (כולל המשך פטה ופחי קושרות), מכלולים וחלקים', () => {
     const t = (x: string) => cat.filter((c) => c.type === x).length;
-    expect([t('ga'), t('roof-plan'), t('side'), t('connection')]).toEqual([1, 1, 1, 7]);
+    expect([t('ga'), t('roof-plan'), t('side'), t('connection')]).toEqual([1, 1, 1, 9]); // REV-F02: 9 = 7 + וריאנטי ייצור שהיו מוסתרים (ברגי M12×35/×40 בתומכי פטה, PL90/PL85 בפחי קושרות)
     // מסגרות: כל ציר מופיע בדיוק בגיליון אחד
     const fr = cat.filter((c) => c.type === 'frame').flatMap((c) => c.refs ?? []);
     expect(fr.sort()).toEqual(p.building.frames.map((f) => f.id).sort());

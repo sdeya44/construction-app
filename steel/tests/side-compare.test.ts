@@ -93,18 +93,21 @@ describe('SIDE-02 גיליונות השרטוט', () => {
     const run = (p: Project, d: DerivedModel) => { const f = computeFabrication(p, d), bom = computeBom(d, f); return new Map(drawingCatalog(p, d, f).map((df) => [df.id, buildSheet(df, p, d, f, bom)])); };
     const a = run(p0, d0), b = run(p1, d1);
     // כשכל הבסיסים הוסבו — גיליון "פרט פלטת בסיס" הרגיל נעלם והפרט המותאם מחליף אותו (חריג (ב) כמו באלכסון); תוכנית העיגון והפלטות נשארות זהות
-    expect([...a.keys()].filter((k) => !b.has(k))).toEqual(['D-CONN-rafter-side']);
+    // REV-F02: הגיליון הרגיל ווריאנטיו (`~2`…) נעלמים יחד
+    expect([...a.keys()].filter((k) => !b.has(k)).map((k) => k.replace(/~\d+$/, ''))).toEqual(['D-CONN-rafter-side']);
     expect([...b.keys()].filter((k) => !a.has(k)).sort()).toEqual([`D-CONN-cd-${SIDE_RECIPE_ID}`]);
     const SOFT = new Set(['OUTLINE', 'THIN', 'MARK']);
     const bad: string[] = [];
     for (const [id, sa] of a) {
       const sb = b.get(id); if (!sb || id === 'D-COVER' || id === 'D-CONN-rafter-side') continue;
+      // REV-F02: גיליון וריאנט (`~2`…) הוא פרט חדש שנחשף; חלון המבט שלו כולל את פלטת הצד השכנה — קווי מתאר/דקים (רכיב הקשר) לא נספרים, כל שאר השכבות והטקסטים נבדקים במלואם
+      const variant = /~\d+$/.test(id);
       const ea = sa.ents.filter((e) => e.layer !== 'TITLE'), eb = sb.ents.filter((e) => e.layer !== 'TITLE');
       const hist = (es: typeof ea) => { const m: Record<string, number> = {}; for (const e of es) m[`${e.k}|${e.layer}`] = (m[`${e.k}|${e.layer}`] ?? 0) + 1; return m; };
       const ha = hist(ea), hb = hist(eb);
       for (const k of new Set([...Object.keys(ha), ...Object.keys(hb)])) {
         const x = ha[k] ?? 0, y = hb[k] ?? 0;
-        if (SOFT.has(k.split('|')[1]!) ? Math.abs(x - y) > Math.max(10, 0.01 * x) : x !== y) bad.push(`${id}: ${k} ${x}→${y}`);
+        if (SOFT.has(k.split('|')[1]!) ? !variant && Math.abs(x - y) > Math.max(10, 0.01 * x) : x !== y) bad.push(`${id}: ${k} ${x}→${y}`);
       }
       const txt = (es: typeof ea, soft: boolean) => es.filter((e) => e.k === 'text' && (e.layer === 'MARK') === soft).map((e) => (/^-?\d+(\.\d+)?$/.test((e as { s: string }).s) ? '#' : /^\d+\/\d+$/.test((e as { s: string }).s) ? '#/#' : (e as { s: string }).s)).sort();
       if (JSON.stringify(txt(ea, false)) !== JSON.stringify(txt(eb, false))) bad.push(`${id}: טקסטים שונים`);

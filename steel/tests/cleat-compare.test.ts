@@ -103,7 +103,7 @@ describe('CLEAT-02 גיליונות השרטוט', () => {
     const run = (p: Project, d: DerivedModel) => { const f = computeFabrication(p, d), bom = computeBom(d, f); return new Map(drawingCatalog(p, d, f).map((df) => [df.id, buildSheet(df, p, d, f, bom)])); };
     const a = run(p0, d0), b = run(p1, d1);
     // כשכל התושבות הוסבו — גיליון "פרט תושבת" הרגיל נעלם והפרט המותאם מחליף אותו (חריג (ב) כמו באלכסון)
-    expect([...a.keys()].filter((k) => !b.has(k)).filter((k) => k !== 'D-CONN-purlin-cleat')).toEqual([]);
+    expect([...a.keys()].filter((k) => !b.has(k)).filter((k) => !/^D-CONN-purlin-cleat(~\d+)?$/.test(k))).toEqual([]); // REV-F02: כולל וריאנטים (`~2`)
     expect([...b.keys()].filter((k) => !a.has(k)).sort()).toEqual(rids.map((r) => `D-CONN-cd-${r}`).sort());
     const SOFT = new Set(['OUTLINE', 'THIN', 'MARK']);
     const bad: string[] = [];

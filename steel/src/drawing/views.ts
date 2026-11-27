@@ -2,7 +2,7 @@ import { dedupeTexts, placeLabels } from './labels';
 import { braceUnits, braceUnitSheet } from './unit';
 import { approxMeasure } from './layoutAudit';
 import { gutterDev, gutterRuns, gutterSpec, gutterTakeoff } from '../geometry/gutter';
-import { dot, sub, type Vec3 } from '../core/vec';
+import { dot, len, sub, type Vec3 } from '../core/vec';
 import { localFrame } from '../geometry/frame';
 import { cachedSolidPure, silhouetteEdges } from './solidCache';
 import { partSheet, plateCell, plateFaceInBox, plateGeom } from './part';
@@ -48,6 +48,26 @@ export function representativePart(parts: MarkedPart[], d: DerivedModel, mk: str
   return best;
 }
 
+/**
+ * חתימת וריאנט של חיבור (REV-F02): מה שמשפיע על הייצור והשרטוט — חלקי פלטה/זוויתן/עוגן (סוג, חתך, אורך), ברגים (קוטר, דרגה, אורך, מקום), ריתוכים (גודל, מקום, אורך), ופרט מותאם.
+ * בלי מיקומים ומזהים: חיבורים שקולים (שמאל/ימין, מסגרות זהות) חולקים חתימה וגיליון; שינוי עובי/ברגים/סידור ⇒ וריאנט נפרד.
+ */
+export function connVariantSig(c: Connection, d: DerivedModel): string {
+  const pm = c.parts.map((id) => d.byId.get(id)).filter((m): m is Member => !!m && (m.kind === 'plate' || m.kind === 'cleat' || m.kind === 'anchor'))
+    .map((m) => `${m.kind}:${m.profile}:${Math.round(len(sub(m.end, m.start)))}`).sort().join(',');
+  const bs = c.bolts.map((b) => `${b.d}/${b.grade}/${Math.round(b.length)}/${b.location}/${b.rod ? 'rod' : ''}`).sort().join(',');
+  const ws = c.welds.map((w) => `${w.a}/${w.location}/${Math.round(w.length)}`).sort().join(',');
+  return `${c.custom?.detailId ?? ''}|${pm}|${bs}|${ws}`;
+}
+/** קבוצות וריאנטים בסדר הופעה ראשונה: כל קבוצה = רשימת חיבורים בעלי חתימה זהה */
+export function connVariants(conns: Connection[], d: DerivedModel, keyOf?: (c: Connection) => string): Connection[][] {
+  const m = new Map<string, Connection[]>();
+  for (const c of conns) { const k = keyOf ? keyOf(c) : connVariantSig(c, d); m.set(k, [...(m.get(k) ?? []), c]); }
+  return [...m.values()];
+}
+/** פרט מותאם: וריאנט = ערכי המופע שנקבעו לאתר (`detailParams`), לא הגיאומטריה — שני קצוות של אותו אלכסון עם אותם פרמטרים חולקים גיליון */
+const customParamSig = (p: Project, c: Connection) => JSON.stringify(Object.entries(p.detailParams?.[c.custom?.site ?? ''] ?? {}).sort(([a], [b]) => a.localeCompare(b)));
+
 export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): DrawingDef[] {
   const out: DrawingDef[] = [];
   out.push({ id: 'D-COVER', type: 'cover', number: 'G-00', title: 'גיליון שער — רשימת שרטוטים והערות כלליות' });
@@ -67,15 +87,18 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
   if (p.building.cladding) out.push({ id: 'D-CLAD', type: 'cladding', number: 'K-01', title: 'חיפוי, פחים ומזחלות — כתב כמויות' });
   if (d.section && gutterRuns(p.building, d.section, (d.plan?.local.derived ?? d).members).length) out.push({ id: 'D-GUTTER', type: 'gutter', number: 'K-02', title: 'פרט מזחלה וירידת מרזב' });
   const types: [string, string][] = [['eave', 'פרט חיבור קורה-עמוד'], ['ridge', 'פרט חיבור רכס'], ['base', 'פרט פלטת בסיס'], ['purlin-cleat', 'פרט תומך פטה'], ['purlin-splice', 'פרט חיבור המשך פטה'], ['brace-end', 'פרט פח חיבור קושרת'], ['brace-cross', 'פרט הצטלבות קושרות'], ['rafter-side', 'פרט חיבור קורה לצד עמוד'], ['knee', 'פרט אלכסון עמוד-קורה'], ['ridge-tie', 'פרט חיזוק רכס אופקי'], ['tb-support', 'פרט קורה נושאת ↔ עמוד'], ['tb-seat', 'פרט קורת גג על קורה נושאת'], ['truss', 'פרט צמתי מסבך'], ['truss-splice', 'פרט חיבור המשך חגורת מסבך'], ['truss-end', 'פרט חגורה תחתונה ↔ עמוד']];
+  // גיליון לכל וריאנט ייחודי באותו סוג (REV-F02): הראשון שומר את המזהה והמספר הקיימים; נוספים — `~k` ומספר `D-NN.k`
+  const varTitle = (title: string, k: number, n: number) => (n > 1 ? `${title} — וריאנט ${k + 1} מתוך ${n}` : title);
   types.forEach(([t, title], i) => {
-    const c = d.connections.find((x) => x.type === t);
-    if (c) out.push({ id: `D-CONN-${t}`, type: 'connection', number: `D-${String(i + 1).padStart(2, '0')}`, title, ref: c.id });
+    const groups = connVariants(d.connections.filter((x) => x.type === t), d);
+    groups.forEach((g, k) => out.push({ id: k === 0 ? `D-CONN-${t}` : `D-CONN-${t}~${k + 1}`, type: 'connection', number: k === 0 ? `D-${String(i + 1).padStart(2, '0')}` : `D-${String(i + 1).padStart(2, '0')}.${k + 1}`, title: varTitle(title, k, groups.length), ref: g[0]!.id, refs: g.map((x) => x.id) }));
   });
   // פרטים מותאמים מהספרייה — גיליון פרט לכל פרט בשימוש
   const used = [...new Map(d.connections.filter((c) => c.custom).map((c) => [c.custom!.detailId, c])).values()];
-  used.forEach((c, k) => {
-    const nm = findDetail(p, c.custom!.detailId)?.name ?? 'פרט מותאם';
-    out.push({ id: `D-CONN-cd-${c.custom!.detailId}`, type: 'connection', number: `D-${String(types.length + k + 1).padStart(2, '0')}`, title: `פרט ${nm}`, ref: c.id });
+  used.forEach((c0, k) => {
+    const detailId = c0.custom!.detailId, nm = findDetail(p, detailId)?.name ?? 'פרט מותאם';
+    const groups = connVariants(d.connections.filter((c) => c.custom?.detailId === detailId), d, (c) => customParamSig(p, c));
+    groups.forEach((g, j) => out.push({ id: j === 0 ? `D-CONN-cd-${detailId}` : `D-CONN-cd-${detailId}~${j + 1}`, type: 'connection', number: j === 0 ? `D-${String(types.length + k + 1).padStart(2, '0')}` : `D-${String(types.length + k + 1).padStart(2, '0')}.${j + 1}`, title: varTitle(`פרט ${nm}`, j, groups.length), ref: (j === 0 ? c0 : g[0]!).id, refs: g.map((x) => x.id) }));
   });
   // 1.69: מכלולי אגד — אגד B ואלכסוני Y בקורה נושאת (ריתוכים, בועות, פרטי פלטות)
   braceUnits(p, d).forEach((u, i) => out.push({ id: `D-UNIT-${i + 1}`, type: 'brace-unit', number: `U-${String(i + 1).padStart(2, '0')}`, title: `מכלול ${u.id.startsWith('BB.') ? 'אגד B' : 'אלכסוני Y — קורה נושאת'}${u.refs.length > 1 ? ` (×${u.refs.length})` : ''}`, ref: u.id }));
@@ -500,7 +523,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       const cat = drawingCatalog(p, d, fab);
       const seen = new Set<string>();
       for (const c of d.connections.filter((x) => (x.type === 'eave' || x.type === 'ridge' || effType(x) === 'base') && (x.id.split('.').includes(f.id) || (x.custom && x.members.some((id) => d.byId.get(id)?.frameId === f.id))))) {
-        const ref = cat.find((x) => x.id === (c.custom ? `D-CONN-cd-${c.custom.detailId}` : `D-CONN-${c.type}`)); if (!ref) continue;
+        const ref = cat.find((x) => x.type === 'connection' && x.refs?.includes(c.id)) ?? cat.find((x) => x.id === (c.custom ? `D-CONN-cd-${c.custom.detailId}` : `D-CONN-${c.type}`)); if (!ref) continue;
         const pm = c.parts.map((id) => d.byId.get(id)).find((m): m is Member => !!m && m.kind === 'plate'); if (!pm) continue;
         const q = v.p((pm.start.x + pm.end.x) / 2, (pm.start.z + pm.end.z) / 2);
         const key = `${c.type}:${Math.round(q.x)}`; if (seen.has(key)) continue; seen.add(key);
@@ -1127,6 +1150,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       const tx = area.x1 - 4;
       const T = (s: string, bold = false) => { sh.ents.push({ k: 'text', p: { x: tx, y }, s, h: 2.5, align: 'right', layer: 'TEXT', bold }); y -= 4.5; };
       T(c.label, true);
+      if (def.refs && def.refs.length > 1) T(`חל על ${def.refs.length} חיבורים: ${def.refs.slice(0, 4).map((x) => x.replace(/^C\./, '')).join(' · ')}${def.refs.length > 4 ? ' …' : ''}`);
       T(`סטטוס: ${c.status === 'approved' ? 'מאושר' : c.status === 'for-review' ? 'לבדיקה' : 'לא מאומת'}`);
       const agg = new Map<string, number>();
       for (const bo of c.bolts) { const sl = bo.slots ? Object.values(bo.slots)[0] : 0; const k = bo.rod ? `מוט הברגה M${bo.d}×${bo.length} מרותך + אום, חור אובלי ${bo.hole}×${sl} בקורה, ${bo.location === 'site' ? 'שטח' : 'מסגריה'}` : `M${bo.d}×${bo.length} ${bo.grade}, חור Ø${bo.hole}, ${bo.location === 'site' ? 'שטח' : 'מסגריה'}`; agg.set(k, (agg.get(k) ?? 0) + 1); }
@@ -1295,7 +1319,9 @@ function connDims(v: View, c: Connection, d: DerivedModel, pr: (q: Vec3) => P, p
     if (col && raf && br && !planar) {
       const a = pr(br.start), b = pr(br.end);
       const ang = Math.abs((Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI);
-      v.dim(a, { x: a.x, y: b.y }, { x: 0, y: 1 }, a.x < b.x ? -12 : 12, undefined);
+      // המידה האנכית בתוך המשולש; באלכסון קצר (< ~42 מ"מ נייר) הטקסט נוחת על קווי האלכסון (REV-F02: גיליון `knee~2`) ⇒ מחוץ למשולש
+      const inner = Math.abs(b.y - a.y) / v.scale >= 42;
+      v.dim(a, { x: a.x, y: b.y }, { x: 0, y: 1 }, (a.x < b.x ? -12 : 12) * (inner ? 1 : -1), undefined);
       v.dim(a, { x: b.x, y: a.y }, { x: 1, y: 0 }, -10, undefined);
       v.text({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, `${Math.round(Math.min(ang, 180 - ang))}°`, 2.5, 'center', 'DIM');
     }
