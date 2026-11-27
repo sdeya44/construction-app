@@ -63,7 +63,10 @@ function Studio({ siteKey: key }: { siteKey: string }) {
   // מודל בסיס ללא הפרט המותאם באתר הזה — רואים את האלמנט "נקי"
   const base = useMemo(() => { const a = { ...(project.detailAssign ?? {}) }; delete a[key]; return generate({ ...project, detailAssign: a }); }, [project, key]);
   const assignedId = project.detailAssign?.[key];
-  const [det, setDetRaw] = useState<CustomDetail>(() => structuredClone(project.customDetails?.find((x) => x.id === assignedId) ?? blankDetail()));
+  // פרט התחלתי (הפוך לתבנית מהמודל) נטען פעם אחת; אחרת הפרט המוחל באתר, או פרט ריק
+  const draft = useRef<CustomDetail | null>(store.state.studioDraft ?? null);
+  const [det, setDetRaw] = useState<CustomDetail>(() => structuredClone(draft.current ?? project.customDetails?.find((x) => x.id === assignedId) ?? blankDetail()));
+  useEffect(() => { if (store.state.studioDraft) store.set({ studioDraft: null }); }, []);
   const hist = useRef<CustomDetail[]>([]);
   const setDet = (fn: (d: CustomDetail) => CustomDetail) => setDetRaw((d) => { hist.current.push(d); if (hist.current.length > 80) hist.current.shift(); return fn(structuredClone(d)); });
   const undo = () => { const p = hist.current.pop(); if (p) setDetRaw(p); };
@@ -71,7 +74,7 @@ function Studio({ siteKey: key }: { siteKey: string }) {
   const [armed, setArmed] = useState<ToolId | null>(null);
   const [preview, setPreview] = useState<string>(key);
   const [scope, setScope] = useState<'one' | 'similar' | 'any'>('one');
-  const [msg, setMsg] = useState<string>('');
+  const [msg, setMsg] = useState<string>(draft.current ? `נוצר פרט מפלטות שנבחרו במודל: "${draft.current.name}". בדקו, ערכו (⚙ הופך מידה לפרמטר) ושמרו.` : '');
   const [dragState, setDragState] = useState<{ x: number; y: number; lbl: string } | null>(null);
   const [fx, setFx] = useState<FxTarget | null>(null);
   const [fxTokens, setFxTokens] = useState<string[]>([]);

@@ -3,6 +3,8 @@ import { ConnectorBlock, type ConnTab } from './wizard/ConnectorBlock';
 import React, { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { resetOverrides, setBuilding, setKneeBraces, setMemberProps, setTransfers, type Command } from '../commands/commands';
 import { defaultLockTruss } from '../geometry/lockTruss';
+import { generate } from '../geometry/generate';
+import { templateFromParts } from '../geometry/templateFromParts';
 import { BracingEditor } from './StructurePanel';
 import { defaultPortal } from '../geometry/portal';
 import { useFab } from '../fab/useFab';
@@ -465,6 +467,31 @@ function HubSettings({ m }: { m: Member }) {
   return <HubNav m={m} />;
 }
 
+/**
+ * "הפוך לתבנית" (בהשראת Tekla Custom Component): הפלטות שנבחרו במודל (אחת או כמה מאותו קצה) ← פרט חדש בסטודיו.
+ * ההסקה טהורה (`geometry/templateFromParts.ts`) ומאומתת הלוך-חזור; בלי התאמה — הודעה, בלי פרט.
+ */
+function MakeTemplateButton({ c }: { c: Connection }) {
+  const d = useStore((s) => s.derived);
+  const sel = useStore((s) => s.selection);
+  const picked = sel.filter((id) => d.byId.get(id)?.kind === 'plate' && c.parts.includes(id));
+  const make = () => {
+    const ids = picked;
+    if (!ids.length) { store.toast('error', 'בחרו במודל פלטה אחת או יותר מאותו קצה'); return; }
+    // אתר נפתר על מודל נקי (בלי פרטים מותאמים), כמו בסטודיו
+    const clean = generate({ ...store.state.project, detailAssign: {} });
+    const r = templateFromParts(d, ids, { siteMembers: clean.members, id: `cd-${Date.now().toString(36)}` });
+    if (!r.detail || !r.siteKey) { store.toast('error', `לא ניתן להפוך לתבנית: ${r.errors[0] ?? 'לא נמצא אתר מתאים'}`); return; }
+    if (r.warnings.length) store.toast('info', `${r.warnings[0]}${r.warnings.length > 1 ? ` (ועוד ${r.warnings.length - 1} הערות — בהערות הפרט)` : ''}`);
+    store.set({ studioDraft: r.detail, detailStudio: r.siteKey, studioConn: null });
+  };
+  return <div className="hub-set-row" style={{ marginTop: 6 }}>
+    <button className="btn" data-testid="make-template" onClick={make} title="יוצר פרט (פלטות, חורים, ברגים, ריתוכים, חיתוך קצה) מהפלטות שנבחרו במודל ופותח אותו בסטודיו לעריכה והפיכת מידות לפרמטרים">
+      הפוך לתבנית{picked.length > 1 ? ` (${picked.length} פלטות)` : ''}</button>
+    <div className="hint">{picked.length ? 'הפלטות שנבחרו במודל' : 'בחרו פלטה (או כמה, מאותו קצה)'} ← פרט חדש בסטודיו. פלטות, חורים, ברגים, ריתוכים וחיתוך קצה האלמנט (כשאפשר לשחזר). אפשר לערוך ולהפוך מידות לפרמטרים בסטודיו.</div>
+  </div>;
+}
+
 /** אשף הפלטה הוא חלק מהסטודיו: מהמאפיינים פותחים את הסטודיו על החיבור של הפלטה */
 function StudioPlateButton({ c }: { c: Connection }) {
   const d = useStore((s) => s.derived);
@@ -477,7 +504,8 @@ function StudioPlateButton({ c }: { c: Connection }) {
   };
   return <div className="hub-set" data-testid="plate-studio"><div className="hub-set-h">פלטות וברגים: {c.label}</div>
     <button className="btn primary" data-testid="open-plate-studio" onClick={open}>עריכת הפלטה בסטודיו</button>
-    <div className="hint">אשף הפלטה (מידות, חורים, ברגים, סטנדרט מסגריה) נמצא בסטודיו, ליד בניית פרט מותאם.</div></div>;
+    <div className="hint">אשף הפלטה (מידות, חורים, ברגים, סטנדרט מסגריה) נמצא בסטודיו, ליד בניית פרט מותאם.</div>
+    <MakeTemplateButton c={c} /></div>;
 }
 
 const DETAIL_KINDS = new Set(['column', 'rafter', 'beam', 'brace', 'purlin', 'girt']);

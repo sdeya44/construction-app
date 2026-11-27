@@ -47,6 +47,8 @@ export interface AppState {
   detailStudio: string | null;
   /** חיבור שהפלטות שלו נערכות בסטודיו (אשף הפלטה כחלק מהסטודיו) */
   studioConn?: string | null;
+  /** פרט התחלתי לסטודיו (הפוך לתבנית מהמודל): נטען פעם אחת בפתיחה ואז מתנקה */
+  studioDraft?: import('./model/types').CustomDetail | null;
   /** אשף החיבורים פתוח על חיבור (1.42) */
   connWizard?: string | null;
   /** ספריית החיבורים פתוחה */
