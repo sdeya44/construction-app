@@ -12,6 +12,7 @@ import { handlePhotoUpload } from './screens/photos.js';
 import { renderReports, exportSiteMonthPDF, lockMonth, drawLocks, initSelects } from './screens/reports.js';
 import { renderSearch } from './screens/search.js';
 import { renderTopics } from './screens/topics.js';
+import { renderCrossSection, exportCrossSectionPDF } from './screens/crosssection.js';
 
 const DARK_KEY = 'cnstr_dark';
 const FONT_KEY = 'cnstr_font';
@@ -75,6 +76,7 @@ export function renderCurrentScreen() {
   else if (s==='activities') import('./screens/activities.js').then(m => m.renderActivities());
   else if (s==='reports')   renderReports();
   else if (s==='search')    renderSearch('field');
+  else if (s==='crosssection') renderCrossSection();
 }
 
 function navigate(s) { go(s); renderCurrentScreen(); }
@@ -97,6 +99,8 @@ function bindEvents() {
   document.getElementById('nav-newlog')?.addEventListener('click', () => import('./screens/wizard.js').then(m => m.startLog()));
   document.getElementById('nav-topics')?.addEventListener('click', () => navigate('topics'));
   document.getElementById('nav-emp')?.addEventListener('click',    () => navigate('emp'));
+  document.getElementById('nav-crosssection')?.addEventListener('click', () => navigate('crosssection'));
+  document.getElementById('cs-pdf-btn')?.addEventListener('click', exportCrossSectionPDF);
 
   document.getElementById('refresh-btn')?.addEventListener('click', refreshData);
   document.getElementById('logout-btn')?.addEventListener('click', openSettings);

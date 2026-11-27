@@ -199,6 +199,18 @@
     <div id="search-content" style="padding:12px 16px;height:100%;overflow-y:auto"></div>
   </div>
 
+  <!-- CROSS SECTION QUANTITIES -->
+  <div id="s-crosssection" class="screen">
+    <div class="topbar">
+      <div style="flex:1">
+        <div class="topbar-title fg">כמויות חפירה/מילוי</div>
+        <div class="topbar-sub">חתכים — Average End Area</div>
+      </div>
+      <button class="topbar-btn" id="cs-pdf-btn" title="ייצוא PDF">📄</button>
+    </div>
+    <div class="scroll" id="cs-scroll"><div id="cs-body"></div></div>
+  </div>
+
   <div class="bottom-nav">
     <button class="nav-item active" id="nav-dash">
       <span class="nav-icon">🏠</span><span class="nav-label">בית</span><div class="nav-dot"></div>
@@ -212,6 +224,9 @@
     </button>
     <button class="nav-item" id="nav-topics">
       <span class="nav-icon">🏗️</span><span class="nav-label">נושאים</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-item" id="nav-crosssection">
+      <span class="nav-icon">📐</span><span class="nav-label">כמויות</span><div class="nav-dot"></div>
     </button>
     <button class="nav-item" id="nav-emp" style="display:none">
       <span class="nav-icon">👷</span><span class="nav-label">עובדים</span><div class="nav-dot"></div>
@@ -364,6 +379,14 @@
 <div class="overlay" id="sh-confirm">
   <div class="sheet">
     <div class="sh-handle"></div><div id="confirm-body"></div>
+  </div>
+</div>
+
+<!-- CROSS SECTION EDITOR -->
+<div class="overlay" id="sh-csedit" style="display:none">
+  <div class="sheet">
+    <div class="sh-handle"></div>
+    <div id="sh-csedit-body"></div>
   </div>
 </div>
 
