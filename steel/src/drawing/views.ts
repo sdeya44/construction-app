@@ -1,5 +1,6 @@
 import { dedupeTexts, placeLabels } from './labels';
 import { braceUnits, braceUnitSheet } from './unit';
+import { trussUnits, trussUnitSheet } from './truss';
 import { approxMeasure } from './layoutAudit';
 import { gutterDev, gutterRuns, gutterSpec, gutterTakeoff } from '../geometry/gutter';
 import { dot, len, sub, type Vec3 } from '../core/vec';
@@ -102,6 +103,8 @@ export function drawingCatalog(p: Project, d: DerivedModel, fab: Fabrication): D
   });
   // 1.69: מכלולי אגד — אגד B ואלכסוני Y בקורה נושאת (ריתוכים, בועות, פרטי פלטות)
   braceUnits(p, d).forEach((u, i) => out.push({ id: `D-UNIT-${i + 1}`, type: 'brace-unit', number: `U-${String(i + 1).padStart(2, '0')}`, title: `מכלול ${u.id.startsWith('BB.') ? 'אגד B' : 'אלכסוני Y — קורה נושאת'}${u.refs.length > 1 ? ` (×${u.refs.length})` : ''}`, ref: u.id }));
+  // תוכנית מסבך — גיליון לכל מסבך (גג / נושא), מסבכים זהים באותו גיליון
+  trussUnits(p, d).forEach((u, i) => out.push({ id: `D-TRUSS-${i + 1}`, type: 'truss-unit', number: `T-${String(i + 1).padStart(2, '0')}`, title: `תוכנית מסבך — ${u.title}${u.refs.length > 1 ? ` (+${u.refs.length - 1} זהים)` : ''}`, ref: u.id, refs: u.refs }));
   // משפחות פרטים נוספות באותו סוג חיבור (נעילה אופקית, מכפל, אגד B, עיגון לקיר, מוט הברגה) — גיליון פרט לכל משפחה
   {
     const firstIds = new Set(out.filter((x) => x.type === 'connection').map((x) => x.ref));
@@ -290,7 +293,7 @@ export function buildSheet(def: DrawingDef, p: Project, d: DerivedModel, fab: Fa
 function buildSheetSized(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrication, bom: Bom, rec?: DrawingRecord): Sheet {
   if (rec?.sheet) return buildSheetOn(def, p, d, fab, bom, rec, rec.sheet);
   if (def.type === 'plates' || def.type === 'labels' || def.type === 'sequence') return buildSheetOn(def, p, d, fab, bom, rec, def.type === 'plates' ? p.settings.paper ?? 'A4' : 'A4');
-  if ((p.settings.paper ?? 'A4') === 'A4' && def.type !== 'assembly' && def.type !== 'brace-unit') {
+  if ((p.settings.paper ?? 'A4') === 'A4' && def.type !== 'assembly' && def.type !== 'brace-unit' && def.type !== 'truss-unit') {
     const sh = buildSheetOn(def, p, d, fab, bom, rec, 'A4');
     const partKind = def.type === 'part' ? d.byId.get(fab.parts.find((x) => x.mark === def.ref)?.memberId ?? '')?.kind : undefined;
     const max = def.type === 'part' && partKind !== 'plate' ? 50 : A4_MAX_SCALE[def.type];
@@ -1179,6 +1182,10 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
         if (c.bolts.length === 4 && st === 'plate') T('תושבת בתפר פטה: 2 ברגים לכל פטה — שני קצות הפטות נפגשים מעל התושבת.');
       }
       T('גיאומטריה בלבד — אין בדיקת חוזק לברגים, ריתוכים ופלטות.');
+      break;
+    }
+    case 'truss-unit': {
+      scaleLabel = trussUnitSheet(sh, def, d, fab, trussUnits(p, d), area);
       break;
     }
     case 'brace-unit': {
