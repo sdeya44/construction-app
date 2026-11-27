@@ -2,9 +2,9 @@ import { ConnPreview } from './ConnPreview';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { store, useStore } from '../store';
 import { generate } from '../geometry/generate';
-import { detailParamValues, siteKey } from '../geometry/detail';
+import { detailParamValues } from '../geometry/detail';
 import { uid } from '../core/ids';
-import { applyDetail, candidates, customParamDefs, detailById, readCurrent, situationOf, type ConnFamily, type ConnPreset, type Params } from '../model/connRegistry';
+import { applyDetail, candidates, customParamDefs, detailInfo, readCurrent, situationOf, type ConnFamily, type ConnPreset, type ParamDef, type Params } from '../model/connRegistry';
 import type { Project } from '../model/types';
 import { Dialog } from './Dialogs';
 import { PIC } from './DetailPicker';
@@ -41,7 +41,7 @@ function WizardBody({ connId }: { connId: string }) {
   const [sel, setSel] = useState<string>(() => cands.find((c) => c.detail === cur?.detail && !c.preset)?.id ?? cands[0]?.id);
   const pick = cands.find((c) => c.id === sel) ?? cands[0];
   const [params, setParams] = useState<Params>(() => ({ ...(cur?.params ?? {}) }));
-  const [scope, setScope] = useState<'all' | 'one'>(cur?.local && sit?.oneLabel !== null ? 'one' : 'all');
+  const [scope, setScope] = useState<'all' | 'one'>(sit?.oneLabel !== null ? 'one' : 'all'); // REV-F07: כניסה מחיבור מסוים — ברירת המחדל היא החיבור הזה בלבד
   const [check, setCheck] = useState<ReturnType<typeof evalCandidate> | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (pick?.preset) setParams({ ...(cur?.params ?? {}), ...pick.preset.params }); }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -49,7 +49,7 @@ function WizardBody({ connId }: { connId: string }) {
   const detCustom = pick?.studio ? (p.customDetails ?? []).find((x) => `custom:${x.id}` === pick.detail) : undefined;
   const cdefs = useMemo(() => (detCustom ? customParamDefs(detCustom) : []), [detCustom]);
   const cinfo = useMemo(() => (detCustom && sit?.site ? detailParamValues(d.members, sit.site.key, detCustom, params as Record<string, number>) : null), [detCustom, sit, d, params]);
-  useEffect(() => { if (pick?.studio && sit?.site) setParams(p.detailAssign?.[sit.site.key] === pick.detail.slice(7) ? { ...(p.detailParams?.[sit.site.key] ?? {}) } : {}); }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (pick?.studio && !pick.preset && sit?.site) setParams(p.detailAssign?.[sit.site.key] === pick.detail.slice(7) ? { ...(p.detailParams?.[sit.site.key] ?? {}) } : {}); }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
   const next = useMemo(() => (sit && pick && pick.fit.status !== 'no' ? applyDetail(p, sit, pick.detail, params, scope) : null), [p, sit, pick, params, scope]);
   useEffect(() => {
     if (!next || !sit) { setCheck(null); return; }
@@ -58,7 +58,7 @@ function WizardBody({ connId }: { connId: string }) {
     return () => clearTimeout(t);
   }, [next]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!sit || !cur) return <Dialog title="אשף חיבורים" onClose={close}><div className="hint">לסוג החיבור הזה אין עדיין סוגי פרט באשף — פתחו את עורך החיבור.</div></Dialog>;
-  const dt = detailById(pick?.detail ?? '');
+  const dt = detailInfo(p, pick?.detail ?? '');
   const vis = showAll ? cands : cands.filter((c) => c.fit.status !== 'no');
   const apply = () => { if (!next) return; store.exec({ label: `אשף חיבורים: ${pick!.title}${scope === 'one' ? ' (מיקום זה)' : ''}`, run: () => next }); close(); };
   const save = () => {
@@ -67,7 +67,6 @@ function WizardBody({ connId }: { connId: string }) {
     const pr: ConnPreset = { id: uid('CP'), family: sit.family, detail: pick!.detail, name, params: Object.fromEntries(Object.entries(params).filter(([k]) => dt?.params.some((q) => q.key === k))) };
     store.exec({ label: `ספריית חיבורים: ${name}`, run: (pp) => ({ ...pp, connLibrary: [...(pp.connLibrary ?? []), pr] }) });
   };
-  const brace = sit.family === 'knee' ? d.connById.get(connId)?.parts[0] : sit.family === 'strut' ? d.connById.get(connId)?.members[1] : d.connById.get(connId)?.members[0];
   const TAG: Record<string, string> = { ok: 'מתאים', warn: 'עם הערה', no: 'לא מתאים' };
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
@@ -98,13 +97,13 @@ function WizardBody({ connId }: { connId: string }) {
           </section>
           <section className="wiz-col">
             <h3>{pick?.title ?? ''} — פרמטרים ובדיקה</h3>
-            {dt && dt.params.map((q) => (
+            {dt?.builtin && dt.params.map((q) => (
               <div className="field" key={q.key}><label>{q.label}</label>
                 {q.options
-                  ? <select className="inp" data-testid={`wiz-p-${q.key}`} value={String(params[q.key] ?? '')} onChange={(e) => setParams({ ...params, [q.key]: Number(e.target.value) })}>{q.options.map((o) => <option key={o.v} value={o.v}>{o.t}</option>)}</select>
+                  ? <select className="inp" data-testid={`wiz-p-${q.key}`} value={String(params[q.key] ?? '')} onChange={(e) => setParams({ ...params, [q.key]: Number(e.target.value) })}>{(() => { const curV = params[q.key]; const has = curV === undefined || curV === '' || q.options!.some((o) => String(o.v) === String(curV)); return (has ? q.options! : [...q.options!, { v: curV as string | number, t: `${q.key === 'boltD' ? `M${curV}` : curV} (ערך קיים, מחוץ לרשימה)` }]).map((o) => <option key={o.v} value={o.v}>{o.t}</option>); })()}</select>
                   : <input className="inp num" data-testid={`wiz-p-${q.key}`} type="number" defaultValue={String(params[q.key] ?? '')} key={`${sel}-${q.key}`} onBlur={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) setParams({ ...params, [q.key]: Math.max(q.min ?? -Infinity, v) }); }} />}
               </div>))}
-            {dt && !dt.params.length && <div className="hint">לפרט הזה אין פרמטרים.</div>}
+            {dt?.builtin && !dt.params.length && <div className="hint">לפרט הזה אין פרמטרים.</div>}
             {cdefs.map((q) => {
               const val = cinfo?.values[q.key] ?? 0, dflt = cinfo?.defaults[q.key] ?? 0, own = q.key in params;
               const set = (v: number) => { const x = Math.min(q.max ?? Infinity, Math.max(q.min ?? -Infinity, v)); const n = { ...params }; if (Math.abs(x - dflt) < 1e-9) delete n[q.key]; else n[q.key] = x; setParams(n); };
@@ -133,10 +132,10 @@ function WizardBody({ connId }: { connId: string }) {
           <b>החל על:</b>
           {sit.oneLabel !== null && <label className="ss-radio"><input type="radio" data-testid="wiz-scope-one" checked={scope === 'one'} onChange={() => setScope('one')} />{sit.family === 'knee' ? 'המיקום הזה (כל המסגרות)' : sit.family === 'strut' ? 'שורת התמוכות הזו' : sit.oneLabel ?? 'החיבור הזה'}</label>}
           <label className="ss-radio"><input type="radio" data-testid="wiz-scope-all" checked={scope === 'all'} onChange={() => setScope('all')} />כל החיבורים באותו מצב ({sit.sameCount})</label>
-          <span className="hint" style={{ margin: 0 }}>{scope === 'all' ? 'חריגים קיימים נשמרים' : ''}</span>
+          <span className="hint" style={{ margin: 0 }} data-testid="wiz-scope-count"><b>{scope === 'all' ? `יוחלו ${sit.sameCount} חיבורים (חריגים קיימים נשמרים)` : 'יוחל על חיבור זה בלבד'}</b></span>
           <span style={{ marginInlineStart: 'auto' }} />
           <button className="btn" data-testid="wiz-save" disabled={!pick || pick.fit.status === 'no'} onClick={save}>שמור כהגדרה בספרייה</button>
-          {brace && <button className="btn" data-testid="wiz-studio" onClick={() => { store.set({ connWizard: null, detailStudio: siteKey(brace, 'start') }); }}>פתח בסטודיו ✎</button>}
+          {sit.site ? <button className="btn" data-testid="wiz-studio" onClick={() => { store.set({ connWizard: null, detailStudio: sit.site!.key }); }}>פתח בסטודיו ✎</button> : <span className="hint" data-testid="wiz-studio-na" style={{ margin: 0 }}>לסוג החיבור הזה אין עריכה בסטודיו (REV-F04: לא פותחים קצה שאינו שלו)</span>}
           <button className="btn primary" data-testid="wiz-apply" disabled={!next} onClick={apply}>החל</button>
         </footer>
       </div>
@@ -166,7 +165,7 @@ export function ConnLibrary() {
     const f = await pickFile('.json'); if (!f) return;
     try {
       const j = JSON.parse(await f.text());
-      const add: ConnPreset[] = (j.presets ?? []).filter((x: ConnPreset) => x && detailById(x.detail));
+      const add: ConnPreset[] = (j.presets ?? []).filter((x: ConnPreset) => x && detailInfo(p, x.detail));
       setLib([...lib, ...add.map((x) => ({ ...x, id: uid('CP') }))], `ייבוא ${add.length} הגדרות חיבור`);
     } catch { store.toast('error', 'קובץ לא תקין'); }
   };
@@ -178,7 +177,7 @@ export function ConnLibrary() {
         return <div key={f} style={{ marginBottom: 12 }}>
           <div className="sum-group">{FAM[f]} ({items.length})</div>
           {!items.length && <div className="hint">אין הגדרות שמורות — שומרים מתוך אשף החיבורים ("שמור כהגדרה בספרייה").</div>}
-          {items.map((x) => { const t = detailById(x.detail)!; const isDef = p.connDefaults?.[f] === x.id; return (
+          {items.map((x) => { const t = detailInfo(p, x.detail) ?? { id: x.detail, title: `${x.detail} (הפרט חסר בפרויקט)`, pic: 'flange', params: [] as ParamDef[], builtin: false }; const isDef = p.connDefaults?.[f] === x.id; return (
             <div key={x.id} className="sum-card" data-testid={`lib-${x.id}`}>
               <div className="sum-main" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <span>{PIC[t.pic as keyof typeof PIC]}</span>

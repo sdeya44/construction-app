@@ -108,6 +108,18 @@ export const DETAIL_TYPES: DetailType[] = [
 ];
 export const detailById = (id: string) => DETAIL_TYPES.find((t) => t.id === id);
 
+/** פותר אחיד לפרט לפי מזהה: מובנה (`knee.fin`) או מסטודיו (`custom:<id>`). חסר (פרט שנמחק) ⇒ `undefined` — המשתמש בפונקציה מטפל, לא קורס */
+export interface DetailInfo { id: string; title: string; pic: string; params: ParamDef[]; builtin: boolean; custom?: CustomDetail }
+export function detailInfo(p: Pick<Project, 'customDetails'>, id: string): DetailInfo | undefined {
+  const t = detailById(id);
+  if (t) return { id, title: t.title, pic: t.pic, params: t.params, builtin: true };
+  if (id.startsWith('custom:')) {
+    const c = (p.customDetails ?? []).find((x) => x.id === id.slice(7));
+    if (c) return { id, title: c.name, pic: 'flange', params: customParamDefs(c), builtin: false, custom: c };
+  }
+  return undefined;
+}
+
 /** פרמטרים של פרט מותאם (מתכון v2) בצורת שדות האשף הקיימת: מספר ⇒ min; בחירה ⇒ options; מתג ⇒ לא/כן */
 export function customParamDefs(det: CustomDetail): (ParamDef & { group?: string; hint?: string; max?: number; toggle?: boolean })[] {
   return shownParams(det).map((q) => ({
@@ -248,7 +260,7 @@ export function readCurrent(p: Project, s: Situation): { detail: string; params:
     const kb = b.kneeBraces ?? defaultKneeBraces();
     const ov = kb.sides?.[s.local];
     const det = kneeDetail(ov?.detail ?? kb.detail, s.memberFamily ?? '');
-    return { detail: `knee.${det}`, local: !!ov?.detail, params: { plateT: kb.plateT, boltsPerEnd: kb.boltsPerEnd ?? 2, boltD: kb.bolt.d } };
+    return { detail: `knee.${det}`, local: !!ov?.detail || ov?.plateT !== undefined || ov?.boltsPerEnd !== undefined || !!ov?.bolt, params: { plateT: ov?.plateT ?? kb.plateT, boltsPerEnd: ov?.boltsPerEnd ?? kb.boltsPerEnd ?? 2, boltD: ov?.bolt?.d ?? kb.bolt.d } };
   }
   if (s.family === 'strut') {
     const rs = b.bracing.rafterStruts ?? defaultRafterStruts();
@@ -313,9 +325,14 @@ export function applyDetail(p: Project, s: Situation, detail: string, params: Pa
   if (s.family === 'knee') {
     const kb = n.building.kneeBraces ?? { ...defaultKneeBraces(), enabled: true };
     const det = kind as 'fin' | 'angle' | 'flange';
-    if (scope === 'one') kb.sides = { ...(kb.sides ?? {}), [s.local]: { ...(kb.sides?.[s.local] ?? {}), detail: det } };
-    else kb.detail = det;
-    kb.plateT = num('plateT', kb.plateT); kb.boltsPerEnd = num('boltsPerEnd', kb.boltsPerEnd ?? 2); kb.bolt = { ...kb.bolt, d: num('boltD', kb.bolt.d) };
+    if (scope === 'one') {
+      // REV-F03: "המיקום הזה בלבד" לא דולף להגדרות הכלליות — עובי/ברגים/בורג נכתבים כחריג לצד הזה
+      const cur = { ...kb, ...(kb.sides?.[s.local] ?? {}) };
+      kb.sides = { ...(kb.sides ?? {}), [s.local]: { ...(kb.sides?.[s.local] ?? {}), detail: det, plateT: num('plateT', cur.plateT), boltsPerEnd: num('boltsPerEnd', cur.boltsPerEnd ?? 2), bolt: { ...cur.bolt, d: num('boltD', cur.bolt.d) } } };
+    } else {
+      kb.detail = det;
+      kb.plateT = num('plateT', kb.plateT); kb.boltsPerEnd = num('boltsPerEnd', kb.boltsPerEnd ?? 2); kb.bolt = { ...kb.bolt, d: num('boltD', kb.bolt.d) };
+    }
     n.building.kneeBraces = kb;
   } else if (s.family === 'strut') {
     const rs = n.building.bracing.rafterStruts ?? defaultRafterStruts();
@@ -339,7 +356,7 @@ export function applyDetail(p: Project, s: Situation, detail: string, params: Pa
     const w = n.building.bracing.walls;
     const pb = w.portal ?? defaultPortal();
     const patch = { finOrient: (kind === 'finH' ? 'horizontal' : 'vertical') as 'horizontal' | 'vertical', plateT: num('plateT', pb.plateT), beamBolts: num('beamBolts', pb.beamBolts ?? 2), boltsPerEnd: num('boltsPerEnd', pb.boltsPerEnd ?? 2) };
-    if (scope === 'one') w.linePortal = { ...(w.linePortal ?? {}), [s.local]: { ...(w.linePortal?.[s.local] ?? {}), ...patch } };
+    if (scope === 'one') { const cur = { ...pb, ...(w.linePortal?.[s.local] ?? {}) }; w.linePortal = { ...(w.linePortal ?? {}), [s.local]: { ...(w.linePortal?.[s.local] ?? {}), ...patch, bolt: { ...cur.bolt, d: num('boltD', cur.bolt.d) } } }; } // REV-F03: גם קוטר הבורג — לציר הזה בלבד
     else { const base0 = w.portal ?? defaultPortal(); w.portal = { ...base0, ...patch, bolt: { ...base0.bolt, d: num('boltD', base0.bolt.d) } }; }
   } else if (s.family === 'cleat') {
     const patch = { style: kind as 'run' | 'stand' | 'plate', thickness: num('thickness', 8), width: num('width', 100) };
@@ -359,7 +376,7 @@ export function applyDetail(p: Project, s: Situation, detail: string, params: Pa
     const w = n.building.bracing.walls;
     const base0 = w.truss ?? defaultLockTruss();
     const patch = { conn: kind as 'plate' | 'tongue', connA: undefined, connB: undefined, plateT: num('plateT', base0.plateT) };
-    if (scope === 'one') w.lineTruss = { ...(w.lineTruss ?? {}), [s.local]: { ...(w.lineTruss?.[s.local] ?? {}), ...patch } };
+    if (scope === 'one') { const cur = { ...base0, ...(w.lineTruss?.[s.local] ?? {}) }; w.lineTruss = { ...(w.lineTruss ?? {}), [s.local]: { ...(w.lineTruss?.[s.local] ?? {}), ...patch, bolt: { ...cur.bolt, d: num('boltD', cur.bolt.d) } } }; } // REV-F03
     else w.truss = { ...base0, ...patch, bolt: { ...base0.bolt, d: num('boltD', base0.bolt.d) } };
   } else if (s.family === 'psplice') {
     const sp = n.building.purlins.splice;
@@ -381,7 +398,14 @@ export function candidates(p: Project, s: Situation): { id: string; detail: stri
   type Cand = { id: string; detail: string; title: string; desc: string; pic: string; fit: Fit; preset?: ConnPreset; isDefault?: boolean; studio?: boolean };
   const out: Cand[] = [
     ...DETAIL_TYPES.filter((t) => t.family === s.family).map((t) => ({ id: t.id, detail: t.id, title: t.title, desc: t.desc, pic: t.pic, fit: t.fit(s) })),
-    ...lib.map((x) => { const t = detailById(x.detail)!; return { id: x.id, detail: x.detail, title: x.name, desc: `הגדרה שמורה של "${t.title}"`, pic: t.pic, fit: t.fit(s), preset: x, isDefault: p.connDefaults?.[s.family] === x.id }; }),
+    // הגדרה שמורה: של פרט מובנה או של פרט מהסטודיו (`custom:`); פרט שנמחק — מוצגת כ"לא מתאים" עם הסבר, בלי לקרוס
+    ...lib.map((x): Cand => {
+      const info = detailInfo(p, x.detail);
+      const isDefault = p.connDefaults?.[s.family] === x.id;
+      if (!info) return { id: x.id, detail: x.detail, title: x.name, desc: 'הגדרה שמורה של פרט שאינו קיים עוד בפרויקט', pic: 'flange', fit: { status: 'no', reason: 'הפרט המקורי נמחק או לא נטען — אפשר למחוק את ההגדרה בספריית החיבורים' }, preset: x, isDefault };
+      if (info.custom) return { id: x.id, detail: x.detail, title: x.name, desc: `הגדרה שמורה של "${info.title}" (מסטודיו)`, pic: info.pic, fit: studioFit(info.custom, s), preset: x, isDefault, studio: true };
+      return { id: x.id, detail: x.detail, title: x.name, desc: `הגדרה שמורה של "${info.title}"`, pic: info.pic, fit: detailById(x.detail)!.fit(s), preset: x, isDefault };
+    }),
     ...(s.site ? (p.customDetails ?? []).filter((x) => x.family !== 'cleat').map((x) => ({ id: `custom:${x.id}`, detail: `custom:${x.id}`, title: x.name, desc: x.note || 'פרט שנבנה בסטודיו', pic: 'flange', fit: studioFit(x, s), studio: true })) : []),
   ];
   const rank = { ok: 0, warn: 1, no: 2 } as const;

@@ -528,7 +528,7 @@ export interface KneeBraceParams {
   /** ביטול במסגרת מסוימת: "מסגרת|קו.מישור.צד" */
   offCells?: string[];
 }
-export interface KneeSideOverride { on?: boolean; drop?: Mm; angle?: number; reach?: Mm; mode?: 'angle' | 'reach'; profile?: string; /** פרט חיבור חריג לצד הזה */ detail?: 'fin' | 'flange' | 'angle' }
+export interface KneeSideOverride { on?: boolean; drop?: Mm; angle?: number; reach?: Mm; mode?: 'angle' | 'reach'; profile?: string; /** פרט חיבור חריג לצד הזה */ detail?: 'fin' | 'flange' | 'angle'; /** חריגי פרמטרי חיבור לצד הזה בלבד (REV-F03): עובי פח, ברגים לקצה, בורג — דורסים את הכלליים */ plateT?: Mm; boltsPerEnd?: number; bolt?: BoltSpec }
 
 export interface ProjectMeta {
   name: string;
