@@ -663,6 +663,8 @@ export interface Project {
   cleatOverrides: Record<string, Partial<CleatParams>>;
   /** ספריית פרטי חיבור מותאמים (מתכון פעולות עם נוסחאות) */
   customDetails?: CustomDetail[];
+  /** עקיבות חומר (1.106): ליטים (היתך/תעודה) והקצאת סימוני חלקים אליהם — רישום של המשתמש, לא אימות; אופציונלי (אין מיגרציה) */
+  traceability?: { lots: StockLot[]; assign: Record<string, string> };
   /** ספריית חיבורים (1.42): הגדרות שמורות לסוגי פרט — בפרויקט הפתוח בלבד; ייצוא/ייבוא כסטנדרט חברה */
   connLibrary?: import('./connRegistry').ConnPreset[];
   /** ברירת מחדל לכל משפחת חיבור (מזהה הגדרה שמורה) */
@@ -922,6 +924,9 @@ export interface CustomDetail {
   /** גרסת הגיאומטריה של הפרט (שינוי = פרט אחר) */
   version?: number;
 }
+
+/** ליט חומר: מספר היתך, תעודת מפעל (EN 10204 3.1), חתך וחומר. פלטות — החתך הוא `PL<עובי>` (למשל PL15) */
+export interface StockLot { id: string; heat: string; cert?: string; profile: string; material: string; note?: string }
 
 export interface SpliceInfo {
   id: string;

@@ -1,7 +1,7 @@
 import { add, rotateAxis, sub, v3, type Vec3 } from '../core/vec';
 import { degToRad } from '../core/units';
 import { generate, placementBasis } from '../geometry/generate';
-import type { CustomDetail, TransferDef, ValidationIssue, ApprovalStatus, BuildingParams, KneeBraceParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem } from '../model/types';
+import type { CustomDetail, TransferDef, ValidationIssue, ApprovalStatus, BuildingParams, KneeBraceParams, CleatParams, DrawingRecord, FrameDef, ManualMember, Member, MemberOverride, PlateConnParams, Project, PurlinSideParams, PurlinSystem, StockLot } from '../model/types';
 import { purlinParams } from '../geometry/purlins';
 import { effectiveSplices } from '../geometry/autoSplice';
 import { defaultKneeBraces } from '../geometry/knee';
@@ -862,6 +862,19 @@ export function withDetailCleared(keys: string[], inner: Command | null, label: 
       if (n.detailAssign) n.detailAssign = Object.fromEntries(Object.entries(n.detailAssign).filter(([k]) => !keys.includes(k)));
       n.detailParams = dropKeys(n.detailParams, keys);
       if (inner) n = inner.run(n);
+      return n;
+    },
+  };
+}
+
+/** עקיבות חומר: ליטים והקצאות (1.106) — מחליף את כל המבנה; `assign` מנוקה מהפניות לליטים שנמחקו */
+export function setTraceability(t: { lots: StockLot[]; assign: Record<string, string> }): Command {
+  return {
+    label: 'עקיבות חומר',
+    run: (p) => {
+      const n = clone(p);
+      const ids = new Set(t.lots.map((l) => l.id));
+      n.traceability = { lots: t.lots, assign: Object.fromEntries(Object.entries(t.assign).filter(([, id]) => ids.has(id))) };
       return n;
     },
   };

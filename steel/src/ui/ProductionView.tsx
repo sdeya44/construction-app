@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { approveRevision, numberParts, openNewRevision, setSettings } from '../commands/commands';
 import { boltsByNodeTable, bomTables, sequenceTable, toCsv, toXlsx } from '../fab/export';
 import { connReportTable } from '../fab/connReport';
+import { traceTable } from '../fab/traceability';
+import { TracePanel } from './TracePanel';
 import { CONN_TYPE } from './ConnectionEditor';
 import { dstvZip } from '../fab/dstv';
 import { NestingDialog } from './NestingDialog';
@@ -49,7 +51,7 @@ export function ProductionView() {
       ['סה"כ גג', '', '', Math.round(clad.roofArea * 10) / 10, 'מ"ר'], ['סה"כ קירות (נטו)', '', '', Math.round(clad.wallArea * 10) / 10, 'מ"ר'],
     ],
   } : null;
-  const tables = [...bomTables(bom, plans), boltsByNodeTable(p, store.state.derived), sequenceTable(p, store.state.derived, fab), connReportTable(p, store.state.derived, CONN_TYPE), ...(cladTable ? [cladTable] : []), quoteTable];
+  const tables = [...bomTables(bom, plans), boltsByNodeTable(p, store.state.derived), sequenceTable(p, store.state.derived, fab), connReportTable(p, store.state.derived, CONN_TYPE), traceTable(p, store.state.derived, fab), ...(cladTable ? [cladTable] : []), quoteTable];
   const isQuote = (i: number) => i === tables.length - 1;
   const setPrice = (k: keyof Pricing, v: number) => store.exec(setSettings({ pricing: { ...(p.settings.pricing ?? {}), [k]: v } }));
   const PRICE_FIELDS: [keyof Pricing, string][] = [
@@ -134,6 +136,7 @@ export function ProductionView() {
             const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${safeFileName(p.meta.name)}_כמויות.xlsx`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
           }}><Icon name="download" />Excel</button>
         </div>
+        {t.name === 'עקיבות חומר' && <TracePanel />}
         {isQuote(tab) && <div className="quote-prices" data-testid="quote-prices">
           {PRICE_FIELDS.map(([k, lab]) => <div className="field" key={k}><label>{lab}</label><NumField testId={`qp-${k}`} value={pricing[k]} step={0.5} onCommit={(v) => setPrice(k, v)} /></div>)}
           <div className="quote-sum" data-testid="quote-total">
