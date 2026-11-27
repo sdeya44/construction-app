@@ -129,6 +129,12 @@ export function removeFrame(id: string): Command {
       n.building.frames = n.building.frames.filter((f) => f.id !== id);
       for (const k of Object.keys(n.memberOverrides)) if (k.startsWith(`${id}.`)) delete n.memberOverrides[k];
       n.deleted = n.deleted.filter((d) => !d.startsWith(`${id}.`));
+      // QA-F1: הפניות נוספות למסגרת שנמחקה (השמות פרטים מותאמים, ערכי מופע, חריגי חיבור) — לא נשארות יתומות בפרויקט
+      const refsFrame = new RegExp(`(?:^|[.|:])${id.replace(/[^\w]/g, '\\$&')}(?=[.|:]|$)`);
+      const prune = <T extends Record<string, unknown> | undefined>(o: T): T => (o ? (Object.fromEntries(Object.entries(o).filter(([k]) => !refsFrame.test(k))) as T) : o);
+      n.detailAssign = prune(n.detailAssign); n.detailParams = prune(n.detailParams);
+      n.connectionOverrides = prune(n.connectionOverrides); n.cleatOverrides = prune(n.cleatOverrides);
+      if (n.building.kneeBraces?.offCells) n.building.kneeBraces.offCells = n.building.kneeBraces.offCells.filter((c) => !c.startsWith(`${id}|`));
       return n;
     },
   };

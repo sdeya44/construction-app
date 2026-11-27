@@ -438,10 +438,12 @@ export function buildDetail(site: Site, det: CustomDetail, opts: { connId?: stri
         let X: Vec3, Y: Vec3, Z: Vec3, center: Vec3;
         if (op.mode === 'flat') { Z = fr.n; Y = rotateAxis(fr.e1, Z, spin); X = scale(cross(Z, Y), fr.hand); center = add(o, scale(Z, t / 2 + off)); }
         else { X = fr.n; Y = rotateAxis(fr.e1, X, spin); Z = scale(cross(X, Y), fr.hand); center = add(o, scale(X, w / 2 + off)); }
-        const poly = platePoly(op.shape, w, h, ch, op.corners);
+        // פינות נקטמות: ביטוי לכל פינה (`cornerOn`, פרמטרי) או המערך הקבוע; הקיטום חלק מהקונטור האמיתי של הפלטה
+        const cor = op.cornerOn ? op.cornerOn.map((e, i) => ev(e, `${op.id}.c${i + 1}`, 0) !== 0) : op.corners;
+        const poly = platePoly(op.shape, w, h, ch, cor);
         const g: PlateGeom = { id: op.id, center, X, Y, Z, t, w, h, poly, hand: fr.hand, memberId: `${cid}.${op.id}`, target: targetOf(op.ref.on) };
         plates.set(op.id, g);
-        const pm = plateMember(g, op.name || 'פלטה', op.shape !== 'rect' && !(op.shape === 'cham' && (ch <= 0 || !op.corners.some(Boolean))), op.shape === 'rtri', op.suffix);
+        const pm = plateMember(g, op.name || 'פלטה', op.shape !== 'rect' && !(op.shape === 'cham' && (ch <= 0 || !cor.some(Boolean))), op.shape === 'rtri', op.suffix);
         // clipHost: קצה הפלטה שליד המארח נחתך במישור פני המארח (זווית חיתוך בחלק — כמו בקוד הישן, ו-NC1 מקבל את זווית החיתוך)
         if (op.clipHost && s.host && !s.cross) {
           const cut = { point: sub(s.P, scale(s.n, op.clipOff ? ev(op.clipOff, `${op.id}.clipOff`) : 0)), normal: scale(s.n, -1) };
@@ -909,6 +911,43 @@ function basePresets(): CustomDetail[] {
         { k: 'cut', id: 'C1', kind: 'host', at: 'P1.t + P2.t' },
         { k: 'holes', id: 'H1', ref: R('P2', 'z+'), rows: '2', cols: '2', px: 'g', py: 'p', d0: 'd0' },
         { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true, noMain: true, noHost: true },
+        { k: 'weld', id: 'W1', part: 'P1', a: 'max(4, ceil(mt))', site: false, to: 'host' },
+        { k: 'weld', id: 'W2', part: 'P2', a: 'max(4, ceil(mt))', site: false, to: 'main' },
+      ],
+    },
+    {
+      id: 'preset-plate-plate-cham', name: 'פלטה אל פלטה + קיטומי פינות (אלכסון)', family: 'any',
+      match: { member: ['RHS', 'SHS'], host: ['IPE', 'HEA', 'HEB', 'HEM'], angMin: 20, angMax: 85 },
+      note: 'אלכסון עמוד-קורה: פלטה מרותכת למארח ופלטה שנייה מרותכת לאלמנט, מוברגות זו לזו. בכל פלטה קיטומי פינה ישרים (ברירת מחדל 20×20: 20 מ"מ לאורך כל אחת משתי השפות הסמוכות לפינה) — חלק מהקונטור האמיתי, לא פילה. אילו פינות נקטמות ומידת הקיטום הם פרמטרים. ברגים/ריתוכים — הצעה לעריכה, ללא אישור חוזק.',
+      vars: [
+        { name: 'd', expr: '16', note: 'קוטר בורג' }, { name: 'd0', expr: 'd+2', note: 'קוטר חור' }, { name: 'e', expr: 'max(30, r5(1.5*d0))', note: 'מרחק שפה מציר החור' },
+        { name: 'ex', expr: '20', note: 'תוספת לרוחב הפלטות מעל הגדול מבין רוחב האלמנט והמארח' }, { name: 'eh', expr: '0', note: 'תוספת לגובה הפלטות מעל היטל האלמנט' },
+        { name: 't', expr: '12', note: 'עובי כל פלטה' },
+        { name: 'ch', expr: '20', note: 'קיטום פינה: אורך כל אחת משתי הניצבים (מ"מ), 0 = בלי קיטום' },
+        { name: 'k1', expr: '1', note: 'קיטום פינה ↗ (1 = כן)' }, { name: 'k2', expr: '1', note: 'קיטום פינה ↖' }, { name: 'k3', expr: '1', note: 'קיטום פינה ↙' }, { name: 'k4', expr: '1', note: 'קיטום פינה ↘' },
+        { name: 'nc', expr: '1', note: 'עמודות ברגים בכל צד של האלמנט (לרוחב)' }, { name: 'pc', expr: 'r5(2.6*d0)', note: 'מרווח בין עמודות ברגים באותו צד' }, { name: 'nr', expr: '2', note: 'שורות ברגים (לגובה)' },
+        { name: 'M', expr: 'max(mb, hb)', note: 'הגדול מבין רוחב האלמנט ורוחב המארח' }, { name: 'cl', expr: 'r5(0.95*d) + 5', note: 'מרחק ציר הבורג מקצה הגוף: חצי קוטר הדיסקית + 5 מ"מ' },
+        { name: 'W', expr: 'max(M + ex, M + 2*cl + 2*(nc-1)*pc + 2*e)', note: 'רוחב הפלטות: הגדול מבין הרוחבים + תוספת, ולפחות מקום לכל עמודות הברגים משני הצדדים מחוץ לגוף (מרחק דיסקית cl, מרווח pc בין עמודות) ומרווח שפה e אחרי החור' }, { name: 'H', expr: 'mh/sin(ang) + eh', note: 'גובה הפלטות' },
+        { name: 'g', expr: 'W - 2*e', note: 'מרחק בין העמודות הקיצוניות של הברגים' }, { name: 'p', expr: 'H - 2*e', note: 'מרחק בין השורות הקיצוניות של הברגים' },
+      ],
+      params: [
+        pBolt([12, 16, 20, 24]), pNum('e', 'מרחק שפה', 25, 100, 'ברגים'),
+        { name: 'nc', label: 'עמודות ברגים בכל צד', kind: 'select', group: 'ברגים', options: [1, 2].map((v) => ({ value: v, label: String(v) })) }, pNum('pc', 'מרווח בין עמודות ברגים', 35, 120, 'ברגים'),
+        { name: 'nr', label: 'שורות ברגים', kind: 'select', group: 'ברגים', options: [1, 2, 3].map((v) => ({ value: v, label: String(v) })) },
+        pNum('t', 'עובי פלטה', 6, 30, 'פלטות'), pNum('ex', 'תוספת לרוחב', 0, 100, 'פלטות', 'מעל הגדול מבין רוחב האלמנט לרוחב המארח'), pNum('eh', 'תוספת לגובה', 0, 100, 'פלטות', 'מעל גובה האלמנט (היטל על המארח)'),
+        pNum('ch', 'קיטום פינה', 0, 60, 'קיטומים', 'אורך כל אחת משתי הניצבים של הקיטום (20 = 20×20)'),
+        { name: 'k1', label: 'קיטום פינה ↗', kind: 'toggle', group: 'קיטומים' }, { name: 'k2', label: 'קיטום פינה ↖', kind: 'toggle', group: 'קיטומים' },
+        { name: 'k3', label: 'קיטום פינה ↙', kind: 'toggle', group: 'קיטומים' }, { name: 'k4', label: 'קיטום פינה ↘', kind: 'toggle', group: 'קיטומים' },
+      ],
+      ops: [
+        { k: 'plate', id: 'P1', name: 'פלטה על המארח', ref: R('host', 'hit'), mode: 'flat', spin: '0', off: '0', shape: 'cham', w: 'W', h: 'H', t: 't', ch: 'ch', corners: [false, false, false, false], cornerOn: ['k1', 'k2', 'k3', 'k4'] },
+        { k: 'plate', id: 'P2', name: 'פלטה על האלמנט', ref: R('P1', 'z+'), mode: 'flat', spin: '0', off: '0', shape: 'cham', w: 'W', h: 'H', t: 't', ch: 'ch', corners: [false, false, false, false], cornerOn: ['k1', 'k2', 'k3', 'k4'] },
+        { k: 'cut', id: 'C1', kind: 'host', at: 'P1.t + P2.t' },
+        // ברגים משני צדי האלמנט (מחוץ להיטל שלו): קבוצה לכל צד, nc עמודות בכל צד
+        { k: 'holes', id: 'H1', ref: R('P2', 'z+', '0', '-(g/2 - (nc-1)*pc/2)'), rows: 'nr', cols: 'nc', px: 'pc', py: 'p/max(nr-1, 1)', d0: 'd0' },
+        { k: 'holes', id: 'H2', ref: R('P2', 'z+', '0', '(g/2 - (nc-1)*pc/2)'), rows: 'nr', cols: 'nc', px: 'pc', py: 'p/max(nr-1, 1)', d0: 'd0' },
+        { k: 'bolts', id: 'B1', holes: 'H1', d: 'd', grade: '8.8', site: true, noMain: true, noHost: true },
+        { k: 'bolts', id: 'B2', holes: 'H2', d: 'd', grade: '8.8', site: true, noMain: true, noHost: true },
         { k: 'weld', id: 'W1', part: 'P1', a: 'max(4, ceil(mt))', site: false, to: 'host' },
         { k: 'weld', id: 'W2', part: 'P2', a: 'max(4, ceil(mt))', site: false, to: 'main' },
       ],

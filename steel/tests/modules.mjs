@@ -21,7 +21,7 @@ export const MODULES = {
   frame: {
     title: 'מסגרות, צירים, חתך, גבהים, תוכנית',
     src: ['src/geometry/generate.ts', 'src/geometry/frame.ts', 'src/geometry/plan.ts', 'src/geometry/solid.ts', 'src/geometry/parts.ts', 'src/geometry/audit.ts', 'src/geometry/clash.ts', 'src/geometry/lengthWhy.ts', 'src/model/section.ts', 'src/model/defaults.ts', 'src/model/validate.ts', 'src/model/types.ts'],
-    tests: ['tests/generate.test.ts', 'tests/section.test.ts', 'tests/framesection.test.ts', 'tests/plan.test.ts', 'tests/steep.test.ts', 'tests/v137.test.ts', 'tests/newshapes.test.ts'],
+    tests: ['tests/qa-resize.test.ts', 'tests/generate.test.ts', 'tests/section.test.ts', 'tests/framesection.test.ts', 'tests/plan.test.ts', 'tests/steep.test.ts', 'tests/v137.test.ts', 'tests/newshapes.test.ts'],
     e2e: ['e2e/m1.spec.ts', 'e2e/wizard-sheet.spec.ts'],
   },
   purlins: {
@@ -45,8 +45,8 @@ export const MODULES = {
   connections: {
     title: 'חיבורים: בסיס, ראש עמוד, רכס, פרטים מותאמים, אשף חיבורים',
     src: ['src/geometry/connections.ts', 'src/geometry/detail.ts', 'src/geometry/midSite.ts', 'src/geometry/detailLibrary.ts', 'src/geometry/data/', 'src/ui/DetailLibrary.tsx', 'src/ui/ConnTypePicker.tsx', 'src/ui/DetailStudio.tsx', 'src/geometry/eavePlate.ts', 'src/model/connRegistry.ts', 'src/ui/wizard/DetailParams.tsx', 'src/ui/ConnWizard.tsx'],
-    tests: ['tests/connections.test.ts', 'tests/uhost-compare.test.ts', 'tests/connwizard.test.ts', 'tests/conn-review.test.ts', 'tests/detail.test.ts', 'tests/plateplate.test.ts', 'tests/mates.test.ts', 'tests/studiofix.test.ts', 'tests/extras141.test.ts', 'tests/connlib.test.ts', 'tests/detailparams.test.ts', 'tests/connperf.test.ts', 'tests/base-compare.test.ts', 'tests/g9-wizard.test.ts', 'tests/side-compare.test.ts', 'tests/bolt-washer.test.ts', 'tests/portal-compare.test.ts', 'tests/lock-compare.test.ts', { file: 'tests/cad-oracle.test.ts', t: 'CAD-11' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-12' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-13' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-10' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-09' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-08' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-03' }, cad('· base'), cad('· eave'), cad('· ridge'), { file: 'tests/cad-oracle.test.ts', t: 'CAD-02' }],
-    e2e: ['e2e/detail-params.spec.ts', 'e2e/connwizard.spec.ts', 'e2e/conn-review.spec.ts', 'e2e/detail-studio.spec.ts', 'e2e/studio-mates.spec.ts', 'e2e/plate-wizard.spec.ts', 'e2e/v134.spec.ts', 'e2e/v167.spec.ts'],
+    tests: ['tests/connections.test.ts', 'tests/uhost-compare.test.ts', 'tests/connwizard.test.ts', 'tests/conn-review.test.ts', 'tests/detail.test.ts', 'tests/plateplate.test.ts', 'tests/chamfer.test.ts', 'tests/mates.test.ts', 'tests/studiofix.test.ts', 'tests/extras141.test.ts', 'tests/connlib.test.ts', 'tests/detailparams.test.ts', 'tests/connperf.test.ts', 'tests/base-compare.test.ts', 'tests/g9-wizard.test.ts', 'tests/side-compare.test.ts', 'tests/bolt-washer.test.ts', 'tests/portal-compare.test.ts', 'tests/lock-compare.test.ts', { file: 'tests/cad-oracle.test.ts', t: 'CAD-11' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-12' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-13' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-10' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-09' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-08' }, { file: 'tests/cad-oracle.test.ts', t: 'CAD-03' }, cad('· base'), cad('· eave'), cad('· ridge'), { file: 'tests/cad-oracle.test.ts', t: 'CAD-02' }],
+    e2e: ['e2e/detail-params.spec.ts', 'e2e/connwizard.spec.ts', 'e2e/conn-review.spec.ts', 'e2e/detail-studio.spec.ts', 'e2e/studio-mates.spec.ts', 'e2e/chamfer.spec.ts', 'e2e/plate-wizard.spec.ts', 'e2e/v134.spec.ts', 'e2e/v167.spec.ts'],
   },
   wing: {
     title: 'סככת L (כנף) וכיסאות',
