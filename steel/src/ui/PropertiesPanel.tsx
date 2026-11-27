@@ -482,13 +482,13 @@ function MakeTemplateButton({ c }: { c: Connection }) {
     const clean = generate({ ...store.state.project, detailAssign: {} });
     const r = templateFromParts(d, ids, { siteMembers: clean.members, id: `cd-${Date.now().toString(36)}` });
     if (!r.detail || !r.siteKey) { store.toast('error', `לא ניתן להפוך לתבנית: ${r.errors[0] ?? 'לא נמצא אתר מתאים'}`); return; }
-    if (r.warnings.length) store.toast('info', r.warnings[0]);
+    if (r.warnings.length) store.toast('info', `${r.warnings[0]}${r.warnings.length > 1 ? ` (ועוד ${r.warnings.length - 1} הערות — בהערות הפרט)` : ''}`);
     store.set({ studioDraft: r.detail, detailStudio: r.siteKey, studioConn: null });
   };
   return <div className="hub-set-row" style={{ marginTop: 6 }}>
-    <button className="btn" data-testid="make-template" onClick={make} title="יוצר פרט (פלטות וחורים) מהפלטות שנבחרו במודל ופותח אותו בסטודיו לעריכה והפיכת מידות לפרמטרים">
+    <button className="btn" data-testid="make-template" onClick={make} title="יוצר פרט (פלטות, חורים, ברגים) מהפלטות שנבחרו במודל ופותח אותו בסטודיו לעריכה והפיכת מידות לפרמטרים">
       הפוך לתבנית{picked.length > 1 ? ` (${picked.length} פלטות)` : ''}</button>
-    <div className="hint">{picked.length ? 'הפלטות שנבחרו במודל' : 'בחרו פלטה (או כמה, מאותו קצה)'} ← פרט חדש בסטודיו. פלטות וחורים בלבד; ברגים וריתוכים מוסיפים בסטודיו.</div>
+    <div className="hint">{picked.length ? 'הפלטות שנבחרו במודל' : 'בחרו פלטה (או כמה, מאותו קצה)'} ← פרט חדש בסטודיו. פלטות, חורים וברגים; ריתוכים וחיתוך האלמנט מוסיפים בסטודיו.</div>
   </div>;
 }
 

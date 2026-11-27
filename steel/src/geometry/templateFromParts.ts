@@ -13,8 +13,9 @@ import { localFrame } from './frame';
  * מגע בפנים (|off| ≤ 0.5), זווית "נקייה" (כפולה של 90°), פנים "ציר" (axis) רק כמוצא אחרון, קרבה למרכז הפנים (|along|+|across|+|off|, מעוגל למ"מ), עדיפות פנים (פלטה קודמת ← מארח ← קצה האלמנט ← דפנות).
  * בטיחות: כל תוצאה מאומתת הלוך-חזור — הפרט נבנה מחדש על אותו אתר ומושווה לפלטות ולחורים של המקור; בלי התאמה — אין פרט.
  *
- * מחוץ לשלב 1 (בכוונה): ברגים (שלב 2), ריתוכים וחיתוך קצה האלמנט (שלב 3). חורים נרשמים כפעולת `holes` — לפי המנוע
- * הם נראים במודל רק כשיש עליהם `bolts` (ראו `tests/templatefromparts.test.ts`, האימות משתמש בברגי בדיקה זמניים).
+ * שלב 2: ברגים — פעולת `bolts` לכל קבוצת חורים שיש לה בורג במקור (קוטר, דרגה, תקן, מסגריה/שטח, `grip` כשהמדידה שונה,
+ * דגלי noMain/noHost לפי החלקים שהבורג עובר בהם). חורים בלי ברגים נפלטים מהמנוע רק דרך `bolts`, ולכן קבוצות חורים בלי בורג
+ * מאומתות בברגי בדיקה זמניים. מחוץ לתחום (שלב 3): ריתוכים וחיתוך קצה האלמנט (`cut`).
  */
 
 /** סטיית מידה מרבית (מ"מ) להלוך-חזור: פלטות וחורים */
@@ -33,7 +34,7 @@ export interface TemplateResult {
   warnings: string[];
   infos: TemplateInfo[];
   /** סטייה מרבית (מ"מ) בהלוך-חזור: פלטות, חורים */
-  dev?: { plates: number; holes: number };
+  dev?: { plates: number; holes: number; bolts?: number };
 }
 
 export interface PartsModel { members: Member[]; connections: Connection[] }
@@ -193,20 +194,20 @@ const plateOp = (id: string, name: string, c: Cand): DetailOp => ({
 
 // ---------- חורים ----------
 
-interface SrcHole { pt: Vec3; axis: Vec3; d: number }
+interface SrcHole { pt: Vec3; axis: Vec3; d: number; bolt?: BoltInfo }
 
 function holesThrough(model: PartsModel, src: SrcPlate): SrcHole[] {
   const out: SrcHole[] = [];
-  const add1 = (p: Vec3, axis: Vec3, d: number) => {
+  const add1 = (p: Vec3, axis: Vec3, d: number, bolt?: BoltInfo) => {
     const k = dot(axis, src.Z);
     if (Math.abs(k) < 0.5) return;
     const s = dot(sub(src.m.start, p), src.Z) / k;
     const pt = add(p, scale(axis, s));
     // החור חייב ליפול בתוך מתאר הפלטה (בדיקה גסה: בתוך תיבת התוחם)
-    out.push({ pt, axis: norm(axis), d });
+    out.push({ pt, axis: norm(axis), d, ...(bolt ? { bolt } : {}) });
   };
   for (const c of model.connections) {
-    for (const b of c.bolts as BoltInfo[]) if (b.holesIn.includes(src.id)) add1(b.p, b.axis, b.hole);
+    for (const b of c.bolts as BoltInfo[]) if (b.holesIn.includes(src.id)) add1(b.p, b.axis, b.hole, b);
     for (const h of c.holes ?? []) if (h.memberId === src.id) add1(h.p, h.axis, h.d);
   }
   // כפילויות (אותו חור שמופיע גם בבורג וגם ברשימת חורים)
@@ -242,65 +243,121 @@ export function groupHoles(pts: [number, number][]): HGroup[] {
 const nameOf = (m: Member) => (m.partDesc ?? m.label ?? '').replace(/\s*PL\d.*$/, '').trim() || 'פלטה';
 
 /** מנסה להסיק פרט על אתר אחד. מחזיר פרט + סטיות, או סיבת כשל */
-function inferOnSite(model: PartsModel, site: Site, srcs: SrcPlate[], id: string, name: string): { det?: CustomDetail; infos: TemplateInfo[]; warnings: string[]; dev?: { plates: number; holes: number }; err?: string } {
+function inferOnSite(model: PartsModel, site: Site, srcs: SrcPlate[], id: string, name: string, opts: { bolts?: boolean }): { det?: CustomDetail; infos: TemplateInfo[]; warnings: string[]; dev?: { plates: number; holes: number; bolts?: number }; err?: string } {
   let det: CustomDetail = { ...blankDetail(name), id, name, vars: [], ops: [] };
   const infos: TemplateInfo[] = [], warnings: string[] = [], remaining = [...srcs], placed: { src: SrcPlate; opId: string }[] = [];
   let k = 0;
   while (remaining.length) {
     const res = buildDetail(site, det);
-    let best: { i: number; c: Cand } | null = null;
+    // כל המועמדים של כל הפלטות שנותרו, מהטוב לגרוע; הראשון שהלוך-חזור שלו (מתאר הפלטה) עובר — נבחר
+    const all: { i: number; c: Cand }[] = [];
     remaining.forEach((src, i) => {
       const refs: [string, string, number][] = [...placed.flatMap((p) => [[p.opId, 'z+', 0], [p.opId, 'z-', 0]] as [string, string, number][]), ...SITE_FACES];
       for (const [on, face, prio] of refs) {
         const fr = res.frame({ on, face });
         if (!fr) continue;
-        for (const c of candidatesFor(src, fr, on, face, prio)) if (!best || cmp(c.score, best.c.score) < 0) best = { i, c };
+        for (const c of candidatesFor(src, fr, on, face, prio)) all.push({ i, c });
       }
     });
-    if (!best) return { infos, warnings, err: `לא נמצאו פנים באתר שעליהן אפשר לתאר את הפלטה ${remaining[0].id} (צורה לא נתמכת או כיוון לא ישר ביחס לפנים)` };
-    const { i, c } = best as { i: number; c: Cand };
-    const src = remaining.splice(i, 1)[0], opId = `P${++k}`;
-    const op = plateOp(opId, nameOf(src.m), c) as Extract<DetailOp, { k: 'plate' }>;
-    if (src.cut) {
-      // חיתוך קצה במישור פני המארח (`clipHost`): מישור המקור חייב להיות מקביל לפני המארח
-      if (!site.host || site.cross || Math.abs(dot(norm(src.cut.plane.normal), site.n)) < 1 - 1e-6) return { infos, warnings, err: `הפלטה ${src.id}: חיתוך הקצה אינו במישור פני המארח — לא נתמך עדיין בהסקה` };
-      op.clipHost = true;
-      const co = dot(sub(site.P, src.cut.plane.point), site.n);
-      if (Math.abs(co) > 0.005) op.clipOff = S(co);
+    if (!all.length) return { infos, warnings, err: `לא נמצאו פנים באתר שעליהן אפשר לתאר את הפלטה ${remaining[0].id} (צורה לא נתמכת או כיוון לא ישר ביחס לפנים)` };
+    all.sort((x, y) => cmp(x.c.score, y.c.score) || x.i - y.i);
+    const opId = `P${k + 1}`;
+    let chosen: { i: number; c: Cand; op: Extract<DetailOp, { k: 'plate' }> } | null = null, why = '';
+    for (const { i, c } of all.slice(0, 60)) {
+      const src = remaining[i];
+      const op = plateOp(opId, nameOf(src.m), c) as Extract<DetailOp, { k: 'plate' }>;
+      if (src.cut) {
+        // חיתוך קצה במישור פני המארח (`clipHost`): מישור המקור חייב להיות מקביל לפני המארח
+        if (!site.host || site.cross || Math.abs(dot(norm(src.cut.plane.normal), site.n)) < 1 - 1e-6) { why = `הפלטה ${src.id}: חיתוך הקצה אינו במישור פני המארח — לא נתמך עדיין בהסקה`; continue; }
+        op.clipHost = true;
+        const co = dot(sub(site.P, src.cut.plane.point), site.n);
+        if (Math.abs(co) > 0.005) op.clipOff = S(co);
+      }
+      const t = buildDetail(site, { ...det, ops: [...det.ops, op] }), rb = t.members.find((m) => m.id === `${t.conn.id}.${opId}`), o = rb ? plateOutline(rb) : null;
+      if (!o || typeof o === 'string' || t.errors[opId] || !(polyDev(o.poly, src.poly) <= TFP_TOL) || Math.abs(o.t - src.t) > TFP_TOL) { why = `הפלטה ${src.id}: אף הצבה אפשרית לא שחזרה את המתאר (סטייה ${o && typeof o !== 'string' ? (Number.isFinite(polyDev(o.poly, src.poly)) ? `${r2(polyDev(o.poly, src.poly))} מ"מ` : 'צורה שונה') : 'ללא פלטה'})`; continue; }
+      chosen = { i, c, op };
+      break;
     }
+    if (!chosen) return { infos, warnings, err: why };
+    const { i, c, op } = chosen, src = remaining.splice(i, 1)[0];
+    k++;
     det = { ...det, ops: [...det.ops, op] };
     placed.push({ src, opId });
     infos.push({ plate: src.id, op: opId, ref: `${c.on}.${c.face}`, mode: c.mode, spin: c.spin, off: r2(c.off), shape: c.sh.shape, contact: Math.abs(c.off) <= CONTACT });
     if (Math.abs(c.off) > CONTACT) warnings.push(`הפלטה ${src.id} לא נוגעת בפנים הייחוס ${c.on}.${c.face} (היסט ${S(c.off)} מ"מ) — נשמר כהיסט`);
   }
   // חורים: לכל פלטה לפי סדר ההצבה; חור שכבר מכוסה (אותו קו בורג דרך פלטה קודמת) לא נכפל
-  const res2 = buildDetail(site, det);
-  const hops: DetailOp[] = [], srcHoles: { src: SrcPlate; pts: Vec3[] }[] = [], done: SrcHole[] = [];
+  const res2 = buildDetail(site, det), cid = res2.conn.id;
+  type HMeta = { op: Extract<DetailOp, { k: 'holes' }>; spec?: { d: number; grade: string; standard: string; location: 'site' | 'shop' }; ref?: BoltInfo };
+  const hmeta: HMeta[] = [], srcHoles: { src: SrcPlate; pts: Vec3[] }[] = [], done: SrcHole[] = [], srcBolts = new Set<BoltInfo>();
   let hk = 0;
   for (const p of placed) {
     const hs = holesThrough(model, p.src);
     srcHoles.push({ src: p.src, pts: hs.map((h) => h.pt) });
+    hs.forEach((h) => { if (h.bolt) srcBolts.add(h.bolt); });
     const fr = res2.frame({ on: p.opId, face: 'z+' });
     if (!fr) continue;
     const fresh = hs.filter((h) => !done.some((q) => Math.abs(dot(q.axis, h.axis)) > 0.99 && len(sub(sub(q.pt, h.pt), scale(h.axis, dot(sub(q.pt, h.pt), h.axis)))) < 0.3 && Math.abs(q.d - h.d) < 0.05));
     done.push(...fresh);
+    // קבוצה = אותו קוטר חור, אותו כיוון ואותם מאפייני בורג (קוטר, דרגה, תקן, מסגריה/שטח)
     const keyed = new Map<string, SrcHole[]>();
-    for (const h of fresh) { const key = `${r2(h.d)}|${dot(h.axis, fr.n) < 0 ? 'r' : 'f'}`; keyed.set(key, [...(keyed.get(key) ?? []), h]); }
+    for (const h of fresh) { const key = `${r2(h.d)}|${dot(h.axis, fr.n) < 0 ? 'r' : 'f'}|${h.bolt ? `${h.bolt.d}|${h.bolt.grade}|${h.bolt.standard}|${h.bolt.location}` : '-'}`; keyed.set(key, [...(keyed.get(key) ?? []), h]); }
     for (const [key, list] of [...keyed.entries()].sort()) {
-      const [d, dir] = key.split('|');
+      const [d, dir] = key.split('|'), bo = list[0].bolt;
       const groups = groupHoles(list.map((h) => { const r = sub(h.pt, fr.base); return [dot(r, fr.e1), dot(r, fr.e2)] as [number, number]; }));
       if (groups.length > 1) warnings.push(`החורים בפלטה ${p.src.id} אינם רשת סדירה — נוצרו ${groups.length} קבוצות חורים`);
-      for (const g of groups) hops.push({ k: 'holes', id: `H${++hk}`, ref: { on: p.opId, face: 'z+', along: S(g.along), across: S(g.across) }, rows: String(g.rows), cols: String(g.cols), px: S(g.px), py: S(g.py), d0: d, ...(g.ring ? { ring: true } : {}), ...(dir === 'r' ? { rev: '1' } : {}) });
+      for (const g of groups) hmeta.push({ op: { k: 'holes', id: `H${++hk}`, ref: { on: p.opId, face: 'z+', along: S(g.along), across: S(g.across) }, rows: String(g.rows), cols: String(g.cols), px: S(g.px), py: S(g.py), d0: d, ...(g.ring ? { ring: true } : {}), ...(dir === 'r' ? { rev: '1' } : {}) }, ...(bo ? { spec: { d: bo.d, grade: bo.grade, standard: bo.standard, location: bo.location }, ref: bo } : {}) });
     }
   }
+  const hops = hmeta.map((h) => h.op);
   det = { ...det, ops: [...det.ops, ...hops] };
 
-  // אימות הלוך-חזור: פלטות (מתאר) וחורים (דרך ברגי בדיקה זמניים, כי חורים בלי ברגים אינם נפלטים מהמנוע)
-  const probe: CustomDetail = { ...det, ops: [...det.ops, ...hops.map((h, i) => ({ k: 'bolts', id: `PB${i + 1}`, holes: h.id, d: '12', grade: '8.8', site: true, noMain: true, noHost: true }) as DetailOp)] };
-  const built = buildDetail(site, probe);
+  // ברגים (שלב 2): פעולת bolts לכל קבוצת חורים שיש לה בורג במקור. הדגלים noMain/noHost נבחרים כך שהחלקים שהבורג עובר בהם יהיו כמו במקור
+  const boltOps: Extract<DetailOp, { k: 'bolts' }>[] = [];
+  const mapId = new Map<string, string>(placed.map((p) => [p.src.id, `${cid}.${p.opId}`]));
+  if (opts.bolts !== false) {
+    let bk = 0;
+    for (const h of hmeta) {
+      if (!h.spec || !h.ref) continue;
+      const op: Extract<DetailOp, { k: 'bolts' }> = { k: 'bolts', id: `B${++bk}`, holes: h.op.id, d: S(h.spec.d), grade: h.spec.grade, site: h.spec.location === 'site', ...(h.spec.standard !== 'ISO 4017' ? { standard: h.spec.standard } : {}) };
+      const want = new Set(h.ref.holesIn.filter((id) => mapId.has(id) || id === site.main.id || id === site.host?.id).map((id) => mapId.get(id) ?? id));
+      const skipped = h.ref.holesIn.filter((id) => !mapId.has(id) && id !== site.main.id && id !== site.host?.id);
+      if (skipped.length) warnings.push(`הבורג של ${h.op.id} עובר גם בחלקים שלא נבחרו (${skipped.join(', ')}) — לא יופיעו בפרט`);
+      let best: { f: Pick<typeof op, 'noMain' | 'noHost'>; score: number } | null = null;
+      // קודם הדגלים שנגזרים מהמקור (אלמנט/מארח שהבורג לא עובר בהם ← לא משתתפים בסריקה — יציב גם כשמפרמטרים), ואז שאר הצירופים
+      const derived: Pick<typeof op, 'noMain' | 'noHost'> = { ...(want.has(site.main.id) ? {} : { noMain: true }), ...(!site.host || want.has(site.host.id) ? {} : { noHost: true }) };
+      for (const f of [derived, {}, { noMain: true }, { noHost: true }, { noMain: true, noHost: true }] as Pick<typeof op, 'noMain' | 'noHost'>[]) {
+        const t = buildDetail(site, { ...det, ops: [...det.ops, ...boltOps, { ...op, ...f }] });
+        const bs = t.conn.bolts.filter((b) => b.id.startsWith(`${cid}.${op.id}.`));
+        const got = new Set(bs[0]?.holesIn ?? []);
+        const score = [...want].filter((x) => got.has(x)).length - [...got].filter((x) => !want.has(x)).length - (bs.length ? 0 : 99);
+        if (!best || score > best.score) best = { f, score };
+        if (score === want.size) break;
+      }
+      Object.assign(op, best!.f);
+      if (best!.score < want.size) warnings.push(`הפרט שהוסק: הבורג של ${h.op.id} עובר בחלקים שונים מהמקור (נדרש: ${[...want].map((x) => x.replace(`${cid}.`, '')).join(', ')})`);
+      boltOps.push(op);
+    }
+    det = { ...det, ops: [...det.ops, ...boltOps] };
+  }
+
+  // אימות הלוך-חזור: פלטות (מתאר), חורים (דרך ברגי בדיקה זמניים לקבוצות בלי בורג) וברגים (מפרט, אחיזה, מיקום)
+  const probeOps = (): DetailOp[] => hmeta.filter((h) => !boltOps.some((b) => b.holes === h.op.id)).map((h, i) => ({ k: 'bolts', id: `PB${i + 1}`, holes: h.op.id, d: '12', grade: '8.8', site: true, noMain: true, noHost: true }) as DetailOp);
+  const lateral = (p: Vec3, a: Vec3, q: Vec3) => { const r = sub(q, p); return len(sub(r, scale(a, dot(r, a)))); };
+  const realBolts = (bs: BoltInfo[]) => bs.filter((b) => !b.id.includes('.PB'));
+  const matchBolt = (bs: BoltInfo[], sb: BoltInfo) => bs.filter((b) => Math.abs(dot(b.axis, sb.axis)) > 0.99).map((b) => ({ b, d: lateral(sb.p, sb.axis, b.p) })).sort((x, y) => x.d - y.d)[0];
+  let built = buildDetail(site, { ...det, ops: [...det.ops, ...probeOps()] });
+  // אחיזה (grip): אם המנוע מודד אחרת מהמקור — נקבעת במפורש (המדידה מעוגלת; אורך הבורג רגיש לה)
+  let regrip = false;
+  for (const bo of boltOps) {
+    const mine = realBolts(built.conn.bolts).filter((b) => b.id.startsWith(`${cid}.${bo.id}.`));
+    const grips = [...srcBolts].map((sb) => ({ sb, m: matchBolt(mine, sb) })).filter((x) => x.m && x.m.d <= TFP_TOL && x.sb.d === mine[0]?.d);
+    if (grips.length && grips.some((x) => Math.abs(x.m!.b.grip - x.sb.grip) > 0.05)) { bo.grip = S(grips[0].sb.grip); regrip = true; }
+  }
+  if (regrip) { det = { ...det, ops: det.ops.map((o) => boltOps.find((b) => b.id === o.id) ?? o) }; built = buildDetail(site, { ...det, ops: [...det.ops, ...probeOps()] }); }
   const bad = Object.entries(built.errors).filter(([key]) => !key.startsWith('_'));
   if (bad.length) return { infos, warnings, err: `שגיאת בנייה בפרט שהוסק (${bad.map(([a, b]) => `${a}: ${b}`).join('; ')})` };
-  let dp = 0, dh = 0;
+  let dp = 0, dh = 0, db = 0, dhead = 0;
   for (let i = 0; i < placed.length; i++) {
     const { src } = placed[i], rb = built.members.find((m) => m.id === `${built.conn.id}.${placed[i].opId}`);
     const o = rb ? plateOutline(rb) : 'חסרה';
@@ -317,14 +374,27 @@ function inferOnSite(model: PartsModel, site: Site, srcs: SrcPlate[], id: string
       if (pts.length > sh.length) warnings.push(`הפלטה ${src.id}: בפרט שהוסק יש ${pts.length - sh.length} חורים נוספים מעבר למקור (חורי פלטה אחרת באותו קו בורג)`);
     }
   }
-  return { det, infos, warnings, dev: { plates: r2(dp), holes: r2(dh) } };
+  if (boltOps.length) {
+    const mine = realBolts(built.conn.bolts);
+    for (const sb of srcBolts) {
+      const m = matchBolt(mine, sb);
+      if (!m || !(m.d <= TFP_TOL)) return { infos, warnings, err: `בורג ${sb.id} (M${sb.d}) לא שוחזר בפרט שהוסק (סטייה ${m ? r2(m.d) : '∞'} מ"מ)` };
+      const b = m.b;
+      if (b.d !== sb.d || b.grade !== sb.grade || b.standard !== sb.standard || b.location !== sb.location) return { infos, warnings, err: `בורג ${sb.id}: מפרט שונה אחרי הלוך-חזור (M${b.d} ${b.grade} מול M${sb.d} ${sb.grade})` };
+      if (Math.abs(b.length - sb.length) > 0.05) warnings.push(`בורג ${sb.id}: אורך ${b.length} במקום ${sb.length} מ"מ (אורך אחיזה ${b.grip} מול ${sb.grip})`);
+      db = Math.max(db, m.d); dhead = Math.max(dhead, Math.abs(dot(sub(b.p, sb.p), sb.axis)));
+    }
+    if (mine.length > srcBolts.size) warnings.push(`בפרט שהוסק יש ${mine.length - srcBolts.size} ברגים נוספים מעבר למקור`);
+    if (dhead > TFP_TOL) warnings.push(`ראש הבורג בפרט שהוסק מוסט עד ${r2(dhead)} מ"מ לאורך הציר לעומת המקור (המנוע ממקם לפי סריקת החומר)`);
+  }
+  return { det, infos, warnings, dev: { plates: r2(dp), holes: r2(dh), ...(boltOps.length ? { bolts: r2(db) } : {}) } };
 }
 
 /**
  * פרט מפלטות שנבחרו. `plateIds` — מזהי פלטות במודל (אחת או כמה). `opts.siteKey` — אתר מפורש (אחרת מנסים את קצוות האלמנטים של החיבור
  * לפי קרבה ובוחרים את הראשון שהלוך-חזור שלו עובר). `opts.id` — מזהה הפרט (ברירת מחדל קבוע; הממשק מעביר מזהה ייחודי).
  */
-export function templateFromParts(model: PartsModel, plateIds: string[], opts: { siteKey?: string; id?: string; name?: string; /** אלמנטי המודל "הנקי" לפתרון האתר (בלי פרט מותאם שהוחל על הקצה — כמו `base` בסטודיו); ברירת מחדל: `model.members` */ siteMembers?: Member[] } = {}): TemplateResult {
+export function templateFromParts(model: PartsModel, plateIds: string[], opts: { siteKey?: string; id?: string; name?: string; /** אלמנטי המודל "הנקי" לפתרון האתר (בלי פרט מותאם שהוחל על הקצה — כמו `base` בסטודיו); ברירת מחדל: `model.members` */ siteMembers?: Member[]; /** הסקת ברגים (שלב 2); false = חורים בלבד */ bolts?: boolean } = {}): TemplateResult {
   const res: TemplateResult = { detail: null, errors: [], warnings: [], infos: [] };
   const byId = new Map(model.members.map((m) => [m.id, m]));
   const srcs: SrcPlate[] = [];
@@ -350,17 +420,18 @@ export function templateFromParts(model: PartsModel, plateIds: string[], opts: {
   }
   if (!keys.length) { res.errors.push('הפלטות לא שייכות לחיבור — לא ידוע על איזה אלמנט לבנות את הפרט'); return res; }
   const name = opts.name ?? `תבנית מהמודל — ${nameOf(srcs[0].m)}`;
-  let last = 'לא נמצא אתר מתאים';
+  const fails: string[] = [];
   for (const key of [...new Set(keys)]) {
     const sm = opts.siteMembers ?? model.members, { id, end } = parseSiteKey(key), mm = sm.find((x) => x.id === id), site = mm ? findSite(sm, mm, end) : null;
-    if (!site) { last = `האתר ${key} לא נפתר`; continue; }
-    const r = inferOnSite(model, site, srcs, opts.id ?? 'cd-from-parts', name);
+    if (!site) { fails.push(`האתר ${key} לא נפתר`); continue; }
+    const r = inferOnSite(model, site, srcs, opts.id ?? 'cd-from-parts', name, opts);
     if (r.det) {
-      r.det.note = `נוצר מבחירת ${srcs.length} פלטות במודל (אתר ${key}). פעולות: פלטות וחורים בלבד — ברגים, ריתוכים וחיתוך האלמנט מוסיפים בסטודיו.`;
+      const ws = [...res.warnings, ...r.warnings];
+      r.det.note = `נוצר מבחירת ${srcs.length} פלטות במודל (אתר ${key}): פלטות, חורים${r.det.ops.some((o) => o.k === 'bolts') ? ' וברגים' : ''}. ריתוכים וחיתוך קצה האלמנט — מוסיפים בסטודיו (שלב 3).${ws.length ? ` הערות הסקה: ${ws.slice(0, 6).join(' · ')}${ws.length > 6 ? ` (ועוד ${ws.length - 6})` : ''}` : ''}`;
       return { ...res, detail: r.det, siteKey: key, infos: r.infos, warnings: [...res.warnings, ...r.warnings], dev: r.dev };
     }
-    last = `${key}: ${r.err}`;
+    fails.push(`${key}: ${r.err}`);
   }
-  res.errors.push(`הלוך-חזור לא עבר באף אתר — ${last}`);
+  res.errors.push(`הלוך-חזור לא עבר באף אתר (${fails.length} נבדקו) — ${fails[0] ?? 'לא נמצא אתר מתאים'}`);
   return res;
 }

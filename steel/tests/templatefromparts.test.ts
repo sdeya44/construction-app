@@ -42,15 +42,23 @@ describe('TFP הפוך לתבנית (שלב 1)', () => {
       const best = Math.min(...got.map((g) => polyDev((plateOutline(g) as typeof a).poly, a.poly)));
       expect(best).toBeLessThanOrEqual(0.3);
     }
-    // חורים: הוספת ברגים לפרט שהוסק מייצרת את אותם 4 חורים כמו במקור
-    const holesOps = det.ops.filter((o) => o.k === 'holes');
+    // ברגים (שלב 2): הפרט שהוסק כולל bolts — אותם 4 ברגים (קוטר, דרגה, מקום), בלי אזהרות
+    const holesOps = det.ops.filter((o) => o.k === 'holes'), boltOps = det.ops.filter((o) => o.k === 'bolts');
     expect(holesOps.length).toBe(1);
-    const det2: CustomDetail = { ...det, ops: [...det.ops, { k: 'bolts', id: 'B1', holes: holesOps[0].id, d: '16', grade: '8.8', site: true, noMain: true, noHost: true } as DetailOp] };
+    expect(boltOps).toEqual([expect.objectContaining({ holes: holesOps[0].id, d: '16', grade: '8.8', site: true, noMain: true, noHost: true })]);
+    expect(r.warnings).toEqual([]);
+    expect(r.dev!.bolts).toBeLessThanOrEqual(0.3);
     const mm = generate(proj()), m0 = mm.byId.get(parseSiteKey(key).id)!, site = findSite(mm.members, m0, 'start')!;
-    const out = buildDetail(site, det2);
+    const out = buildDetail(site, det);
     const srcBolts = src.connections.flatMap((c) => c.bolts).filter((b) => b.connId.startsWith('C.CD.'));
-    expect(out.conn.bolts.length).toBe(srcBolts.length);
     expect(srcBolts.length).toBe(4);
+    expect(out.conn.bolts.length).toBe(4);
+    for (const sb of srcBolts) expect(Math.min(...out.conn.bolts.map((b) => Math.hypot(b.p.x - sb.p.x, b.p.y - sb.p.y, b.p.z - sb.p.z)))).toBeLessThanOrEqual(0.3);
+    for (const b of out.conn.bolts) { expect(b.holesIn.length).toBe(2); expect(b.length).toBe(srcBolts[0].length); }
+    // מצב "חורים בלבד" (bolts:false): בלי פעולת bolts, והאימות עדיין מכסה את החורים
+    const ho = templateFromParts(src, plates.map((m) => m.id), { siteKey: key, siteMembers: generate(proj()).members, bolts: false });
+    expect(ho.detail!.ops.some((o) => o.k === 'bolts')).toBe(false);
+    expect(ho.dev!.holes).toBeLessThanOrEqual(0.3);
   });
 });
 
@@ -72,6 +80,11 @@ describe('TFP — כיסוי על חיבורים מובנים, צורות, שג�
       const a = plateOutline(plate) as Exclude<ReturnType<typeof plateOutline>, string>;
       const dev = Math.min(...got.map((g) => { const o = plateOutline(g); return typeof o === 'string' ? Infinity : polyDev(o.poly, a.poly) + Math.abs(o.t - a.t); }));
       expect(dev, `${c.type} ${plate.id}`).toBeLessThanOrEqual(0.3);
+      // ברגים: כל בורג מקורי דרך הפלטה מופיע גם אחרי ההחלה (אותו מספר ברגים דרך הפלטה המשוחזרת)
+      const nSrc = d.connections.flatMap((x) => x.bolts).filter((b) => b.holesIn.includes(plate.id)).length;
+      const gotPl = got.find((g) => { const o = plateOutline(g); return typeof o !== 'string' && polyDev(o.poly, a.poly) <= 0.3; })!;
+      const nGot = out.connections.flatMap((x) => x.bolts).filter((b) => b.holesIn.includes(gotPl.id)).length;
+      expect(nGot, `${c.type} ברגים דרך ${plate.id}`).toBe(nSrc);
     }
     expect(n).toBeGreaterThanOrEqual(5);
   });
@@ -127,5 +140,25 @@ describe('TFP — כיסוי על חיבורים מובנים, צורות, שג�
     const g = groupHoles(irr);
     expect(g.reduce((s, x) => s + x.rows * x.cols, 0)).toBe(6);
     expect(groupHoles([])).toEqual([]);
+  });
+
+  it('TFP-06: מפרט הבורג נשמר (M20, 10.9, מסגריה) ודגלי noMain/noHost נגזרים; בורג דרך פלטה שלא נבחרה ← הערה', () => {
+    const key = kbKey(), base = generate(proj());
+    const pre = preset('preset-plate-plate');
+    pre.vars.find((v) => v.name === 'd')!.expr = '20';
+    const bo = pre.ops.find((o) => o.k === 'bolts') as Extract<DetailOp, { k: 'bolts' }>; bo.grade = '10.9'; bo.site = false;
+    const src = generate(withDetail(proj(), key, pre));
+    const plates = src.members.filter((m) => m.kind === 'plate' && m.connId?.startsWith('C.CD.')).map((m) => m.id);
+    const r = templateFromParts(src, plates, { siteKey: key, siteMembers: base.members, id: 'cd-m20' });
+    expect(r.errors).toEqual([]);
+    expect(r.detail!.ops.find((o) => o.k === 'bolts')).toMatchObject({ d: '20', grade: '10.9', site: false, noMain: true, noHost: true });
+    const out = buildDetail(findSite(base.members, base.byId.get(parseSiteKey(key).id)!, 'start')!, r.detail!);
+    const sb = src.connections.flatMap((c) => c.bolts).filter((b) => b.connId.startsWith('C.CD.'));
+    expect(out.conn.bolts.map((b) => [b.d, b.grade, b.location, b.length]).sort()).toEqual(sb.map((b) => [b.d, b.grade, b.location, b.length]).sort());
+    // רק P1 נבחרת: הברגים עוברים גם ב-P2 ← הערה שברור מה הושמט
+    const one = templateFromParts(src, [plates.find((id) => id.endsWith('.P1'))!], { siteKey: key, siteMembers: base.members });
+    expect(one.errors).toEqual([]);
+    expect(one.warnings.join(' ')).toMatch(/לא נבחרו/);
+    expect(one.detail!.note).toMatch(/הערות הסקה/);
   });
 });
