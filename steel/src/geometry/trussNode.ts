@@ -1,5 +1,5 @@
 import type { Project, TrussSpec } from '../model/types';
-import { CHEEK_MIN } from './truss';
+import { cheekMins } from './truss';
 
 /**
  * צמתי מסבך — מצב וערכים כפי שהמודל מחזיק אותם (1.112): סוג הצומת (`direct` = מרותך ישיר, `cheek` = עם לחיות צומת) הוא **לכל מסבך**
@@ -27,20 +27,31 @@ export const nodeTypeOf = (spec: TrussSpec): NodeType => (spec.nodeCheeks?.enabl
 /** תיאור מצב הצמתים לתצוגה */
 export function nodeStateText(spec: TrussSpec): string {
   const nc = spec.nodeCheeks;
-  return nc?.enabled ? `לחיות צומת — עובי ${Math.max(CHEEK_MIN.t, nc.t)} מ"מ, גובה ${Math.max(CHEEK_MIN.h, nc.h)} מ"מ` : 'צומת מרותך ישיר (ללא לחיות)';
+  const mn = cheekMins(nc);
+  return nc?.enabled ? `לחיות צומת — עובי ${Math.max(mn.t, nc.t)} מ"מ, גובה ${Math.max(mn.h, nc.h)} מ"מ` : 'צומת מרותך ישיר (ללא לחיות)';
 }
 
-/** ערכי הלחיות אחרי החלה של patch (ברירת מחדל 8/100 כשאין עדיין); מוגבלים למינימום הקיים */
+/**
+ * ערכי הלחיות אחרי החלה של patch (ברירת מחדל 8/100 כשאין עדיין). ערך לא מספרי (NaN/∞) אינו נשמר.
+ * המינימומים (`minT`/`minH`) ניתנים לשינוי: ערך חוקי = מספר ≥ 1 מ"מ, אחרת אינו נשמר; העובי והגובה מוגבלים למינימום הנוכחי,
+ * והעלאת מינימום מעל הערך הקיים מעלה גם אותו.
+ */
 export function applyCheeks(spec: TrussSpec, patch: Partial<NodeCheeks>): TrussSpec {
   const cur = spec.nodeCheeks ?? { enabled: false, t: 8, h: 100 };
-  // ערך לא מספרי (NaN/∞) אינו נשמר; ערך קטן מהמינימום הקיים מוגבל אליו
-  const next: NodeCheeks = { ...cur, ...(typeof patch.enabled === 'boolean' ? { enabled: patch.enabled } : {}), ...(Number.isFinite(patch.t) ? { t: patch.t! } : {}), ...(Number.isFinite(patch.h) ? { h: patch.h! } : {}) };
-  next.t = Math.max(CHEEK_MIN.t, next.t); next.h = Math.max(CHEEK_MIN.h, next.h);
+  const fin = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const next: NodeCheeks = {
+    ...cur,
+    ...(typeof patch.enabled === 'boolean' ? { enabled: patch.enabled } : {}),
+    ...(fin(patch.t) ? { t: patch.t } : {}), ...(fin(patch.h) ? { h: patch.h } : {}),
+    ...(fin(patch.minT) && patch.minT >= 1 ? { minT: patch.minT } : {}), ...(fin(patch.minH) && patch.minH >= 1 ? { minH: patch.minH } : {}),
+  };
+  const mn = cheekMins(next);
+  next.t = Math.max(mn.t, next.t); next.h = Math.max(mn.h, next.h);
   return { ...spec, nodeCheeks: next };
 }
 
 /** חתימה יציבה של מצב הצמתים (לבדיקות שקילות) */
-export const nodeSignature = (spec: TrussSpec): string => { const nc = spec.nodeCheeks; return nc?.enabled ? `cheek:${Math.max(CHEEK_MIN.t, nc.t)}x${Math.max(CHEEK_MIN.h, nc.h)}` : 'direct'; };
+export const nodeSignature = (spec: TrussSpec): string => { const nc = spec.nodeCheeks; const mn = cheekMins(nc); return nc?.enabled ? `cheek:${Math.max(mn.t, nc.t)}x${Math.max(mn.h, nc.h)}` : 'direct'; };
 
 /** הפרויקט אחרי עדכון לחיות הצומת של המסבך שחיבורו `connId`; null — אין מסבך כזה */
 export function withNodeCheeks(p: Project, connId: string, patch: Partial<NodeCheeks>): Project | null {

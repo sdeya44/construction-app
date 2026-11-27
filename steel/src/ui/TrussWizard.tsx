@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { hasPanelLens, panelLocks, panelsOnFrames, patternCells, resizeSpec, setPanelLen, unlockPanel, TRUSS_GROUP_HE, TRUSS_PATTERNS, trussFractions, trussPanelLens, trussUtil, CHEEK_MIN } from '../geometry/truss';
+import { hasPanelLens, panelLocks, panelsOnFrames, patternCells, resizeSpec, setPanelLen, unlockPanel, TRUSS_GROUP_HE, TRUSS_PATTERNS, trussFractions, trussPanelLens, trussUtil, cheekMins } from '../geometry/truss';
 import type { TrussCell, TrussSpec } from '../model/types';
 import { massPerMeter, tryProfile } from '../profiles/library';
 import { NumField, ProfilePicker } from './fields';
+import { applyCheeks } from '../geometry/trussNode';
 import { Schematic, type SDim } from './Schematic';
 
 const NEXT: Record<TrussCell, TrussCell> = { '/': '\\', '\\': 'X', X: '', '': '/' };
@@ -145,8 +146,13 @@ export function TrussWizard({ spec, span, onChange, chordFamilies, loads, testId
       <div className="tw-row" data-testid={`${testId}-cheeks`}>
         <label className="tw-lbl"><input type="checkbox" data-testid={`${testId}-cheeks-on`} checked={!!spec.nodeCheeks?.enabled} onChange={(e) => set({ nodeCheeks: { t: 8, h: 100, ...(spec.nodeCheeks ?? {}), enabled: e.target.checked } })} /> לחיות צומת (פלטות משני צדי האלכסונים)</label>
         {spec.nodeCheeks?.enabled && <>
-          <span className="tw-lbl">עובי</span><NumField key={`t${cheekTick}`} testId={`${testId}-cheek-t`} value={spec.nodeCheeks.t} step={1} onCommit={(v) => { set({ nodeCheeks: { ...spec.nodeCheeks!, t: Math.max(CHEEK_MIN.t, v) } }); setCheekTick((x) => x + 1); }} />
-          <span className="tw-lbl">גובה מעל החגורה</span><NumField key={`h${cheekTick}`} testId={`${testId}-cheek-h`} value={spec.nodeCheeks.h} step={5} onCommit={(v) => { set({ nodeCheeks: { ...spec.nodeCheeks!, h: Math.max(CHEEK_MIN.h, v) } }); setCheekTick((x) => x + 1); }} />
+          {(['t', 'h', 'minT', 'minH'] as const).map((k) => {
+            const lab = { t: 'עובי', h: 'גובה מעל החגורה', minT: 'מינ׳ עובי', minH: 'מינ׳ גובה' }[k];
+            const mn = cheekMins(spec.nodeCheeks);
+            const val = k === 't' ? spec.nodeCheeks!.t : k === 'h' ? spec.nodeCheeks!.h : k === 'minT' ? mn.t : mn.h;
+            const id = { t: 'cheek-t', h: 'cheek-h', minT: 'cheek-min-t', minH: 'cheek-min-h' }[k];
+            return <span key={k}><span className="tw-lbl">{lab}</span><NumField key={`${k}${cheekTick}`} testId={`${testId}-${id}`} value={val} step={k === 'h' || k === 'minH' ? 5 : 1} onCommit={(v) => { set({ nodeCheeks: applyCheeks(spec, { [k]: v }).nodeCheeks }); setCheekTick((x) => x + 1); }} /></span>;
+          })}
         </>}
       </div>
       <table className="mini-table tw-prof"><thead><tr><th>קבוצה</th><th>פרופיל (סוג ← מידה)</th><th>ניצול</th></tr></thead>

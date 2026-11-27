@@ -390,7 +390,7 @@ export interface TrussSpec {
   splice: 'auto' | 'none' | number[];
   pattern?: 'warren-v' | 'warren' | 'pratt' | 'howe' | 'custom';
   /** לחיות צומת (1.107, F10): זוג פלטות מרותכות משני צדי קצות האלכסונים בכל צומת, על פני החגורה. חסר/כבוי ⇒ צומת מרותך ישיר (ברירת מחדל, ללא שינוי בגיאומטריה). t — עובי, h — גובה מעל פני החגורה (מ"מ) */
-  nodeCheeks?: { enabled: boolean; t: number; h: number };
+  nodeCheeks?: { enabled: boolean; t: number; h: number; /** מינימום עובי/גובה (מ"מ) — ניתנים לשינוי בממשק; חסר ⇒ ברירת המחדל הטכנית `CHEEK_MIN` */ minT?: number; minH?: number };
   symmetric?: boolean;
   /** אורכי שדות (מ"מ) — חלוקה לא אחידה; מותאמים יחסית למפתח בפועל. חסר/לא תואם למספר השדות ⇒ שדות שווים */
   panelLens?: Mm[];

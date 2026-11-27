@@ -118,3 +118,43 @@ test('TNODE-E3: מודל גדול (30 מסגרות, מסבכי גג עם לחי�
   console.log(`TNODE-E3 diagnostics: members=${n}; model ${tModel}ms; fitAll ${tFit}ms; orbit ${tOrbit}ms; zoom ${tZoom}ms`);
   expect(errors).toEqual([]);
 });
+
+test('TNODE-E4: מינימום עובי/גובה ניתנים לשינוי בממשק (עורך החיבור והאשף) — החלה, ערכים לא חוקיים, שמירה אחרי טעינה', async ({ page }) => {
+  const errors = await boot(page);
+  await enableRoof(page);
+  await openTrussConn(page);
+  await page.getByTestId('tn-cheeks-on').check();
+  const setNum = async (id: string, v: string) => { const f = page.getByTestId(id); await f.fill(v); await f.press('Enter'); };
+  await expect(page.getByTestId('tn-min-t')).toHaveValue('4'); await expect(page.getByTestId('tn-min-h')).toHaveValue('30');
+  // העלאת מינימום מעל הערך הקיים (8) מעלה גם את העובי
+  await setNum('tn-min-t', '10');
+  await expect(page.getByTestId('tn-t')).toHaveValue('10'); await expect(page.getByTestId('tn-state')).toContainText('עובי 10');
+  expect((await cheeks(page)).prof).toEqual(['PL100x10']);
+  await expect(page.getByTestId('tn-min')).toContainText('עובי 10');
+  // ערך קטן מהמינימום החדש — מוגבל אליו
+  await setNum('tn-t', '6'); await expect(page.getByTestId('tn-t')).toHaveValue('10');
+  // הורדת מינימום מתחת לברירת המחדל מאפשרת ערך נמוך
+  await setNum('tn-min-t', '2'); await setNum('tn-min-h', '20');
+  await setNum('tn-t', '3'); await setNum('tn-h', '25');
+  expect((await cheeks(page)).prof).toEqual(['PL25x3']); expect((await cheeks(page)).err).toBe(0);
+  // מינימום לא חוקי: 0 / שלילי — אינו נשמר (השדה חוזר לערך השמור); ריק / לא מספרי — מסומן כשגוי
+  for (const bad of ['0', '-4', '0.5']) { await setNum('tn-min-t', bad); await expect(page.getByTestId('tn-min-t')).toHaveValue('2'); }
+  for (const bad of ['', 'x']) { await setNum('tn-min-t', bad); await expect(page.getByTestId('tn-min-t')).toHaveClass(/bad/); }
+  expect((await cheeks(page)).prof).toEqual(['PL25x3']);
+  // האשף של המסבך מראה את אותם ערכים ומשנה אותם
+  await openNav(page, 'b:truss');
+  await page.getByTestId('ks-sec-geo').click();
+  await expect(page.getByTestId('tw-roof-cheek-min-t')).toHaveValue('2');
+  await setNum('tw-roof-cheek-min-t', '5');
+  await expect(page.getByTestId('tw-roof-cheek-t')).toHaveValue('5');
+  expect((await cheeks(page)).prof).toEqual(['PL25x5']);
+  // שמירה: אחרי טעינה מחדש המינימום נשמר
+  await page.waitForFunction(() => (window as any).__ksp.store.state.saveState === 'saved');
+  await page.reload();
+  await page.waitForFunction(() => !!(window as any).__ksp?.viewport?.model);
+  await openTrussConn(page);
+  await expect(page.getByTestId('tn-min-t')).toHaveValue('5'); await expect(page.getByTestId('tn-min-h')).toHaveValue('20');
+  expect((await cheeks(page)).prof).toEqual(['PL25x5']);
+  expect(errors).toEqual([]);
+});
+

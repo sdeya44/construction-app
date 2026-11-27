@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultBuilding, newProject } from '../src/model/defaults';
 import { generate } from '../src/geometry/generate';
-import { CHEEK_MIN, defaultTrussSpec, resizeSpec } from '../src/geometry/truss';
+import { CHEEK_MIN, cheekMins, defaultTrussSpec, resizeSpec } from '../src/geometry/truss';
 import { applyCheeks, nodeSignature, nodeStateText, nodeTypeOf, trussOwner } from '../src/geometry/trussNode';
 import { setTrussNodeCheeks } from '../src/commands/commands';
 import { fromFileJson, toFileJson } from '../src/model/migrate';
@@ -89,5 +89,35 @@ describe('TNODE צמתי מסבך', () => {
     expect(specOf(mig).nodeCheeks).toEqual({ enabled: true, t: 10, h: 120 });
     expect(cheekMembers(mig).length).toBe(cheekMembers(p).length);
     expect(() => fromFileJson(JSON.stringify({ ...env, schemaVersion: 99, project: { ...env.project, schemaVersion: 99 } }))).toThrow(/חדשה יותר/);
+  });
+  it('TNODE-06: מינימום עובי/גובה ניתנים לשינוי — מספר ≥ 1 בלבד נשמר; העובי/הגובה מוגבלים למינימום הנוכחי; המנוע והקובץ משתמשים בו', () => {
+    const on = applyCheeks(specOf(roofP()), { enabled: true });
+    expect(cheekMins(on.nodeCheeks)).toEqual({ t: CHEEK_MIN.t, h: CHEEK_MIN.h });
+    // העלאת מינימום מעל הערך הקיים מעלה גם אותו; הורדת מינימום אינה משנה ערך קיים אבל מאפשרת ערך נמוך יותר
+    const hi = applyCheeks(on, { minT: 10, minH: 150 });
+    expect(hi.nodeCheeks).toEqual({ enabled: true, t: 10, h: 150, minT: 10, minH: 150 });
+    expect(applyCheeks(hi, { t: 7, h: 100 }).nodeCheeks).toMatchObject({ t: 10, h: 150 });
+    const lo = applyCheeks(hi, { minT: 2, minH: 20 });
+    expect(lo.nodeCheeks).toMatchObject({ t: 10, h: 150, minT: 2, minH: 20 });
+    expect(applyCheeks(lo, { t: 3, h: 25 }).nodeCheeks).toMatchObject({ t: 3, h: 25 });
+    expect(applyCheeks(lo, { t: 0, h: -9 }).nodeCheeks).toMatchObject({ t: 2, h: 20 }); // מוגבל למינימום החדש, לא לברירת המחדל
+    // מינימום לא חוקי (קטן מ-1, שלילי, NaN, ∞, לא מספר) אינו נשמר
+    for (const bad of [0, 0.5, -3, NaN, Infinity, undefined as unknown as number, '5' as unknown as number]) expect(applyCheeks(hi, { minT: bad, minH: bad }).nodeCheeks).toMatchObject({ minT: 10, minH: 150 });
+    expect(applyCheeks(on, { minT: 1, minH: 1 }).nodeCheeks).toMatchObject({ minT: 1, minH: 1 });
+    // ערכים פגומים בקובץ ⇒ ברירת המחדל
+    expect(cheekMins({ minT: -1, minH: NaN })).toEqual({ t: CHEEK_MIN.t, h: CHEEK_MIN.h });
+    expect(cheekMins({ minT: 0.2 })).toEqual({ t: CHEEK_MIN.t, h: CHEEK_MIN.h });
+    // מנוע: מינימום נמוך מברירת המחדל מאפשר פלטה דקה; מינימום גבוה מעלה אותה
+    const p = roofP(1), id = connOf(p, 'C.TR.');
+    const thin = setTrussNodeCheeks(id, { enabled: true, minT: 2, minH: 20 }).run(p);
+    const thin2 = setTrussNodeCheeks(id, { t: 3, h: 25 }).run(thin);
+    expect(new Set(cheekMembers(thin2).map((m) => m.profile))).toEqual(new Set(['PL25x3']));
+    expect(generate(thin2).issues.filter((i) => i.severity === 'error')).toEqual([]);
+    const thick = setTrussNodeCheeks(id, { minT: 14 }).run(thin2);
+    expect(new Set(cheekMembers(thick).map((m) => m.profile))).toEqual(new Set(['PL25x14']));
+    // קובץ בלי minT/minH שנטען — ברירת המחדל; עם ערכים — נשמרים אחרי שמירה/טעינה
+    expect(cheekMins(fromFileJson(toFileJson(p)).building.roofTruss!.spec.nodeCheeks)).toEqual({ t: CHEEK_MIN.t, h: CHEEK_MIN.h });
+    expect(specOf(fromFileJson(toFileJson(thick))).nodeCheeks).toEqual({ enabled: true, t: 14, h: 25, minT: 14, minH: 20 });
+    expect(nodeSignature(specOf(thick))).toBe('cheek:14x25');
   });
 });

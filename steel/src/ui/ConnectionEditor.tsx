@@ -15,7 +15,7 @@ import { PlateWizard } from './PlateWizard';
 import { DetailTiles, PIC, ScopeToggle } from './DetailPicker';
 import { familyOf } from '../model/connRegistry';
 import { setTrussNodeCheeks } from '../commands/commands';
-import { CHEEK_MIN } from '../geometry/truss';
+import { cheekMins } from '../geometry/truss';
 import { nodeStateText, trussOwner } from '../geometry/trussNode';
 import { CleatTypePicker } from './ConnTypePicker';
 
@@ -394,6 +394,7 @@ function TrussNodeCard({ connId }: { connId: string }) {
   if (!o) return null;
   const nc = o.spec.nodeCheeks;
   const on = !!nc?.enabled;
+  const mn = cheekMins(nc);
   const scope = o.owner === 'roof' ? `חל על כל מסבכי הגג בפרויקט (${o.count})` : `חל על המסבך הנושא ${o.transferId}`;
   return (
     <details className="psec" open data-testid="tn-card"><summary>צמתי המסבך</summary>
@@ -404,7 +405,9 @@ function TrussNodeCard({ connId }: { connId: string }) {
         {on && <>
           <div className="field"><label>עובי לחי</label><NumField key={`t${tick}`} testId="tn-t" value={nc!.t} suffix='מ"מ' onCommit={(v) => { store.exec(setTrussNodeCheeks(connId, { t: v })); setTick((x) => x + 1); }} /></div>
           <div className="field"><label>גובה מעל החגורה</label><NumField key={`h${tick}`} testId="tn-h" value={nc!.h} suffix='מ"מ' onCommit={(v) => { store.exec(setTrussNodeCheeks(connId, { h: v })); setTick((x) => x + 1); }} /></div>
-          <div className="hint" data-testid="tn-min">ערך קטן מהמינימום (עובי {CHEEK_MIN.t}, גובה {CHEEK_MIN.h} מ"מ) מוגבל למינימום; ערך ריק או לא מספרי אינו נשמר. גיאומטריה בלבד — אינו תכן חוזק ואינו אישור ייצור.</div>
+          <div className="field"><label>מינימום עובי</label><NumField key={`mt${tick}`} testId="tn-min-t" value={mn.t} suffix='מ"מ' onCommit={(v) => { store.exec(setTrussNodeCheeks(connId, { minT: v })); setTick((x) => x + 1); }} /></div>
+          <div className="field"><label>מינימום גובה</label><NumField key={`mh${tick}`} testId="tn-min-h" value={mn.h} suffix='מ"מ' onCommit={(v) => { store.exec(setTrussNodeCheeks(connId, { minH: v })); setTick((x) => x + 1); }} /></div>
+          <div className="hint" data-testid="tn-min">ערך קטן מהמינימום (עובי {mn.t}, גובה {mn.h} מ"מ) מוגבל למינימום. את המינימום אפשר לשנות כאן (מספר ≥ 1 מ"מ); ערך ריק, לא מספרי או קטן מ-1 אינו נשמר. גיאומטריה בלבד — אינו תכן חוזק ואינו אישור ייצור.</div>
         </>}
       </div>
     </details>
