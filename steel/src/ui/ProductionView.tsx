@@ -4,6 +4,7 @@ import { boltsByNodeTable, bomTables, sequenceTable, toCsv, toXlsx } from '../fa
 import { connReportTable } from '../fab/connReport';
 import { CONN_TYPE } from './ConnectionEditor';
 import { dstvZip } from '../fab/dstv';
+import { NestingDialog } from './NestingDialog';
 import { useFab } from '../fab/useFab';
 import { downloadText, safeFileName } from '../persist/files';
 import { store, useStore } from '../store';
@@ -58,6 +59,7 @@ export function ProductionView() {
     ...(clad ? [['roofPanelPerM2', 'פנל גג ₪/מ"ר'], ['wallPanelPerM2', 'פנל קיר ₪/מ"ר'], ['flashingPerM', 'פחים ₪/מ\''], ['gutterPerM', 'מזחלה ₪/מ\''], ['downpipePerUnit', 'מרזב ₪/יח\''], ['claddingScrewPerUnit', 'בורג חיפוי ₪'], ['claddingInstallPerM2', 'התקנת חיפוי ₪/מ"ר']] as [keyof Pricing, string][] : []),
   ];
   const [tab, setTab] = useState(0);
+  const [nestOpen, setNestOpen] = useState(false);
   const t = tables[tab];
   const prov = fab.parts.filter((x) => x.provisional).length;
   const rv = p.revision;
@@ -119,6 +121,7 @@ export function ProductionView() {
             const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${safeFileName(p.meta.name)}_DSTV.zip`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
             store.toast('ok', `הופקו ${count} קבצי NC1 לפלטות (בטא — לאמת מול המכונה)`);
           }}><Icon name="download" />DSTV</button>
+          <button className="btn small" data-testid="export-nest" title="ניסטינג פלטות ללייזר — קונטור אמיתי, DXF לכל לוח ודוח. לא מאומת מול מכונה" onClick={() => setNestOpen(true)}>ניסטינג</button>
           <button className="btn small" data-testid="export-ifc" title="מודל BIM ‏IFC4 — לפתיחה ב-Tekla / Revit / צופי IFC" onClick={() => {
             const txt = projectToIfc(p, store.state.derived, fab);
             downloadText(`${safeFileName(p.meta.name)}.ifc`, txt, 'application/octet-stream');
@@ -171,6 +174,7 @@ export function ProductionView() {
           {tab === 5 && <div className="hint" style={{ padding: 8 }}>{plans.map((pl) => `${pl.profile}: ${pl.bars.length} מוטות, ניצולת ${(pl.utilization * 100).toFixed(1)}%${pl.tooLong.length ? `, ${pl.tooLong.length} חלקים ארוכים מהמלאי` : ''}`).join(' · ')}</div>}
         </div>
       </section>
+      {nestOpen && <NestingDialog onClose={() => setNestOpen(false)} />}
     </div>
   );
 }
