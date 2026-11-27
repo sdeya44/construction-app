@@ -24,7 +24,7 @@
 | מחבר "פלטה אל פלטה + קיטומי פינות" (`preset-plate-plate-cham` ב-`detail.ts`; יכולת כללית `plate.cornerOn` — פינות נקטמות לפי פרמטר; UI: `DetailStudio.tsx`) — `tests/chamfer.test.ts`, `e2e/chamfer.spec.ts`; QA מנוע: `tests/qa-resize.test.ts`; דוח: `docs/qa-report-195.md`, שחזורים: `docs/qa/` | `geometry/detail.ts`, `ui/DetailStudio.tsx`, `commands/commands.ts` (`removeFrame`) | connections, frame |
 | אשף חיבורים: חיפוש, מועדפים (העדפת משתמש ב-localStorage, לא בפרויקט) ותצוגה מקדימה (איור) במעבר עכבר — `ui/connFavs.ts` (`filterCands`, `loadFavs`) — `tests/connfavs.test.ts` FAV-01, `e2e/conn-favs.spec.ts` FAV-E1; דוח התאמה לכל חיבור (לשונית בייצור, CSV/XLSX; גיאומטריה בלבד, "אינו תכן מאושר") — `fab/connReport.ts` (`connReportTable`, `issuesOfConn`) — `tests/connreport.test.ts` CRPT-01, `e2e/conn-report.spec.ts` CRPT-E1; מחקר: `docs/research-upgrades.md` | `ui/ConnWizard.tsx`, `ui/ProductionView.tsx` | connections |
 | ביקורת Codex 1.93 — סטטוס ותיקונים: `docs/review-193.md`; `detailInfo` (פותר מובנה/סטודיו), `candidates`/`applyDetail` ב-`model/connRegistry.ts`, `tests/conn-review.test.ts`, `e2e/conn-review.spec.ts` | `model/connRegistry.ts`, `ui/ConnWizard.tsx` | connections |
-| ספריית מחברים: 7 מחברים מוכנים, ייבוא/ייצוא | `data/connLibrary.json`, `detailLibrary.ts`, `ui/DetailLibrary.tsx` (`lib-*`) | connections (e2e v167) |
+| "ספריית פרטים" (7 פרטים מוכנים, ייבוא/ייצוא פרטים) ו"הגדרות שמורות לחיבורים" (`connLibrary`, מזהי בדיקה `cp-*`; `e2e/library-names.spec.ts`) | `data/connLibrary.json`, `detailLibrary.ts`, `ui/DetailLibrary.tsx` (`lib-*`) | connections (e2e v167) |
 | סככת L וכיסאות `C.WS` | `wing.ts` | wing |
 | דילול עמודים / קורה נושאת | `transfer.ts` | transfer |
 | מסבכים, נעילה (לחיות צומת: `TrussSpec.nodeCheeks`, `tests/nodecheeks.test.ts` CHEEK-01..05; כרטיס "צמתי המסבך" בעורך החיבור — `geometry/trussNode.ts`, פקודה `setTrussNodeCheeks`, `TrussNodeCard` ב-`ConnectionEditor.tsx`, `tests/trussnode.test.ts`, `e2e/truss-node.spec.ts`) | `truss.ts`, `lockTruss.ts` | truss |
@@ -37,7 +37,7 @@
 | מספור, חורים בחלק, מכלולים | `fab/marks.ts` | fab |
 | כתב כמויות, ייצוא, הזמנה, האחדה | `fab/bom.ts`, `fab/export.ts`, `fab/unify.ts` | fab |
 | ניסטינג ללייזר לפלטות (קונטור אמיתי, אריזה על רסטר, סיבוב 90°, DXF לכל לוח, דוח כמויות; אלגוריתם עצמאי; אינו מאומת מול מכונה) — `fab/nesting.ts` (`nestParts`, `nestPlates`, `nestSheetDxf`, `nestZip`, `nestTables`), `ui/NestingDialog.tsx` (כפתור `export-nest` בייצור) | `fab/nesting.ts`, `ui/NestingDialog.tsx` | fab (`tests/nesting.test.ts` NEST-01..04, `e2e/nesting.spec.ts`) |
-| **עקיבות חומר** (ליטים: היתך+תעודה, הקצאה לפי סימון, הקצאה אוטומטית, דוח; `Project.traceability`; פקודה `setTraceability`; לשונית בייצור) | `fab/traceability.ts`, `ui/TracePanel.tsx` | fab (`tests/traceability.test.ts` TRACE-01..05, `e2e/traceability.spec.ts`) |
+| **עקיבות חומר** (ליטים: היתך+תעודה, הקצאה לפי סימון, הקצאה אוטומטית, ייבוא ליטים מ-CSV — `parseLotsCsv`, דוח; `Project.traceability`; פקודה `setTraceability`; לשונית בייצור) | `fab/traceability.ts`, `ui/TracePanel.tsx` | fab (`tests/traceability.test.ts` TRACE-01..05, `e2e/traceability.spec.ts`) |
 | DSTV/NC1 (ZIP: פלטות בלבד — פרופילים נחתכים במסגריה; חריץ RHS כשורות `** SLOT` ב-`partToNc1`), IFC | `fab/dstv.ts`, `fab/ifc.ts` | fab |
 | הרכבה, מיקום, הצעת מחיר, גדלים | `fab/sequence.ts`, `fab/location.ts`, `fab/quote.ts`, `fab/clientQuote.ts`, `model/sizing.ts` | fab |
 | קטלוג גיליונות ובניית גיליון (החלק המייצג של סימון: `representativePart`) | `drawing/views.ts` (**~1260 שורות**) | drawing |

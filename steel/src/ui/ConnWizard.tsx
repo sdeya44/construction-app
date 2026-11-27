@@ -68,17 +68,17 @@ function WizardBody({ connId }: { connId: string }) {
   const hc = cands.find((c) => c.id === (hov ?? pick?.id));
   const apply = () => { if (!next) return; store.exec({ label: `אשף חיבורים: ${pick!.title}${scope === 'one' ? ' (מיקום זה)' : ''}`, run: () => next }); close(); };
   const save = () => {
-    const name = prompt('שם להגדרה בספרייה', `${dt?.title ?? ''} — ${Object.entries(params).filter(([k]) => dt?.params.some((q) => q.key === k)).map(([, v]) => v).join(' / ')}`);
+    const name = prompt('שם להגדרה השמורה', `${dt?.title ?? ''} — ${Object.entries(params).filter(([k]) => dt?.params.some((q) => q.key === k)).map(([, v]) => v).join(' / ')}`);
     if (!name) return;
     const pr: ConnPreset = { id: uid('CP'), family: sit.family, detail: pick!.detail, name, params: Object.fromEntries(Object.entries(params).filter(([k]) => dt?.params.some((q) => q.key === k))) };
-    store.exec({ label: `ספריית חיבורים: ${name}`, run: (pp) => ({ ...pp, connLibrary: [...(pp.connLibrary ?? []), pr] }) });
+    store.exec({ label: `הגדרה שמורה: ${name}`, run: (pp) => ({ ...pp, connLibrary: [...(pp.connLibrary ?? []), pr] }) });
   };
   const TAG: Record<string, string> = { ok: 'מתאים', warn: 'עם הערה', no: 'לא מתאים' };
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="dialog wiz" role="dialog" aria-label="אשף חיבורים" data-testid="conn-wizard">
         <header><h2>אשף חיבורים <small style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 13 }}>· {sit.title}</small></h2>
-          <button className="btn small" data-testid="wiz-library" onClick={() => store.set({ connWizard: null, connLibraryOpen: true })}>ספריית חיבורים</button>
+          <button className="btn small" data-testid="wiz-library" onClick={() => store.set({ connWizard: null, connLibraryOpen: true })}>הגדרות שמורות לחיבורים</button>
           <button className="icon-btn" onClick={close} aria-label="סגירה">✕</button></header>
         <div className="wiz-body">
           <section className="wiz-col">
@@ -153,7 +153,7 @@ function WizardBody({ connId }: { connId: string }) {
           <label className="ss-radio"><input type="radio" data-testid="wiz-scope-all" checked={scope === 'all'} onChange={() => setScope('all')} />כל החיבורים באותו מצב ({sit.sameCount})</label>
           <span className="hint" style={{ margin: 0 }} data-testid="wiz-scope-count"><b>{scope === 'all' ? `יוחלו ${sit.sameCount} חיבורים (חריגים קיימים נשמרים)` : 'יוחל על חיבור זה בלבד'}</b></span>
           <span style={{ marginInlineStart: 'auto' }} />
-          <button className="btn" data-testid="wiz-save" disabled={!pick || pick.fit.status === 'no'} onClick={save}>שמור כהגדרה בספרייה</button>
+          <button className="btn" data-testid="wiz-save" disabled={!pick || pick.fit.status === 'no'} onClick={save}>שמור כהגדרה שמורה</button>
           {sit.site ? <button className="btn" data-testid="wiz-studio" onClick={() => { store.set({ connWizard: null, detailStudio: sit.site!.key }); }}>פתח בסטודיו ✎</button> : <span className="hint" data-testid="wiz-studio-na" style={{ margin: 0 }}>לסוג החיבור הזה אין עריכה בסטודיו (REV-F04: לא פותחים קצה שאינו שלו)</span>}
           <button className="btn primary" data-testid="wiz-apply" disabled={!next} onClick={apply}>החל</button>
         </footer>
@@ -189,13 +189,14 @@ export function ConnLibrary() {
     } catch { store.toast('error', 'קובץ לא תקין'); }
   };
   return (
-    <Dialog title="ספריית חיבורים — הפרויקט הפתוח" onClose={close} wide testId="conn-library"
-      footer={<><span className="hint" style={{ margin: 0 }}>שינוי בהגדרה חל על הפרויקט הפתוח בלבד. סטנדרט החברה מתעדכן רק בייצוא.</span><span style={{ marginInlineStart: 'auto' }} /><button className="btn" data-testid="lib-import" onClick={importLib}>ייבוא סטנדרט חברה</button><button className="btn" data-testid="lib-export" disabled={!lib.length} onClick={exportLib}>ייצוא סטנדרט חברה</button></>}>
+    <Dialog title="הגדרות שמורות לחיבורים — הפרויקט הפתוח" onClose={close} wide testId="conn-library"
+      footer={<><span className="hint" style={{ margin: 0 }}>שינוי בהגדרה חל על הפרויקט הפתוח בלבד. סטנדרט החברה מתעדכן רק בייצוא.</span><span style={{ marginInlineStart: 'auto' }} /><button className="btn" data-testid="cp-import" onClick={importLib}>ייבוא סטנדרט חברה</button><button className="btn" data-testid="cp-export" disabled={!lib.length} onClick={exportLib}>ייצוא סטנדרט חברה</button></>}>
+      <div className="hint" data-testid="cp-explain">הגדרה שמורה = פרט (מובנה, או מ"ספריית פרטים") + ערכי הפרמטרים שנבחרו לו. היא אינה פרט בפני עצמה: מחיקת הפרט מספריית הפרטים מסמנת אותה "הפרט חסר בפרויקט". גיאומטריה בלבד — לא תכן חוזק.</div>
       {(Object.keys(FAM) as ConnFamily[]).map((f) => {
         const items = lib.filter((x) => x.family === f);
         return <div key={f} style={{ marginBottom: 12 }}>
           <div className="sum-group">{FAM[f]} ({items.length})</div>
-          {!items.length && <div className="hint">אין הגדרות שמורות — שומרים מתוך אשף החיבורים ("שמור כהגדרה בספרייה").</div>}
+          {!items.length && <div className="hint">אין הגדרות שמורות — שומרים מתוך אשף החיבורים ("שמור כהגדרה שמורה").</div>}
           {items.map((x) => { const t = detailInfo(p, x.detail) ?? { id: x.detail, title: `${x.detail} (הפרט חסר בפרויקט)`, pic: 'flange', params: [] as ParamDef[], builtin: false }; const isDef = p.connDefaults?.[f] === x.id; return (
             <div key={x.id} className="sum-card" data-testid={`lib-${x.id}`}>
               <div className="sum-main" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

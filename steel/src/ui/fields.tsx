@@ -15,13 +15,14 @@ export function LenField({ mm, unit, onCommit, min, testId, disabled }: {
   const show = (v: number) => (unit === 'm' ? String(+fromMm(v, 'm').toFixed(4)) : String(+v.toFixed(2)));
   const [text, setText] = useState(show(mm));
   const [bad, setBad] = useState(false);
-  useEffect(() => { setText(show(mm)); setBad(false); }, [mm, unit]);
+  const [rev, setRev] = useState(0); // אחרי הזנה: הטקסט חוזר לערך השמור (גם כשהפקודה נדחתה או שהערך הוגבל)
+  useEffect(() => { setText(show(mm)); setBad(false); }, [mm, unit, rev]);
   const commit = () => {
     const n = Number(text.replace(',', '.'));
     if (!Number.isFinite(n) || text.trim() === '' || (min !== undefined && toMm(n, unit) < min)) { setBad(true); return; }
     setBad(false);
     const v = toMm(n, unit);
-    if (Math.abs(v - mm) > 1e-9) onCommit(v);
+    if (Math.abs(v - mm) > 1e-9) { onCommit(v); setRev((r) => r + 1); }
   };
   return (
     <div className="unit-wrap">
@@ -39,14 +40,15 @@ export function NumField({ value, suffix, onCommit, testId, step, placeholder }:
   const show = (v: number) => (Number.isFinite(v) ? String(+v.toFixed(6)) : '');
   const [text, setText] = useState(show(value));
   const [bad, setBad] = useState(false);
-  useEffect(() => { setText(show(value)); setBad(false); }, [value]);
+  const [rev, setRev] = useState(0); // אחרי הזנה: הטקסט חוזר לערך השמור (גם כשהפקודה נדחתה או שהערך הוגבל)
+  useEffect(() => { setText(show(value)); setBad(false); }, [value, rev]);
   const commit = () => {
     // ערך "משתנה" (NaN) שלא נגעו בו — לא משנה דבר
     if (!Number.isFinite(value) && text.trim() === '') { setBad(false); return; }
     const n = Number(text.replace(',', '.'));
     if (!Number.isFinite(n) || text.trim() === '') { setBad(true); return; }
     setBad(false);
-    if (n !== value) onCommit(n);
+    if (n !== value) { onCommit(n); setRev((r) => r + 1); }
   };
   return (
     <div className="unit-wrap">

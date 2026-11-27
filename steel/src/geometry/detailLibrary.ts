@@ -16,7 +16,7 @@ export function importLibrary(text: string, existing: CustomDetail[]): { added: 
   let raw: unknown;
   try { raw = JSON.parse(text); } catch { throw new Error('הקובץ אינו JSON תקין'); }
   const list = Array.isArray(raw) ? raw : raw && typeof raw === 'object' && (raw as { format?: string }).format === LIB_FORMAT ? (raw as { details?: unknown }).details : null;
-  if (!Array.isArray(list)) throw new Error('הקובץ אינו ספריית מחברים של KAYAN');
+  if (!Array.isArray(list)) throw new Error('הקובץ אינו קובץ פרטים של KAYAN');
   const have = new Set(existing.map((x) => x.id));
   const added: CustomDetail[] = [];
   list.forEach((x, i) => {

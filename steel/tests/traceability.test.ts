@@ -6,7 +6,7 @@ import { defaultBuilding, newProject } from '../src/model/defaults';
 import { generate } from '../src/geometry/generate';
 import { computeFabrication } from '../src/fab/marks';
 import { numberParts, setTraceability } from '../src/commands/commands';
-import { autoAssign, compatibleLots, lotKey, traceRows, traceTable } from '../src/fab/traceability';
+import { autoAssign, compatibleLots, LOT_CSV_MAX_ROWS, LOT_CSV_TEMPLATE, lotKey, parseLotsCsv, traceRows, traceTable } from '../src/fab/traceability';
 import { toCsv } from '../src/fab/export';
 import type { StockLot } from '../src/model/types';
 
@@ -63,5 +63,39 @@ describe('TRACE עקיבות חומר', () => {
     const d2 = generate(p2);
     expect(d2.members.length).toBe(d.members.length);
     expect(d2.members.map((m) => `${m.id}${m.start.x}${m.end.z}`).join()).toBe(d.members.map((m) => `${m.id}${m.start.x}${m.end.z}`).join());
+  });
+  it('TRACE-06: ייבוא CSV — מפרידים (פסיק/נקודה-פסיק/טאב), BOM, CRLF, כותרות בעברית ובאנגלית, מירכאות, שורות ריקות', () => {
+    const base = 'היתך,תעודה,חתך,חומר,הערה\nH1,C1,HEA140,S235,"הערה, עם פסיק"\nH2,,PL15,S355,\n';
+    const a = parseLotsCsv(base, []);
+    expect(a.errors).toEqual([]); expect(a.delimiter).toBe(',');
+    expect(a.added.map((l) => [l.id, l.heat, l.cert, l.profile, l.material, l.note])).toEqual([['L1', 'H1', 'C1', 'HEA140', 'S235', 'הערה, עם פסיק'], ['L2', 'H2', undefined, 'PL15', 'S355', undefined]]);
+    const b = parseLotsCsv('\uFEFFHeat No;Cert;Section;Grade\r\nH3;C3;IPE200;S355\r\n\r\nH4;;RHS100x5;S235\r\n', []);
+    expect(b.errors).toEqual([]); expect(b.delimiter).toBe(';'); expect(b.added.map((l) => l.heat)).toEqual(['H3', 'H4']);
+    const c = parseLotsCsv('heat\tprofile\tmaterial\nH5\tHEB200\tS235', []);
+    expect(c.delimiter).toBe('\t'); expect(c.added).toHaveLength(1);
+    expect(parseLotsCsv(LOT_CSV_TEMPLATE, []).added).toEqual([]); expect(parseLotsCsv(LOT_CSV_TEMPLATE, []).errors).toEqual([]); // תבנית בלי שורות — תקינה וריקה
+  });
+  it('TRACE-07: ייבוא CSV — שורות לא תקינות מדווחות עם מספר שורה ולא נוספות; חומר חסר אינו מושלם; כפולים (בקובץ ומול קיימים, פלטה לפי עובי) לא נוספים', () => {
+    const ex: StockLot[] = [lot('L1', 'H1', 'PL15', 'S235'), lot('L7', 'H9', 'HEA140', 'S235')];
+    const r = parseLotsCsv('היתך,חתך,חומר\nH1,PL15x200,s235\n,HEA140,S235\nH2,HEA140,\nH3,,S235\nH4,IPE200,S355\nH4,ipe200,s355\n', ex);
+    expect(r.duplicates).toBe(2); // H1 מול קיים (PL15x200≡PL15, חומר ללא רגישות לאותיות) + H4 כפול בקובץ
+    expect(r.errors).toEqual([{ line: 3, reason: 'חסר היתך' }, { line: 4, reason: 'חסר חומר' }, { line: 5, reason: 'חסר חתך' }]);
+    expect(r.added.map((l) => [l.id, l.heat])).toEqual([['L3', 'H4']]); // מזהה חדש בלי התנגשות עם L1/L7
+    // כותרת בלי עמודת חובה / קובץ ריק / גדול מדי / יותר מדי שורות
+    expect(parseLotsCsv('היתך,חתך\nH1,HEA140\n', []).errors[0]).toMatchObject({ line: 1, reason: expect.stringContaining('חומר') });
+    expect(parseLotsCsv('  \n\n', []).errors[0]!.reason).toBe('הקובץ ריק');
+    expect(parseLotsCsv('x'.repeat(1_000_001), []).errors[0]!.reason).toContain('גדול מדי');
+    const many = parseLotsCsv(`heat,profile,material\n${Array.from({ length: LOT_CSV_MAX_ROWS + 3 }, (_, i) => `H${i},HEA140,S235`).join('\n')}`, []);
+    expect(many.added).toHaveLength(LOT_CSV_MAX_ROWS); expect(many.errors.at(-1)!.reason).toContain('הייבוא נעצר');
+    expect(parseLotsCsv(`heat,profile,material\n${'H'.repeat(61)},HEA140,S235`, []).errors).toEqual([{ line: 2, reason: 'ערך ארוך מדי' }]);
+  });
+  it('TRACE-08: ליטים מיובאים משתתפים בהקצאה האוטומטית; ייבוא חוזר של אותו קובץ אינו מוסיף דבר', () => {
+    const { p, d, fab } = setup();
+    const col = traceRows(p, d, fab).find((r) => r.profile === p.building.columnProfile)!;
+    const csv = `heat,cert,profile,material\nHX-1,CX-1,${col.profile},${col.material}\n`;
+    const r1 = parseLotsCsv(csv, []);
+    const p1 = setTraceability({ lots: r1.added, assign: {} }).run(p);
+    const a = autoAssign(p1, d, fab); expect(a.assign[col.mark]).toBe('L1');
+    const r2 = parseLotsCsv(csv, p1.traceability!.lots); expect(r2.added).toEqual([]); expect(r2.duplicates).toBe(1);
   });
 });

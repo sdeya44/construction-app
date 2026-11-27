@@ -31,13 +31,14 @@ export function DetailLibrary() {
   const uses = (id: string) => Object.entries(p.detailAssign ?? {}).filter(([, v]) => v === id).map(([k]) => k);
   return (
     <div className="panel-body" data-testid="detail-library">
-      <button className="btn" style={{ width: '100%', marginBottom: 8 }} data-testid="open-conn-library" onClick={() => store.set({ connLibraryOpen: true })}>ספריית חיבורים — הגדרות שמורות לפרויקט ←</button>
+      <button className="btn" style={{ width: '100%', marginBottom: 8 }} data-testid="open-conn-library" onClick={() => store.set({ connLibraryOpen: true })}>הגדרות שמורות לחיבורים (פרט + ערכי פרמטרים) ←</button>
       <div className="panel-title">ספריית פרטים ({lib.length})</div>
+      <div className="hint" data-testid="lib-explain">פרטים שנבנו בסטודיו או יובאו. לשמירת פרט יחד עם ערכי פרמטרים — "הגדרות שמורות לחיבורים" למעלה.</div>
       <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-        <button className="btn small" data-testid="lib-export" disabled={!lib.length} title="שמירת פרטי הספרייה לקובץ — להעברה לפרויקט אחר או למחשב אחר"
-          onClick={() => downloadText(`${safeFileName(p.meta.name)}-מחברים.json`, exportLibrary(lib))}>ייצוא ספרייה</button>
-        <button className="btn small" data-testid="lib-import" title="טעינת פרטים מקובץ ספרייה (פרטים קיימים לא נדרסים)" onClick={doImport}>ייבוא ספרייה</button>
-        <button className="btn small" data-testid="lib-add-builtin" title={builtin.map((x) => x.name).join(' · ')} onClick={addBuiltin}>＋ {builtin.length} מחברים מוכנים</button>
+        <button className="btn small" data-testid="lib-export" disabled={!lib.length} title="שמירת פרטי הספרייה (לא ההגדרות השמורות) לקובץ — להעברה לפרויקט אחר או למחשב אחר"
+          onClick={() => downloadText(`${safeFileName(p.meta.name)}-פרטים.json`, exportLibrary(lib))}>ייצוא פרטים</button>
+        <button className="btn small" data-testid="lib-import" title="טעינת פרטים מקובץ ספרייה (פרטים קיימים לא נדרסים)" onClick={doImport}>ייבוא פרטים</button>
+        <button className="btn small" data-testid="lib-add-builtin" title={builtin.map((x) => x.name).join(' · ')} onClick={addBuiltin}>＋ {builtin.length} פרטים מוכנים</button>
       </div>
       {msg && <div className={msg.ok ? 'hint' : 'hint warn'} data-testid="lib-msg">{msg.text}</div>}
       {!lib.length && <div className="hint">אין עדיין פרטים בספרייה. בוחרים אלמנט ← "סוג חיבור בכל קצה" ← "פרט חדש בסטודיו", או תושבת ← "סוג התושבת".</div>}

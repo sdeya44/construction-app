@@ -239,7 +239,7 @@ export function ConnectionEditor() {
         }}>קבע כברירת מחדל</button>}
       </div>
       {eff && plateType && <>
-        <div className="panel-title">ספריית תבניות</div>
+        <div className="panel-title">תבניות פלטה (לסוג החיבור הזה)</div>
         <div className="row" style={{ flexWrap: 'nowrap' }}>
           <input className="inp" placeholder="שם תבנית" value={tplName} onChange={(e) => setTplName(e.target.value)} data-testid="tpl-name" />
           <button className="btn small" data-testid="tpl-save" onClick={() => { if (store.exec(saveTemplate(tplName, id, eff))) setTplName(''); }}>שמירה</button>

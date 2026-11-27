@@ -19,6 +19,6 @@ test('LIB-E1: ספריית מחברים — הוספת 7 המחברים המוכ
   // קובץ פגום — הודעה ברורה, הספרייה לא משתנה
   const [fc2] = await Promise.all([page.waitForEvent('filechooser'), page.getByTestId('lib-import').click()]);
   await fc2.setFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{"a":1}') });
-  await expect(page.getByTestId('lib-msg')).toContainText('אינו ספריית מחברים');
+  await expect(page.getByTestId('lib-msg')).toContainText('אינו קובץ פרטים');
   await expect(page.locator('[data-testid^="lib-row-"]')).toHaveCount(14);
 });

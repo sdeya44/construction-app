@@ -70,3 +70,70 @@ export function traceTable(p: Project, d: DerivedModel, fab: Fabrication): Table
   out.push(['רישום משתמש בלבד — אינו אימות תעודות מפעל (EN 10204)', '', '', '', '', '', '', '']);
   return { name: 'עקיבות חומר', headers: ['סימון', 'תיאור', 'חתך', 'חומר', 'כמות', 'היתך', 'תעודה', 'סטטוס'], rows: out };
 }
+
+// ---------------------------------------------------------------- ייבוא ליטים מ-CSV (1.113)
+export const LOT_CSV_MAX_BYTES = 1_000_000, LOT_CSV_MAX_ROWS = 5000;
+export const LOT_CSV_TEMPLATE = 'היתך,תעודה,חתך,חומר,הערה\n';
+type LotCol = 'heat' | 'cert' | 'profile' | 'material' | 'note';
+const COL_NAMES: Record<LotCol, string[]> = {
+  heat: ['heat', 'heat no', 'heat number', 'heatno', 'היתך', 'מספר היתך', 'מס היתך', "מס' היתך"],
+  cert: ['cert', 'cert no', 'certificate', 'תעודה', 'תעודת מפעל', 'מספר תעודה'],
+  profile: ['profile', 'section', 'חתך', 'פרופיל'],
+  material: ['material', 'grade', 'steel grade', 'חומר', 'דרגה', 'סוג פלדה'],
+  note: ['note', 'notes', 'הערה', 'הערות'],
+};
+export interface LotCsvError { line: number; reason: string }
+export interface LotCsvResult { added: StockLot[]; duplicates: number; errors: LotCsvError[]; rows: number; delimiter: string }
+
+/** פירוק שורת CSV עם מירכאות (`"a,b"`, `""` = מירכאה) */
+function splitCsvLine(line: string, d: string): string[] {
+  const out: string[] = []; let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]!;
+    if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === d) { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map((x) => x.trim());
+}
+
+/**
+ * ייבוא ליטים מ-CSV: שורת כותרת חובה (עברית או אנגלית) עם היתך, חתך וחומר (תעודה והערה — אופציונליים); מפריד `,` / `;` / טאב נקבע לפי הכותרת.
+ * שורה בלי היתך/חתך/חומר — שגיאה עם מספר שורה ואינה נוספת; ליט זהה (היתך + מפתח חתך + חומר) לקיים או לשורה קודמת — "כפול", לא נוסף.
+ * אין ניחוש: חומר חסר אינו מושלם. רישום משתמש בלבד — אינו אימות תעודות.
+ */
+export function parseLotsCsv(text: string, existing: StockLot[]): LotCsvResult {
+  const res: LotCsvResult = { added: [], duplicates: 0, errors: [], rows: 0, delimiter: ',' };
+  if (text.length > LOT_CSV_MAX_BYTES) { res.errors.push({ line: 0, reason: `הקובץ גדול מדי (מעל ${LOT_CSV_MAX_BYTES / 1000} KB)` }); return res; }
+  const lines = text.replace(/^\uFEFF/, '').split(/\r\n|\n|\r/);
+  const hi = lines.findIndex((l) => l.trim() !== '');
+  if (hi < 0) { res.errors.push({ line: 0, reason: 'הקובץ ריק' }); return res; }
+  const count = (d: string) => lines[hi]!.split(d).length;
+  res.delimiter = [',', ';', '\t'].reduce((best, d) => (count(d) > count(best) ? d : best), ',');
+  const head = splitCsvLine(lines[hi]!, res.delimiter).map((h) => h.toLowerCase().replace(/[._]+/g, ' ').replace(/\s+/g, ' ').trim());
+  const idx = {} as Record<LotCol, number>;
+  for (const c of Object.keys(COL_NAMES) as LotCol[]) idx[c] = head.findIndex((h) => COL_NAMES[c].includes(h));
+  const missing = (['heat', 'profile', 'material'] as LotCol[]).filter((c) => idx[c] < 0);
+  if (missing.length) { res.errors.push({ line: hi + 1, reason: `חסרות עמודות חובה בכותרת: ${missing.map((c) => ({ heat: 'היתך', profile: 'חתך', material: 'חומר' } as Record<string, string>)[c]).join(', ')}` }); return res; }
+  const ids = new Set(existing.map((l) => l.id)); let n = existing.length + 1;
+  const nextId = () => { while (ids.has(`L${n}`)) n++; const id = `L${n}`; ids.add(id); return id; };
+  const seen = new Set(existing.map((l) => `${l.heat}|${lotKey(l.profile)}|${l.material.trim().toUpperCase()}`));
+  for (let i = hi + 1; i < lines.length; i++) {
+    if (lines[i]!.trim() === '') continue;
+    if (++res.rows > LOT_CSV_MAX_ROWS) { res.errors.push({ line: i + 1, reason: `יותר מ-${LOT_CSV_MAX_ROWS} שורות — הייבוא נעצר` }); break; }
+    const f = splitCsvLine(lines[i]!, res.delimiter);
+    const get = (c: LotCol) => (idx[c] >= 0 ? (f[idx[c]] ?? '') : '');
+    const heat = get('heat'), profile = get('profile'), material = get('material');
+    const miss = [!heat && 'היתך', !profile && 'חתך', !material && 'חומר'].filter(Boolean);
+    if (miss.length) { res.errors.push({ line: i + 1, reason: `חסר ${miss.join(', ')}` }); continue; }
+    if (heat.length > 60 || profile.length > 60 || material.length > 60 || get('cert').length > 120 || get('note').length > 240) { res.errors.push({ line: i + 1, reason: 'ערך ארוך מדי' }); continue; }
+    const key = `${heat}|${lotKey(profile)}|${material.toUpperCase()}`;
+    if (seen.has(key)) { res.duplicates++; continue; }
+    seen.add(key);
+    res.added.push({ id: nextId(), heat, cert: get('cert') || undefined, profile, material, note: get('note') || undefined });
+  }
+  return res;
+}
+
