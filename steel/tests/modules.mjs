@@ -21,7 +21,7 @@ export const MODULES = {
   frame: {
     title: 'מסגרות, צירים, חתך, גבהים, תוכנית',
     src: ['src/geometry/generate.ts', 'src/geometry/frame.ts', 'src/geometry/plan.ts', 'src/geometry/solid.ts', 'src/geometry/parts.ts', 'src/geometry/audit.ts', 'src/geometry/clash.ts', 'src/geometry/lengthWhy.ts', 'src/model/section.ts', 'src/model/defaults.ts', 'src/model/validate.ts', 'src/model/types.ts'],
-    tests: ['tests/qa-resize.test.ts', 'tests/generate.test.ts', 'tests/section.test.ts', 'tests/framesection.test.ts', 'tests/plan.test.ts', 'tests/steep.test.ts', 'tests/v137.test.ts', 'tests/newshapes.test.ts'],
+    tests: ['tests/sim-mono-full.test.ts', 'tests/qa-resize.test.ts', 'tests/generate.test.ts', 'tests/section.test.ts', 'tests/framesection.test.ts', 'tests/plan.test.ts', 'tests/steep.test.ts', 'tests/v137.test.ts', 'tests/newshapes.test.ts'],
     e2e: ['e2e/m1.spec.ts', 'e2e/wizard-sheet.spec.ts'],
   },
   purlins: {
