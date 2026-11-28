@@ -6,6 +6,10 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { IN, calcExpected, catalogRows, len, runSim, type Rec, type Shape, type Stage } from './sim/mono-sim';
+import { defaultBuilding, newProject, framesFromSpacings } from '../src/model/defaults';
+import { generate } from '../src/geometry/generate';
+import { setBuilding } from '../src/commands/commands';
+import { defaultKneeBraces } from '../src/geometry/knee';
 import { getProfile } from '../src/profiles/library';
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -119,10 +123,23 @@ function collect(stage: Stage) {
     { cat: /^פטות/, dim: /אורך שורה|חלקי ייצור/, kind: 'accepted', note: 'אושר: 24,000 הוא מרחק צירים; הפטה בולטת 50 מ"מ מעבר לציר בכל קצה (24,100), ולכן 3 חלקי ייצור (מוט 12,000)' },
     { cat: /^תומכי פטה/, dim: /כמות/, kind: 'accepted', note: 'נגזר ממספר שורות הפטות (9 במקום 10) — אושר' },
     { cat: /^אלכסוני עמוד-קורה/, dim: /אורך אלכסון/, kind: 'accepted', note: 'אושר: האורך משתנה לפי סוג המחבר (כאן: זוויתן מוברג)' },
-    { cat: /^אגד B/, dim: /^אורך$/, el: /אלכסון אגד/, kind: 'issue', note: 'ממתין לאישור: נבדק בקוד — הציר הנומינלי 848.5 תואם (ירידה 600, 45°); חלק ה-RHS הוא 563.5 כי פלטות הקצה (PL95x12 + לשונית, ≈142 לכל קצה) משלימות עד העמוד והקורה. לא תוקן.' },
+    { cat: /^אגד B/, dim: /^אורך$/, el: /אלכסון אגד/, kind: 'accepted', note: 'אושר: האורך תלוי בסוג המחבר — מנקודות ההשקה (עמוד/קורה, ציר נומינלי 848.5) מורידים את פלטות הקצה (פח + לשונית בחריץ ≈142.5 לכל קצה); בפלטה-אל-פלטה — עובי הפלטות' },
   ];
   for (const r of recs) { const o = OWN.find((x) => x.cat.test(r.cat) && x.dim.test(r.dim) && (!x.el || x.el.test(r.el))); if (o) { r.owner = o.kind; r.ownerNote = o.note; } }
   return { stage, recs, shapes, errors: d.issues.filter((i) => i.severity === 'error').map((i) => `${i.code}: ${i.message}`), warnings: [...new Set(d.issues.filter((i) => i.severity === 'warning').map((i) => i.code))], totals: { members: d.members.length, weightKg: bom.totalWeight } };
+}
+
+/** אורך אלכסון עמוד-קורה (מסגרת 1 שמאל) לפי סוג המחבר ועובי הפלטה; נומינלי = ציר-ציר מנקודת העמוד לתחתית הקורה (45°, ירידה 800, שיפוע 10%). */
+function kneeVariants() {
+  const nominal = IN.knee.drop / (1 - 0.1) / Math.cos(Math.PI / 4);
+  const rows: { detail: string; profile: string; plateT: number; member: number; allowance: number }[] = [];
+  for (const [detail, profile] of [['fin', 'RHS80x80x4'], ['flange', 'RHS80x80x4'], ['stub', 'RHS80x80x4'], ['angle', 'L50x5']] as const) for (const plateT of [12, 20]) {
+    const p = setBuilding({ roofType: 'mono', width: IN.W, eaveLeft: IN.eL, eaveRight: IN.eR, slopeLeftPct: 10, frames: framesFromSpacings([6000, 6000]), kneeBraces: { ...defaultKneeBraces(), enabled: true, profile, detail, plateT, drop: IN.knee.drop, angle: IN.knee.angle } } as never).run(newProject('K', defaultBuilding()));
+    const m = generate(p).members.find((x) => x.id.startsWith('KB.F1.L'))!;
+    const L = Math.hypot(m.end.x - m.start.x, m.end.z - m.start.z);
+    rows.push({ detail, profile, plateT, member: L, allowance: (nominal - L) / 2 });
+  }
+  return { nominal, rows };
 }
 
 describe('SIM מבנה חד-שיפועי — חישוב מקדים מול האפליקציה', () => {
@@ -137,22 +154,36 @@ describe('SIM מבנה חד-שיפועי — חישוב מקדים מול האפ
       for (const r of S.recs.filter((x) => !x.info && x.unit === 'יח׳' && !/חלקי ייצור|חלקי חגורה|מספר שורות/.test(x.dim) && !/זוויתני/.test(x.el))) expect(r.actual, `${S.stage}: ${r.cat} / ${r.el} / ${r.dim}`).toBe(r.expected);
     }
   });
+  it('SIM-03: אורך אלכסון עמוד-קורה תלוי בסוג המחבר (החלטת בעלים): פח+לשונית — אורך הפח, פלטה-אל-פלטה — עובי הפלטות, זוויתן — קבוע', () => {
+    const { nominal, rows } = kneeVariants();
+    const at = (d: string, t: number) => rows.find((r) => r.detail === d && r.plateT === t)!;
+    expect(nominal).toBeCloseTo(1257.1, 1);
+    // פח + לשונית בחריץ (fin / stub): הקיצור לכל קצה קבוע (אורך הפח), אינו תלוי בעובי הפלטה
+    for (const d of ['fin', 'stub']) { expect(at(d, 12).allowance).toBeCloseTo(152, 0); expect(at(d, 20).allowance).toBeCloseTo(at(d, 12).allowance, 6); }
+    // פלטה אל פלטה (flange): הקיצור גדל עם עובי הפלטות (≈1.5×t לכל קצה)
+    expect(at('flange', 20).allowance).toBeGreaterThan(at('flange', 12).allowance);
+    expect(at('flange', 12).allowance).toBeCloseTo(1.5 * 12, 0); expect(at('flange', 20).allowance).toBeCloseTo(1.5 * 20, 0);
+    // זוויתן מוברג: קבוע (46 לכל קצה), בלי תלות בעובי פח הקצה
+    expect(at('angle', 12).allowance).toBeCloseTo(46.1, 1); expect(at('angle', 20).allowance).toBeCloseTo(at('angle', 12).allowance, 6);
+    for (const r of rows) expect(r.member).toBeLessThan(nominal);
+    fs.mkdirSync('e2e-results/evidence', { recursive: true });
+    fs.writeFileSync('e2e-results/evidence/sim-conn-variants.json', JSON.stringify(rows.map((r) => ({ ...r, nominal })), null, 1));
+  });
   it('SIM-02: סטיות מעל 0.5% — מקובעות (שינוי באפליקציה ייכשל כאן בכוונה) ונכתב דוח JSON', () => {
     const dev = (S: typeof S1) => [...new Set(S.recs.filter((r) => !r.info && !r.owner && Math.abs(diffPct(r) ?? 0) > TOL).map((r) => `${r.cat} | ${r.dim}`))].sort();
     const issues = (S: typeof S1) => [...new Set(S.recs.filter((r) => r.owner === 'issue').map((r) => `${r.cat} | ${r.el} | ${r.dim}: ${r.expected} מול ${r.actual}`))].sort();
     fs.mkdirSync('e2e-results/evidence', { recursive: true });
     const explain = [
       '<b>אושרו על ידי הבעלים (מכוון):</b> פטות — הראשונה והאחרונה זזות פנימה כדי לשבת על הקורה (9 שורות, מרווח 1,496, 45 תומכים); אלכסוני עמוד-קורה — האורך משתנה לפי סוג המחבר (זוויתן מוברג: 1,165 / 951).',
-      '<b>אלכסון אגד B (563.5 מול 848.5) — נבדק בקוד, לא תוקן:</b> הציר הנומינלי של האלכסון (מנקודת העמוד ועד תחתית הקורה) אכן 848.5 כפי שאושר. חלק ה-RHS הוא 563.5 כי בכל קצה פלטת קצה (PL95x12) ולשונית מוברגת ממלאות כ-142 מ"מ עד העמוד ועד הקורה. השרטוט הקודם לא הראה את הפלטות, ולכן נראה שהאלכסון "לא מגיע" — הוא מגיע דרך הפלטות. ממתין לאישור שאין צורך בתיקון.',
+      '<b>אלכסוני אגד B ואלכסוני עמוד-קורה (אושר — תלוי בסוג המחבר):</b> האורך הוא המרחק בין נקודות ההשקה על העמוד והקורה פחות הפלטות: בפח + לשונית בחריץ — אורך הפח (≈142.5 לכל קצה באגד B, 152 באלכסון RHS80), בפלטה-אל-פלטה — עובי הפלטות (≈1.5×t לכל קצה), בזוויתן מוברג — 46 לכל קצה. טבלת הווריאנטים בדוח (נבדקה בסימולציה).',
       '<b>תוקן (1.114) — חגורה תחתונה של המסבך:</b> נדרש חלק אחד (11,780 ≤ 12,000); האפליקציה פיצלה אותה במקום חיבור ההמשך של קורת הגג. תוקן ב-`truss.ts`; בסימולציה כעת חלק אחד.',
       '<b>אלכסוני מסבך (+1.1% עד +5.9%):</b> החישוב המקדים לא כולל היסט צומת K (מרווח 12 מ"מ + רוחב האלכסון) — הכלל נמצא בקוד; לא נשאל.',
       '<b>פטות — 24,100 ו-3 חלקי ייצור (אושר):</b> 24,000 הוא מרחק צירים בין המסגרת הראשונה לאחרונה; הפטה בולטת 50 מ"מ מעבר לציר בכל קצה (חצי רוחב התומך). אין חפיפה בתפרים — תיקון לטענה קודמת בדוח.',
     ];
     const questions = [
-      'האם לתקן עכשיו באפליקציה את אורך אלכסון אגד B כך שיגיע לקורה (848 מ"מ)? (שינוי בקוד `portal.ts`)',
       'האם לתקן עכשיו באפליקציה את פיצול החגורה התחתונה של המסבך לחלק אחד? (שינוי בקוד `truss.ts`)',
     ];
-    fs.writeFileSync('e2e-results/evidence/sim-mono-full.json', JSON.stringify({ input: IN, stages: [S1, S2], tolerancePct: TOL, deviations: { 1: dev(S1), 2: dev(S2) }, openIssues: { 1: issues(S1), 2: issues(S2) }, catalog: catalogRows(), explain, questions }, null, 1));
+    fs.writeFileSync('e2e-results/evidence/sim-mono-full.json', JSON.stringify({ input: IN, stages: [S1, S2], tolerancePct: TOL, deviations: { 1: dev(S1), 2: dev(S2) }, openIssues: { 1: issues(S1), 2: issues(S2) }, connVariants: JSON.parse(fs.existsSync('e2e-results/evidence/sim-conn-variants.json') ? fs.readFileSync('e2e-results/evidence/sim-conn-variants.json', 'utf8') : '[]'), catalog: catalogRows(), explain, questions }, null, 1));
     fs.writeFileSync('e2e-results/evidence/sim-deviations.txt', JSON.stringify({ 1: dev(S1), 2: dev(S2) }, null, 1));
   });
 });
