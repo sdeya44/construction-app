@@ -25,7 +25,7 @@ export const IN = {
 };
 
 export type Stage = 1 | 2;
-export interface Rec { cat: string; el: string; dim: string; unit: string; expected: number | string | null; actual: number | string | null; basis: string; info?: boolean }
+export interface Rec { owner?: 'accepted' | 'issue'; ownerNote?: string; cat: string; el: string; dim: string; unit: string; expected: number | string | null; actual: number | string | null; basis: string; info?: boolean }
 export interface Shape { key: string; kind: 'member' | 'plate'; title: string; profile?: string; outline?: { outer: { u: number; v: number }[]; holes: { u: number; v: number }[][] }; lenMm?: number; cutA?: number; cutB?: number; w?: number; l?: number; t?: number; holes?: { c: number; t: number; d: number }[] }
 
 const deg = (r: number) => (r * 180) / Math.PI;
