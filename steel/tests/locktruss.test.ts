@@ -43,6 +43,6 @@ describe('נעילה אופקית — מסבך + סיב רציף (תוכנית 1
       const a = fab.parts.find((x) => x.memberId.startsWith('LT.') && x.memberId.endsWith('.S'))!;
       const asm = fab.assemblies.find((x) => x.id === a.assembly)!;
       expect(asm.parts.filter((id) => id.startsWith('LT.')).length).toBeGreaterThan(3);
-    });
+    }, 60000); // ~5 שניות: ברירת המחדל של vitest 4 (5 שניות) אינה מספיקה
   }
 });

@@ -455,13 +455,11 @@ export function buildRoofTrusses(p: Project, members: Member[], splices: Record<
       : rise > 0 ? (x: number) => zEnd + rise * (1 - Math.abs(x - L.xR!) / (x < L.xR! ? L.xR! - L.x0 : L.x1 - L.xR!)) : () => zEnd;
     if (rt.shape === 'scissor' && L.xR === null) res.issues.push({ code: 'TRUSS_FRAME', severity: 'info', message: `מסבך "מספריים" מסגרת ${fi}: גג חד-שיפועי — חגורה תחתונה אופקית` });
     if (rise > 0 && top(L.xR!) - (zEnd + rise) < spec.depth * 0.6) res.issues.push({ code: 'TRUSS_ANGLE', severity: 'warning', message: `מסבך "מספריים" מסגרת ${fi}: הגבהה גדולה — גובה המסבך ברכס קטן מ-60% מהגובה בקצה` });
-    // מקטעי החגורה התחתונה: נחתכים ברכס (parallel / גג דו-שיפועי) ובמקומות חיבורי ההמשך של קורות הגג
+    // מקטעי החגורה התחתונה: נחתכים ברכס (parallel / גג דו-שיפועי) ובאורך מוט (להלן). 1.114 (החלטת בעלים 28.11.2026): חיבורי ההמשך של קורת הגג
+    // (החגורה העליונה) אינם חותכים עוד את החגורה התחתונה — חלק אחד כשאורכה נכנס במוט.
     const cutsX = new Set<number>();
     if (L.xR !== null) cutsX.add(L.xR);
-    for (const r of L.rafters) for (const t of splices[r.id] ?? []) {
-      const len = Math.hypot(r.end.x - r.start.x, r.end.z - r.start.z), cos = Math.abs(r.end.x - r.start.x) / len;
-      cutsX.add(r.start.x + Math.sign(r.end.x - r.start.x) * t * cos);
-    }
+    void splices;
     const cuts = [...cutsX].filter((x) => x > L.x0 + 300 && x < L.x1 - 300).sort((a, b) => a - b);
     // אם החגורה התחתונה ארוכה מהמוט — חיתוך נוסף באמצע שדות
     const stock = p.settings.stockLength - 30;
