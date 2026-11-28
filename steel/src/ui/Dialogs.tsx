@@ -211,8 +211,8 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
           </>}
           {step === 2 && <>
             <div className="panel-title">חתכים</div>
-            <div className="field prof"><label>חתך עמוד</label><ProfilePicker value={b.columnProfile} families={['HEA', 'HEB', 'HEM', 'IPE', 'RHS', 'SHS']} onCommit={(v) => set({ columnProfile: v })} /></div>
-            <div className="field prof"><label>חתך קורה</label><ProfilePicker value={b.rafterProfile} families={['IPE', 'HEA', 'HEB', 'RHS']} onCommit={(v) => set({ rafterProfile: v })} /></div>
+            <div className="field prof"><label>חתך עמוד</label><ProfilePicker value={b.columnProfile} families={['HEA', 'HEB', 'HEM', 'IPE', 'RHS', 'SHS']} onCommit={(v) => set({ columnProfile: v })} testId="np-column" /></div>
+            <div className="field prof"><label>חתך קורה</label><ProfilePicker value={b.rafterProfile} families={['IPE', 'HEA', 'HEB', 'RHS']} onCommit={(v) => set({ rafterProfile: v })} testId="np-rafter" /></div>
             <label className="row" style={{ marginTop: 8 }} title="הקטן ביותר שמסומן 'סביר' בבדיקת הגדלים, באותה משפחת פרופיל; כולל התאמת פלטות ראש עמוד ובסיס. הערכה בלבד — לא תכן."><input type="checkbox" checked={autoSize} data-testid="np-autosize" onChange={(e) => setAutoSize(e.target.checked)} />התאמת חתכים לפי כללי אצבע (עמודים, קורות, פטות, קושרות)</label>
             <div className="hint">עם ההתאמה מסומנת — החתכים שכאן הם נקודת התחלה בלבד; ההתאמה רצה ביצירה. הערכה בלבד, לא תכן מאושר.</div>
           </>}

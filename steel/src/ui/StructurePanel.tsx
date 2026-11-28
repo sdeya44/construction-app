@@ -612,9 +612,9 @@ export function RafterStrutsEditor() {
             <div className="row" style={{ justifyContent: 'space-between' }}><b>שורה {i + 1}</b>
               <button className="icon-btn" title="מחיקת השורה" data-testid={`rs-del-${i}`} onClick={() => save({ rows: rs.rows.filter((x) => x.id !== r.id) })}><Icon name="x" /></button></div>
             <div className="field"><label>מציר</label>
-              <select className="inp" data-testid={`rs-from-${i}`} value={r.from} onChange={(e) => setRow(r.id, { from: e.target.value })}>{lines.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}</select></div>
+              <select className="inp" data-testid={`rs-from-${i}`} value={r.from} onChange={(e) => setRow(r.id, { from: e.target.value })}>{lines.map((l) => <option key={l.id} value={l.id} data-testid={`rs-from-opt-${l.label}`} data-line-label={l.label} title={`ציר ${l.label} (מזהה פנימי ${l.id})`}>ציר {l.label}</option>)}</select></div>
             <div className="field"><label>לכיוון ציר</label>
-              <select className="inp" data-testid={`rs-toward-${i}`} value={r.toward} onChange={(e) => setRow(r.id, { toward: e.target.value })}>{lines.filter((l) => l.id !== r.from).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}</select></div>
+              <select className="inp" data-testid={`rs-toward-${i}`} value={r.toward} onChange={(e) => setRow(r.id, { toward: e.target.value })}>{lines.filter((l) => l.id !== r.from).map((l) => <option key={l.id} value={l.id} data-testid={`rs-toward-opt-${l.label}`} data-line-label={l.label} title={`ציר ${l.label} (מזהה פנימי ${l.id})`}>ציר {l.label}</option>)}</select></div>
             <div className="field"><label>מרחק מהציר (אופקי)</label><NumField testId={`rs-dist-${i}`} value={r.dist} suffix='מ"מ' onCommit={(v) => setRow(r.id, { dist: Math.max(0, v) })} /></div>
             <div className="field"><label>מפתחים</label>
               <select className="inp" data-testid={`rs-bays-${i}`} value={mode} onChange={(e) => setRow(r.id, { bays: e.target.value === 'all' ? undefined : e.target.value === 'roof' ? [...roofBays] : [...sel].sort((p, q) => p - q) })}>

@@ -81,16 +81,27 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
     const chk = checkKneePair(store.state.project, ref, [k, other], scope === 'loc' ? key! : undefined);
     if (!chk.ok) { setPairBad(chk.reason ?? 'לא תקין'); setMsg(null); return; }
     const targets: Partial<KMeas> = { [k]: v, [other]: meas[other] };
+    // אנכי + אופקי קובעות: הן בדיוק ירידה ו-reach של המנוע (מצב reach) — נשמרות כמו שהוזנו, בלי המרה לזווית ובלי reach ישן שנשאר בצד
+    if (L2.includes('v') && L2.includes('h')) {
+      const dropV = Math.round(targets.v!), reachH = Math.round(targets.h!);
+      if (scope === 'loc') store.exec(setKneeBraces({ sides: { ...(kb.sides ?? {}), [key!]: { ...(kb.sides?.[key!] ?? {}), mode: 'reach', drop: dropV, reach: reachH } } }));
+      else {
+        const sides = Object.fromEntries(Object.entries(kb.sides ?? {}).map(([kk, o]) => { const { drop: _d, angle: _a, reach: _r, mode: _m, ...rest } = o; void _d; void _a; void _r; void _m; return [kk, rest]; }).filter(([, o]) => Object.keys(o as object).length));
+        store.exec(setKneeBraces({ mode: 'reach', drop: dropV, reach: reachH, sides }));
+      }
+      setBusy(false); setMsg(null);
+      return;
+    }
     setBusy(true); setMsg(null);
     setTimeout(() => {
       const r = solveKnee(store.state.project, ref, targets, scope === 'loc' ? key! : undefined);
       setBusy(false);
       if (!r) { setMsg('אין אלכסון שעונה על שתי המידות האלה — נסו ערך אחר או מידה קובעת אחרת'); return; }
-      if (scope === 'loc') store.exec(setKneeBraces({ sides: { ...(kb.sides ?? {}), [key!]: { ...(kb.sides?.[key!] ?? {}), mode: 'angle', drop: r.drop, angle: r.angle } } }));
+      if (scope === 'loc') store.exec(setKneeBraces({ sides: { ...(kb.sides ?? {}), [key!]: { ...(kb.sides?.[key!] ?? {}), mode: 'angle', drop: r.drop, angle: r.angle, reach: Math.round(r.meas.h) } } }));
       else {
         // כל המודל: גובר על מידות שהוגדרו קודם למיקומים
         const sides = Object.fromEntries(Object.entries(kb.sides ?? {}).map(([kk, o]) => { const { drop: _d, angle: _a, reach: _r, mode: _m, ...rest } = o; void _d; void _a; void _r; void _m; return [kk, rest]; }).filter(([, o]) => Object.keys(o as object).length));
-        store.exec(setKneeBraces({ mode: 'angle', drop: r.drop, angle: r.angle, sides }));
+        store.exec(setKneeBraces({ mode: 'angle', drop: r.drop, angle: r.angle, reach: Math.round(r.meas.h), sides }));
       }
     }, 20);
   };
@@ -194,6 +205,7 @@ export function KneeStudio({ memberId }: { memberId?: string }) {
                 <span className="ks-u">{DIM[k].unit}</span>
               </div>
             ))}
+            {meas && Math.abs(meas.v - meas.h) < 1 && Math.abs(meas.ang - 45) > 0.5 && <div className="ks-note" data-testid="ks-v-eq-h">אנכי = אופקי אבל הזווית {meas.ang.toFixed(1)}°, לא 45°: האופקי נמדד מציר העמוד (כולל חצי עומק העמוד) והאנכי מתחתית הקורה — לאלכסון 45° נעלו אנכי + זווית 45°.</div>}
             {pairBad && <div className="ks-bad" data-testid="ks-pair-bad">{pairBad}</div>}
             {busy && <div className="ks-note" data-testid="ks-busy">מחשב…</div>}
             {msg && <div className="ks-warn" data-testid="ks-msg">{msg}</div>}

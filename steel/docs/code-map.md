@@ -77,3 +77,4 @@
 - בדיקות דפדפן: `e2e/` (דורש `npx vite build`; עזרים ב-`e2e/helpers.ts`: `boot`, `openNav`, `openGroup`).
 
 | חתך וחומר לפי היקף (אלמנט / ציר / כל המודל) בחלונות הרכיבים | `ui/ScopeProfile.tsx` (`ScopeProfile`, `lineGroup`, `roleGroup`); הבונים קוראים `memberOverrides[id].profile` דרך `ovOf` (`bracing.ts`, `portal.ts`, `lockTruss.ts`, `truss.ts` — `TrussPlaneIn.ovOf`, `hbrace.ts`, `transfer.ts`); `profileRoute` ב-`PropertiesPanel.tsx` (`one`/`single`) | bracing, ui (`tests/elemscope.test.ts` EO, `e2e/elem-scope.spec.ts`) |
+| ממצאי סימולציית UI (אלכסון reach, גובה TOS, מסבך נושא מול אגד B, קונזולה) | `ui/KneeStudio.tsx` (`commit` — זוג v+h ⇒ mode reach), `model/section.ts` (`slidePlaneEnd`), `geometry/transfer.ts` (`hollowChords`, `TB_FIN_CHORD`), `geometry/bracing.ts` (`gone`, `WALL_BRACE_TB`), `ui/FrameSection.tsx` (קונזולה תמיד נראית) | bracing, transfer, ui (`tests/sim-regress.test.ts` SR, `e2e/sim-regress.spec.ts`) |

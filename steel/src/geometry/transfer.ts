@@ -159,7 +159,10 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
       const wMax = Math.max(...[tr0.profiles.top, tr0.profiles.bottom].map((n) => getProfile(n).props.b)) + 20 + (def.finOrient === 'vertical' ? 2 * finT : 0);
       const fits = !webFacing || wMax <= inner;
       const mode = def.trussConn ?? 'auto';
-      finMode = mode === 'fin' || (mode === 'auto' && fits);
+      // פח + לשונית בחריץ — רק לחגורות חלולות: בחגורת I (העליונה היא פרופיל הקורה) הלשונית עוברת דרך הווב (חדירה 5 מ"מ) ואין חריץ
+      const hollowChords = isBox(tbp) && isBox(tryProfile(tr0.profiles.bottom));
+      finMode = (mode === 'fin' || (mode === 'auto' && fits)) && hollowChords;
+      if (mode === 'fin' && !hollowChords) res.issues.push({ code: 'TB_FIN_CHORD', severity: 'warning', elementId: `TB.${def.id}`, message: `מסבך נושא ${def.id}: פח + לשונית דורש חגורות חלולות (RHS/SHS) — החגורה העליונה ${def.profile} / התחתונה ${tr0.profiles.bottom}; נבנה חיבור "פלטה אל פלטה"` });
       if (finMode && !fits) res.issues.push({ code: 'PLATE_WIDE', severity: 'warning', message: `מסבך נושא ${def.id}: החגורה עם הסנפיר (${Math.round(wMax)}) רחבה מהמרווח בין אגפי העמוד (${Math.round(inner)}) — בחר "פלטה אל פלטה" או חגורה צרה יותר` });
       finFace = webFacing ? ctw / 2 : halfY;
       if (finMode) endGap = finFace; // החגורות מתחילות אחרי הסנפיר — המיקום הסופי נקבע מהפרט

@@ -267,11 +267,16 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
     // עמוד חלול (RHS/SHS): פני ההלחמה הם הדופן החיצונית (רוחב מלא), לא עובי הדופן
     const twOf = (id: string) => { const n = profOf?.(id); const pr = (n ? tryProfile(n) : null) ?? col; return pr.family === 'RHS' || pr.family === 'SHS' ? pr.props.b : pr.dims.tw ?? pr.dims.t ?? ctw; };
     const ls = [...topo.sec.lines].sort((p, q) => p.x - q.x);
-    for (const [lid, bays] of wallBays(b.bracing, ls.map((l) => l.id))) {
+    for (const [lid, baysRaw] of wallBays(b.bracing, ls.map((l) => l.id))) {
       const l = ls.find((q) => q.id === lid)!;
       if (l.wall) continue;
       const ct = topo.colTop.get(l.id);
       if (!ct) continue;
+      // מפתח הצמוד לעמוד שבוטל (דילול עמודים — קורה/מסבך נושא): המארח של הקשיחות לא קיים, ומסבך נושא תופס את מישור הקיר — מושמט
+      const gone = new Set((b.transfers ?? []).filter((t) => t.lineId === lid).flatMap((t) => t.removed));
+      const bays = resolveBays(baysRaw, frames.length - 1).filter((bi) => !gone.has(frames[bi].id) && !gone.has(frames[bi + 1].id));
+      const dropped = resolveBays(baysRaw, frames.length - 1).filter((bi) => !bays.includes(bi));
+      if (dropped.length) res.issues.push({ code: 'WALL_BRACE_TB', severity: 'info', message: `קשיחות קיר ציר ${l.label}: מפתח ${dropped.map((x) => x + 1).join(', ')} הושמט — צמוד לעמוד שבוטל (קורה/מסבך נושא במקומו)` });
       const cap = ct.cap ?? topo.junctions.find((j) => j.line === l)?.plane;
       const sl = cap ? Math.abs((cap.b.z - cap.a.z) / (cap.b.x - cap.a.x)) : 0;
       const rafV = raf.props.h * Math.sqrt(1 + sl * sl);
@@ -281,7 +286,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
       if (lType === 'truss') {
         buildLockTrussLine(res, { ...(br.walls.truss ?? defaultLockTruss()), ...(br.walls.lineTruss?.[l.id] ?? {}) }, {
           side, label: l.label, x, frames: frames.map((f) => ({ id: f.id, y: f.y })), portalBays: resolveBays(bays, nb),
-          colProfile: profOf?.(`${frames[0].id}.COL.${l.id}`) ?? b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - 60, mat, ovOf,
+          colProfile: profOf?.(`${frames[0].id}.COL.${l.id}`) ?? b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - 60, mat, ovOf, gone,
         });
         continue;
       }
@@ -289,7 +294,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         const pp = { ...(br.walls.portal ?? defaultPortal()), ...(br.walls.linePortal?.[l.id] ?? {}) };
         buildPortalLine(res, pp, {
           side, label: l.label, x, frames: frames.map((f) => ({ id: f.id, y: f.y })), portalBays: resolveBays(bays, nb),
-          colProfile: b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - (pp.zTopClear ?? 60), mat, ovOf,
+          colProfile: b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - (pp.zTopClear ?? 60), mat, ovOf, gone,
         });
         continue;
       }

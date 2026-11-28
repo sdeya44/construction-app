@@ -516,6 +516,7 @@ function buildSheetOn(def: DrawingDef, p: Project, d: DerivedModel, fab: Fabrica
       for (const m of colsF) v.text({ x: m.start.x + (m.start.x < b.width / 2 ? 450 : -450), y: (m.start.z + m.end.z) / 2 }, `${asmOf(m.id)} ${m.profile}`, 2.5, 'center', 'MARK', 90);
       const slopesTxt = (d.section?.planes ?? []).map((q) => `${Math.abs(((q.b.z - q.a.z) / (q.b.x - q.a.x)) * 100).toFixed(1)}%`).join(' / ');
       v.text({ x: (bx.x0 + bx.x1) / 2, y: bx.y1 - 300 }, `שיפוע ${slopesTxt}  ·  מבט לאורך Y, ${def.refs && def.refs.length > 1 ? `מסגרת טיפוסית – צירים ${def.refs.map((id) => b.frames.findIndex((q) => q.id === id) + 1).join(', ')}` : `מסגרת ${fi}`}`, 2.5, 'center', 'TEXT');
+      v.text({ x: (bx.x0 + bx.x1) / 2, y: bx.y1 - 700 }, 'גובה עמוד = עד פני עליון קורת הגג (TOS) בציר העמוד — לא בקצה הקונזולה', 2, 'center', 'TEXT');
       // מפלסים
       const xL = (xsF[0] ?? 0) - 1400;
       v.level({ x: xL, y: b.baseElevation }, 0, -1);

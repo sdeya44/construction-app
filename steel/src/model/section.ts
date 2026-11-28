@@ -449,3 +449,18 @@ export function gablePair(sec: CustomSection): { a: string; b: string; symmetric
   if (!centered) return null;
   return { a: p.id, b: q.id, symmetric: Math.abs(dp.zLow - dq.zLow) < 1 && Math.abs(dp.slopePct - dq.slopePct) < 0.01 };
 }
+
+/**
+ * הזזת קצה מישור גג (X) לאורך השיפוע: הגובה בצירי העמודים נשמר (הגובה = פני עליון קורת הגג בציר העמוד, לא בקצה הקונזולה).
+ * שינוי X בלי לעדכן Z מזיז את כל הגג (למשל קונזולה 1 מ' ב-X=-1000 עם Z=4000 בקצה העלה את גובה העמוד ל-4143).
+ */
+export function slidePlaneEnd(sec: CustomSection, planeId: string, end: 'x0' | 'x1', x: number): CustomSection {
+  return {
+    ...sec, template: undefined,
+    planes: sec.planes.map((pl) => {
+      if (pl.id !== planeId) return pl;
+      const s = (pl.z1 - pl.z0) / (pl.x1 - pl.x0);
+      return end === 'x0' ? { ...pl, x0: x, z0: pl.z1 - s * (pl.x1 - x) } : { ...pl, x1: x, z1: pl.z0 + s * (x - pl.x0) };
+    }),
+  };
+}

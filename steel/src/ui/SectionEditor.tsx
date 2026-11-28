@@ -8,7 +8,7 @@ import { setBuilding, setKneeBraces, setSection, setSettings } from '../commands
 import { tryProfile } from '../profiles/library';
 import { defaultKneeBraces } from '../geometry/knee';
 import { defaultHaunch } from '../geometry/haunch';
-import { gablePair, lineLabel, moveLines, planeDims, setAxisCount, setPlaneDims, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
+import { gablePair, lineLabel, moveLines, planeDims, setAxisCount, setPlaneDims, slidePlaneEnd, SECTION_TEMPLATES, toCustomSection, type CustomSection, type RoofPlaneDef } from '../model/section';
 import { TriDims, type TriCalc } from './TriDims';
 import { store, useStore } from '../store';
 import { Adv, LenField, NumField, ProfilePicker, useEdit, Help } from './fields';
@@ -80,7 +80,6 @@ function ModularTables({ sec, unit: u, apply, part }: { sec: CustomSection; unit
   const labels = useStore((st) => st.project.building.lineLabels) ?? {};
   const baseEl = useStore((st) => st.project.building.baseElevation);
   const setLine = (id: string, x: number) => apply(moveLines(sec, new Map([[id, x]])), 'הזזת ציר');
-  const setPlane = (id: string, patch: Partial<RoofPlaneDef>) => apply({ ...sec, template: undefined, planes: sec.planes.map((pl) => (pl.id === id ? { ...pl, ...patch } : pl)) });
   const newId = (pre: string, used: string[]) => { let i = 1; while (used.includes(`${pre}${i}`)) i++; return `${pre}${i}`; };
   const slope = (pl: RoofPlaneDef) => ((pl.z1 - pl.z0) / (pl.x1 - pl.x0)) * 100;
   // מה מחושב בכל מישור (ברירת מחדל: גובה הרכס / העמוד הגבוה)
@@ -167,10 +166,10 @@ function ModularTables({ sec, unit: u, apply, part }: { sec: CustomSection; unit
           </div>
           {pd && <TriDims testId={`tri-${i}`} unit={u} col={pd.zLow} top={pd.zHigh} run={pd.run} calc={calcOf(pl.id)} onCalc={(c) => setCalc({ ...calc, [pl.id]: c })}
             labels={planeLabels(pd)} onCommit={(v) => apply(setPlaneDims(sec, pl.id, v.col, v.top), 'מידות גג')} />}
-          <Adv id={`pl-x-${pl.id}`} label="קצוות המישור (X) — מתקדם">
+          <Adv id={`pl-x-${pl.id}`} label="קצוות המישור (X) — מתקדם (הגובה בצירי העמודים נשמר)">
             <div className="grid-4">
-              <label>X שמאל<LenField mm={pl.x0} unit={u} testId={`pl-x0-${i}`} onCommit={(v) => setPlane(pl.id, { x0: v })} /></label>
-              <label>X ימין<LenField mm={pl.x1} unit={u} testId={`pl-x1-${i}`} onCommit={(v) => setPlane(pl.id, { x1: v })} /></label>
+              <label>X שמאל<LenField mm={pl.x0} unit={u} testId={`pl-x0-${i}`} onCommit={(v) => apply(slidePlaneEnd(sec, pl.id, 'x0', v), 'קצה מישור')} /></label>
+              <label>X ימין<LenField mm={pl.x1} unit={u} testId={`pl-x1-${i}`} onCommit={(v) => apply(slidePlaneEnd(sec, pl.id, 'x1', v), 'קצה מישור')} /></label>
             </div>
           </Adv>
         </div>

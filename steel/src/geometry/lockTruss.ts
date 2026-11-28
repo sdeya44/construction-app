@@ -57,6 +57,7 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
   const joints = new Map<string, { colId: string; z: number; yC: number; ends: { chordId: string; plateId: string; sg: number; yF: number; lab: string }[] }>();
   for (const bay of bays) {
     const f0 = L.frames[bay], f1 = L.frames[bay + 1];
+    if (L.gone?.has(f0.id) || L.gone?.has(f1.id)) continue;
     const ya = Math.min(f0.y, f1.y) + tw / 2, yb = Math.max(f0.y, f1.y) - tw / 2;
     const c0 = `${f0.id}.COL.${L.side}`, c1 = `${f1.id}.COL.${L.side}`;
     const colA = f0.y < f1.y ? c0 : c1, colB = f0.y < f1.y ? c1 : c0;

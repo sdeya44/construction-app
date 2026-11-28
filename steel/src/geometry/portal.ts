@@ -27,6 +27,8 @@ export interface PortalLine {
   mat: string;
   /** חתך אישי לאלמנט (memberOverrides) — חל על האלמנט הזה בלבד, והחיבור נבנה לפיו */
   ovOf?: (id: string) => string | undefined;
+  /** מסגרות שהעמוד שלהן בציר זה בוטל (דילול עמודים) — מפתחים צמודים להן לא נבנים (גם סיב רציף) */
+  gone?: Set<string>;
 }
 
 /**
@@ -75,6 +77,7 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
   const rcp = (ok: boolean, rid: string, member: string, end: 'start' | 'end', nb: number, sd: 1 | -1, bs = 1) => (specOk && ok ? { recipe: { id: rid, params: { d: pp.bolt.d, nb, ft: T, tt: T, sd, bs, wa: pp.weldSize, ...(colI ? { th: 1 } : {}) }, sites: [`${member}|${end}`] } } : {});
   for (const bay of bays) {
     const f0 = L.frames[bay], f1 = L.frames[bay + 1];
+    if (L.gone?.has(f0.id) || L.gone?.has(f1.id)) continue;
     const key = `${bay + 1}.${L.side}`;
     const lab = portal.has(bay) ? `אגד B ציר ${L.label} מפתח ${bay + 1}` : `קורת אגד ציר ${L.label} מפתח ${bay + 1}`;
     const withDiag = portal.has(bay);

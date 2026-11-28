@@ -98,7 +98,7 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
             { key: 'line', title: 'כל הציר', count: nLine, testId: 'pscope-asm' },
             { key: 'all', title: 'כל המודל', count: nOn, testId: 'pscope-asmall' },
           ]}
-          after={scope === 'line' ? <select className="inp ks-linesel" value={line} onChange={(e) => setLine(e.target.value)} aria-label="ציר" data-testid="ks-line">{lines.map((l) => <option key={l.id} value={l.id}>ציר {l.label}</option>)}</select> : undefined}
+          after={scope === 'line' ? <select className="inp ks-linesel" value={line} onChange={(e) => setLine(e.target.value)} aria-label="ציר" data-testid="ks-line">{lines.map((l) => <option key={l.id} value={l.id} data-testid={`ks-line-opt-${l.label}`} data-line-label={l.label} title={`ציר ${l.label} (מזהה פנימי ${l.id})`}>ציר {l.label}</option>)}</select> : undefined}
           note={<>{scopeIds.length} אלמנטים וחלקים — מודגשים בכתום · <button className="wz-link" onClick={copyNow} data-testid="wz-copy">העתקת הגדרות</button>{clipNow && <> · <button className="wz-link" onClick={paste} data-testid="wz-paste">הדבקה {scope === 'line' ? `לציר ${lineLabel}` : 'לכל המודל'}</button></>}</>} />
         {selId && d.byId.has(selId) && (() => { const sm = d.byId.get(selId)!, wm = d.members.filter((x) => WALL_RE.test(x.id)); return <ScopeProfile scopeKey={scope} ids={scope === 'one' ? [selId] : (scope === 'line' ? lineGroup(sm, wm) : roleGroup(sm, wm)).map((x) => x.id)} />; })()}
         {scope === 'one' && <div className="ks-note" data-testid="walls-one-note">סוג הקשיחות ומידותיה נקבעים לציר; כאן משנים חתך וחומר לאלמנט הנבחר בלבד.</div>}

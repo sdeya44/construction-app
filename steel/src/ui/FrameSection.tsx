@@ -255,10 +255,10 @@ export function FrameSectionDims() {
               <line x1={a} y1={yDim} x2={c} y2={yDim} /><line x1={a} y1={yDim - 4} x2={a} y2={yDim + 4} /><line x1={c} y1={yDim - 4} x2={c} y2={yDim + 4} />
               <text x={(a + c) / 2} y={yDim - 4} className="fs-t c">{((l.x - lines[i].x) / 1000).toFixed(2)}</text></g>;
           })}
-          {lines[0].x - L0 > 1 && <g className="fs-dim ed" onClick={() => open({ kind: 'ovl', key: '', value: lines[0].x - L0 }, (X(L0) + X(lines[0].x)) / 2, yOv - 8)} data-testid="fs-ovl">
-            <line x1={X(L0)} y1={yOv} x2={X(lines[0].x)} y2={yOv} /><text x={(X(L0) + X(lines[0].x)) / 2} y={yOv - 4} className="fs-t c">{((lines[0].x - L0) / 1000).toFixed(2)}</text></g>}
-          {R1 - lines[lines.length - 1].x > 1 && <g className="fs-dim ed" onClick={() => open({ kind: 'ovr', key: '', value: R1 - lines[lines.length - 1].x }, (X(R1) + X(lines[lines.length - 1].x)) / 2, yOv - 8)} data-testid="fs-ovr">
-            <line x1={X(lines[lines.length - 1].x)} y1={yOv} x2={X(R1)} y2={yOv} /><text x={(X(R1) + X(lines[lines.length - 1].x)) / 2} y={yOv - 4} className="fs-t c">{((R1 - lines[lines.length - 1].x) / 1000).toFixed(2)}</text></g>}
+          {<g className="fs-dim ed" onClick={() => open({ kind: 'ovl', key: '', value: Math.max(0, lines[0].x - L0) }, (X(L0) + X(lines[0].x)) / 2, yOv - 8)} data-testid="fs-ovl"><title>קונזולה שמאל — לחיצה לעריכה (גם כשהיא 0)</title>
+            <line x1={X(L0)} y1={yOv} x2={X(lines[0].x)} y2={yOv} /><text x={(X(L0) + X(lines[0].x)) / 2} y={yOv - 4} className="fs-t c">{(Math.max(0, lines[0].x - L0) / 1000).toFixed(2)}</text></g>}
+          {<g className="fs-dim ed" onClick={() => open({ kind: 'ovr', key: '', value: Math.max(0, R1 - lines[lines.length - 1].x) }, (X(R1) + X(lines[lines.length - 1].x)) / 2, yOv - 8)} data-testid="fs-ovr"><title>קונזולה ימין — לחיצה לעריכה (גם כשהיא 0)</title>
+            <line x1={X(lines[lines.length - 1].x)} y1={yOv} x2={X(R1)} y2={yOv} /><text x={(X(R1) + X(lines[lines.length - 1].x)) / 2} y={yOv - 4} className="fs-t c">{(Math.max(0, R1 - lines[lines.length - 1].x) / 1000).toFixed(2)}</text></g>}
           <g className="fs-lvl ed" onClick={() => open({ kind: 'blev', key: '', value: base }, W - 50, Y(base) - 20)} data-testid="fs-base-level"><text x={W - 10} y={Y(base) - 5} className="fs-t end b">{`מפלס בסיס ${base ? m3(base) : '\u2066±0.00\u2069'}`}</text></g>
         </svg>
         {pop && (() => { const l = sec.lines.find((q) => q.id === pop.id); if (!l) return null; const i = lines.findIndex((q) => q.id === l.id); return (
