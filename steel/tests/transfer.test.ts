@@ -20,7 +20,7 @@ describe('דילול עמודים — קורה נושאת', () => {
       expect(d.members.find((m) => m.id === 'TB.T1')).toBeTruthy();
       expect(d.connections.filter((c) => c.type === 'tb-support').length).toBe(2);
     }
-  });
+  }, 60000); // ~5 שניות: ברירת המחדל של vitest 4 (5 שניות) אינה מספיקה
   it('TB-U2: ציר פנימי (רכס ומונו רב־מפתחי) — A1–A5 × B1–B3 ללא שגיאות', () => {
     const secs = [
       { lines: [{ id: 'A', x: 0 }, { id: 'B', x: 7000 }, { id: 'C', x: 14000 }], planes: [{ id: 'P1', x0: -300, z0: 5970, x1: 7000, z1: 6700, start: 'x1' }, { id: 'P2', x0: 7000, z0: 6700, x1: 14300, z1: 5970, start: 'x0' }] },
@@ -32,7 +32,7 @@ describe('דילול עמודים — קורה נושאת', () => {
       const d = generate(newProject('x', b));
       expect(errs(d).map((e) => `${sup}/${seat} ${e.code}`)).toEqual([]);
     }
-  });
+  }, 60000); // ~6 שניות: ברירת המחדל של vitest 4 (5 שניות) אינה מספיקה
   it('TB-U3: A1 מקצר את העמודים התומכים; B4 עם תמיכה צדית עובר ל־B1', () => {
     const b = defaultBuilding(); const f = [...b.frames].sort((x, y) => x.y - y.y);
     b.transfers = [{ id: 'T1', lineId: 'L', from: f[0].id, to: f[2].id, removed: [f[1].id], profile: 'IPE450', support: 'A1', seat: 'B1' }];
