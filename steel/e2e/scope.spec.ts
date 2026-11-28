@@ -68,8 +68,8 @@ test('SCOPE-03 (1.48): אלמנט במכלול קשיחות — רק "המכלו
   const [a, b] = lines;
   const bbK = (l: string) => page.evaluate((ll) => (window as any).__ksp.store.state.derived.members.find((m: any) => m.id.startsWith(`BB.`) && m.id.split('.')[2] === ll && /\.K1$/.test(m.id)).id, l);
   await page.evaluate((i) => (window as any).__ksp.store.select([i]), await bbK(a));
-  // אין "רק האלמנט הזה" / "כל הדומים" — רק ציר / כל המודל (1.56: חלון קשיחות הקירות)
-  await expect(page.getByTestId('pscope-one')).toHaveCount(0);
+  // 1.115: גם "האלמנט שנבחר" (חתך וחומר לאלמנט בודד); אין "כל הדומים" (1.56: חלון קשיחות הקירות)
+  await expect(page.getByTestId('pscope-one')).toHaveCount(1);
   await expect(page.getByTestId('pscope-similar')).toHaveCount(0);
   await page.getByTestId('pscope-asm').click();
   await expect(page.getByTestId('ks-line')).toHaveValue(a);

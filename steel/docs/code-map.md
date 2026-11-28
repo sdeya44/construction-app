@@ -75,3 +75,5 @@
 - מפת מודולים: `tests/modules.mjs` · פקודה: `scripts/test-mod.mjs` · שלמות המפה: `tests/modules.test.ts`.
 - עשן: `tests/smoke.test.ts` (כ-10 שניות). כבדות (רק בהרצה מלאה): `sim-all`, `catalog50`, `perf`, `audit`, `cad-oracle` המלא.
 - בדיקות דפדפן: `e2e/` (דורש `npx vite build`; עזרים ב-`e2e/helpers.ts`: `boot`, `openNav`, `openGroup`).
+
+| חתך וחומר לפי היקף (אלמנט / ציר / כל המודל) בחלונות הרכיבים | `ui/ScopeProfile.tsx` (`ScopeProfile`, `lineGroup`, `roleGroup`); הבונים קוראים `memberOverrides[id].profile` דרך `ovOf` (`bracing.ts`, `portal.ts`, `lockTruss.ts`, `truss.ts` — `TrussPlaneIn.ovOf`, `hbrace.ts`, `transfer.ts`); `profileRoute` ב-`PropertiesPanel.tsx` (`one`/`single`) | bracing, ui (`tests/elemscope.test.ts` EO, `e2e/elem-scope.spec.ts`) |

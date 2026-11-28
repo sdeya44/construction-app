@@ -158,6 +158,8 @@ export interface TrussPlaneIn {
   top: ChordDef; bot: ChordDef;
   spec: TrussSpec;
   mat: string;
+  /** חתך אישי לאלמנט (memberOverrides) — אנכים ואלכסונים: החתך והחיבורים (צמתים, לחיים, ריתוכים) נבנים לפיו */
+  ovOf?: (id: string) => string | undefined;
 }
 
 const slopeAt = (c: ChordDef, s: number) => (c.z(s + 1) - c.z(s - 1)) / 2;
@@ -181,11 +183,12 @@ export function buildTrussPlane(t: TrussPlaneIn): { members: Member[]; connectio
   const prof = (k: keyof TrussSpec['profiles']) => t.spec.profiles[k];
   type Web = { id: string; prof: string; kind: 'v' | 'd'; bot: number; top: number; xPair?: 'cont' | 'split' };
   const webs: Web[] = [];
-  t.spec.verts.forEach((v, i) => { if (v && i <= n) webs.push({ id: `${t.idBase}.V${i}`, prof: prof('vert'), kind: 'v', bot: i, top: i }); });
+  const own = (id: string, def: string) => { const o = t.ovOf?.(id) ?? t.ovOf?.(`${id}1`) ?? t.ovOf?.(`${id}2`); return o && tryProfile(o) ? o : def; };
+  t.spec.verts.forEach((v, i) => { if (v && i <= n) webs.push({ id: `${t.idBase}.V${i}`, prof: own(`${t.idBase}.V${i}`, prof('vert')), kind: 'v', bot: i, top: i }); });
   t.spec.cells.slice(0, n).forEach((c, i) => {
     const pr = i === 0 || i === n - 1 ? prof('endDiag') : prof('diag');
-    if (c === '/' || c === 'X') webs.push({ id: `${t.idBase}.D${i}a`, prof: pr, kind: 'd', bot: i, top: i + 1, xPair: c === 'X' ? 'cont' : undefined });
-    if (c === '\\' || c === 'X') webs.push({ id: `${t.idBase}.D${i}b`, prof: pr, kind: 'd', bot: i + 1, top: i, xPair: c === 'X' ? 'split' : undefined });
+    if (c === '/' || c === 'X') webs.push({ id: `${t.idBase}.D${i}a`, prof: own(`${t.idBase}.D${i}a`, pr), kind: 'd', bot: i, top: i + 1, xPair: c === 'X' ? 'cont' : undefined });
+    if (c === '\\' || c === 'X') webs.push({ id: `${t.idBase}.D${i}b`, prof: own(`${t.idBase}.D${i}b`, pr), kind: 'd', bot: i + 1, top: i, xPair: c === 'X' ? 'split' : undefined });
   });
   // רוחב במישור ועקבות על פני החגורה
   const wIn = (pr: string) => tryProfile(pr)?.props.b ?? 80;
@@ -499,7 +502,7 @@ export function buildRoofTrusses(p: Project, members: Member[], splices: Record<
     const tp = buildTrussPlane({
       idBase: `TR.${fid}${sx}`, connId: cid, label: `מסבך גג מסגרת ${fi}${bl}`, origin: v3(0, y, 0), e: v3(1, 0, 0), nodes: L.nodes,
       top: { z: top, h: rafterAt(L.rafters, L.x0).h, memberAt: rafAt },
-      bot: { z: bz, h: pb.props.h, memberAt: bcAt }, spec: { ...spec, cells: fitCells(spec, L.nodes.length - 1, L.xR !== null), verts: fitVerts(spec, L.nodes.length - 1, L.xR !== null) }, mat,
+      bot: { z: bz, h: pb.props.h, memberAt: bcAt }, spec: { ...spec, cells: fitCells(spec, L.nodes.length - 1, L.xR !== null), verts: fitVerts(spec, L.nodes.length - 1, L.xR !== null) }, mat, ovOf: (id) => p.memberOverrides[id]?.profile,
     });
     res.members.push(...tp.members); res.connections.push(tp.connection); res.issues.push(...tp.issues);
     // חיבורי המשך בחגורה התחתונה

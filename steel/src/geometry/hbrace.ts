@@ -15,6 +15,8 @@ export function defaultRhsTruss(): RhsTrussParams {
 interface Ctx {
   res: { members: Member[]; connections: Connection[]; issues: ValidationIssue[] };
   mat: string;
+  /** חתך אישי לאלמנט (memberOverrides) */
+  ovOf?: (id: string) => string | undefined;
 }
 
 /**
@@ -41,7 +43,8 @@ export function rhsTruss(ctx: Ctx, rp: RhsTrussParams, key: string, label: strin
     if (!nodePts.has(nk)) nodePts.set(nk, { pts: [], bolts: [], yFace: f ? (yF1 > yF0 ? y1 : y0) : (yF1 > yF0 ? y0 : y1), host: f ? host1 : host0, w: ws[i], members: [], welds: [] });
     return nodePts.get(nk)!;
   };
-  const place = (id: string, profile: string, a: { f: 0 | 1; i: number }, b: { f: 0 | 1; i: number }, side: 1 | -1, desc: string) => {
+  const place = (id: string, profile0: string, a: { f: 0 | 1; i: number }, b: { f: 0 | 1; i: number }, side: 1 | -1, desc: string) => {
+    const ov = ctx.ovOf?.(id), profile = ov && tryProfile(ov) ? ov : profile0; // חתך אישי למוט/אלכסון זה
     const pr = getProfile(profile);
     const wt = pr.props.b; // רוחב הלשונית = רוחב ה-RHS
     const S = P(a.f ? yF1 : yF0, ws[a.i]), E = P(b.f ? yF1 : yF0, ws[b.i]);

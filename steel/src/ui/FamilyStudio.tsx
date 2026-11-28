@@ -24,6 +24,7 @@ import { LSvg } from './Dialogs';
 import { FrameSectionDims } from './FrameSection';
 import { SecHeightsCtx, SectionEditor, TemplateBar } from './SectionEditor';
 import { ConnectorBlock, endOfConn } from './wizard/ConnectorBlock';
+import { ScopeProfile, lineGroup } from './ScopeProfile';
 import { WizardNavigation, WizardScopeSelector, WizardSection, WizardTypeSelector, WizardValidation, wizardClip, wizardCopy, type WzSec, type WzType } from './wizard/Wizard';
 
 /**
@@ -312,9 +313,12 @@ export function FamilyStudio({ fam, nav, memberId }: { fam: FamKey; nav: NavKey;
   const types = F.types?.(ctx);
 
   const own = useMemo(() => d.members.filter((m) => match(m)), [d, match]);
+  const allIds = own.filter((m) => !isPart(m)).map((m) => m.id);
+  const lineIds = sel && !isPart(sel) ? lineGroup(sel, own).map((m) => m.id) : [];
   const scopeList = custom ?? [
     { key: 'one', title: 'האלמנט שנבחר', ids: sel ? [sel.id] : [], disabled: sel ? undefined : 'בחרו אלמנט של הרכיב במודל' },
-    { key: 'all', title: 'כל המודל', ids: own.filter((m) => !isPart(m)).map((m) => m.id) },
+    ...(lineIds.length > 1 && lineIds.length < allIds.length ? [{ key: 'line', title: 'הציר (השורה)', ids: lineIds }] : []),
+    { key: 'all', title: 'כל המודל', ids: allIds },
   ];
   const cur = scopeList.find((s) => s.key === scope) ?? scopeList[scopeList.length - 1];
   const scopeIds = useMemo(() => {
@@ -347,6 +351,7 @@ export function FamilyStudio({ fam, nav, memberId }: { fam: FamKey; nav: NavKey;
           scopes={scopeList.map((s) => ({ key: s.key, title: s.title, count: s.ids.length || undefined, disabled: s.disabled, testId: s.key === 'one' ? 'pscope-one' : s.key === 'all' ? 'pscope-asmall' : `pscope-${s.key}` }))}
           note={<>{scopeIds.length} אלמנטים וחלקים — מודגשים בכתום{F.copy && <> · <button className="wz-link" onClick={() => wizardCopy(fam, F.copy!.get(ctx))} data-testid="wz-copy">העתקת הגדרות</button>{clip != null && <> · <button className="wz-link" onClick={() => F.copy!.put(ctx, clip)} data-testid="wz-paste">הדבקה {F.copy.label?.(ctx) ?? ''}</button></>}</>}</>} />
         {sel && <div className="ks-sel" data-testid="fam-sel">נבחר: {sel.label}</div>}
+        {cur && cur.ids.length > 0 && <ScopeProfile selId={sel?.id} ids={cur.ids} scopeKey={cur.key === 'one' ? 'one' : cur.key === 'all' ? 'all' : 'line'} />}
         <WizardNavigation value={sec} onPick={setSec} subs={subs} />
         <WizardValidation issues={issues} />
 

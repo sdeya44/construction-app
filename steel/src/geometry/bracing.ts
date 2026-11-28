@@ -46,7 +46,7 @@ const mk = (id: string, label: string, profile: string, start: Vec3, end: Vec3, 
  * קושרות X בגג ובקירות ושורות קשירה לפטות. קושרות X עובדות במתיחה בלבד (לפי תוכנית K-02).
  * חיבור: פח מרותך במסגריה, זוויתן מוברג בשטח (M16), בורג בהצטלבות — החלטת משתמש 15.11.2026.
  */
-export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: Member[], eff: BuildingParams, stockLen = 12000, profOf?: (id: string) => string | undefined, colTopOf?: (id: string) => number | undefined): BracingResult {
+export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: Member[], eff: BuildingParams, stockLen = 12000, profOf?: (id: string) => string | undefined, colTopOf?: (id: string) => number | undefined, ovOf?: (id: string) => string | undefined): BracingResult {
   const res: BracingResult = { members: [], connections: [], issues: [] };
   const br = b.bracing;
   const frames = b.frames;
@@ -64,7 +64,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
   const bc = br.conn;
   const xbrace = (key: string, label: string, profile: string, plane0: Vec3, n: Vec3, wDir: Vec3,
     pA: { y: number; w: number }, pC: { y: number; w: number }, yFace0: number, yFace1: number, host0: string, host1: string) =>
-    xBrace(res, b, bc, key, label, profile, plane0, n, wDir, pA, pC, yFace0, yFace1, host0, host1);
+    xBrace(res, b, bc, key, label, ((o) => (o && tryProfile(o) ? o : profile))(ovOf?.(`BR.${key}.1`) ?? ovOf?.(`BR.${key}.2`)), plane0, n, wDir, pA, pC, yFace0, yFace1, host0, host1);
 
   /**
    * תמוכת קושרות גג: RHS לאורך השיפוע (במקביל לקורות) בגבול תת־מפתח, במישור הקושרות. תלויה מכל פטה שמעליה
@@ -175,7 +175,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         if (narrow) continue;
         const sCuts = strutCutsIn(sLines, bay, sl.pid, sl.a, dir, L, 300);
         if (sCuts.length && br.roof.type === 'rhs' && !res.issues.some((i) => i.code === 'RS_RHS')) res.issues.push({ code: 'RS_RHS', severity: 'warning', message: `סבכה אופקית RHS מפתח ${bay + 1}: יש תמוכות בין הקורות בתוך הסבכה — הסבכה אינה מחולקת לפיהן; לבדוק התנגשות או לעבור לקושרות X` });
-        if (br.roof.type === 'rhs') rhsTruss({ res, mat: b.material }, br.roof.rhs ?? defaultRhsTruss(), `R${bay + 1}.${sl.side}`, `סבכה אופקית מפתח ${bay + 1}`, o, n, dir, L,
+        if (br.roof.type === 'rhs') rhsTruss({ res, mat: b.material, ovOf }, br.roof.rhs ?? defaultRhsTruss(), `R${bay + 1}.${sl.side}`, `סבכה אופקית מפתח ${bay + 1}`, o, n, dir, L,
           f0.y, f1.y, f0.y + rtw(rid(f0.id)) / 2, f1.y - rtw(rid(f1.id)) / 2, rid(f0.id), rid(f1.id));
         else {
           // מפתח ארוך בין מסגרות: חלוקה לאורך המבנה ל-nY תת־מפתחים עם תמוכת RHS רוחבית בכל גבול (תלויה מהפטות);
@@ -185,11 +185,15 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
           const nY = Math.max(1, Math.min(6, Math.round(nYu ?? (fullW > 9000 ? Math.ceil(fullW / 6000) : 1))));
           const strutP = tryProfile(br.roof.strut ?? 'RHS100x100x5') ?? getProfile('RHS100x100x5');
           const strutName = tryProfile(br.roof.strut ?? '') ? br.roof.strut! : 'RHS100x100x5';
-          const sb = strutP.props.b, sh = strutP.props.h;
           const sgn = Math.sign(f1.y - f0.y) || 1;
           const yB = Array.from({ length: nY + 1 }, (_, i) => f0.y + (f1.y - f0.y) * i / nY);
           const strutId = (i: number) => `BR.S${bay + 1}.${sl.side}.${i}`;
-          for (let i = 1; i < nY; i++) roofStrut(strutId(i), `תמוכת קושרות גג מפתח ${bay + 1} (${i}/${nY - 1})`, strutName, sb, sh, o, n, dir, L, yB[i], sl.pid, bay);
+          const sbOf = (i: number) => { const ov = ovOf?.(strutId(i)), pr = ov ? tryProfile(ov) : null; return (pr ?? strutP).props.b; }; // רוחב התמוכה (גם אישית) — פני תת־המפתח
+          for (let i = 1; i < nY; i++) {
+            // חתך אישי לתמוכה זו (מפאנל האלמנט)
+            const ovS = ovOf?.(strutId(i)), sP = (ovS && tryProfile(ovS)) || strutP;
+            roofStrut(strutId(i), `תמוכת קושרות גג מפתח ${bay + 1} (${i}/${nY - 1})`, sP === strutP ? strutName : ovS!, sP.props.b, sP.props.h, o, n, dir, L, yB[i], sl.pid, bay);
+          }
           const bayW = fullW / nY;
           let k = 1;
           // אלכסון שלא נכנס בחומר הגלם גם בפנל צר מאוד: אין טעם לחלק עוד לאורך השיפוע (הרוחב לבדו ארוך מדי)
@@ -237,7 +241,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
           for (let q = 0; q < nY; q++) {
             const ya = yB[q], yb = yB[q + 1];
             const h0 = q === 0 ? rid(f0.id) : strutId(q), h1 = q === nY - 1 ? rid(f1.id) : strutId(q + 1);
-            const face0 = q === 0 ? f0.y + sgn * rtw(rid(f0.id)) / 2 : ya + sgn * sb / 2, face1 = q === nY - 1 ? f1.y - sgn * rtw(rid(f1.id)) / 2 : yb - sgn * sb / 2;
+            const face0 = q === 0 ? f0.y + sgn * rtw(rid(f0.id)) / 2 : ya + sgn * sbOf(q) / 2, face1 = q === nY - 1 ? f1.y - sgn * rtw(rid(f1.id)) / 2 : yb - sgn * sbOf(q + 1) / 2;
             const sub = nY > 1 ? `.Y${q + 1}` : '', subL = nY > 1 ? ` תת־מפתח ${q + 1}/${nY}` : '';
             for (let j = 0; j < np; j++) {
               const [w0, w1] = panels[j];
@@ -277,7 +281,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
       if (lType === 'truss') {
         buildLockTrussLine(res, { ...(br.walls.truss ?? defaultLockTruss()), ...(br.walls.lineTruss?.[l.id] ?? {}) }, {
           side, label: l.label, x, frames: frames.map((f) => ({ id: f.id, y: f.y })), portalBays: resolveBays(bays, nb),
-          colProfile: profOf?.(`${frames[0].id}.COL.${l.id}`) ?? b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - 60, mat,
+          colProfile: profOf?.(`${frames[0].id}.COL.${l.id}`) ?? b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - 60, mat, ovOf,
         });
         continue;
       }
@@ -285,7 +289,7 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         const pp = { ...(br.walls.portal ?? defaultPortal()), ...(br.walls.linePortal?.[l.id] ?? {}) };
         buildPortalLine(res, pp, {
           side, label: l.label, x, frames: frames.map((f) => ({ id: f.id, y: f.y })), portalBays: resolveBays(bays, nb),
-          colProfile: b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - (pp.zTopClear ?? 60), mat,
+          colProfile: b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - (pp.zTopClear ?? 60), mat, ovOf,
         });
         continue;
       }
@@ -322,14 +326,14 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
       const nearRidge = (q: Vec3) => topo.ridges.some((r) => Math.abs(r.x - q.x) < 600);
       const a0 = sub(v3(first.start.x, 0, first.start.z), scale(dir, nearRidge(first.start) ? 20 : 60));
       const a1 = add(v3(last.start.x, 0, last.start.z), scale(dir, nearRidge(last.start) ? 20 : 60));
-      const tieProf = getProfile(br.purlinTies.profile);
-      const tieT = tieProf.dims.t ?? 4;
       for (let bay = 0; bay < nb; bay++) {
         if (skipTie.has(`${bay}|${side}`)) { if (!res.issues.some((i) => i.code === 'TIE_SKIP')) res.issues.push({ code: 'TIE_SKIP', severity: 'info', message: 'שורות קשירה לפטות: במפתחים עם קושרות גג ובקורה רדודה אין מקום לשניהם — שורת הקשירה לא נבנתה במפתחים האלה (הקושרת מייצבת את הפטות)' }); continue; }
         const ym = (frames[bay].y + frames[bay + 1].y) / 2;
         const id = `BR.T${bay + 1}.${side}`;
+        const ovT = ovOf?.(id), tieName = ovT && tryProfile(ovT) ? ovT : br.purlinTies.profile; // חתך אישי לשורה זו
+        const tieT = getProfile(tieName).dims.t ?? 4;
         // זוויתן מסובב 180°: הרגל האופקית למעלה, צמודה מתחת לאגף התחתון של הפטות (מגע 0 מ"מ)
-        const tie = mk(id, `שורת קשירה לפטות מפתח ${bay + 1}`, br.purlinTies.profile, v3(a0.x, ym, a0.z), v3(a1.x, ym, a1.z), n, mat, 'purlin');
+        const tie = mk(id, `שורת קשירה לפטות מפתח ${bay + 1}`, tieName, v3(a0.x, ym, a0.z), v3(a1.x, ym, a1.z), n, mat, 'purlin');
         tie.rollDeg = 180;
         res.members.push(tie);
         const cid = `C.BR.TIE.${side}.${bay + 1}`;

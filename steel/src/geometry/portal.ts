@@ -25,6 +25,8 @@ export interface PortalLine {
   /** ראש קורת האגד המרבי (מתחת לקורה הראשית) */
   zTop: number;
   mat: string;
+  /** חתך אישי לאלמנט (memberOverrides) — חל על האלמנט הזה בלבד, והחיבור נבנה לפיו */
+  ovOf?: (id: string) => string | undefined;
 }
 
 /**
@@ -48,7 +50,7 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
   const hb = bp.props.h;
   // הפוך (בקשת משתמש 18.11.2026): האלכסונים עולים מראש קורת האגד אל העמוד — הקורה יורדת ב-drop; gap = מתחת לקורה הראשית עד ראש האלכסון בעמוד
   const inv = !!pp.invert;
-  const zc = L.zTop - pp.gap - (inv ? pp.drop : 0) - hb / 2, zBot = zc - hb / 2, zTopB = zc + hb / 2;
+  const zc = L.zTop - pp.gap - (inv ? pp.drop : 0) - hb / 2, zBot = zc - hb / 2;
   const x = L.x;
   const nb = L.frames.length - 1;
   const portal = new Set(L.portalBays);
@@ -81,34 +83,38 @@ export function buildPortalLine(out: Out, pp: PortalBraceParams, L: PortalLine) 
     const c0 = `${f0.id}.COL.${L.side}`, c1 = `${f1.id}.COL.${L.side}`;
     const colA = f0.y < f1.y ? c0 : c1, colB = f0.y < f1.y ? c1 : c0;
     const bid = `BB.${key}`;
+    // חתך אישי לקורה זו (מפאנל האלמנט): הציר נשאר על zc, פני הקורה לפי הגובה שלה
+    const ovB = L.ovOf?.(bid), bpB = (ovB && tryProfile(ovB)) || bp, beamName = bpB === bp ? pp.beam : ovB!;
+    const zBotB = zc - bpB.props.h / 2, zTopBB = zc + bpB.props.h / 2;
     // קורה-עמוד בשני הקצוות
     const ends = ([['E0', ya, 1, colA], ['E1', yb, -1, colB]] as const).map(([k, yF, sg, col]) => {
       const cid = `C.BB.${key}.${k}`;
-      const j = finJoint({ ...base, cid, desc: 'קורת אגד', hostId: col, memberId: bid, P: horiz ? v3(x, yF, zc - T) : v3(x, yF, zc), n: v3(0, sg, 0), d: v3(0, sg, 0), pn: horiz ? v3(0, 0, 1) : X, side: 1, prof: bp, profile: pp.beam, bolts: pp.beamBolts ?? 2 });
-      if (!hollow && bp.props.b / 2 + T > inner / 2 + 0.5) out.issues.push({ code: 'PLATE_WIDE', severity: 'warning', elementId: cid, message: `${lab}: קורת האגד המוסטת ${hollow ? 'רחבה מפני העמוד' : 'אינה נכנסת בין אגפי העמוד'} (${Math.round(inner)})` });
+      const j = finJoint({ ...base, cid, desc: 'קורת אגד', hostId: col, memberId: bid, P: horiz ? v3(x, yF, zc - T) : v3(x, yF, zc), n: v3(0, sg, 0), d: v3(0, sg, 0), pn: horiz ? v3(0, 0, 1) : X, side: 1, prof: bpB, profile: beamName, bolts: pp.beamBolts ?? 2 });
+      if (!hollow && bpB.props.b / 2 + T > inner / 2 + 0.5) out.issues.push({ code: 'PLATE_WIDE', severity: 'warning', elementId: cid, message: `${lab}: קורת האגד המוסטת ${hollow ? 'רחבה מפני העמוד' : 'אינה נכנסת בין אגפי העמוד'} (${Math.round(inner)})` });
       return { cid, col, j, label: `${lab} — קורה לעמוד` };
     });
-    const beamR = specOk && horiz && HOLLOW.includes(bp.family);
-    out.members.push({ id: bid, kind: 'beam', label: lab, start: beamR ? unshift(ends[0].j.start, Z, v3(0, 1, 0), 1) : ends[0].j.start, end: beamR ? unshift(ends[1].j.start, Z, v3(0, -1, 0), 1) : ends[1].j.start, profile: pp.beam, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: Z, source: 'generated', manualPlacement: false, partDesc: `קורת אגד ${pp.beam}` });
+    const beamR = specOk && horiz && HOLLOW.includes(bpB.family);
+    out.members.push({ id: bid, kind: 'beam', label: lab, start: beamR ? unshift(ends[0].j.start, Z, v3(0, 1, 0), 1) : ends[0].j.start, end: beamR ? unshift(ends[1].j.start, Z, v3(0, -1, 0), 1) : ends[1].j.start, profile: beamName, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: Z, source: 'generated', manualPlacement: false, partDesc: `קורת אגד ${beamName}` });
     for (const e of ends) {
       out.members.push(...e.j.members); out.issues.push(...e.j.issues);
-      out.connections.push({ id: e.cid, type: 'knee', label: e.label, members: [e.col, bid], parts: e.j.parts, bolts: e.j.bolts, welds: e.j.welds, ...slotsOf(e.j), status: 'not-verified', fixity: 'pinned', overridden: false, ...rcp(horiz && HOLLOW.includes(bp.family), KNEE_FIN_BEAM_RECIPE_ID, bid, e.cid.endsWith('.E0') ? 'start' : 'end', pp.beamBolts ?? 2, 1) });
+      out.connections.push({ id: e.cid, type: 'knee', label: e.label, members: [e.col, bid], parts: e.j.parts, bolts: e.j.bolts, welds: e.j.welds, ...slotsOf(e.j), status: 'not-verified', fixity: 'pinned', overridden: false, ...rcp(horiz && HOLLOW.includes(bpB.family), KNEE_FIN_BEAM_RECIPE_ID, bid, e.cid.endsWith('.E0') ? 'start' : 'end', pp.beamBolts ?? 2, 1) });
     }
     if (!withDiag) continue;
-    // שני אלכסונים: מווב העמוד בגובה zBot−drop אל תחתית הקורה, בזווית מהאופק; הפוך — מראש הקורה עד zTop+drop בעמוד
+    // שני אלכסונים: מווב העמוד בגובה zBotB−drop אל תחתית הקורה, בזווית מהאופק; הפוך — מראש הקורה עד zTop+drop בעמוד
     for (const [k, yF, sg, col] of [['1', ya, 1, colA], ['2', yb, -1, colB]] as const) {
       const kid = `${bid}.K${k}`;
+      const ovK = L.ovOf?.(kid), kpK = (ovK && tryProfile(ovK)) || kp, braceName = kpK === kp ? pp.brace : ovK!;
       // הפחים לאלכסון: על ציר קורת האגד (x+T); הלשונית בצד השני — ציר האלכסון על ציר העמודים
-      const C0 = inv ? v3(x + T, yF, zTopB + pp.drop) : v3(x + T, yF, zBot - pp.drop), R0 = v3(x + T, yF + sg * reach, inv ? zTopB : zBot);
+      const C0 = inv ? v3(x + T, yF, zTopBB + pp.drop) : v3(x + T, yF, zBotB - pp.drop), R0 = v3(x + T, yF + sg * reach, inv ? zTopBB : zBotB);
       const dir = norm(sub(R0, C0));
-      const common = { ...base, desc: 'אלכסון אגד', memberId: kid, prof: kp, profile: pp.brace, bolts: pp.boltsPerEnd ?? 2, pn: X, side: -1 as const };
+      const common = { ...base, desc: 'אלכסון אגד', memberId: kid, prof: kpK, profile: braceName, bolts: pp.boltsPerEnd ?? 2, pn: X, side: -1 as const };
       const cidC = `C.BB.${key}.K${k}C`, cidB = `C.BB.${key}.K${k}B`;
       const jc = finJoint({ ...common, cid: cidC, hostId: col, P: C0, n: v3(0, sg, 0), d: dir });
       const jb = finJoint({ ...common, cid: cidB, hostId: bid, P: R0, n: v3(0, 0, inv ? 1 : -1), d: v3(-dir.x, -dir.y, -dir.z) });
-      out.members.push({ id: kid, kind: 'brace', label: `${lab} — אלכסון`, start: jc.start, end: jb.start, profile: pp.brace, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: X, source: 'generated', manualPlacement: false, partDesc: `אלכסון אגד B ${pp.brace}` });
+      out.members.push({ id: kid, kind: 'brace', label: `${lab} — אלכסון`, start: jc.start, end: jb.start, profile: braceName, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: X, source: 'generated', manualPlacement: false, partDesc: `אלכסון אגד B ${braceName}` });
       for (const [cid, j, hostId, t] of [[cidC, jc, col, 'אלכסון לעמוד'], [cidB, jb, bid, 'אלכסון לקורה']] as const) {
         out.members.push(...j.members); out.issues.push(...j.issues);
-        out.connections.push({ id: cid, type: 'knee', label: `${lab} — ${t}`, members: [hostId, kid], parts: j.parts, bolts: j.bolts, welds: j.welds, ...slotsOf(j), status: 'not-verified', fixity: 'pinned', overridden: false, ...rcp(HOLLOW.includes(kp.family) && T < 25, KNEE_FIN_BBDIAG_RECIPE_ID, kid, cid.endsWith('C') ? 'start' : 'end', pp.boltsPerEnd ?? 2, -1, 0) });
+        out.connections.push({ id: cid, type: 'knee', label: `${lab} — ${t}`, members: [hostId, kid], parts: j.parts, bolts: j.bolts, welds: j.welds, ...slotsOf(j), status: 'not-verified', fixity: 'pinned', overridden: false, ...rcp(HOLLOW.includes(kpK.family) && T < 25, KNEE_FIN_BBDIAG_RECIPE_ID, kid, cid.endsWith('C') ? 'start' : 'end', pp.boltsPerEnd ?? 2, -1, 0) });
       }
     }
   }

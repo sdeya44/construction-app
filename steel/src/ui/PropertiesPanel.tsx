@@ -254,9 +254,11 @@ function PropertiesInner() {
         <PSec id="prof" title={plateLike ? 'חלק וחומר' : 'חתך וחומר — האלמנט הזה'} testId="psec-prof">
           {secCard}
           {m.partDesc && <div className="hint" style={{ marginTop: 0 }}>{m.partDesc}</div>}
-          {!plateLike && (route && !route.one
+          {!plateLike && (route && !route.one && !route.single
             ? <><div className="field prof"><label>חתך</label><span className="readonly mono">{m.profile}</span></div><div className="hint" style={{ marginTop: 0 }}>החתך נקבע לכל {route.what} (פחי החיבור לפיו) — לשינוי: "כל הדומים" או "המכלול".</div></>
-            : <div className="field prof"><label>חתך</label><ProfilePicker testId="prop-profile" value={m.profile} families={FAMS[m.kind]} role={m.kind === 'column' || m.kind === 'rafter' || m.kind === 'purlin' ? m.kind : undefined} onCommit={(v) => store.exec(setMemberProps([m.id], { profile: v }))} /></div>)}
+            : <div className="field prof"><label>חתך</label><ProfilePicker testId="prop-profile" value={m.profile} families={FAMS[m.kind]} role={m.kind === 'column' || m.kind === 'rafter' || m.kind === 'purlin' ? m.kind : undefined} onCommit={(v) => store.exec(route?.single ? route.all(v) : setMemberProps([m.id], { profile: v }))} /></div>)}
+          {route?.single && <div className="hint" style={{ marginTop: 0 }} data-testid="def-hint">{route.what} — אלמנט יחיד בהגדרה (או חגורה אחת לאורך כל הציר): שינוי החתך כאן חל על ההגדרה כולה.</div>}
+          {/^BR\.[RW]\d+\./.test(m.id) && <div className="hint" style={{ marginTop: 0 }} data-testid="x-pair-hint">קושרת X: שני האלכסונים המוצלבים חולקים פח חיבור ובורג הצטלבות — החתך חל על הזוג.</div>}
           {matField([m.id])}
           {flipField}
           {ov && (ov.profile || ov.material || ov.rollDeg !== undefined || ov.mirror !== undefined) && m.source === 'generated' && (
@@ -315,7 +317,7 @@ function PSec({ id, title, testId, closed, children }: { id: string; title: stri
   );
 }
 
-const FAMS: Record<string, string[]> = { column: ['HEA', 'HEB', 'IPE', 'HEM', 'RHS', 'SHS'], rafter: ['IPE', 'HEA', 'HEB', 'RHS'], beam: ['IPE', 'HEA', 'HEB', 'RHS', 'SHS'], purlin: ['C', 'Z'], girt: ['C', 'Z'], brace: ['L', 'RHS', 'SHS', 'CHS', 'UPN'] };
+export const FAMS: Record<string, string[]> = { column: ['HEA', 'HEB', 'IPE', 'HEM', 'RHS', 'SHS'], rafter: ['IPE', 'HEA', 'HEB', 'RHS'], beam: ['IPE', 'HEA', 'HEB', 'RHS', 'SHS'], purlin: ['C', 'Z'], girt: ['C', 'Z'], brace: ['L', 'RHS', 'SHS', 'CHS', 'UPN'] };
 const PLURAL: Record<string, string> = { column: 'העמודים', rafter: 'קורות הגג', beam: 'הקורות', purlin: 'הפטות', girt: 'פטות הקיר', brace: 'האלכסונים', plate: 'הפלטות', cleat: 'התומכים' };
 /** קבוצת "הדומים": אותו סוג ואותו תפקיד (קידומת מזהה) ואותו חתך נוכחי */
 export function similarOf(m: Member, all: Member[]): Member[] {
@@ -329,14 +331,14 @@ export function similarOf(m: Member, all: Member[]): Member[] {
  * אלמנטים שנבנים מהגדרה כללית (אלכסונים, קושרות, אגד B, סבכת RHS): "כל הדומים" משנה את ההגדרה עצמה;
  * "רק האלמנט הזה" נתמך באלכסוני עמוד-קורה בלבד (בשאר — החתך קובע את פחי החיבור המשותפים).
  */
-function profileRoute(m: Member, p: Project): { all: (v: string) => Command; one: boolean; what: string } | null {
+export function profileRoute(m: Member, p: Project): { all: (v: string) => Command; one: boolean; what: string; single?: boolean } | null {
   const b = p.building, br = b.bracing;
   const id = m.id;
   if (id.startsWith('KB.')) return { all: (v) => setKneeBraces({ profile: v, sides: Object.fromEntries(Object.entries(b.kneeBraces?.sides ?? {}).map(([k, o]) => [k, { ...o, profile: undefined }])) }), one: true, what: 'אלכסוני עמוד-קורה' };
-  if (/^BR\.R/.test(id)) return { all: (v) => setBuilding({ bracing: { ...br, roof: { ...br.roof, profile: v } } }), one: false, what: 'קושרות הגג' };
-  if (/^BR\.W/.test(id)) return { all: (v) => setBuilding({ bracing: { ...br, walls: { ...br.walls, profile: v } } }), one: false, what: 'קושרות הקיר' };
-  if (/^BR\.T/.test(id)) return { all: (v) => setBuilding({ bracing: { ...br, purlinTies: { ...br.purlinTies, profile: v } } }), one: false, what: 'שורות הקשירה' };
-  if (/^BB\./.test(id) && br.walls.portal) { const isK = /\.K\d+$/.test(id); return { all: (v) => setBuilding({ bracing: { ...br, walls: { ...br.walls, portal: { ...br.walls.portal!, ...(isK ? { brace: v } : { beam: v }) } } } }), one: false, what: isK ? 'אלכסוני אגד B' : 'קורות אגד B' }; }
+  if (/^BR\.R/.test(id)) return { all: (v) => setBuilding({ bracing: { ...br, roof: { ...br.roof, profile: v } } }), one: true, what: 'קושרות הגג' };
+  if (/^BR\.W/.test(id)) return { all: (v) => setBuilding({ bracing: { ...br, walls: { ...br.walls, profile: v } } }), one: true, what: 'קושרות הקיר' };
+  if (/^BR\.T/.test(id)) return { all: (v) => setBuilding({ bracing: { ...br, purlinTies: { ...br.purlinTies, profile: v } } }), one: true, what: 'שורות הקשירה' };
+  if (/^BB\./.test(id) && br.walls.portal) { const isK = /\.K\d+$/.test(id); return { all: (v) => setBuilding({ bracing: { ...br, walls: { ...br.walls, portal: { ...br.walls.portal!, ...(isK ? { brace: v } : { beam: v }) } } } }), one: true, what: isK ? 'אלכסוני אגד B' : 'קורות אגד B' }; }
   if (/^TB\./.test(id)) {
     const tid = id.split('.')[1], defs = b.transfers ?? [], def = defs.find((t) => t.id === tid);
     if (def) {
@@ -344,18 +346,18 @@ function profileRoute(m: Member, p: Project): { all: (v: string) => Command; one
       if (def.kind === 'truss' && def.truss) {
         const n = def.truss.panels, dm = /\.TR\.D(\d+)[ab]$/.exec(id);
         const g: keyof TrussSpec['profiles'] = /\.BC$/.test(id) ? 'bottom' : /\.TR\.V\d+$/.test(id) ? 'vert' : dm ? (+dm[1] === 0 || +dm[1] === n - 1 ? 'endDiag' : 'diag') : 'top';
-        return { all: (v) => put({ truss: { ...def.truss!, profiles: { ...def.truss!.profiles, [g]: v } } }), one: false, what: `${TRUSS_GROUP_HE[g]} במסבך הנושא` };
+        return { all: (v) => put({ truss: { ...def.truss!, profiles: { ...def.truss!.profiles, [g]: v } } }), one: g !== 'bottom' && g !== 'top', single: g === 'bottom' || g === 'top', what: `${TRUSS_GROUP_HE[g]} במסבך הנושא` };
       }
-      return { all: (v) => put({ profile: v }), one: false, what: 'הקורה הנושאת' };
+      return { all: (v) => put({ profile: v }), one: false, single: true, what: 'הקורה הנושאת' };
     }
   }
   const rt = b.roofTruss;
   if (rt?.enabled && (/^TR\./.test(id) || /^F[^.]+(?:\.S\d+)?\.BC\.\d+$/.test(id))) {
     const n = rt.spec.panels, dm = /\.D(\d+)[ab]$/.exec(id);
     const g: keyof TrussSpec['profiles'] = /\.BC\.\d+$/.test(id) ? 'bottom' : /\.V\d+$/.test(id) ? 'vert' : dm ? (+dm[1] === 0 || +dm[1] === n - 1 ? 'endDiag' : 'diag') : 'diag';
-    return { all: (v) => setBuilding({ roofTruss: { ...rt, spec: { ...rt.spec, profiles: { ...rt.spec.profiles, [g]: v } } } }), one: false, what: `${TRUSS_GROUP_HE[g]} במסבכי הגג` };
+    return { all: (v) => setBuilding({ roofTruss: { ...rt, spec: { ...rt.spec, profiles: { ...rt.spec.profiles, [g]: v } } } }), one: g !== 'bottom', single: g === 'bottom', what: `${TRUSS_GROUP_HE[g]} במסבכי הגג` };
   }
-  if (/^HB\./.test(id) && br.roof.rhs) { const isD = /\.D\d+$/.test(id); return { all: (v) => setBuilding({ bracing: { ...br, roof: { ...br.roof, rhs: { ...br.roof.rhs!, ...(isD ? { diag: v } : { strut: v }) } } } }), one: false, what: isD ? 'אלכסוני הסבכה' : 'מוטות הסבכה' }; }
+  if (/^HB\./.test(id) && br.roof.rhs) { const isD = /\.D\d+$/.test(id); return { all: (v) => setBuilding({ bracing: { ...br, roof: { ...br.roof, rhs: { ...br.roof.rhs!, ...(isD ? { diag: v } : { strut: v }) } } } }), one: true, what: isD ? 'אלכסוני הסבכה' : 'מוטות הסבכה' }; }
   return null;
 }
 
@@ -661,7 +663,7 @@ export function scopeOptions(m: Member, d: DerivedModel): ScopeOpt[] {
       const ids = all.map((x) => x.id);
       return { ids: same, show: [...ids, ...parts(ids)] };
     };
-    const o: ScopeOpt[] = [];
+    const o: ScopeOpt[] = [{ key: 'one', label: 'רק האלמנט הזה', ids: [m.id], show: [m.id, ...parts([m.id])] }];
     if (asm.lineId) o.push({ key: 'asm', label: `המכלולים בציר ${lab}`, ...pick(asm.lineId) });
     o.push({ key: 'asmall', label: asm.family === 'roofx' ? 'כל קושרות הגג' : 'כל המכלולים במודל', ...pick() });
     return o;

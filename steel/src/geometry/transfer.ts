@@ -239,7 +239,7 @@ export function buildTransfers(project: Project, plans: TbPlan[], members: Membe
       const specB = side ? { ...tr, verts: tr.verts.map((v, i) => (i === 0 || i === tr.verts.length - 1 ? false : v)) } : tr;
       const xPl = finMode ? finJ.get(`${def.from}|T`)!.start.x : x;
       const tp = buildTrussPlane({ idBase: `${tbId}.TR`, connId: `C.TBT.${def.id}`, label: `מסבך נושא ציר ${line.label}`, origin: v3(xPl, 0, 0), e: Y, nodes,
-        top: { z: () => zTop - h / 2, h, memberAt: () => tbId }, bot: { z: () => zBC, h: pB!.props.h, memberAt: () => bcId }, spec: specB, mat });
+        top: { z: () => zTop - h / 2, h, memberAt: () => tbId }, bot: { z: () => zBC, h: pB!.props.h, memberAt: () => bcId }, spec: specB, mat, ovOf: (id) => project.memberOverrides[id]?.profile });
       res.members.push(...tp.members); res.connections.push(tp.connection); res.issues.push(...tp.issues);
       // מושבים בצמתים: מסגרת שאינה על צומת — אזהרה
       for (const f of pl.supported) if (!nodes.some((sN) => Math.abs(sN - f.y) < 5)) { res.issues.push({ code: 'TB_TRUSS', severity: 'warning', elementId: tbId, message: `מסבך נושא ${def.id}: קורת הגג במסגרת ${f.id} אינה על צומת — התאם את מספר השדות לכפולה של מספר המפתחים` }); break; }

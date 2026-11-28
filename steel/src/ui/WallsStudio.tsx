@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ScopeProfile, lineGroup, roleGroup } from './ScopeProfile';
 import { setBuilding } from '../commands/commands';
 import { defaultLockTruss } from '../geometry/lockTruss';
 import { defaultPortal } from '../geometry/portal';
@@ -36,12 +37,12 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
   const selId = memberId ? (d.byId.get(memberId)?.connId ? d.connById.get(d.byId.get(memberId)!.connId!)?.members.find((x) => WALL_RE.test(x)) ?? memberId : /^C\./.test(memberId) ? d.connById.get(memberId)?.members.find((x) => WALL_RE.test(x)) ?? memberId : memberId) : undefined;
   const selLine = selId ? wallLineOf(selId) : undefined;
   const [line, setLine] = useState<string>(selLine ?? lines[0]?.id ?? '');
-  const [scope, setScope] = useState<'line' | 'all'>(selLine ? 'line' : 'all');
+  const [scope, setScope] = useState<'one' | 'line' | 'all'>(selLine ? 'line' : 'all');
   useEffect(() => { if (selLine) { setLine(selLine); setScope('line'); } }, [selLine]);
   const [sec, setSec] = useState<Sec>('loc');
   const activeConn = useStore((s) => s.activeConn);
   useEffect(() => { if (activeConn && /^C\.(BR\.W|BB\.|LT\.)/.test(activeConn)) setSec('conn'); }, [activeConn]);
-  const lid = scope === 'line' ? line : undefined;
+  const lid = scope !== 'all' ? line : undefined;
   const type: WType = ((lid && w.lineType?.[lid]) ?? w.type ?? 'x') as WType;
   const lineLabel = lines.find((l) => l.id === line)?.label ?? line;
   const nOn = d.members.filter((m) => WALL_RE.test(m.id) && m.kind !== 'plate' && m.kind !== 'bolt' && m.kind !== 'cleat').length;
@@ -68,11 +69,11 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
 
   // הדגשה כתומה במודל של מה שהשינוי יחול עליו (ציר / כל המודל) + המחברים שלו
   const scopeIds = useMemo(() => {
-    const own = d.members.filter((m) => WALL_RE.test(m.id) && (scope === 'all' || wallLineOf(m.id) === line)).map((m) => m.id);
+    const own = scope === 'one' && selId ? [selId] : d.members.filter((m) => WALL_RE.test(m.id) && (scope === 'all' || wallLineOf(m.id) === line)).map((m) => m.id);
     const S = new Set(own);
     const parts = d.connections.filter((c) => c.members.some((x) => S.has(x))).flatMap((c) => c.parts);
     return [...own, ...parts];
-  }, [d, scope, line]);
+  }, [d, scope, line, selId]);
   useEffect(() => { store.set({ scopeHi: w.enabled ? scopeIds : null }); }, [scopeIds, w.enabled]);
   useEffect(() => () => { store.set({ scopeHi: null }); }, []);
   const issues = useMemo(() => d.issues.filter((i) => /^(C\.)?(BR\.W|BB\.|LT\.)/.test(i.elementId ?? '') || ['TIE_PORTAL', 'TIE_TRUSS'].includes(i.code)), [d]);
@@ -91,14 +92,16 @@ export function WallsStudio({ memberId }: { memberId?: string }) {
         extra={<label className="ks-off"><input type="checkbox" data-testid="br-walls" checked={w.enabled} onChange={(e) => putWalls({ ...w, enabled: e.target.checked })} />פעיל</label>} />
       {!w.enabled && <div className="ks-empty">בחרו סוג כדי להוסיף קשיחות לקירות.</div>}
       {w.enabled && <>
-        <WizardScopeSelector<'one' | 'line' | 'all'> value={scope} onPick={(k) => k !== 'one' && setScope(k)}
+        <WizardScopeSelector<'one' | 'line' | 'all'> value={scope} onPick={setScope}
           scopes={[
-            { key: 'one', title: 'המכלול שנבחר', disabled: 'קשיחות הקיר נקבעת לכל ציר — לא למכלול בודד (המנוע אינו שומר הגדרה למכלול)' },
+            { key: 'one', title: 'האלמנט שנבחר', testId: 'pscope-one', disabled: selId && d.byId.has(selId) ? undefined : 'בחרו אלמנט של קשיחות הקיר במודל' },
             { key: 'line', title: 'כל הציר', count: nLine, testId: 'pscope-asm' },
             { key: 'all', title: 'כל המודל', count: nOn, testId: 'pscope-asmall' },
           ]}
           after={scope === 'line' ? <select className="inp ks-linesel" value={line} onChange={(e) => setLine(e.target.value)} aria-label="ציר" data-testid="ks-line">{lines.map((l) => <option key={l.id} value={l.id}>ציר {l.label}</option>)}</select> : undefined}
           note={<>{scopeIds.length} אלמנטים וחלקים — מודגשים בכתום · <button className="wz-link" onClick={copyNow} data-testid="wz-copy">העתקת הגדרות</button>{clipNow && <> · <button className="wz-link" onClick={paste} data-testid="wz-paste">הדבקה {scope === 'line' ? `לציר ${lineLabel}` : 'לכל המודל'}</button></>}</>} />
+        {selId && d.byId.has(selId) && (() => { const sm = d.byId.get(selId)!, wm = d.members.filter((x) => WALL_RE.test(x.id)); return <ScopeProfile scopeKey={scope} ids={scope === 'one' ? [selId] : (scope === 'line' ? lineGroup(sm, wm) : roleGroup(sm, wm)).map((x) => x.id)} />; })()}
+        {scope === 'one' && <div className="ks-note" data-testid="walls-one-note">סוג הקשיחות ומידותיה נקבעים לציר; כאן משנים חתך וחומר לאלמנט הנבחר בלבד.</div>}
         <WizardNavigation value={sec} onPick={setSec} subs={{ loc: `${nOn} אלמנטים`, geo: TNAME[type], conn: type === 'x' ? w.profile : type === 'portal' ? `${portal.beam} · ${portal.brace}` : `${truss.chord} · ${truss.diag}` }} />
         <WizardValidation issues={issues} />
 

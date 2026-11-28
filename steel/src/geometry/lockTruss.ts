@@ -106,7 +106,6 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
     const xo = ends[0].a.x;
     const zLoF = Math.min(zCont, zSec) + ch / 2, zHiF = Math.max(zCont, zSec) - ch / 2;
     const hF = zHiF - zLoF;
-    const wd = dpf.props.b;
     const ec = lt.endClear && lt.endClear > 0 ? Math.max(lt.endClear, endReach) : endReach + 15;
     const y0 = ya + ec, y1 = yb - ec;
     const span = y1 - y0;
@@ -115,25 +114,27 @@ export function buildLockTrussLine(out: Out, lt: LockTrussParams, L: PortalLine)
     const pnl = span / nd;
     const sinT = hF / Math.hypot(hF, pnl);
     if (sinT > 0.97 || sinT < 0.5) out.issues.push({ code: 'BRACE_ANGLE', severity: 'warning', message: `${lab}: זווית אלכסוני המסבך ${Math.round((Math.asin(sinT) * 180) / Math.PI)}° — לשנות מספר אלכסונים/גובה` });
-    const s = wd / (2 * sinT) + (lt.nodeGap ?? 20) / 2; // חצי טביעת האלכסון בפני החגורה + חצי המרווח בצומת
     const loId = zCont < zSec ? chords[0].id : chords[1].id, hiId = zCont < zSec ? chords[1].id : chords[0].id;
     const cid = `C.LT.${key}.TR`;
     const parts: string[] = [], welds: WeldInfo[] = [];
     for (let i = 0; i < nd; i++) {
       const up = i % 2 === 0; // מתחיל מהחגורה העליונה ליד העמוד ויורד (כמו בתוכנית)
-      const yS = y0 + i * pnl + (i === 0 ? s : s), yE = y0 + (i + 1) * pnl - (i === nd - 1 ? s : s);
-      const zS = up ? zHiF : zLoF, zE = up ? zLoF : zHiF;
       const id = `LT.${key}.D${i + 1}`;
+      // חתך אישי לאלכסון זה (מפאנל האלמנט): רוחב החתך קובע את הטביעה בחגורה ואת אורך הריתוך
+      const ovD = L.ovOf?.(id), dpfD = (ovD && tryProfile(ovD)) || dpf, diagName = dpfD === dpf ? lt.diag : ovD!;
+      const wdD = dpfD.props.b, sD = wdD / (2 * sinT) + (lt.nodeGap ?? 20) / 2;
+      const yS = y0 + i * pnl + sD, yE = y0 + (i + 1) * pnl - sD;
+      const zS = up ? zHiF : zLoF, zE = up ? zLoF : zHiF;
       const S = v3(xo, yS, zS), E = v3(xo, yE, zE);
       const dir = norm(sub(E, S));
       void dir;
-      out.members.push({ id, kind: 'brace', label: `${lab} — אלכסון`, start: S, end: E, profile: lt.diag, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: X,
+      out.members.push({ id, kind: 'brace', label: `${lab} — אלכסון`, start: S, end: E, profile: diagName, material: L.mat, rollDeg: 0, mirror: false, anchor: 'center', refUp: X,
         startCut: { point: S, normal: v3(0, 0, up ? 1 : -1) }, endCut: { point: E, normal: v3(0, 0, up ? -1 : 1) },
-        source: 'generated', manualPlacement: false, partDesc: `אלכסון מסבך ${lt.diag} (חיתוך מקביל לחגורות)` });
+        source: 'generated', manualPlacement: false, partDesc: `אלכסון מסבך ${diagName} (חיתוך מקביל לחגורות)` });
       parts.push(id);
-      const lenF = wd / sinT;
-      welds.push({ id: `${id}.W1`, connId: cid, type: 'fillet', a: lt.weldSize, length: Math.round(2 * (wd + lenF)), location: 'shop', between: [up ? hiId : loId, id], from: S, to: add(S, v3(0, 1, 0)) });
-      welds.push({ id: `${id}.W2`, connId: cid, type: 'fillet', a: lt.weldSize, length: Math.round(2 * (wd + lenF)), location: 'shop', between: [up ? loId : hiId, id], from: E, to: add(E, v3(0, 1, 0)) });
+      const lenF = wdD / sinT;
+      welds.push({ id: `${id}.W1`, connId: cid, type: 'fillet', a: lt.weldSize, length: Math.round(2 * (wdD + lenF)), location: 'shop', between: [up ? hiId : loId, id], from: S, to: add(S, v3(0, 1, 0)) });
+      welds.push({ id: `${id}.W2`, connId: cid, type: 'fillet', a: lt.weldSize, length: Math.round(2 * (wdD + lenF)), location: 'shop', between: [up ? loId : hiId, id], from: E, to: add(E, v3(0, 1, 0)) });
     }
     out.connections.push({ id: cid, type: 'truss', label: `${lab} — מסבך ${nd} אלכסונים מרותכים (מסגריה)`, members: [loId, hiId], parts, bolts: [], welds, status: 'not-verified', fixity: 'pinned', overridden: false });
   }
