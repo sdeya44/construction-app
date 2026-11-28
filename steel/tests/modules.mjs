@@ -33,7 +33,7 @@ export const MODULES = {
   bracing: {
     title: 'קושרות גג וקיר, אגד B, סבכה, חיזוק רכס',
     src: ['src/geometry/bracing.ts', 'src/geometry/hbrace.ts', 'src/geometry/portal.ts', 'src/geometry/crossRecipes.ts'],
-    tests: ['tests/bracing.test.ts', 'tests/cross-compare.test.ts', 'tests/rodx.test.ts', 'tests/roofx136.test.ts', 'tests/reinf.test.ts', 'tests/portal.test.ts', cad('· brace')],
+    tests: ['tests/bracing.test.ts', 'tests/cross-compare.test.ts', 'tests/rodx.test.ts', 'tests/roofx136.test.ts', 'tests/reinf.test.ts', 'tests/portal.test.ts', 'tests/portal-geometry.test.ts', cad('· brace')],
     e2e: ['e2e/v129.spec.ts', 'e2e/sim-gable.spec.ts'],
   },
   knee: {
