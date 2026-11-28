@@ -282,9 +282,10 @@ export function buildBracing(b: BuildingParams, topo: SectionTopology, purlins: 
         continue;
       }
       if (lType === 'portal') {
-        buildPortalLine(res, { ...(br.walls.portal ?? defaultPortal()), ...(br.walls.linePortal?.[l.id] ?? {}) }, {
+        const pp = { ...(br.walls.portal ?? defaultPortal()), ...(br.walls.linePortal?.[l.id] ?? {}) };
+        buildPortalLine(res, pp, {
           side, label: l.label, x, frames: frames.map((f) => ({ id: f.id, y: f.y })), portalBays: resolveBays(bays, nb),
-          colProfile: b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - 60, mat,
+          colProfile: b.columnProfile, zBase: b.lineBase?.[l.id] ?? b.baseElevation, zTop: eave - rafV - (pp.zTopClear ?? 60), mat,
         });
         continue;
       }

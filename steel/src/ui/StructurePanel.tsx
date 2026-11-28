@@ -316,6 +316,7 @@ export function PortalFields({ lineId }: { lineId?: string } = {}) {
       <div className="field prof"><label>קורת אגד</label><ProfilePicker testId="pb-beam" value={p.beam} families={['RHS', 'SHS']} onCommit={(v) => set({ beam: v })} /></div>
       <div className="field prof"><label>אלכסונים</label><ProfilePicker testId="pb-brace" value={p.brace} families={['RHS', 'SHS', 'CHS']} onCommit={(v) => set({ brace: v })} /></div>
     </>}
+    <div className="field" title='gap נמדד מנקודת התחלה הנמצאת מתחת לתחתית הקורה הראשית במרווח הזה. ברירת מחדל 60 (תואם מודלים קיימים); 0 = gap מדויק מתחתית הקורה הראשית.'><label>מרווח ביטחון מתחת לקורה הראשית (נוסף ל-gap)</label><NumField testId="pb-zclear" value={p.zTopClear ?? 60} suffix='מ"מ' onCommit={(v) => set({ zTopClear: Math.max(0, v) })} /></div>
     <div className="field"><label>כיוון האלכסונים</label>
       <div className="seg" role="radiogroup" aria-label="כיוון האלכסונים">
         <button className={`tbtn${!p.invert ? ' on' : ''}`} role="radio" aria-checked={!p.invert} data-testid="pb-dir-down" onClick={() => set({ invert: false })}>למטה (רגיל)</button>

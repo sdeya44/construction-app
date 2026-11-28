@@ -21,9 +21,9 @@ const rad = (d: number) => (d * Math.PI) / 180;
 // חישוב ידני (ציר-ציר) מהקלט בלבד
 const EXP = { dz: IN.drop, dy: IN.drop / Math.tan(rad(IN.angle)), len: IN.drop / Math.sin(rad(IN.angle)) }; // 800 / 953.40 / 1244.58
 
-function build() {
+function build(extra: Record<string, number> = {}) {
   const b = defaultBuilding();
-  const p0 = setBuilding({ frames: framesFromSpacings([IN.bay]), bracing: { ...b.bracing, walls: { ...b.bracing.walls, enabled: true, type: 'portal', portal: { ...defaultPortal(), ...IN } } } } as never).run(newProject('PGEO', b));
+  const p0 = setBuilding({ frames: framesFromSpacings([IN.bay]), bracing: { ...b.bracing, walls: { ...b.bracing.walls, enabled: true, type: 'portal', portal: { ...defaultPortal(), ...IN, ...extra } } } } as never).run(newProject('PGEO', b));
   const p = numberParts().run(p0);
   const d = generate(p), fab = computeFabrication(p, d), bom = computeBom(d, fab);
   return { p, d, fab, bom };
@@ -63,16 +63,24 @@ describe('PGEO אגד B — אלכסונים מול המידות שהוזנו', 
     const onLine = (m: typeof k1, w: typeof w1) => { const dy = w.up.y - w.low.y, dz = w.up.z - w.low.z, L = Math.hypot(dy, dz); const dist = (q: { y: number; z: number }) => Math.abs((q.y - w.low.y) * dz - (q.z - w.low.z) * dy) / L; return Math.max(dist(m.start), dist(m.end)); };
     expect(onLine(k1, w1)).toBeLessThan(1e-6); expect(onLine(k2, w2)).toBeLessThan(1e-6);
   });
-  it('PGEO-03: gap — מרחק מתחתית הקורה הראשית לראש קורת האגד. ידוע: בפועל gap + 60 מ"מ (קבוע בקוד: bracing.ts `zTop: eave - rafV - 60`) — סטייה מתועדת, לא תוקנה', () => {
-    const raf = d.members.find((m) => m.id === 'F1.RAF.L') ?? d.members.find((m) => /^F1\.RAF/.test(m.id))!;
-    const x = beamM.start.x, t = (x - raf.start.x) / (raf.end.x - raf.start.x);
-    const zTopSurface = raf.start.z + t * (raf.end.z - raf.start.z);
+  // gap בפועל = מרחק אנכי מתחתית הקורה הראשית (על ציר הקורה) לראש קורת האגד
+  const gapOf = (mod: ReturnType<typeof build>) => {
+    const bm = mod.d.members.find((m) => m.id === 'BB.1.L')!;
+    const raf = mod.d.members.find((m) => m.id === 'F1.RAF.L') ?? mod.d.members.find((m) => /^F1\.RAF/.test(m.id))!;
+    const t = (bm.start.x - raf.start.x) / (raf.end.x - raf.start.x);
+    const zs = raf.start.z + t * (raf.end.z - raf.start.z);
     const sl = (raf.end.z - raf.start.z) / (raf.end.x - raf.start.x);
-    const underside = zTopSurface - getProfile(raf.profile).props.h * Math.sqrt(1 + sl * sl);
-    const gapActual = underside - zTopB;
     expect(raf.anchor).toBe('top');
-    expect(gapActual).toBeCloseTo(IN.gap + 60, 6);
-    expect(gapActual - IN.gap).toBeCloseTo(60, 6);
+    return zs - getProfile(raf.profile).props.h * Math.sqrt(1 + sl * sl) - (bm.start.z + getProfile(IN.beam).props.h / 2);
+  };
+  it('PGEO-03: gap — ברירת מחדל zTopClear=60 משמרת מודלים קיימים (gap+60); zTopClear=0 נותן gap מדויק 200', () => {
+    expect(gapOf({ p, d, fab, bom })).toBeCloseTo(IN.gap + 60, 6); // ללא zTopClear: גיאומטריה קיימת ללא שינוי
+    const m0 = build({ zTopClear: 0 });
+    expect(gapOf(m0)).toBeCloseTo(IN.gap, 6);
+    // נקודות העבודה לא זזות ביחס לקורה: אותו אורך/זווית/ירידה, הכול מוזז ב-60 מעלה
+    const k = m0.d.members.find((m) => m.id === 'BB.1.L.K1')!;
+    expect(Math.abs(k.start.z - k.end.z)).toBeCloseTo(Math.abs(k1.start.z - k1.end.z), 6);
+    expect(m0.d.members.find((m) => m.id === 'BB.1.L')!.start.z - beamM.start.z).toBeCloseTo(60, 6); // הקורה גבוהה ב-60
   });
   it('PGEO-04: כתב כמויות ושרטוטי ייצור — אורך החלק = אורך האלמנט בפועל; השרטוט מציג את אותו אורך, והמכלול את הדלתאות והזווית', () => {
     const pt = fab.parts.find((x) => x.memberId === k1.id)!;
@@ -96,7 +104,7 @@ describe('PGEO אגד B — אלכסונים מול המידות שהוזנו', 
       `| זווית | 40 | ${r2(w1.angle)} | ${r2(w1.angle - 40)} |`,
       `| אורך חלק RHS (אלמנט / BOM / שרטוט) | — | ${r2(w1.len)} / ${r2(row.length)} / ${Math.round(pt.length)} | קיצור ${r2((EXP.len - w1.len) / 2)} לכל קצה |`,
       `| אנכי / אופקי של האלמנט (מכלול) | — | ${Math.round(w1.dz)} / ${Math.round(w1.dy)} | — |`,
-      `| gap (תחתית הקורה הראשית → ראש קורת האגד) | ${IN.gap} | ${r2(zBotGap())} | +60 (קבוע בקוד) |`].join('\n');
+      `| gap (תחתית הקורה הראשית → ראש קורת האגד) | ${IN.gap} | ${r2(gapOf(build({ zTopClear: 0 })))} (zTopClear=0) / ${r2(zBotGap())} (ברירת מחדל 60) | 0 / +60 |`].join('\n');
     function zBotGap() { const raf = d.members.find((m) => /^F1\.RAF/.test(m.id))!; const t2 = (beamM.start.x - raf.start.x) / (raf.end.x - raf.start.x); const zt = raf.start.z + t2 * (raf.end.z - raf.start.z); const s = (raf.end.z - raf.start.z) / (raf.end.x - raf.start.x); return zt - getProfile(raf.profile).props.h * Math.sqrt(1 + s * s) - zTopB; }
     fs.mkdirSync('e2e-results/evidence', { recursive: true }); fs.writeFileSync('e2e-results/evidence/portal-geometry.md', md);
   });
